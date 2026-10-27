@@ -11,6 +11,7 @@ import { Week } from './admin/Week';
 import { Day } from './admin/Day';
 import { EventForm } from './admin/EventForm';
 import { Staff as StaffAdmin } from './admin/Staff';
+import { ViewAs } from './admin/ViewAs';
 
 export function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
@@ -49,6 +50,7 @@ export function App() {
             <Route path="staff" element={<StaffAdmin />} />
           </Route>
         )}
+        {me.role === 'admin' && <Route path="/admin/view/:staffId/*" element={<ViewAs />} />}
         <Route path="/shift/:id" element={<Shift />} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>

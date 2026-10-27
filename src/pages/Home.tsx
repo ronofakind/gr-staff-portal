@@ -4,7 +4,7 @@ import { supabase, SHIFT_SELECT, type ShiftRow, type Staff } from '../lib/supaba
 import { useT, useLang } from '../lib/i18n';
 import { time, longDate, dayBadge, minus } from '../lib/format';
 
-export function Home({ me }: { me: Staff }) {
+export function Home({ me, base = '', preview = false }: { me: Staff; base?: string; preview?: boolean }) {
   const t = useT(); const lang = useLang();
   const [shifts, setShifts] = useState<ShiftRow[] | null>(null);
 
@@ -18,6 +18,7 @@ export function Home({ me }: { me: Staff }) {
   useEffect(() => { load(); }, []);
 
   const respond = async (id: string, r: 'confirmed' | 'declined') => {
+    if (preview) return;
     await supabase.rpc('respond_to_shift', { p_shift: id, p_response: r });
     load();
   };
@@ -67,7 +68,7 @@ export function Home({ me }: { me: Staff }) {
               <Tile label={t('start')} v={time(next.planned_start, lang)} />
               <Tile label={t('ends')} v={next.planned_end ? time(next.planned_end, lang) : '—'} />
             </div>
-            <Link className="btn primary" to={`/shift/${next.id}`}>{t('details')}</Link>
+            <Link className="btn primary" to={`${base}/shift/${next.id}`}>{t('details')}</Link>
           </section>
         </>
       )}
@@ -79,7 +80,7 @@ export function Home({ me }: { me: Staff }) {
             {rest.map((s) => {
               const b = dayBadge(s.events.event_date, lang);
               return (
-                <Link key={s.id} to={`/shift/${s.id}`} className="list-row">
+                <Link key={s.id} to={`${base}/shift/${s.id}`} className="list-row">
                   <div className="badge-date"><small>{b.dow}</small><b>{b.day}</b></div>
                   <div className="grow">
                     <div className="strong">{s.events.title}</div>

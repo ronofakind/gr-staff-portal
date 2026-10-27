@@ -16,6 +16,7 @@ export function AdminLayout() {
         ))}
         <div className="grow" />
         <Link to="/me" className="side-link">My shifts</Link>
+        <Link to="/admin/staff" className="side-link">View as staff…</Link>
         <button className="side-link" onClick={() => supabase.auth.signOut()}>Log out</button>
       </nav>
       <main className="admin-main"><Outlet /></main>

@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { Link } from 'react-router-dom';
 import { allStaff, type AStaff } from './api';
 
 export function Staff() {
@@ -34,7 +35,7 @@ export function Staff() {
                   <td>{s.phone}</td>
                   <td>{s.email ?? <span className="muted">—</span>}</td>
                   <td>{s.staff_private?.ranking ?? ''}</td>
-                  <td><button className="btn sm" onClick={() => setOpen(open === s.id ? null : s.id)}>{open === s.id ? 'Close' : 'Edit'}</button></td>
+                  <td><div className="row"><Link className="btn sm" to={`/admin/view/${s.id}`}>View as</Link><button className="btn sm" onClick={() => setOpen(open === s.id ? null : s.id)}>{open === s.id ? 'Close' : 'Edit'}</button></div></td>
                 </tr>
                 {open === s.id && <tr><td colSpan={7}><Editor s={s} onDone={() => { setOpen(null); load(); }} /></td></tr>}
               </Fragment>

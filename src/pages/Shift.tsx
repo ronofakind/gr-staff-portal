@@ -4,7 +4,7 @@ import { supabase, SHIFT_SELECT, type ShiftRow } from '../lib/supabase';
 import { useT, useLang } from '../lib/i18n';
 import { time, longDate, minus, initials, mapsUrl } from '../lib/format';
 
-export function Shift() {
+export function Shift({ backTo = '/' }: { backTo?: string }) {
   const t = useT(); const lang = useLang();
   const { id } = useParams();
   const [s, setS] = useState<ShiftRow | null>(null);
@@ -29,7 +29,7 @@ export function Shift() {
   return (
     <main className="page">
       <header className="top bar">
-        <Link to="/" className="icon-btn" aria-label={t('back')}>‹</Link>
+        <Link to={backTo} className="icon-btn" aria-label={t('back')}>‹</Link>
         <div>
           <h1>{ev.title}</h1>
           <div className="muted sm">{longDate(ev.event_date, lang)}{s.position_code ? ` · ${t('youAre')} ${s.position_code}` : ''}</div>
