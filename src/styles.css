@@ -140,3 +140,8 @@ a { color: inherit; text-decoration: none; }
 .crew-edit { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; padding: 0 16px 12px; }
 .crew-edit .field { flex: 1 1 110px; } .crew-edit .field input { height: 42px; font-size: 16px; }
 .code-badge { min-width: 34px; height: 28px; border-radius: 8px; background: var(--bg); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; color: var(--muted); }
+.avatar { flex: 0 0 auto; }
+.av-wrap { position: relative; flex: 0 0 auto; }
+.code-tag { position: absolute; right: -4px; bottom: -4px; min-width: 22px; height: 20px; padding: 0 4px; border-radius: 6px; background: var(--ink); color: #fff; font-size: 10px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+.photo-pick { display: flex; flex-direction: column; align-items: center; gap: 6px; cursor: pointer; color: var(--accent); font-weight: 600; align-self: flex-start; }
+.center { align-items: center; text-align: center; } .center .photo-pick { align-self: center; }

@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 export type AStaff = {
   id: string; full_name: string; email: string | null; phone: string | null; language: 'fr' | 'en';
   department: 'floor' | 'bar' | 'kitchen'; role: 'staff' | 'manager' | 'admin'; positions: string[];
-  active: boolean; staff_private: { ranking: number | null; notes: string | null } | null;
+  active: boolean; photo_url: string | null; staff_private: { ranking: number | null; notes: string | null } | null;
 };
 
 export type AShift = {
@@ -34,7 +34,7 @@ export async function eventsBetween(from: string, to: string) {
 
 export async function allStaff() {
   const { data, error } = await supabase.from('staff')
-    .select('id,full_name,email,phone,language,department,role,positions,active,staff_private(ranking,notes)')
+    .select('id,full_name,email,phone,language,department,role,positions,active,photo_url,staff_private(ranking,notes)')
     .order('full_name');
   if (error) throw error;
   return (data ?? []) as unknown as AStaff[];

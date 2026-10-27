@@ -4,6 +4,7 @@ import { supabase, SHIFT_SELECT, type ShiftRow, type Staff } from '../lib/supaba
 import { useT, useLang } from '../lib/i18n';
 import { time, longDate, dayBadge, minus } from '../lib/format';
 import { ManagingToday } from './Manage';
+import { Avatar } from '../components/Avatar';
 
 export function Home({ me, base = '', preview = false }: { me: Staff; base?: string; preview?: boolean }) {
   const t = useT(); const lang = useLang();
@@ -36,6 +37,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
           <div className="muted">{longDate(new Date().toISOString().slice(0, 10), lang)}</div>
           <h1>{t('hi')} {first}</h1>
         </div>
+        {!preview ? <Link to="/profile" aria-label="My profile" style={{ marginLeft: 'auto' }}><Avatar name={me.full_name} url={me.photo_url} /></Link> : <span style={{ marginLeft: 'auto' }}><Avatar name={me.full_name} url={me.photo_url} /></span>}
       </header>
 
       {!preview && <ManagingToday meId={me.id} isAdmin={me.role === 'admin'} />}

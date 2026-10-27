@@ -2,6 +2,8 @@ import { Fragment, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Link } from 'react-router-dom';
 import { allStaff, type AStaff } from './api';
+import { uploadPhoto } from '../lib/photo';
+import { PhotoPicker } from '../components/Avatar';
 
 export function Staff() {
   const [list, setList] = useState<AStaff[] | null>(null);
@@ -55,6 +57,7 @@ function Editor({ s, onDone }: { s?: AStaff; onDone: () => void }) {
     active: s?.active ?? true, ranking: s?.staff_private?.ranking?.toString() ?? '', notes: s?.staff_private?.notes ?? '',
   });
   const [err, setErr] = useState('');
+  const [photo, setPhoto] = useState(s?.photo_url ?? null);
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setF({ ...f, [k]: e.target.type === 'checkbox' ? (e.target as HTMLInputElement).checked : e.target.value });
 
@@ -75,6 +78,7 @@ function Editor({ s, onDone }: { s?: AStaff; onDone: () => void }) {
 
   return (
     <form className="editor" onSubmit={save}>
+      {s && <PhotoPicker name={s.full_name} url={photo} onPick={async (file) => { try { setPhoto(await uploadPhoto(s.id, file)); } catch (e) { setErr((e as Error).message); } }} />}
       <div className="grid3">
         <label className="field">Name (as on the Events sheet)<input required value={f.full_name} onChange={set('full_name')} /></label>
         <label className="field">Email (for login)<input type="email" value={f.email} onChange={set('email')} /></label>

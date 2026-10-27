@@ -16,7 +16,7 @@ export function ViewAs() {
   if (!who) return <div className="loading" />;
   const base = `/admin/view/${who.id}`;
   return (
-    <LangContext.Provider value={who.language}>
+    <LangContext.Provider value="en">
       <div className="preview-bar">
         <span>Viewing as <b>{who.full_name}</b> · read-only</span>
         <Link to="/admin/staff" className="btn sm">Exit</Link>

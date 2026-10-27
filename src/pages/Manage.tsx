@@ -3,10 +3,11 @@ import { Link, useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useLang } from '../lib/i18n';
 import { time } from '../lib/format';
+import { Avatar } from '../components/Avatar';
 
 type Row = {
   id: string; position_code: string | null; planned_start: string; planned_end: string | null;
-  staff: { full_name: string } | null; punches: { punch_in: string | null; punch_out: string | null } | null;
+  staff: { full_name: string; photo_url: string | null } | null; punches: { punch_in: string | null; punch_out: string | null } | null;
 };
 type Ev = { id: string; title: string; event_date: string };
 
@@ -40,7 +41,7 @@ export function Manage() {
   const load = async () => {
     const [e, s] = await Promise.all([
       supabase.from('events').select('id,title,event_date').eq('id', eventId!).single(),
-      supabase.from('shifts').select('id,position_code,planned_start,planned_end,staff(full_name),punches(punch_in,punch_out)')
+      supabase.from('shifts').select('id,position_code,planned_start,planned_end,staff(full_name,photo_url),punches(punch_in,punch_out)')
         .eq('event_id', eventId!).neq('status', 'declined').order('planned_start'),
     ]);
     setEv(e.data as Ev);
@@ -91,7 +92,7 @@ export function Manage() {
               return (
                 <div key={r.id} className="crew-row">
                   <div className="crew-main">
-                    <span className="code-badge">{r.position_code ?? '·'}</span>
+                    <div className="av-wrap"><Avatar name={r.staff?.full_name ?? '?'} url={r.staff?.photo_url} size={48} /><span className="code-tag">{r.position_code ?? '·'}</span></div>
                     <div className="grow">
                       <div className="strong">{r.staff?.full_name}</div>
                       <div className="sm muted">

@@ -13,11 +13,12 @@ import { EventForm } from './admin/EventForm';
 import { Staff as StaffAdmin } from './admin/Staff';
 import { ViewAs } from './admin/ViewAs';
 import { Manage } from './pages/Manage';
+import { Profile } from './pages/Profile';
 
 export function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [me, setMe] = useState<Staff | null | undefined>(undefined);
-  const lang: Lang = me?.language ?? (navigator.language.startsWith('fr') ? 'fr' : 'en');
+  const lang: Lang = 'en'; // English only for now; French is ready in i18n.ts
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -54,6 +55,7 @@ export function App() {
         {me.role === 'admin' && <Route path="/admin/view/:staffId/*" element={<ViewAs />} />}
         <Route path="/shift/:id" element={<Shift />} />
         <Route path="/manage/:eventId" element={<Manage />} />
+        <Route path="/profile" element={<Profile me={me} />} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </BrowserRouter>
