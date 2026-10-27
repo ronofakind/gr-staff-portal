@@ -6,6 +6,11 @@ import { LangContext, type Lang } from './lib/i18n';
 import { Login } from './pages/Login';
 import { Home } from './pages/Home';
 import { Shift } from './pages/Shift';
+import { AdminLayout } from './admin/AdminLayout';
+import { Week } from './admin/Week';
+import { Day } from './admin/Day';
+import { EventForm } from './admin/EventForm';
+import { Staff as StaffAdmin } from './admin/Staff';
 
 export function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
@@ -34,7 +39,16 @@ export function App() {
   else body = (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<Home me={me} />} />
+        <Route path="/" element={me.role === 'admin' ? <Navigate to="/admin" /> : <Home me={me} />} />
+        <Route path="/me" element={<Home me={me} />} />
+        {me.role === 'admin' && (
+          <Route path="/admin" element={<AdminLayout />}>
+            <Route index element={<Week />} />
+            <Route path="day" element={<Day />} />
+            <Route path="event/:id" element={<EventForm />} />
+            <Route path="staff" element={<StaffAdmin />} />
+          </Route>
+        )}
         <Route path="/shift/:id" element={<Shift />} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
