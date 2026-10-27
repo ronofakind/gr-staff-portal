@@ -7,6 +7,8 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      injectRegister: false,
+      workbox: { clientsClaim: true, skipWaiting: true },
       manifest: {
         name: 'G&R', short_name: 'G&R', lang: 'fr',
         theme_color: '#ffffff', background_color: '#ffffff', display: 'standalone', start_url: '/',
