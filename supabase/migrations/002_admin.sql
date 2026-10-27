@@ -18,3 +18,7 @@ $$ begin
 end $$;
 drop trigger if exists shifts_touch on public.shifts;
 create trigger shifts_touch before update on public.shifts for each row execute function public.touch_shift();
+
+-- Managers see the names of the staff on events they manage.
+create policy manager_team on public.staff for select using (
+  exists (select 1 from shifts s where s.staff_id = staff.id and manages(s.event_id)));

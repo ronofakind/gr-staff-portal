@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { supabase, SHIFT_SELECT, type ShiftRow, type Staff } from '../lib/supabase';
 import { useT, useLang } from '../lib/i18n';
 import { time, longDate, dayBadge, minus } from '../lib/format';
+import { ManagingToday } from './Manage';
 
 export function Home({ me, base = '', preview = false }: { me: Staff; base?: string; preview?: boolean }) {
   const t = useT(); const lang = useLang();
@@ -36,6 +37,8 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
           <h1>{t('hi')} {first}</h1>
         </div>
       </header>
+
+      {!preview && <ManagingToday meId={me.id} isAdmin={me.role === 'admin'} />}
 
       {pending.map((s) => (
         <section key={s.id} className="card confirm stack">
