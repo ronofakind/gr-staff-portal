@@ -13,7 +13,7 @@ const dict = {
     firstTime: 'Première connexion ou code oublié ?', sendCode: 'Envoyer un code par courriel',
     codeSent: 'Vérifie tes courriels : touche le lien, ou entre le code reçu.', verify: 'Vérifier', setPin: 'Choisis ton code à 6 chiffres',
     savePin: 'Enregistrer', badLogin: 'Courriel ou code incorrect.', notStaff: "Ce courriel n'est pas dans l'équipe G&R. Parle à Ronnie.",
-    logout: 'Déconnexion', back: 'Retour', late: 'En retard ou empêché ? Avertis Ronnie',
+    logout: 'Déconnexion', notYou: 'Pas toi ?', back: 'Retour', late: 'En retard ou empêché ? Avertis Ronnie',
   },
   en: {
     hi: 'Hi', nextShift: 'Next shift', comingUp: 'Coming up', nothing: 'No shifts booked yet.',
@@ -27,7 +27,7 @@ const dict = {
     firstTime: 'First time or forgot your code?', sendCode: 'Email me a code',
     codeSent: 'Check your email: tap the link, or enter the code.', verify: 'Verify', setPin: 'Choose your 6-digit code',
     savePin: 'Save', badLogin: 'Wrong email or code.', notStaff: "This email isn't on the G&R team. Talk to Ronnie.",
-    logout: 'Log out', back: 'Back', late: "Running late or can't make it? Tell Ronnie",
+    logout: 'Log out', notYou: 'Not you?', back: 'Back', late: "Running late or can't make it? Tell Ronnie",
   },
 };
 

@@ -6,8 +6,9 @@ type Step = 'email' | 'pin' | 'code' | 'setpin';
 
 export function Login({ mustSetPin }: { mustSetPin?: boolean }) {
   const t = useT();
-  const [step, setStep] = useState<Step>(mustSetPin ? 'setpin' : 'email');
-  const [email, setEmail] = useState('');
+  const saved = localStorage.getItem('gr_email') ?? '';
+  const [step, setStep] = useState<Step>(mustSetPin ? 'setpin' : saved ? 'pin' : 'email');
+  const [email, setEmail] = useState(saved);
   const [value, setValue] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
@@ -23,6 +24,7 @@ export function Login({ mustSetPin }: { mustSetPin?: boolean }) {
     if (step === 'pin') return run(async () => {
       const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password: value });
       if (error) throw new Error(t('badLogin'));
+      localStorage.setItem('gr_email', email.trim());
     });
     if (step === 'code') return run(async () => {
       const { error } = await supabase.auth.verifyOtp({ email: email.trim(), token: value, type: 'email' });
@@ -41,6 +43,7 @@ export function Login({ mustSetPin }: { mustSetPin?: boolean }) {
   const sendCode = () => run(async () => {
     const { error } = await supabase.auth.signInWithOtp({ email: email.trim(), options: { shouldCreateUser: true, emailRedirectTo: window.location.origin } });
     if (error) throw new Error(error.message);
+    localStorage.setItem('gr_email', email.trim());
     setStep('code'); setValue('');
   });
 
@@ -66,6 +69,11 @@ export function Login({ mustSetPin }: { mustSetPin?: boolean }) {
         <button className="btn primary" disabled={busy}>
           {step === 'email' ? t('next') : step === 'pin' ? t('login') : step === 'code' ? t('verify') : t('savePin')}
         </button>
+        {step === 'pin' && (
+          <button type="button" className="btn link" onClick={() => { localStorage.removeItem('gr_email'); setEmail(''); setStep('email'); }}>
+            {email} · {t('notYou')}
+          </button>
+        )}
         {step === 'pin' && (
           <button type="button" className="btn link" onClick={sendCode} disabled={busy}>{t('firstTime')} {t('sendCode')}</button>
         )}
