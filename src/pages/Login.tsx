@@ -39,7 +39,7 @@ export function Login({ mustSetPin }: { mustSetPin?: boolean }) {
   };
 
   const sendCode = () => run(async () => {
-    const { error } = await supabase.auth.signInWithOtp({ email: email.trim(), options: { shouldCreateUser: true } });
+    const { error } = await supabase.auth.signInWithOtp({ email: email.trim(), options: { shouldCreateUser: true, emailRedirectTo: window.location.origin } });
     if (error) throw new Error(error.message);
     setStep('code'); setValue('');
   });

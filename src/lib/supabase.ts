@@ -1,5 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 
+// Arriving from an emailed sign-in link: ask the person to choose their PIN next.
+if (/[?&#](code|access_token)=/.test(window.location.href)) localStorage.setItem('gr_needs_pin', '1');
+
 export const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL as string,
   import.meta.env.VITE_SUPABASE_KEY as string,
