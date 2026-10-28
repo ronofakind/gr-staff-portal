@@ -54,6 +54,7 @@ export function Manage() {
   const [ask, setAsk] = useState<Ask>(null);
   const [review, setReview] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [early, setEarly] = useState<Row[] | null>(null);
   const [err, setErr] = useState('');
 
   const load = async () => {
@@ -83,6 +84,25 @@ export function Manage() {
     setAsk(null); setOpen(null); await load();
   };
   const now = () => new Date().toISOString();
+  const todayMtl = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' });
+  /** ok: within 3 h of call · early: 3–6 h before (ask first, flagged) · locked: earlier, or not the event day */
+  const gate = (r: Row): { kind: 'ok' | 'early' | 'locked'; label?: string } => {
+    const call = new Date(r.planned_start).getTime(); const mins = (call - Date.now()) / 60000;
+    const at = (ms: number) => new Date(ms).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' });
+    if (ev && todayMtl < ev.event_date) {
+      const d = new Date(ev.event_date + 'T12:00:00').toLocaleDateString('en-CA', { weekday: 'short' });
+      return { kind: 'locked', label: `Opens ${d} ${at(call - 3 * 3600e3)}` };
+    }
+    if (mins > 360) return { kind: 'locked', label: `Opens ${at(call - 3 * 3600e3)}` };
+    if (mins > 180) return { kind: 'early' };
+    return { kind: 'ok' };
+  };
+  const startRows = (list: Row[]) => {
+    const go = list.filter((r) => gate(r).kind !== 'locked');
+    if (!go.length) return;
+    if (go.some((r) => gate(r).kind === 'early')) setEarly(go);
+    else set(go.map((r) => ({ id: r.id, in: now(), out: null })));
+  };
 
   if (!ev) return <div className="loading" />;
   const active = rows.filter((r) => !r.attendance);
@@ -134,7 +154,9 @@ export function Manage() {
           <section key={g} className="stack" style={{ gap: 10 }}>
             <div className="grp-head">
               <span className="serif">{time(g, lang)} call</span>
-              {notIn.length > 0 && <button className="btn-go" onClick={() => set(notIn.map((r) => ({ id: r.id, in: now(), out: null })))}>Start remaining ({notIn.length})</button>}
+              {notIn.length > 0 && (gate(notIn[0]).kind === 'locked'
+                ? <span className="locked-pill">🔒 {gate(notIn[0]).label}</span>
+                : <button className="btn-go" onClick={() => startRows(notIn)}>Start remaining ({notIn.length})</button>)}
               {notIn.length === 0 && working.length > 0 && <button className="pill-line" onClick={() => set(working.map((r) => ({ id: r.id, in: r.punches!.punch_in, out: now() })))}>End all ({working.length})</button>}
             </div>
             {grp.map((r) => {
@@ -153,7 +175,7 @@ export function Manage() {
                     <span className="rl">{roleLabel(r.position_code, r.position_detail)}</span>
                     {r.attendance ? <span className="st red">{r.attendance === 'no_show' ? 'No-show' : 'Cancelled'}</span>
                       : pout ? <span className="st">{time(pin!, lang)} → {time(pout, lang)} · {hours(pin!, pout)} {t.hours}</span>
-                      : pin ? <span className="st ok">Working · since {time(pin, lang)}</span>
+                      : pin ? <span className="st ok">Working · since {time(pin, lang)}{new Date(pin).getTime() < new Date(r.planned_start).getTime() - 3 * 3600e3 && <b className="early-flag"> · early start</b>}</span>
                       : isLate ? <span className="st red">Late · {Math.round((Date.now() - new Date(r.planned_start).getTime()) / 60000)} min</span>
                       : <span className="st">{t.notIn}</span>}
                   </button>
@@ -162,7 +184,7 @@ export function Manage() {
                     <a className="ic" href={`sms:${tel}`} aria-label={`Text ${r.staff!.full_name}`}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg></a>
                   </>}
                   {r.attendance ? <button className="act undo" onClick={() => mark(r.id, null)}>Undo</button>
-                    : !pin ? <button className="act start" onClick={() => set([{ id: r.id, in: now(), out: null }])}>{t.start}</button>
+                    : !pin ? (gate(r).kind === 'locked' ? <button className="act locked" disabled title={gate(r).label}>{t.start}</button> : <button className="act start" onClick={() => startRows([r])}>{t.start}</button>)
                     : !pout ? <button className="act end" onClick={() => set([{ id: r.id, in: pin, out: now() }])}>{t.end}</button> : null}
                 </div>
               );
@@ -179,6 +201,21 @@ export function Manage() {
         </div>
         <button className="btn-ink" style={{ height: 46, padding: '0 18px', borderRadius: 23 }} onClick={() => setReview(true)}>{ev.hours_submitted_at ? 'Resubmit ›' : 'Submit hours ›'}</button>
       </div>
+
+      {early && (
+        <>
+          <div className="scrim top" onClick={() => setEarly(null)} />
+          <div className="dialog" role="alertdialog" aria-label="Early start">
+            <div className="bang" style={{ background: '#FBF1D3', color: '#9A7413' }}>!</div>
+            <div className="serif">Start {early.length === 1 ? early[0].staff?.full_name : `${early.length} people`} early?</div>
+            <p>The call time is {time(early[0].planned_start, lang)} — that's more than 3 hours from now.<br />Only do this if they're really starting now. Ronnie will see it flagged.</p>
+            <div className="btns">
+              <button className="btn-red" style={{ background: '#9A7413' }} onClick={() => { const l = early; setEarly(null); set(l.map((r) => ({ id: r.id, in: now(), out: null }))); }}>Yes, start now</button>
+              <button className="btn-ghost" onClick={() => setEarly(null)}>Go back</button>
+            </div>
+          </div>
+        </>
+      )}
 
       {review && (() => {
         const missing = active.filter((r) => !r.punches?.punch_in || !r.punches?.punch_out);

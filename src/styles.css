@@ -386,3 +386,6 @@ body:has(.v2) { background: #F6F2EC; }
 .sheet-input { height: 54px; border-radius: 14px; border: 1.5px solid #DCD3C7; padding: 0 14px; font: 500 18px Inter, system-ui, sans-serif; background: #fff; color: var(--ink); }
 .pin-field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600; color: var(--muted); }
 .pin-field input { height: 52px; border-radius: 14px; border: 1.5px solid #DCD3C7; text-align: center; letter-spacing: .6em; font: 600 22px Inter, system-ui, sans-serif; background: #fff; color: var(--ink); }
+.crew .act.locked { border: none; background: #EFE9E1; color: #B8AFA4; cursor: not-allowed; }
+.locked-pill { height: 34px; padding: 0 12px; border-radius: 17px; background: #EFE9E1; color: var(--muted); font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; }
+.early-flag { color: #9A7413; }
