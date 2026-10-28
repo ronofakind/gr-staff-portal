@@ -26,6 +26,7 @@ export function Schedule({ me, base = '', preview = false }: { me: Staff; base?:
   const [off, setOff] = useState<Set<string>>(new Set());
   const [daysOff, setDaysOff] = useState<{ from_date: string; to_date: string; reason: string | null }[]>([]);
   const [usualNo, setUsualNo] = useState<Set<number>>(new Set());
+  const [opened, setOpened] = useState<Set<string>>(new Set());
 
   const range = useMemo(() => {
     if (mode === 'week') { const a = monday(anchor); return { from: a, to: add(a, 6) }; }
@@ -43,7 +44,9 @@ export function Schedule({ me, base = '', preview = false }: { me: Staff; base?:
       supabase.from('availability').select('for_date,status').eq('staff_id', me.id).eq('status', 'no').gte('for_date', range.from).lte('for_date', range.to),
       supabase.from('days_off').select('from_date,to_date,reason').eq('staff_id', me.id).lte('from_date', range.to).gte('to_date', range.from),
       supabase.from('staff_weekly').select('dow,status').eq('staff_id', me.id).eq('status', 'no'),
-    ]).then(([s, a, o, w]) => {
+      supabase.from('avail_exceptions').select('for_date').eq('staff_id', me.id).gte('for_date', range.from).lte('for_date', range.to),
+    ]).then(([s, a, o, w, x]) => {
+      setOpened(new Set((x.data ?? []).map((r) => r.for_date as string)));
       setDaysOff((o.data ?? []) as typeof daysOff);
       setUsualNo(new Set((w.data ?? []).map((r) => r.dow as number)));
       setRows(((s.data ?? []) as unknown as S[]).sort((x, y) => x.planned_start.localeCompare(y.planned_start)));
@@ -52,7 +55,15 @@ export function Schedule({ me, base = '', preview = false }: { me: Staff; base?:
   }, [range.from, range.to, me.id]);
 
   const offOn = (day: string) => daysOff.find((o) => o.from_date <= day && o.to_date >= day);
-  const usuallyNo = (day: string) => usualNo.has((D(day).getDay() + 6) % 7);
+  const usuallyNo = (day: string) => usualNo.has((D(day).getDay() + 6) % 7) && !opened.has(day);
+  const isOpened = (day: string) => opened.has(day) && usualNo.has((D(day).getDay() + 6) % 7);
+  const dowName = (day: string) => D(day).toLocaleDateString('en-CA', { weekday: 'long' });
+  const openDay = async (day: string, on: boolean) => {
+    if (preview) return;
+    const next = new Set(opened); if (on) next.add(day); else next.delete(day); setOpened(next);
+    if (on) await supabase.from('avail_exceptions').upsert({ staff_id: me.id, for_date: day });
+    else await supabase.from('avail_exceptions').delete().eq('staff_id', me.id).eq('for_date', day);
+  };
   const offLabel = (o: { from_date: string; to_date: string }) => o.from_date === o.to_date ? D(o.from_date).toLocaleDateString('en-CA', { weekday: 'short', day: 'numeric' }).replace('.', '')
     : `${D(o.from_date).toLocaleDateString('en-CA', { weekday: 'short', day: 'numeric' }).replace('.', '')} – ${D(o.to_date).toLocaleDateString('en-CA', { weekday: 'short', day: 'numeric' }).replace('.', '')}`;
   const byDay = useMemo(() => { const m: Record<string, S[]> = {}; for (const r of rows ?? []) (m[r.events.event_date] ??= []).push(r); return m; }, [rows]);
@@ -103,10 +114,10 @@ export function Schedule({ me, base = '', preview = false }: { me: Staff; base?:
             const day = add(range.from, i); const list = byDay[day] ?? []; const isToday = day === today;
             const asking = list.some((s) => s.status === 'booked');
             return (
-              <div key={day} className={'agenda-row' + (isToday ? ' today' : '') + (!list.length && !isToday ? ' empty' : '') + (asking ? ' ask' : '') + (!list.length && offOn(day) ? ' dayoff' : '')}>
+              <div key={day} className={'agenda-row' + (isToday ? ' today' : '') + (!list.length && !isToday ? ' empty' : '') + (asking ? ' ask' : '') + (!list.length && offOn(day) ? ' dayoff' : '') + (!list.length && !offOn(day) && usuallyNo(day) && day >= today ? ' usualoff' : '')}>
                 <div className="d"><small>{dw}</small><b>{D(day).getDate()}</b></div>
                 <div className="what">
-                  {list.length === 0 && <span className="none">{offOn(day) ? <><b className="off-tag">DAY OFF</b>{offOn(day)!.reason ?? ''}</> : off.has(day) ? 'Unavailable' : usuallyNo(day) ? 'Usually not free' : '—'}</span>}
+                  {list.length === 0 && <span className="none">{offOn(day) ? <><b className="off-tag">DAY OFF</b>{offOn(day)!.reason ?? ''}</> : off.has(day) ? 'Unavailable' : usuallyNo(day) ? <><b>Not free</b><small>Your usual {dowName(day)}</small></> : isOpened(day) ? <span className="opened-tag">✓ Opened up</span> : '—'}</span>}
                   {list.map((s) => (
                     <Link key={s.id} to={`${base}/shift/${s.id}`}>
                       <b>{s.events.title}</b>
@@ -115,6 +126,7 @@ export function Schedule({ me, base = '', preview = false }: { me: Staff; base?:
                   ))}
                 </div>
                 <div className="right">
+                  {!list.length && !offOn(day) && usuallyNo(day) && day >= today && <button className="can-work" onClick={() => openDay(day, true)}>I can work</button>}
                   {isToday && <span className="tag-today">TODAY</span>}
                   {list.map((s) => day < today ? <span key={s.id} className="tag-done">Worked</span>
                     : s.status === 'confirmed' ? <span key={s.id} className="tag-ok">✓ Confirmed</span>
@@ -138,6 +150,7 @@ export function Schedule({ me, base = '', preview = false }: { me: Staff; base?:
                 else if (offOn(day)) c += ' dayoff';
                 else if (off.has(day)) c += ' off';
                 else if (usuallyNo(day) && day >= today) c += ' usualno';
+                else if (isOpened(day) && day >= today) c += ' opened';
                 else if (day < today) c += ' past';
                 if (day === today) c += ' today';
                 if (day === sel && !out) c += ' sel';
@@ -150,12 +163,22 @@ export function Schedule({ me, base = '', preview = false }: { me: Staff; base?:
             <span><i style={{ border: '2px dashed var(--accent)', background: '#fff' }} />To confirm</span>
             <span><i style={{ background: '#EDE7DF' }} />Worked</span>
             <span><i className="stripe" />Day off</span>
-            <span><b style={{ color: '#C9BFB2', fontWeight: 500 }}>7</b>Usually not free</span>
+            <span><i style={{ background: '#DDD5CA' }} />Not free (usual week)</span>
+            <span><i style={{ background: '#fff', boxShadow: 'inset 0 0 0 2px var(--ok)' }} />Opened up</span>
           </div>
           <div className="sec-head"><span className="serif">{D(sel).toLocaleDateString('en-CA', { weekday: 'long', day: 'numeric' })}</span><span className="muted sm">{inView.length} shifts · {total} hrs this month</span></div>
           {(byDay[sel] ?? []).length === 0 && (offOn(sel) ? (
             <Link to={base ? '#' : '/availability'} className="dayoff-card"><div className="grow"><small>DAY OFF · {offLabel(offOn(sel)!).toUpperCase()}</small><div className="serif">{offOn(sel)!.reason || 'Day off'}</div></div><span className="muted sm">Edit ›</span></Link>
-          ) : <div className="card muted sm">{off.has(sel) ? 'Unavailable' : usuallyNo(sel) ? 'No shift · usually not free' : 'No shift'}</div>)}
+          ) : usuallyNo(sel) && sel >= today ? (
+            <div className="usual-card">
+              <small>{D(sel).toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric' }).toUpperCase()}</small>
+              <div className="serif">You’re usually not free on {dowName(sel)}s</div>
+              <p>Open this day if you can work it. Ronnie will be able to ask you and book you. Your usual week stays the same.</p>
+              <button className="big-btn" style={{ background: 'var(--ok)', color: '#fff', justifyContent: 'center' }} onClick={() => openDay(sel, true)}>I can work this day</button>
+            </div>
+          ) : isOpened(sel) && sel >= today ? (
+            <div className="card row" style={{ gap: 10 }}><span className="opened-tag">✓ Opened up</span><span className="grow muted sm">You can be asked and booked this {dowName(sel)}.</span><button className="link-btn" onClick={() => openDay(sel, false)}>Undo</button></div>
+          ) : <div className="card muted sm">{off.has(sel) ? 'Unavailable' : 'No shift'}</div>)}
           {(byDay[sel] ?? []).map((s) => (
             <Link key={s.id} to={`${base}/shift/${s.id}`} className="day-card">
               <div className="grow"><small>{s.time_tbc ? 'Time TBC' : time(s.planned_start, lang)} · {role(s)}{s.status === 'booked' ? ' · to confirm' : ''}</small><div className="serif">{s.events.title}</div></div>

@@ -8,7 +8,7 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: false,
-      workbox: { clientsClaim: true, skipWaiting: true },
+      workbox: { clientsClaim: true, skipWaiting: true, navigateFallbackDenylist: [/^\/api\//] },
       manifest: {
         name: 'G&R', short_name: 'G&R', lang: 'fr',
         theme_color: '#ffffff', background_color: '#ffffff', display: 'standalone', start_url: '/',

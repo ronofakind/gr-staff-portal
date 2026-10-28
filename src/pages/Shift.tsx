@@ -32,7 +32,7 @@ export function Shift({ backTo = '/' }: { backTo?: string }) {
     ...(ev.timeline ?? []).map((x) => ({ time: x.time, label: x.label, strong: false })),
     ...(s.planned_end ? [{ time: '~' + time(s.planned_end, lang), label: lang === 'fr' ? 'Fin, punch out' : 'Ends', strong: false }] : []),
   ];
-  const cal = calendarUrl(ev.title, arrive, s.planned_end, address);
+  const cal = s.cal_token && !/android/i.test(navigator.userAgent) ? `/api/cal?t=${s.cal_token}` : calendarUrl(ev.title, arrive, s.planned_end, address);
 
   const kind = uniformFor(s);
   const extras = (ev.dress_code ? ev.dress_code.split(/[\n,]+/) : kind === 'dress' ? ['Black closed-toe shoes'] : ['Black dress pants', 'Black shoes', 'Black belt'])

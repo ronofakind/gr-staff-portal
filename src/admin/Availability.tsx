@@ -20,6 +20,7 @@ export function Availability() {
   const [events, setEvents] = useState<AEvent[]>([]);
   const [staff, setStaff] = useState<AStaff[]>([]);
   const [weekly, setWeekly] = useState<Weekly[]>([]);
+  const [opened, setOpened] = useState<Set<string>>(new Set());
   const [off, setOff] = useState<Off[]>([]);
   const [asks, setAsks] = useState<Ask[]>([]);
   const [rows, setRows] = useState<Row[]>([]);
@@ -31,13 +32,15 @@ export function Availability() {
 
   const first = D(month); const last = isoDay(new Date(first.getFullYear(), first.getMonth() + 1, 0));
   const load = async () => {
-    const [ev, st, w, o, a, r] = await Promise.all([
+    const [ev, st, w, o, a, r, x] = await Promise.all([
       eventsBetween(month, last), staff.length ? Promise.resolve(staff) : allStaff(),
       supabase.from('staff_weekly').select('staff_id,dow,status,from_time'),
       supabase.from('days_off').select('staff_id,from_date,to_date,reason').gte('to_date', today),
       supabase.from('avail_asks').select('*').gte('for_date', today).order('for_date'),
       supabase.from('availability').select('id,staff_id,for_date,status,tier,from_time,until_time,ask_id').not('ask_id', 'is', null).gte('for_date', today),
+      supabase.from('avail_exceptions').select('staff_id,for_date').gte('for_date', today),
     ]);
+    setOpened(new Set(((x.data ?? []) as { staff_id: string; for_date: string }[]).map((e) => `${e.staff_id}|${e.for_date}`)));
     setEvents(ev.filter((e) => e.department !== 'bar')); setStaff(st);
     setWeekly((w.data ?? []) as Weekly[]); setOff((o.data ?? []) as Off[]);
     const as = (a.data ?? []) as Ask[];
@@ -59,7 +62,7 @@ export function Availability() {
     const o = off.find((x) => x.staff_id === s.id && x.from_date <= d && x.to_date >= d);
     if (o) return `Day off${o.reason ? ` (${o.reason})` : ''}`;
     const w = weekly.find((x) => x.staff_id === s.id && x.dow === dow(d));
-    if (w?.status === 'no') return `Not on ${D(d).toLocaleDateString('en-CA', { weekday: 'long' })}s`;
+    if (w?.status === 'no' && !opened.has(`${s.id}|${d}`)) return `Not on ${D(d).toLocaleDateString('en-CA', { weekday: 'long' })}s`;
     return null;
   };
   const freeFrom = (s: AStaff, d: string) => { const w = weekly.find((x) => x.staff_id === s.id && x.dow === dow(d)); return w?.status === 'from' ? w.from_time : null; };

@@ -529,3 +529,14 @@ button.tier-dot { width: 30px; height: 30px; cursor: pointer; } button.tier-dot.
 main.page.slide-left > :not(.tabbar):not(.save-bar):not(.sheet):not(.scrim) { animation: gr-in-left .22s ease-out; }
 main.page.slide-right > :not(.tabbar):not(.save-bar):not(.sheet):not(.scrim) { animation: gr-in-right .22s ease-out; }
 @media (prefers-reduced-motion: reduce) { main.page > * { animation: none !important; } }
+
+/* Usual-week "No" days */
+.mcell.usualno .n { background: #DDD5CA; color: #9A9187; font-weight: 500; }
+.mcell.opened .n { background: #fff; color: var(--ok); font-weight: 700; box-shadow: inset 0 0 0 2px var(--ok); }
+.agenda-row.usualoff { background: #E6DFD5; }
+.agenda-row.usualoff .none b { display: block; color: #8A8178; font-size: 14px; } .agenda-row.usualoff .none small { color: #9A9187; font-size: 12px; }
+.can-work { height: 30px; padding: 0 12px; border-radius: 15px; border: 1.5px solid var(--ok); background: #fff; color: var(--ok); font: 700 12px Inter, system-ui, sans-serif; cursor: pointer; white-space: nowrap; }
+.opened-tag { font-size: 12px; font-weight: 700; color: var(--ok); }
+.usual-card { background: #fff; border-radius: 20px; padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+.usual-card small { font-size: 11px; font-weight: 700; letter-spacing: .12em; color: var(--muted); } .usual-card .serif { font-size: 22px; line-height: 1.15; }
+.usual-card p { margin: 0; font-size: 13px; color: var(--muted); line-height: 1.4; }
