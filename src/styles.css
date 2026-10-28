@@ -522,3 +522,10 @@ button.tier-dot { width: 30px; height: 30px; cursor: pointer; } button.tier-dot.
 .off-tag { font-size: 10px; letter-spacing: .1em; color: #7A7268; margin-right: 8px; }
 .dayoff-card { background: repeating-linear-gradient(135deg, #EDE6DC 0 6px, #F6F2EC 6px 12px); border: 1.5px solid #E4DCD1; border-radius: 20px; padding: 14px 16px; display: flex; align-items: center; gap: 14px; text-decoration: none; color: var(--ink); }
 .dayoff-card small { font-size: 11px; font-weight: 700; letter-spacing: .1em; color: var(--muted); } .dayoff-card .serif { font-size: 20px; }
+
+/* Swipe between tabs */
+@keyframes gr-in-left { from { transform: translateX(40px); opacity: .3; } to { transform: none; opacity: 1; } }
+@keyframes gr-in-right { from { transform: translateX(-40px); opacity: .3; } to { transform: none; opacity: 1; } }
+main.page.slide-left > :not(.tabbar):not(.save-bar):not(.sheet):not(.scrim) { animation: gr-in-left .22s ease-out; }
+main.page.slide-right > :not(.tabbar):not(.save-bar):not(.sheet):not(.scrim) { animation: gr-in-right .22s ease-out; }
+@media (prefers-reduced-motion: reduce) { main.page > * { animation: none !important; } }
