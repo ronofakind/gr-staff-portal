@@ -10,6 +10,8 @@ type Row = {
   staff: { full_name: string; photo_url: string | null } | null; punches: { punch_in: string | null; punch_out: string | null } | null;
 };
 type Ev = { id: string; title: string; event_date: string };
+type EvFull = Ev & { address: string | null; start_time: string | null; end_time: string | null; description: string | null;
+  dress_code: string | null; venues: { address: string | null; staff_notes: string | null } | null };
 
 const L = {
   fr: { team: 'Équipe', notIn: 'Pas commencé', start: 'Commencer', end: 'Terminer', startAll: 'Commencer tous', endAll: 'Terminer tous',
@@ -32,16 +34,17 @@ const isBar = (code: string | null, detail: string | null) =>
 
 /** What the person does tonight: the detail set on the shift, else a label from the position code. */
 function roleLabel(code: string | null, detail: string | null) {
-  if (detail) return detail;
-  const map: Record<string, string> = { MD: 'MD', BM: 'Bar - Bar manager', BT: 'Bar - Bartender', BB: 'Bar - Barback', BUS: 'Busboy' };
+  if (detail) return detail.replace(/^bar\s*-\s*/i, ''); // the BAR / FLOOR tag already says the department
+  const map: Record<string, string> = { MD: 'MD', BM: 'Bar manager', BT: 'Bartender', BB: 'Barback', BUS: 'Busboy' };
   return code ? (map[code] ?? (/^\d+$/.test(code) ? 'Waiter' : code)) : 'Waiter';
 }
+const fmt12 = (t: string) => { const [h, m] = t.split(':').map(Number); return `${((h + 11) % 12) + 1}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`; };
 const hm = (iso: string | null) => iso ? new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Toronto' }) : '';
 const hours = (a: string, b: string) => Math.round((new Date(b).getTime() - new Date(a).getTime()) / 900000) / 4;
 
 export function Manage() {
   const { eventId } = useParams(); const lang = useLang(); const t = L[lang];
-  const [ev, setEv] = useState<Ev | null>(null);
+  const [ev, setEv] = useState<EvFull | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
   const [editing, setEditing] = useState<string | null>(null);
   const [draft, setDraft] = useState({ in: '', out: '' });
@@ -49,11 +52,11 @@ export function Manage() {
 
   const load = async () => {
     const [e, s] = await Promise.all([
-      supabase.from('events').select('id,title,event_date').eq('id', eventId!).single(),
+      supabase.from('events').select('id,title,event_date,address,start_time,end_time,description,dress_code,venues(address,staff_notes)').eq('id', eventId!).single(),
       supabase.from('shifts').select('id,position_code,position_detail,planned_start,planned_end,staff(full_name,photo_url),punches(punch_in,punch_out)')
         .eq('event_id', eventId!).neq('status', 'declined').order('planned_start'),
     ]);
-    setEv(e.data as Ev);
+    setEv(e.data as unknown as EvFull);
     setRows(((s.data ?? []) as unknown as Row[]).sort((a, b) => a.planned_start.localeCompare(b.planned_start)
       || (a.position_code === 'MD' ? -1 : b.position_code === 'MD' ? 1 : Number(a.position_code) - Number(b.position_code))));
   };
@@ -72,6 +75,12 @@ export function Manage() {
   if (!ev) return <div className="loading" />;
   const groups = Array.from(new Set(rows.map((r) => r.planned_start)));
   const inCount = rows.filter((r) => r.punches?.punch_in).length;
+  const addr = ev.address || ev.venues?.address || '';
+  const barN = rows.filter((r) => isBar(r.position_code, r.position_detail)).length;
+  const floorN = rows.length - barN;
+  const workingN = rows.filter((r) => r.punches?.punch_in && !r.punches?.punch_out).length;
+  const doneN = rows.filter((r) => r.punches?.punch_out).length;
+  const lateN = rows.filter((r) => !r.punches?.punch_in && new Date(r.planned_start).getTime() < Date.now()).length;
 
   return (
     <main className="page">
@@ -82,6 +91,29 @@ export function Manage() {
           <div className="muted sm">{t.team} · {inCount}/{rows.length} {t.started}</div>
         </div>
       </header>
+
+      <section className="card stack">
+        <div className="row wrap sm">
+          <b>{new Date(ev.event_date + 'T12:00:00').toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric' })}</b>
+          {ev.start_time && <span className="muted">· {fmt12(ev.start_time)}{ev.end_time ? ` – ${fmt12(ev.end_time)}` : ''}</span>}
+        </div>
+        {addr && <a className="addr" href={`https://maps.google.com/?q=${encodeURIComponent(addr)}`} target="_blank" rel="noreferrer">{addr} ›</a>}
+        <div className="row4">
+          <div className="tile"><small>Floor</small><b>{floorN}</b></div>
+          <div className="tile"><small>Bar</small><b>{barN}</b></div>
+          <div className="tile"><small>Working</small><b className="okc">{workingN}</b></div>
+          <div className="tile"><small>Done</small><b>{doneN}</b></div>
+        </div>
+        {lateN > 0 && <div className="late-note">{lateN} not started past their start time</div>}
+        {(ev.dress_code || ev.description || ev.venues?.staff_notes) && (
+          <details className="more">
+            <summary>Event notes & uniform</summary>
+            {ev.description && <p className="body sm">{ev.description}</p>}
+            {ev.venues?.staff_notes && <p className="body sm">{ev.venues.staff_notes}</p>}
+            {ev.dress_code && <p className="body sm" style={{ whiteSpace: 'pre-line' }}>{ev.dress_code}</p>}
+          </details>
+        )}
+      </section>
       {err && <p className="error">{err}</p>}
 
       {groups.map((g) => {
