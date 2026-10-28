@@ -506,3 +506,19 @@ button.tier-dot { width: 30px; height: 30px; cursor: pointer; } button.tier-dot.
 .leave-in { width: 86px; height: 26px; border: 1px dashed #D8D2CA; border-radius: 6px; font-size: 12px; color: #9A9187; background: #fff; }
 .leave-in.set { border: 1px solid #C99A1E; color: #9A7413; font-weight: 600; }
 @media (max-width: 900px) { .avail-grid, .tier-cols { grid-template-columns: 1fr; } }
+
+/* Save bar (usual week) */
+.save-bar { position: fixed; left: 0; right: 0; bottom: calc(64px + env(safe-area-inset-bottom)); z-index: 19; max-width: 520px; margin: 0 auto; background: #fff; border-top: 1px solid #ECE5DB; box-shadow: 0 -6px 18px rgba(26,23,20,.06); padding: 12px 16px; display: flex; align-items: center; gap: 10px; }
+.save-bar b { display: block; font-size: 13px; color: var(--accent); } .save-bar span { font-size: 12px; color: var(--muted); }
+.save-bar .undo { border: none; background: none; font: 600 13px Inter, system-ui, sans-serif; color: var(--muted); cursor: pointer; padding: 0 6px; }
+.save-bar .save { height: 46px; padding: 0 20px; border-radius: 23px; border: none; background: var(--ink); color: #F6F2EC; font: 600 14px Inter, system-ui, sans-serif; cursor: pointer; }
+
+/* Days off on the schedule */
+.stripe { display: inline-block; width: 16px; height: 16px; border-radius: 5px; background: repeating-linear-gradient(135deg, #E4DCD1 0 3px, #F6F2EC 3px 6px); }
+.mcell.dayoff .n { background: repeating-linear-gradient(135deg, #E4DCD1 0 3px, #F6F2EC 3px 6px); color: #9A9187; font-weight: 600; }
+.mcell .off-mark { font-size: 8px; font-weight: 800; letter-spacing: .08em; color: #9A9187; line-height: 8px; height: 8px; }
+.mcell.usualno .n { color: #C9BFB2; font-weight: 500; }
+.agenda-row.dayoff { background: repeating-linear-gradient(135deg, #EDE6DC 0 6px, #F6F2EC 6px 12px); }
+.off-tag { font-size: 10px; letter-spacing: .1em; color: #7A7268; margin-right: 8px; }
+.dayoff-card { background: repeating-linear-gradient(135deg, #EDE6DC 0 6px, #F6F2EC 6px 12px); border: 1.5px solid #E4DCD1; border-radius: 20px; padding: 14px 16px; display: flex; align-items: center; gap: 14px; text-decoration: none; color: var(--ink); }
+.dayoff-card small { font-size: 11px; font-weight: 700; letter-spacing: .1em; color: var(--muted); } .dayoff-card .serif { font-size: 20px; }

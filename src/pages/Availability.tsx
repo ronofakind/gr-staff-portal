@@ -22,6 +22,8 @@ const UNTILS = ['21:00', '22:00', '23:00', '00:00', '01:00'];
 export function Availability({ me, preview = false }: { me: Staff; preview?: boolean }) {
   const [asks, setAsks] = useState<Ask[] | null>(null);
   const [week, setWeek] = useState<Record<number, Week>>({});
+  const [saved, setSaved] = useState<Record<number, Week>>({});
+  const [savingWk, setSavingWk] = useState(false);
   const [off, setOff] = useState<Off[]>([]);
   const [pick, setPick] = useState<Ask | null>(null);
   const [from, setFrom] = useState<string | null>(null); const [until, setUntil] = useState<string | null>(null);
@@ -38,7 +40,7 @@ export function Availability({ me, preview = false }: { me: Staff; preview?: boo
     supabase.from('days_off').select('id,from_date,to_date,reason').eq('staff_id', me.id).gte('to_date', today).order('from_date'),
   ]).then(([a, w, o]) => {
     setAsks((a.data ?? []) as unknown as Ask[]);
-    setWeek(Object.fromEntries(((w.data ?? []) as Week[]).map((x) => [x.dow, x])));
+    const wk = Object.fromEntries(((w.data ?? []) as Week[]).map((x) => [x.dow, x])); setWeek(wk); setSaved(wk);
     setOff((o.data ?? []) as Off[]);
   });
   useEffect(() => { load(); }, [me.id]);
@@ -49,10 +51,14 @@ export function Availability({ me, preview = false }: { me: Staff; preview?: boo
     const { error } = await supabase.rpc('answer_availability', { p_id: a.id, p_status: status, p_from: f, p_until: u });
     if (error) setErr(error.message); setPick(null); load();
   };
-  const setDay = async (dow: number, status: Week['status'], from_time: string | null = null) => {
-    if (preview) return;
-    setWeek({ ...week, [dow]: { dow, status, from_time } });
-    await supabase.from('staff_weekly').upsert({ staff_id: me.id, dow, status, from_time });
+  const setDay = (dow: number, status: Week['status'], from_time: string | null = null) => setWeek({ ...week, [dow]: { dow, status, from_time } });
+  const changed = DAYS.map((_, d) => d).filter((d) => week[d] && (week[d].status !== saved[d]?.status || (week[d].from_time ?? '').slice(0, 5) !== (saved[d]?.from_time ?? '').slice(0, 5)));
+  const saveWeek = async () => {
+    if (preview || !changed.length) return;
+    setSavingWk(true); setErr('');
+    const { error } = await supabase.from('staff_weekly').upsert(changed.map((d) => ({ staff_id: me.id, dow: d, status: week[d].status, from_time: week[d].status === 'from' ? week[d].from_time : null })));
+    setSavingWk(false);
+    if (error) setErr(error.message); else setSaved(week);
   };
   const addOff = async () => {
     if (preview || !nOff.from) return;
@@ -128,7 +134,14 @@ export function Availability({ me, preview = false }: { me: Staff; preview?: boo
         {!off.length && <div className="muted sm" style={{ padding: '0 6px' }}>No days off added.</div>}
         <p className="muted sm" style={{ margin: '2px 6px' }}>Days off win over your usual week. You can’t add a day you’re already booked on. Talk to Ronnie.</p>
       </section>
-      <div style={{ height: 90 }} />
+      <div style={{ height: changed.length ? 160 : 90 }} />
+      {changed.length > 0 && (
+        <div className="save-bar">
+          <div className="grow"><b>{changed.length} unsaved change{changed.length > 1 ? 's' : ''}</b><span>{changed.map((d) => DAYS[d]).join(' · ')}</span></div>
+          <button className="undo" onClick={() => setWeek(saved)}>Undo</button>
+          <button className="save" disabled={savingWk} onClick={saveWeek}>{savingWk ? 'Saving…' : 'Save changes'}</button>
+        </div>
+      )}
 
       {pick && (
         <>
