@@ -5,6 +5,7 @@ import { useLang } from '../lib/i18n';
 import { time, longDate, dayBadge, minus } from '../lib/format';
 import { Avatar } from '../components/Avatar';
 import { TabBar } from '../components/TabBar';
+import { UniformIcon, uniformFor, UNIFORM_LABEL } from '../components/Uniform';
 
 type Mate = { full_name: string; photo_url: string | null; position_code: string | null; position_detail: string | null };
 export const isBar = (code: string | null, detail: string | null) => /^(BM|BT|BB)$/.test(code ?? '') || /^bar\b/i.test(detail ?? '');
@@ -98,6 +99,10 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
             <div className="grow" />
             <div style={{ textAlign: 'right' }}><small>Shift</small><b style={{ fontSize: 15 }}>{time(next.planned_start, lang)}{next.planned_end ? ` – ${time(next.planned_end, lang)}` : ''}</b></div>
           </div>
+          <div className="wear-row">
+            <span className="wear-tile"><UniformIcon kind={uniformFor(next)} size={34} /></span>
+            <div><small>Wear</small><b>{UNIFORM_LABEL[uniformFor(next)]}</b></div>
+          </div>
           <Link className="light-btn" to={`${base}/shift/${next.id}`}>View details</Link>
         </section>
       )}
@@ -129,6 +134,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
                 <Link key={s.id} to={`${base}/shift/${s.id}`} className="agenda-row">
                   <div className="d"><small>{b.dow}</small><b>{b.day}</b></div>
                   <div className="what"><b>{s.events.title}</b><span>{time(s.planned_start, lang)} · {role(s)}</span></div>
+                  <span className="wear-mini" title={UNIFORM_LABEL[uniformFor(s)]}><UniformIcon kind={uniformFor(s)} size={26} /></span>
                   {teams[s.events.id] && !preview
                     ? <button className="tag-dark" onClick={(e) => { e.preventDefault(); nav(`/manage/${s.events.id}`); }}>Team {teams[s.events.id].length} ›</button>
                     : s.status === 'confirmed' ? <span className="tag-ok">✓ Confirmed</span> : <span className="tag-ask">To confirm</span>}
@@ -143,7 +149,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
   );
 }
 
-function BigTime({ iso }: { iso: string }) {
+export function BigTime({ iso }: { iso: string }) {
   const t = time(iso, 'en'); const m = t.match(/^(.*?)\s*([ap])\.?\s?m\.?$/i);
   return <span className="big serif">{m ? m[1] : t}{m && <em> {m[2].toUpperCase()}M</em>}</span>;
 }

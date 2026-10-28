@@ -7,11 +7,13 @@ type F = {
   event_date: string; title: string; client: string; address: string; department: 'floor' | 'bar' | 'kitchen';
   start_time: string; end_time: string; staff_needed: number; manager_id: string;
   description: string; dress_code: string; bring: string; timeline: string;
+  uniform_floor: string; uniform_bar: string;
 };
 
 const empty = (d: string): F => ({
   event_date: d, title: '', client: '', address: '', department: 'floor', start_time: '17:00', end_time: '',
-  staff_needed: 0, manager_id: '', description: '', dress_code: 'Black dress shirt, black pants, black shoes', bring: '', timeline: '',
+  staff_needed: 0, manager_id: '', description: '', dress_code: 'Black dress pants, Black shoes, Black belt', bring: '', timeline: '',
+  uniform_floor: 'white_shirt', uniform_bar: 'black_shirt',
 });
 
 export function EventForm() {
@@ -32,7 +34,7 @@ export function EventForm() {
         event_date: e.event_date, title: e.title, client: e.event_private?.client ?? '', address: e.address ?? '',
         department: e.department, start_time: (e.start_time ?? '').slice(0, 5), end_time: (e.end_time ?? '').slice(0, 5),
         staff_needed: e.staff_needed, manager_id: e.manager_id ?? '', description: e.description ?? '',
-        dress_code: e.dress_code ?? '', bring: e.bring ?? '',
+        dress_code: e.dress_code ?? '', bring: e.bring ?? '', uniform_floor: e.uniform_floor ?? 'white_shirt', uniform_bar: e.uniform_bar ?? 'black_shirt',
         timeline: (e.timeline ?? []).map((t: { time: string; label: string }) => `${t.time} ${t.label}`).join('\n'),
       });
     });
@@ -48,6 +50,7 @@ export function EventForm() {
       event_date: f.event_date, title: f.title.trim(), address: f.address || null, department: f.department,
       start_time: f.start_time || null, end_time: f.end_time || null, staff_needed: f.staff_needed,
       manager_id: f.manager_id || null, description: f.description || null, dress_code: f.dress_code || null, bring: f.bring || null,
+      uniform_floor: f.uniform_floor, uniform_bar: f.uniform_bar,
       timeline: f.timeline.split('\n').map((l) => l.trim()).filter(Boolean).map((l) => {
         const m = l.match(/^(\S+)\s+(.*)$/); return m ? { time: m[1], label: m[2] } : { time: '', label: l };
       }),
@@ -85,7 +88,9 @@ export function EventForm() {
           <select value={f.manager_id} onChange={set('manager_id')}><option value="">—</option>{managers.map((m) => <option key={m.id} value={m.id}>{m.full_name}</option>)}</select>
         </label>
         <label className="field span2">What the event is (staff see this)<textarea rows={2} value={f.description} onChange={set('description')} placeholder="Seated dinner for 120, three courses, wine service." /></label>
-        <label className="field">Uniform (one item per line)<textarea rows={3} value={f.dress_code} onChange={set('dress_code')} /></label>
+        <label className="field">Floor wears<select value={f.uniform_floor} onChange={set('uniform_floor')}><option value="white_shirt">White dress shirt + tie</option><option value="black_shirt">Black dress shirt + tie</option><option value="dress">Black cocktail dress</option></select></label>
+        <label className="field">Bar wears<select value={f.uniform_bar} onChange={set('uniform_bar')}><option value="black_shirt">Black dress shirt + tie</option><option value="white_shirt">White dress shirt + tie</option><option value="dress">Black cocktail dress</option></select></label>
+        <label className="field">Rest of the uniform (comma or one per line)<textarea rows={2} value={f.dress_code} onChange={set('dress_code')} /></label>
         <label className="field">Bring (one per line)<textarea rows={3} value={f.bring} onChange={set('bring')} placeholder="Wine key" /></label>
         <label className="field span2">Timeline (one per line: time then label)<textarea rows={3} value={f.timeline} onChange={set('timeline')} placeholder={'18:30 Guests arrive, cocktail\n19:30 Dinner'} /></label>
       </div>
