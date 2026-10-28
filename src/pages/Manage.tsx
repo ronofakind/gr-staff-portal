@@ -7,7 +7,7 @@ import { Avatar } from '../components/Avatar';
 
 type Row = {
   id: string; position_code: string | null; position_detail: string | null; planned_start: string; planned_end: string | null;
-  staff: { full_name: string; photo_url: string | null } | null; punches: { punch_in: string | null; punch_out: string | null } | null;
+  staff: { full_name: string; photo_url: string | null; phone: string | null } | null; punches: { punch_in: string | null; punch_out: string | null } | null;
 };
 type Ev = { id: string; title: string; event_date: string };
 type EvFull = Ev & { address: string | null; start_time: string | null; end_time: string | null; description: string | null;
@@ -53,7 +53,7 @@ export function Manage() {
   const load = async () => {
     const [e, s] = await Promise.all([
       supabase.from('events').select('id,title,event_date,address,start_time,end_time,description,dress_code,venues(address,staff_notes)').eq('id', eventId!).single(),
-      supabase.from('shifts').select('id,position_code,position_detail,planned_start,planned_end,staff(full_name,photo_url),punches(punch_in,punch_out)')
+      supabase.from('shifts').select('id,position_code,position_detail,planned_start,planned_end,staff(full_name,photo_url,phone),punches(punch_in,punch_out)')
         .eq('event_id', eventId!).neq('status', 'declined').order('planned_start'),
     ]);
     setEv(e.data as unknown as EvFull);
@@ -75,7 +75,6 @@ export function Manage() {
   if (!ev) return <div className="loading" />;
   const groups = Array.from(new Set(rows.map((r) => r.planned_start)));
   const inCount = rows.filter((r) => r.punches?.punch_in).length;
-  const addr = ev.address || ev.venues?.address || '';
   const barN = rows.filter((r) => isBar(r.position_code, r.position_detail)).length;
   const floorN = rows.length - barN;
   const workingN = rows.filter((r) => r.punches?.punch_in && !r.punches?.punch_out).length;
@@ -88,32 +87,17 @@ export function Manage() {
         <Link to="/" className="icon-btn" aria-label={t.back}>‹</Link>
         <div className="grow">
           <h1>{ev.title}</h1>
-          <div className="muted sm">{t.team} · {inCount}/{rows.length} {t.started}</div>
+          <div className="muted sm">{new Date(ev.event_date + 'T12:00:00').toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric' })}{ev.start_time ? ` · ${fmt12(ev.start_time)}${ev.end_time ? ` – ${fmt12(ev.end_time)}` : ''}` : ''}</div>
         </div>
       </header>
 
-      <section className="card stack">
-        <div className="row wrap sm">
-          <b>{new Date(ev.event_date + 'T12:00:00').toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric' })}</b>
-          {ev.start_time && <span className="muted">· {fmt12(ev.start_time)}{ev.end_time ? ` – ${fmt12(ev.end_time)}` : ''}</span>}
-        </div>
-        {addr && <a className="addr" href={`https://maps.google.com/?q=${encodeURIComponent(addr)}`} target="_blank" rel="noreferrer">{addr} ›</a>}
-        <div className="row4">
-          <div className="tile"><small>Floor</small><b>{floorN}</b></div>
-          <div className="tile"><small>Bar</small><b>{barN}</b></div>
-          <div className="tile"><small>Working</small><b className="okc">{workingN}</b></div>
-          <div className="tile"><small>Done</small><b>{doneN}</b></div>
-        </div>
-        {lateN > 0 && <div className="late-note">{lateN} not started past their start time</div>}
-        {(ev.dress_code || ev.description || ev.venues?.staff_notes) && (
-          <details className="more">
-            <summary>Event notes & uniform</summary>
-            {ev.description && <p className="body sm">{ev.description}</p>}
-            {ev.venues?.staff_notes && <p className="body sm">{ev.venues.staff_notes}</p>}
-            {ev.dress_code && <p className="body sm" style={{ whiteSpace: 'pre-line' }}>{ev.dress_code}</p>}
-          </details>
-        )}
-      </section>
+      <div className="row4">
+        <div className="tile card-tile"><small>Floor</small><b>{floorN}</b></div>
+        <div className="tile card-tile"><small>Bar</small><b>{barN}</b></div>
+        <div className="tile card-tile"><small>Working</small><b className="okc">{workingN}</b></div>
+        <div className="tile card-tile"><small>Done</small><b>{doneN}</b></div>
+      </div>
+      {lateN > 0 && <div className="late-note">{lateN} not started past their start time</div>}
       {err && <p className="error">{err}</p>}
 
       {groups.map((g) => {
@@ -134,16 +118,20 @@ export function Manage() {
                 <div key={r.id} className="crew-row">
                   <div className="crew-main">
                     <div className="av-wrap"><Avatar name={r.staff?.full_name ?? '?'} url={r.staff?.photo_url} size={48} />{isBar(r.position_code, r.position_detail) ? <span className="dept-tag is-bar">BAR</span> : <span className="dept-tag is-floor">FLOOR</span>}</div>
-                    <div className="grow">
+                    <button className="grow name-btn" aria-label={`Edit times for ${r.staff?.full_name}`} onClick={() => { setEditing(editing === r.id ? null : r.id); setDraft({ in: hm(pin) || hm(r.planned_start), out: hm(pout) }); }}>
                       <div className="strong">{r.staff?.full_name}</div>
                       <div className="sm role-line">{roleLabel(r.position_code, r.position_detail)}</div>
                       <div className="sm muted">
-                        {!pin ? t.notIn : <>{time(pin, lang)} → {pout ? time(pout, lang) : '…'}{pout ? ` · ${hours(pin, pout)} ${t.hours}` : ''}</>}
+                        {!pin ? (new Date(r.planned_start).getTime() < Date.now() ? <span className="accent strong">Not started · {Math.round((Date.now() - new Date(r.planned_start).getTime()) / 60000)} min late</span> : t.notIn)
+                          : <>{time(pin, lang)} → {pout ? time(pout, lang) : '…'}{pout ? ` · ${hours(pin, pout)} ${t.hours}` : ''}</>}
                       </div>
-                    </div>
+                    </button>
+                    {r.staff?.phone && <>
+                      <a className="round-ic" href={`tel:${r.staff.phone.replace(/[^\d+]/g, '')}`} aria-label={`Call ${r.staff.full_name}`}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z" /></svg></a>
+                      <a className="round-ic" href={`sms:${r.staff.phone.replace(/[^\d+]/g, '')}`} aria-label={`Text ${r.staff.full_name}`}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg></a>
+                    </>}
                     {!pin && <button className="btn sm ok" onClick={() => set([{ id: r.id, in: now(), out: null }])}>{t.start}</button>}
                     {pin && !pout && <button className="btn sm" onClick={() => set([{ id: r.id, in: pin, out: now() }])}>{t.end}</button>}
-                    <button className="btn sm link" onClick={() => { setEditing(editing === r.id ? null : r.id); setDraft({ in: hm(pin) || hm(r.planned_start), out: hm(pout) }); }}>{t.edit}</button>
                   </div>
                   {editing === r.id && (
                     <div className="crew-edit">

@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { supabase, SHIFT_SELECT, type ShiftRow, type Staff } from '../lib/supabase';
 import { useT, useLang } from '../lib/i18n';
 import { time, longDate, dayBadge, minus } from '../lib/format';
 import { Avatar } from '../components/Avatar';
 
 export function Home({ me, base = '', preview = false }: { me: Staff; base?: string; preview?: boolean }) {
-  const t = useT(); const lang = useLang();
+  const t = useT(); const lang = useLang(); const nav = useNavigate();
   const [shifts, setShifts] = useState<ShiftRow[] | null>(null);
   const [teams, setTeams] = useState<Record<string, { full_name: string; photo_url: string | null }[]>>({});
 
@@ -104,7 +104,9 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
                     <div className="strong">{s.events.title}</div>
                     <div className="muted sm">{time(s.planned_start, lang)}{s.planned_end ? ` – ${time(s.planned_end, lang)}` : ''}</div>
                   </div>
-                  {teams[s.events.id] ? <span className="pill dark">Team {teams[s.events.id].length}</span> : <Status s={s.status} />}
+                  {teams[s.events.id] && !preview
+                    ? <button className="pill dark pill-btn" onClick={(e) => { e.preventDefault(); nav(`/manage/${s.events.id}`); }}>Team {teams[s.events.id].length} ›</button>
+                    : <Status s={s.status} />}
                 </Link>
               );
             })}

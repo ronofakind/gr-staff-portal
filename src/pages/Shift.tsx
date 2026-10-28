@@ -8,21 +8,26 @@ export function Shift({ backTo = '/' }: { backTo?: string }) {
   const t = useT(); const lang = useLang();
   const { id } = useParams();
   const [s, setS] = useState<ShiftRow | null>(null);
+  const [md, setMd] = useState<{ full_name: string; photo_url: string | null; phone: string | null } | null>(null);
 
   useEffect(() => {
-    supabase.from('shifts').select(SHIFT_SELECT).eq('id', id!).single()
-      .then(({ data }) => setS(data as unknown as ShiftRow));
+    supabase.from('shifts').select(SHIFT_SELECT).eq('id', id!).single().then(({ data }) => {
+      const row = data as unknown as ShiftRow; setS(row);
+      // "Look for" = the MD on site (falls back to the event manager).
+      if (row) supabase.rpc('event_md', { p_event: row.events.id }).then(({ data: m }) => setMd((m as typeof md[]) ?.[0] ?? null));
+    });
   }, [id]);
 
   if (!s) return <div className="loading" />;
   const ev = s.events;
+  const lead = md ?? ev.manager;
   const address = ev.address || ev.venues?.address || '';
   const arrive = minus(s.planned_start, s.arrive_before_min);
   const steps = [
-    { time: time(arrive, lang), label: ev.manager ? `${lang === 'fr' ? 'Arrivée, présente-toi à' : 'Arrive, check in with'} ${ev.manager.full_name.split(' ')[0]}` : (lang === 'fr' ? 'Arrivée' : 'Arrive'), strong: true },
-    { time: time(s.planned_start, lang), label: lang === 'fr' ? 'Début du quart, punch in' : 'Shift starts, punch in', strong: true },
+    { time: time(arrive, lang), label: lead ? `${lang === 'fr' ? 'Arrivée, présente-toi à' : 'Arrive, check in with'} ${lead.full_name.split(' ')[0]}` : (lang === 'fr' ? 'Arrivée' : 'Arrive'), strong: true },
+    { time: time(s.planned_start, lang), label: lang === 'fr' ? 'Début du quart, punch in' : 'Shift starts', strong: true },
     ...(ev.timeline ?? []).map((x) => ({ time: x.time, label: x.label, strong: false })),
-    ...(s.planned_end ? [{ time: '~' + time(s.planned_end, lang), label: lang === 'fr' ? 'Fin, punch out' : 'Ends, punch out', strong: false }] : []),
+    ...(s.planned_end ? [{ time: '~' + time(s.planned_end, lang), label: lang === 'fr' ? 'Fin, punch out' : 'Ends', strong: false }] : []),
   ];
   const cal = calendarUrl(ev.title, arrive, s.planned_end, address);
 
@@ -73,16 +78,16 @@ export function Shift({ backTo = '/' }: { backTo?: string }) {
       <section className="card stack">
         <div className="eyebrow">{t('theEvent')}</div>
         {ev.description && <p className="body">{ev.description}</p>}
-        {ev.manager && (
+        {lead && (
           <div className="lookfor">
-            {ev.manager.photo_url
-              ? <img src={ev.manager.photo_url} alt={ev.manager.full_name} className="avatar xl" />
-              : <div className="avatar xl" role="img" aria-label={ev.manager.full_name}>{initials(ev.manager.full_name)}</div>}
+            {lead.photo_url
+              ? <img src={lead.photo_url} alt={lead.full_name} className="avatar xl" />
+              : <div className="avatar xl" role="img" aria-label={lead.full_name}>{initials(lead.full_name)}</div>}
             <div className="grow">
               <div className="eyebrow accent">{t('lookFor')}</div>
-              <div className="h2">{ev.manager.full_name}</div>
+              <div className="h2">{lead.full_name}</div>
             </div>
-            {ev.manager.phone && <a className="icon-btn ok" href={`https://wa.me/${ev.manager.phone.replace(/\D/g, '')}`} aria-label="WhatsApp"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1b7f5c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg></a>}
+            {lead.phone && <a className="icon-btn ok" href={`https://wa.me/${lead.phone.replace(/\D/g, '')}`} aria-label="WhatsApp"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1b7f5c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg></a>}
           </div>
         )}
       </section>
