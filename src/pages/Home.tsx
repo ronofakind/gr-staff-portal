@@ -97,7 +97,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
           <div className="times">
             <div><small>Be there</small><BigTime iso={minus(next.planned_start, next.arrive_before_min)} /></div>
             <div className="grow" />
-            <div style={{ textAlign: 'right' }}><small>Shift</small><b style={{ fontSize: 15 }}>{time(next.planned_start, lang)}{next.planned_end ? ` – ${time(next.planned_end, lang)}` : ''}</b></div>
+            <div style={{ textAlign: 'right' }}><small>Shift starts</small><b style={{ fontSize: 15 }}>{time(next.planned_start, lang)}</b></div>
           </div>
           <div className="wear-row">
             <span className="wear-tile"><UniformIcon kind={uniformFor(next)} size={34} /></span>

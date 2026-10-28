@@ -100,7 +100,7 @@ export function Schedule({ me, base = '', preview = false }: { me: Staff; base?:
                   {list.map((s) => (
                     <Link key={s.id} to={`${base}/shift/${s.id}`}>
                       <b>{s.events.title}</b>
-                      <span>{time(s.planned_start, lang)}{s.planned_end ? ` – ${time(s.planned_end, lang)}` : ''} · {role(s)}</span>
+                      <span>{time(s.planned_start, lang)} · {role(s)}</span>
                     </Link>
                   ))}
                 </div>
@@ -143,7 +143,7 @@ export function Schedule({ me, base = '', preview = false }: { me: Staff; base?:
           {(byDay[sel] ?? []).length === 0 && <div className="card muted sm">{off.has(sel) ? 'Unavailable' : 'No shift'}</div>}
           {(byDay[sel] ?? []).map((s) => (
             <Link key={s.id} to={`${base}/shift/${s.id}`} className="day-card">
-              <div className="grow"><small>{time(s.planned_start, lang)}{s.planned_end ? ` – ${time(s.planned_end, lang)}` : ''} · {role(s)}{s.status === 'booked' ? ' · to confirm' : ''}</small><div className="serif">{s.events.title}</div></div>
+              <div className="grow"><small>{time(s.planned_start, lang)} · {role(s)}{s.status === 'booked' ? ' · to confirm' : ''}</small><div className="serif">{s.events.title}</div></div>
               <span className="go">›</span>
             </Link>
           ))}
