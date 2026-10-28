@@ -14,6 +14,8 @@ export function Profile({ me }: { me: Staff }) {
   const [url, setUrl] = useState(me.photo_url);
   const [x, setX] = useState<Extra | null>(null);
   const [msg, setMsg] = useState('');
+  const [edit, setEdit] = useState<null | 'phone' | 'pin'>(null);
+  const [phone, setPhone] = useState(me.phone ?? '');
 
   useEffect(() => {
     supabase.from('staff').select('transport,positions,shirt_size,pants_size,dress_size').eq('id', me.id).single()
@@ -44,9 +46,15 @@ export function Profile({ me }: { me: Staff }) {
         <PhotoPicker name={me.full_name} url={url} onPick={pick} size={84} />
         <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 18, fontWeight: 700 }}>{me.full_name}</div>
-          <div className="muted sm">{me.email}</div>
-          {me.phone && <div className="muted sm">{me.phone}</div>}
+          <div className="muted sm">{me.role === 'manager' ? 'Manager' : me.role === 'admin' ? 'Admin' : 'Staff'}</div>
         </div>
+      </section>
+
+      <div className="sec-head"><span className="serif">Contact &amp; login</span></div>
+      <section className="sizes">
+        <div className="size-row"><span className="muted sm" style={{ width: 70 }}>Email</span><span className="grow strong" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{me.email}</span></div>
+        <button className="size-row edit-row" onClick={() => setEdit('phone')}><span className="muted sm" style={{ width: 70 }}>Phone</span><span className="grow strong">{phone || '—'}</span><span className="strong sm">Edit ›</span></button>
+        <button className="size-row edit-row" onClick={() => setEdit('pin')}><span className="muted sm" style={{ width: 70 }}>PIN</span><span className="grow strong">••••••</span><span className="strong sm">Change ›</span></button>
       </section>
 
       {x && <>
@@ -82,6 +90,7 @@ export function Profile({ me }: { me: Staff }) {
 
       <button className="btn" onClick={() => supabase.auth.signOut()}>Log out</button>
       <TabBar />
+      {edit && <EditSheet kind={edit} me={me} phone={phone} onClose={() => setEdit(null)} onPhone={(v) => { setPhone(v); setMsg('✓ Saved'); }} />}
     </main>
   );
 }
@@ -99,5 +108,50 @@ function SizeRow({ label, value, options, onChange, none = 'Choose' }: { label: 
         </select>
       </span>
     </label>
+  );
+}
+
+function EditSheet({ kind, me, phone, onClose, onPhone }: { kind: 'phone' | 'pin'; me: Staff; phone: string; onClose: () => void; onPhone: (v: string) => void }) {
+  const [v, setV] = useState(kind === 'phone' ? phone : '');
+  const [cur, setCur] = useState(''); const [n1, setN1] = useState(''); const [n2, setN2] = useState('');
+  const [err, setErr] = useState(''); const [busy, setBusy] = useState(false); const [done, setDone] = useState(false);
+  const digits = (t: string) => t.replace(/\D/g, '').slice(0, 6);
+  const savePhone = async () => {
+    setBusy(true); setErr('');
+    const { error } = await supabase.from('staff').update({ phone: v.trim() || null }).eq('id', me.id);
+    setBusy(false); if (error) return setErr(error.message);
+    onPhone(v.trim()); onClose();
+  };
+  const savePin = async () => {
+    setBusy(true); setErr('');
+    const chk = await supabase.auth.signInWithPassword({ email: me.email!, password: cur });
+    if (chk.error) { setBusy(false); return setErr('Current PIN is wrong.'); }
+    const { error } = await supabase.auth.updateUser({ password: n1 });
+    setBusy(false); if (error) return setErr(error.message);
+    setDone(true);
+  };
+  const pinOk = cur.length === 6 && n1.length === 6 && n1 === n2;
+  return (
+    <>
+      <div className="scrim" onClick={onClose} />
+      <div className="sheet" role="dialog" aria-label={kind === 'phone' ? 'Edit phone' : 'Change PIN'}>
+        <div className="grab" />
+        <div className="spread" style={{ alignItems: 'center' }}><span className="serif" style={{ fontSize: 24 }}>{kind === 'phone' ? 'Phone number' : 'Change PIN'}</span><button className="btn link" onClick={onClose}>Cancel</button></div>
+        {kind === 'phone' ? <>
+          <input className="sheet-input" type="tel" inputMode="tel" autoFocus value={v} onChange={(e) => setV(e.target.value)} placeholder="(514) 555-0000" />
+          <button className="btn-ink" disabled={busy} onClick={savePhone}>{busy ? 'Saving…' : 'Save'}</button>
+        </> : done ? <>
+          <p className="body">✓ Your new PIN is saved. Use it next time you log in.</p>
+          <button className="btn-ink" onClick={onClose}>Done</button>
+        </> : <>
+          <label className="pin-field">Current PIN<input inputMode="numeric" type="password" autoComplete="current-password" value={cur} onChange={(e) => setCur(digits(e.target.value))} /></label>
+          <label className="pin-field">New PIN<input inputMode="numeric" type="password" autoComplete="new-password" value={n1} onChange={(e) => setN1(digits(e.target.value))} /></label>
+          <label className="pin-field">Confirm new PIN<input inputMode="numeric" type="password" autoComplete="new-password" value={n2} onChange={(e) => setN2(digits(e.target.value))} /></label>
+          {n2.length === 6 && n1 !== n2 && <p className="error">The new PINs don't match.</p>}
+          <button className="btn-ink" disabled={!pinOk || busy} style={{ opacity: pinOk ? 1 : 0.45 }} onClick={savePin}>{busy ? 'Saving…' : 'Save new PIN'}</button>
+        </>}
+        {err && <p className="error">{err}</p>}
+      </div>
+    </>
   );
 }

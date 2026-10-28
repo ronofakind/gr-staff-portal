@@ -374,3 +374,15 @@ body:has(.v2) { background: #F6F2EC; }
 .size-row + .size-row { border-top: 1px solid var(--line); }
 .size-val { position: relative; display: flex; align-items: center; gap: 6px; font-weight: 600; } .size-val.empty { color: var(--soft); }
 .size-val select { position: absolute; inset: -10px; opacity: 0; width: auto; height: auto; cursor: pointer; }
+.tbox { background: #2A2521; border-radius: 14px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; }
+.tbox small { font-size: 11px; color: var(--dim); }
+.big.sm-big { font-size: 24px; } .big.sm-big em { font-size: 12px; }
+.team-btn { height: 46px; border-radius: 14px; background: var(--accent); color: #fff; display: flex; align-items: center; justify-content: center; font: 600 14px Inter, system-ui, sans-serif; cursor: pointer; }
+.countdown { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 12px; background: #2A2521; font-size: 11px; font-weight: 600; letter-spacing: 0; color: #D8D0C5; font-variant-numeric: tabular-nums; }
+.countdown i { width: 6px; height: 6px; border-radius: 3px; background: #E0A458; }
+.ok-dot { width: 10px; height: 10px; border-radius: 5px; background: var(--ok); flex: 0 0 auto; margin: 0 6px; }
+.edit-row { width: 100%; border: none; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; gap: 12px; }
+.size-row { gap: 12px; }
+.sheet-input { height: 54px; border-radius: 14px; border: 1.5px solid #DCD3C7; padding: 0 14px; font: 500 18px Inter, system-ui, sans-serif; background: #fff; color: var(--ink); }
+.pin-field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600; color: var(--muted); }
+.pin-field input { height: 52px; border-radius: 14px; border: 1.5px solid #DCD3C7; text-align: center; letter-spacing: .6em; font: 600 22px Inter, system-ui, sans-serif; background: #fff; color: var(--ink); }

@@ -49,9 +49,6 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
   const pending = shifts.filter((s) => s.status === 'booked');
   const first = me.full_name.split(' ')[0];
   const today = todayIso();
-  const hour = Number(new Date().toLocaleString('en-US', { hour: 'numeric', hour12: false, timeZone: 'America/Toronto' }));
-  const greet = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
-  const managedNext = shifts.find((s) => teams[s.events.id]);
 
   const whenLabel = (s: ShiftRow) => {
     const d = s.events.event_date;
@@ -65,7 +62,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
     <main className="page v2">
       <header className="v2-head">
         <img className="logo" src="/logo-full.png" alt="G&R" />
-        <div className="hello"><b>{greet}, {first}</b><span>{longDate(today, lang)}</span></div>
+        <div className="hello"><b>Hi {first}</b><span>{longDate(today, lang)}</span></div>
         {!preview ? <Link to="/profile" aria-label="My profile"><Avatar name={me.full_name} url={me.photo_url} size={38} /></Link> : <Avatar name={me.full_name} url={me.photo_url} size={38} />}
       </header>
 
@@ -84,43 +81,36 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
 
       {!next && <div className="card"><p className="muted" style={{ margin: 0 }}>No shifts booked yet.</p></div>}
 
-      {next && (
-        <section className="next">
-          <div className="top-line">
-            <span>{whenLabel(next).toUpperCase()} · {role(next).toUpperCase()}</span>
-            {next.status === 'confirmed' ? <span className="state"><i />Confirmed</span> : <span className="state wait"><i />To confirm</span>}
-          </div>
-          <div>
-            <div className="venue serif">{next.events.title}</div>
-            <div className="sub">{longDate(next.events.event_date, lang)}{next.events.venues?.name && next.events.venues.name !== next.events.title ? ` · ${next.events.venues.name}` : ''}</div>
-          </div>
-          <div className="times">
-            <div><small>Be there</small><BigTime iso={minus(next.planned_start, next.arrive_before_min)} /></div>
-            <div className="grow" />
-            <div style={{ textAlign: 'right' }}><small>Shift starts</small><b style={{ fontSize: 15 }}>{time(next.planned_start, lang)}</b></div>
-          </div>
-          <div className="wear-row">
-            <span className="wear-tile"><UniformIcon kind={uniformFor(next)} size={34} /></span>
-            <div><small>Wear</small><b>{UNIFORM_LABEL[uniformFor(next)]}</b></div>
-          </div>
-          <Link className="light-btn" to={`${base}/shift/${next.id}`}>View details</Link>
-        </section>
-      )}
-
-      {managedNext && !preview && (() => {
-        const team = teams[managedNext.events.id];
-        const bar = team.filter((m) => isBar(m.position_code, m.position_detail)).length;
+      {next && (() => {
+        const addr = next.events.address || next.events.venues?.address || '';
+        const team = teams[next.events.id];
+        const dayWord = next.events.event_date === today ? 'Today' : next.events.event_date === addDay(today, 1) ? 'Tomorrow'
+          : new Date(next.events.event_date + 'T12:00:00').toLocaleDateString('en-CA', { weekday: 'long', month: 'short', day: 'numeric' });
         return (
-          <Link to={`/manage/${managedNext.events.id}`} className="managing">
-            <div className="grow">
-              <div className="kicker red">You're managing{managedNext.id !== next?.id ? ` · ${managedNext.events.title}` : ''}</div>
-              <div className="faces2">
-                {team.slice(0, 5).map((p, i) => <Avatar key={i} name={p.full_name} url={p.photo_url} size={34} />)}
-                <span className="cnt">{team.length > 5 ? `+${team.length - 5} · ` : ''}{team.length - bar} floor · {bar} bar</span>
-              </div>
+          <section className="next" style={{ gap: 14, padding: 18 }}>
+            <div className="top-line">
+              <span>{dayWord.toUpperCase()} · {role(next).toUpperCase()}</span>
+              <Countdown iso={minus(next.planned_start, next.arrive_before_min)} start={next.planned_start} />
             </div>
-            <span className="go">›</span>
-          </Link>
+            <div className="spread" style={{ alignItems: 'flex-end' }}>
+              <div style={{ minWidth: 0 }}>
+                <div className="venue serif">{next.events.title}</div>
+                {addr && <div className="sub" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{addr.split(',').slice(0, 2).join(' ·')}</div>}
+              </div>
+              <span className="wear-tile" style={{ width: 52, height: 52, borderRadius: 14 }} title={UNIFORM_LABEL[uniformFor(next)]}><UniformIcon kind={uniformFor(next)} size={38} /></span>
+            </div>
+            <div className="row2">
+              <div className="tbox"><small>Be there</small><BigTime iso={minus(next.planned_start, next.arrive_before_min)} small /></div>
+              <div className="tbox"><small>Shift starts</small><BigTime iso={next.planned_start} small /></div>
+            </div>
+            <div className="row2">
+              <Link className="light-btn" style={{ height: 46, borderRadius: 14 }} to={`${base}/shift/${next.id}`}>Details</Link>
+              {team && !preview
+                ? <Link className="team-btn" to={`/manage/${next.events.id}`}>My team · {team.length} ›</Link>
+                : next.status === 'confirmed' ? <span className="light-btn" style={{ height: 46, borderRadius: 14, background: '#2A2521', color: '#9FD8B8' }}>✓ Confirmed</span>
+                : <button className="team-btn" style={{ border: 'none' }} onClick={() => respond(next.id, 'confirmed')}>Confirm</button>}
+            </div>
+          </section>
         );
       })()}
 
@@ -131,13 +121,11 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
             {rest.slice(0, 5).map((s) => {
               const b = dayBadge(s.events.event_date, lang);
               return (
-                <Link key={s.id} to={`${base}/shift/${s.id}`} className="agenda-row">
-                  <div className="d"><small>{b.dow}</small><b>{b.day}</b></div>
-                  <div className="what"><b>{s.events.title}</b><span>{time(s.planned_start, lang)} · {role(s)}</span></div>
-                  <span className="wear-mini" title={UNIFORM_LABEL[uniformFor(s)]}><UniformIcon kind={uniformFor(s)} size={26} /></span>
-                  {teams[s.events.id] && !preview
-                    ? <button className="tag-dark" onClick={(e) => { e.preventDefault(); nav(`/manage/${s.events.id}`); }}>Team {teams[s.events.id].length} ›</button>
-                    : s.status === 'confirmed' ? <span className="tag-ok">✓ Confirmed</span> : <span className="tag-ask">To confirm</span>}
+                <Link key={s.id} to={teams[s.events.id] && !preview ? `/manage/${s.events.id}` : `${base}/shift/${s.id}`} className="agenda-row" style={{ minHeight: 64 }}>
+                  <div className="d" style={{ width: 40, alignItems: 'center' }}><small>{b.dow}</small><b>{b.day}</b></div>
+                  <div className="what" style={{ gap: 1 }}><b>{s.events.title}</b><span>Be there {time(minus(s.planned_start, s.arrive_before_min), lang).replace(/\s?[ap]\.?m\.?/i, '')} · {role(s)}{teams[s.events.id] && !preview ? ` · team ${teams[s.events.id].length}` : ''}</span></div>
+                  <span className="wear-mini" style={{ width: 32, height: 32, borderRadius: 9 }} title={UNIFORM_LABEL[uniformFor(s)]}><UniformIcon kind={uniformFor(s)} size={24} /></span>
+                  {s.status === 'confirmed' ? <span className="ok-dot" aria-label="Confirmed" /> : <span className="tag-ask" style={{ height: 26, fontSize: 11 }}>Confirm</span>}
                 </Link>
               );
             })}
@@ -149,9 +137,24 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
   );
 }
 
-export function BigTime({ iso }: { iso: string }) {
+export function BigTime({ iso, small = false }: { iso: string; small?: boolean }) {
   const t = time(iso, 'en'); const m = t.match(/^(.*?)\s*([ap])\.?\s?m\.?$/i);
-  return <span className="big serif">{m ? m[1] : t}{m && <em> {m[2].toUpperCase()}M</em>}</span>;
+  return <span className={'big serif' + (small ? ' sm-big' : '')}>{m ? m[1] : t}{m && <em> {m[2].toUpperCase()}M</em>}</span>;
+}
+
+/** Small live countdown to "be there" time, only on the next event. */
+function Countdown({ iso, start }: { iso: string; start: string }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => { const id = setInterval(() => setNow(Date.now()), 30000); return () => clearInterval(id); }, []);
+  const ms = new Date(iso).getTime() - now;
+  let label: string;
+  if (now >= new Date(start).getTime()) label = 'Started';
+  else if (ms <= 0) label = 'Time to go';
+  else {
+    const m = Math.floor(ms / 60000); const d = Math.floor(m / 1440); const h = Math.floor((m % 1440) / 60); const mm = m % 60;
+    label = d > 0 ? `in ${d} d ${h} h` : h > 0 ? `in ${h} h ${mm} min` : `in ${mm} min`;
+  }
+  return <span className="countdown"><i />{label}</span>;
 }
 
 export function Status({ s }: { s: ShiftRow['status'] }) {
