@@ -9,7 +9,15 @@ export function Staff() {
   const [list, setList] = useState<AStaff[] | null>(null);
   const [q, setQ] = useState(''); const [show, setShow] = useState<'active' | 'all'>('active');
   const [open, setOpen] = useState<string | null>(null);
-  const load = () => allStaff().then(setList);
+  const [flags, setFlags] = useState<Record<string, { ns: number; c: number }>>({});
+  const load = () => {
+    allStaff().then(setList);
+    supabase.from('shifts').select('staff_id,attendance').not('attendance', 'is', null).then(({ data }) => {
+      const m: Record<string, { ns: number; c: number }> = {};
+      for (const r of (data ?? []) as { staff_id: string; attendance: string }[]) { const x = (m[r.staff_id] ??= { ns: 0, c: 0 }); if (r.attendance === 'no_show') x.ns++; else x.c++; }
+      setFlags(m);
+    });
+  };
   useEffect(() => { load(); }, []);
 
   const rows = (list ?? []).filter((s) => (show === 'all' || s.active) && s.full_name.toLowerCase().includes(q.toLowerCase()));
@@ -31,7 +39,7 @@ export function Staff() {
             {rows.map((s) => (
               <Fragment key={s.id}>
                 <tr className={s.active ? '' : 'inactive'}>
-                  <td className="strong">{s.full_name}</td>
+                  <td className="strong">{s.full_name}{flags[s.id]?.ns ? <span className="flag no_show" title="No-shows"> {flags[s.id].ns} no-show{flags[s.id].ns > 1 ? 's' : ''}</span> : null}{flags[s.id]?.c ? <span className="flag cancelled" title="Cancellations"> {flags[s.id].c} cancelled</span> : null}</td>
                   <td>{s.role}{s.department !== 'floor' ? ` · ${s.department}` : ''}</td>
                   <td>{s.positions.join(', ')}</td>
                   <td>{s.phone}</td>

@@ -14,6 +14,7 @@ import { Staff as StaffAdmin } from './admin/Staff';
 import { ViewAs } from './admin/ViewAs';
 import { Manage } from './pages/Manage';
 import { Profile } from './pages/Profile';
+import { Schedule } from './pages/Schedule';
 
 export function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
@@ -53,6 +54,7 @@ export function App() {
           </Route>
         )}
         {me.role === 'admin' && <Route path="/admin/view/:staffId/*" element={<ViewAs />} />}
+        <Route path="/schedule" element={<Schedule me={me} />} />
         <Route path="/shift/:id" element={<Shift />} />
         <Route path="/manage/:eventId" element={<Manage />} />
         <Route path="/profile" element={<Profile me={me} />} />

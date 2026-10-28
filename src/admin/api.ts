@@ -8,7 +8,7 @@ export type AStaff = {
 
 export type AShift = {
   id: string; event_id: string; staff_id: string; position_code: string | null; position_detail: string | null;
-  planned_start: string; status: 'booked' | 'confirmed' | 'declined'; changed_at: string; notified_at: string | null;
+  planned_start: string; status: 'booked' | 'confirmed' | 'declined'; changed_at: string; notified_at: string | null; attendance: 'no_show' | 'cancelled' | null;
   staff: { full_name: string } | null;
 };
 
@@ -23,7 +23,7 @@ export type AEvent = {
 
 export const EVENT_SELECT = `id,event_date,title,address,department,description,dress_code,bring,start_time,end_time,
   staff_needed,manager_id,venue_id,timeline,event_private(client,punch_code),
-  shifts(id,event_id,staff_id,position_code,position_detail,planned_start,status,changed_at,notified_at,staff(full_name))`;
+  shifts(id,event_id,staff_id,position_code,position_detail,planned_start,status,changed_at,notified_at,attendance,staff(full_name))`;
 
 export async function eventsBetween(from: string, to: string) {
   const { data, error } = await supabase.from('events').select(EVENT_SELECT)

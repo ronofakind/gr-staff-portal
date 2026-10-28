@@ -132,6 +132,7 @@ export function Day() {
                   <input className="code" defaultValue={s.position_code ?? ''} disabled={locked} aria-label="Position"
                     onBlur={(ev) => ev.target.value !== (s.position_code ?? '') && setCode(s, ev.target.value.trim().toUpperCase())} />
                   <span className="grow">{s.staff?.full_name}</span>
+                  {s.attendance && <span className={'flag ' + s.attendance}>{s.attendance === 'no_show' ? 'NO-SHOW' : 'CANCELLED'}</span>}
                   <span className={'dot ' + s.status} title={s.status} />
                   {!locked && (
                     <>

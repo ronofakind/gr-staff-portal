@@ -32,7 +32,7 @@ export function Shift({ backTo = '/' }: { backTo?: string }) {
   const cal = calendarUrl(ev.title, arrive, s.planned_end, address);
 
   return (
-    <main className="page">
+    <main className="page v2">
       <header className="top bar">
         <Link to={backTo} className="icon-btn" aria-label={t('back')}>‹</Link>
         <div>

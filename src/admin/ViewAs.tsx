@@ -4,6 +4,7 @@ import { supabase, type Staff } from '../lib/supabase';
 import { LangContext } from '../lib/i18n';
 import { Home } from '../pages/Home';
 import { Shift } from '../pages/Shift';
+import { Schedule } from '../pages/Schedule';
 
 /** Admin preview: the staff app exactly as this person sees it. Read-only. */
 export function ViewAs() {
@@ -24,6 +25,7 @@ export function ViewAs() {
       <div className="preview-phone">
         <Routes>
           <Route index element={<Home me={who} base={base} preview />} />
+          <Route path="schedule" element={<Schedule me={who} base={base} preview />} />
           <Route path="shift/:id" element={<Shift backTo={base} />} />
         </Routes>
       </div>
