@@ -101,7 +101,7 @@ export function Manage() {
               return (
                 <div key={r.id} className="crew-row">
                   <div className="crew-main">
-                    <div className="av-wrap"><Avatar name={r.staff?.full_name ?? '?'} url={r.staff?.photo_url} size={48} />{isBar(r.position_code, r.position_detail) ? <span className="dept-tag bar">BAR</span> : <span className="dept-tag floor">FLOOR</span>}</div>
+                    <div className="av-wrap"><Avatar name={r.staff?.full_name ?? '?'} url={r.staff?.photo_url} size={48} />{isBar(r.position_code, r.position_detail) ? <span className="dept-tag is-bar">BAR</span> : <span className="dept-tag is-floor">FLOOR</span>}</div>
                     <div className="grow">
                       <div className="strong">{r.staff?.full_name}</div>
                       <div className="sm role-line">{roleLabel(r.position_code, r.position_detail)}</div>
