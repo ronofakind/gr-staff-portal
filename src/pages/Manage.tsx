@@ -130,9 +130,10 @@ export function ManagingToday({ meId, isAdmin }: { meId: string; isAdmin: boolea
   const lang = useLang();
   const [evs, setEvs] = useState<Ev[]>([]);
   useEffect(() => {
-    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' });
     const yesterday = new Date(Date.now() - 864e5).toLocaleDateString('en-CA', { timeZone: 'America/Toronto' });
-    let q = supabase.from('events').select('id,title,event_date').in('event_date', [yesterday, today]).neq('department', 'bar');
+    const week = new Date(Date.now() + 7 * 864e5).toLocaleDateString('en-CA', { timeZone: 'America/Toronto' });
+    let q = supabase.from('events').select('id,title,event_date').gte('event_date', yesterday).lte('event_date', week)
+      .neq('department', 'bar').order('event_date');
     if (!isAdmin) q = q.eq('manager_id', meId);
     q.then(({ data }) => setEvs((data ?? []) as Ev[]));
   }, [meId]);
@@ -142,7 +143,7 @@ export function ManagingToday({ meId, isAdmin }: { meId: string; isAdmin: boolea
       {evs.map((e) => (
         <Link key={e.id} to={`/manage/${e.id}`} className="card manage-card">
           <div className="grow">
-            <div className="eyebrow accent">{lang === 'fr' ? 'Tu gères' : "You're managing"}</div>
+            <div className="eyebrow accent">{lang === 'fr' ? 'Tu gères' : "You're managing"} · {e.event_date <= new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' }) ? 'today' : new Date(e.event_date + 'T12:00:00').toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' })}</div>
             <div className="h2">{e.title}</div>
           </div>
           <span className="btn primary sm">{lang === 'fr' ? 'Équipe' : 'Team'} ›</span>
