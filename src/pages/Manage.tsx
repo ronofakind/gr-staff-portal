@@ -6,7 +6,7 @@ import { time } from '../lib/format';
 import { Avatar } from '../components/Avatar';
 
 type Row = {
-  id: string; position_code: string | null; planned_start: string; planned_end: string | null;
+  id: string; position_code: string | null; position_detail: string | null; planned_start: string; planned_end: string | null;
   staff: { full_name: string; photo_url: string | null } | null; punches: { punch_in: string | null; punch_out: string | null } | null;
 };
 type Ev = { id: string; title: string; event_date: string };
@@ -27,6 +27,12 @@ function toIso(date: string, hm: string, ref: string) {
   if (d.getTime() < new Date(ref).getTime() - 6 * 3600e3) d = new Date(d.getTime() + 24 * 3600e3);
   return d.toISOString();
 }
+/** What the person does tonight: the detail set on the shift, else a label from the position code. */
+function roleLabel(code: string | null, detail: string | null) {
+  if (detail) return detail;
+  const map: Record<string, string> = { MD: 'MD', BM: 'Bar - Bar manager', BT: 'Bar - Bartender', BB: 'Bar - Barback', BUS: 'Busboy' };
+  return code ? (map[code] ?? (/^\d+$/.test(code) ? 'Waiter' : code)) : 'Waiter';
+}
 const hm = (iso: string | null) => iso ? new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Toronto' }) : '';
 const hours = (a: string, b: string) => Math.round((new Date(b).getTime() - new Date(a).getTime()) / 900000) / 4;
 
@@ -41,7 +47,7 @@ export function Manage() {
   const load = async () => {
     const [e, s] = await Promise.all([
       supabase.from('events').select('id,title,event_date').eq('id', eventId!).single(),
-      supabase.from('shifts').select('id,position_code,planned_start,planned_end,staff(full_name,photo_url),punches(punch_in,punch_out)')
+      supabase.from('shifts').select('id,position_code,position_detail,planned_start,planned_end,staff(full_name,photo_url),punches(punch_in,punch_out)')
         .eq('event_id', eventId!).neq('status', 'declined').order('planned_start'),
     ]);
     setEv(e.data as Ev);
@@ -95,6 +101,7 @@ export function Manage() {
                     <div className="av-wrap"><Avatar name={r.staff?.full_name ?? '?'} url={r.staff?.photo_url} size={48} /><span className="code-tag">{r.position_code ?? '·'}</span></div>
                     <div className="grow">
                       <div className="strong">{r.staff?.full_name}</div>
+                      <div className="sm role-line">{roleLabel(r.position_code, r.position_detail)}</div>
                       <div className="sm muted">
                         {!pin ? t.notIn : <>{time(pin, lang)} → {pout ? time(pout, lang) : '…'}{pout ? ` · ${hours(pin, pout)} ${t.hours}` : ''}</>}
                       </div>
