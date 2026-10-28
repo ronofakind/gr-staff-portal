@@ -5,6 +5,8 @@ export function AdminLayout() {
   const nav = [
     ['/admin', 'Week'],
     ['/admin/day', 'Day'],
+    ['/admin/availability', 'Availability'],
+    ['/admin/tiers', 'Tiers & ranking'],
     ['/admin/staff', 'Staff'],
   ];
   return (

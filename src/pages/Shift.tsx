@@ -66,6 +66,14 @@ export function Shift({ backTo = '/' }: { backTo?: string }) {
         </div>
       </section>
 
+      {(s.plan || ev.plan) ? (
+        <Link to={`${backTo === '/' ? '' : backTo}/shift/${s.id}/plan`} className="plan-link">
+          <span className="ic">📋</span>
+          <div className="grow"><b>Your plan tonight</b><span>Your role, side, leads, wine + water, clearing</span></div>
+          <span className="go">›</span>
+        </Link>
+      ) : null}
+
       <div className="sec-head"><span className="serif">Where</span></div>
       <section className="where">
         <div className="map">

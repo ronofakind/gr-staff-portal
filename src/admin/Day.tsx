@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { eventsBetween, allStaff, addDays, isoDay, hhmm, startIso, sortShifts, type AEvent, type AStaff, type AShift } from './api';
+import { eventsBetween, allStaff, addDays, isoDay, hhmm, startIso, endIso, sortShifts, type AEvent, type AStaff, type AShift } from './api';
 
 type Drag = { kind: 'shift'; shift: AShift } | { kind: 'staff'; staff: AStaff };
 
@@ -43,6 +43,8 @@ export function Day() {
   const moveTo = (e: AEvent, sh: AShift) => sh.event_id === e.id ? Promise.resolve() :
     act(supabase.from('shifts').update({ event_id: e.id, planned_start: startIso(e.event_date, e.start_time), position_code: null }).eq('id', sh.id));
   const remove = (sh: AShift) => act(supabase.from('shifts').delete().eq('id', sh.id));
+  const setLeave = (e: AEvent, sh: AShift, t: string) => act(supabase.from('shifts').update({ leave_by: t ? endIso(e.event_date, e.start_time, t) : null }).eq('id', sh.id));
+  const localHM = (iso: string | null) => iso ? new Date(iso).toLocaleTimeString('en-GB', { timeZone: 'America/Toronto', hour: '2-digit', minute: '2-digit' }) : '';
   const setCode = (sh: AShift, code: string) => act(supabase.from('shifts').update({ position_code: code || null }).eq('id', sh.id));
 
   const onDrop = (e: AEvent) => {
@@ -134,6 +136,8 @@ export function Day() {
                     onBlur={(ev) => ev.target.value !== (s.position_code ?? '') && setCode(s, ev.target.value.trim().toUpperCase())} />
                   <span className="grow">{s.staff?.full_name}</span>
                   {s.attendance && <span className={'flag ' + s.attendance}>{s.attendance === 'no_show' ? 'NO-SHOW' : 'CANCELLED'}</span>}
+                  {!locked && <input type="time" className={'leave-in' + (s.leave_by ? ' set' : '')} title="Needs to leave around (reminder for the manager)" aria-label={`${s.staff?.full_name} needs to leave around`}
+                    defaultValue={localHM(s.leave_by)} onBlur={(ev) => ev.target.value !== localHM(s.leave_by) && setLeave(e, s, ev.target.value)} />}
                   <span className={'dot ' + s.status} title={s.status} />
                   {!locked && (
                     <>

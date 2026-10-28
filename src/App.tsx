@@ -15,6 +15,10 @@ import { ViewAs } from './admin/ViewAs';
 import { Manage } from './pages/Manage';
 import { Profile } from './pages/Profile';
 import { Schedule } from './pages/Schedule';
+import { Availability as StaffAvail } from './pages/Availability';
+import { EventPlan } from './pages/EventPlan';
+import { Availability as AdminAvail } from './admin/Availability';
+import { Tiers } from './admin/Tiers';
 
 export function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
@@ -51,11 +55,15 @@ export function App() {
             <Route path="day" element={<Day />} />
             <Route path="event/:id" element={<EventForm />} />
             <Route path="staff" element={<StaffAdmin />} />
+            <Route path="availability" element={<AdminAvail />} />
+            <Route path="tiers" element={<Tiers />} />
           </Route>
         )}
         {me.role === 'admin' && <Route path="/admin/view/:staffId/*" element={<ViewAs />} />}
         <Route path="/schedule" element={<Schedule me={me} />} />
         <Route path="/shift/:id" element={<Shift />} />
+        <Route path="/shift/:id/plan" element={<EventPlan />} />
+        <Route path="/availability" element={<StaffAvail me={me} />} />
         <Route path="/manage/:eventId" element={<Manage />} />
         <Route path="/profile" element={<Profile me={me} />} />
         <Route path="*" element={<Navigate to="/" />} />

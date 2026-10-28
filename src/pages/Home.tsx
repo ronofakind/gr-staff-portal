@@ -37,6 +37,11 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
     }
   };
   useEffect(() => { load(); }, []);
+  const [asked, setAsked] = useState(0);
+  useEffect(() => {
+    supabase.from('availability').select('id', { count: 'exact', head: true }).eq('staff_id', me.id).eq('status', 'asked')
+      .not('ask_id', 'is', null).gte('for_date', todayIso()).then(({ count }) => setAsked(count ?? 0));
+  }, [me.id]);
 
   const respond = async (id: string, r: 'confirmed' | 'declined') => {
     if (preview) return;
@@ -65,6 +70,13 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
         <div className="hello"><b>Hi {first}</b><span>{longDate(today, lang)}</span></div>
         {!preview ? <Link to="/profile" aria-label="My profile"><Avatar name={me.full_name} url={me.photo_url} size={38} /></Link> : <Avatar name={me.full_name} url={me.photo_url} size={38} />}
       </header>
+
+      {asked > 0 && (
+        <Link to={preview ? '#' : '/availability'} className="todo">
+          <div className="grow"><b>Are you available?</b><span>{asked} date{asked > 1 ? 's' : ''} waiting for your answer</span></div>
+          <span className="pill-red" style={{ display: 'inline-flex', alignItems: 'center' }}>Answer ›</span>
+        </Link>
+      )}
 
       {pending.map((s) => (
         <div key={s.id} className="todo">
