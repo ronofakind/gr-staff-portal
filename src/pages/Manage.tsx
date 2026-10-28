@@ -27,6 +27,9 @@ function toIso(date: string, hm: string, ref: string) {
   if (d.getTime() < new Date(ref).getTime() - 6 * 3600e3) d = new Date(d.getTime() + 24 * 3600e3);
   return d.toISOString();
 }
+const isBar = (code: string | null, detail: string | null) =>
+  /^(BM|BT|BB)$/.test(code ?? '') || /^bar\b/i.test(detail ?? '');
+
 /** What the person does tonight: the detail set on the shift, else a label from the position code. */
 function roleLabel(code: string | null, detail: string | null) {
   if (detail) return detail;
@@ -98,7 +101,7 @@ export function Manage() {
               return (
                 <div key={r.id} className="crew-row">
                   <div className="crew-main">
-                    <div className="av-wrap"><Avatar name={r.staff?.full_name ?? '?'} url={r.staff?.photo_url} size={48} /><span className="code-tag">{r.position_code ?? '·'}</span></div>
+                    <div className="av-wrap"><Avatar name={r.staff?.full_name ?? '?'} url={r.staff?.photo_url} size={48} />{isBar(r.position_code, r.position_detail) ? <span className="dept-tag bar">BAR</span> : <span className="dept-tag floor">FLOOR</span>}</div>
                     <div className="grow">
                       <div className="strong">{r.staff?.full_name}</div>
                       <div className="sm role-line">{roleLabel(r.position_code, r.position_detail)}</div>
