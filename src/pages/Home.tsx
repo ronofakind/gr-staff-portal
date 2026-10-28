@@ -46,7 +46,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
     <main className="page">
       <header className="top">
         <div>
-          <div className="muted">{longDate(new Date().toISOString().slice(0, 10), lang)}</div>
+          <div className="muted">{longDate(new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' }), lang)}</div>
           <h1>{t('hi')} {first}</h1>
         </div>
         {!preview ? <Link to="/profile" aria-label="My profile" style={{ marginLeft: 'auto' }}><Avatar name={me.full_name} url={me.photo_url} /></Link> : <span style={{ marginLeft: 'auto' }}><Avatar name={me.full_name} url={me.photo_url} /></span>}
