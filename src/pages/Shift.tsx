@@ -97,8 +97,8 @@ export function Shift({ backTo = '/' }: { backTo?: string }) {
       <section className="card stack" style={{ gap: 14 }}>
         <div className="row" style={{ gap: 16 }}>
           <span className="wear-big"><UniformIcon kind={kind} size={66} /></span>
-          <div><div className="kicker">{kind === 'dress' ? 'Dress' : 'Shirt'}</div><div className="serif" style={{ fontSize: 24, lineHeight: 1.1 }}>{UNIFORM_LABEL[kind].replace(' + tie', '')}</div>
-            {kind !== 'dress' && <div className="muted sm">With black tie</div>}</div>
+          <div><div className="kicker">{kind === 'dress' ? 'Dress' : kind === 'black_tshirt' ? 'Top' : 'Shirt'}</div><div className="serif" style={{ fontSize: 24, lineHeight: 1.1 }}>{UNIFORM_LABEL[kind].replace(' + tie', '')}</div>
+            {(kind === 'white_shirt' || kind === 'black_shirt') && <div className="muted sm">With black tie</div>}</div>
         </div>
         {(extras.length > 0 || bring.length > 0) && <div className="chips">{[...extras, ...bring].map((x, i) => <span key={i} className="wear-chip">{x}</span>)}</div>}
       </section>

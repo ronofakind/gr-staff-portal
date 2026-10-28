@@ -1,11 +1,12 @@
-export type UniformKind = 'white_shirt' | 'black_shirt' | 'dress';
+export type UniformKind = 'white_shirt' | 'black_shirt' | 'dress' | 'black_tshirt';
 
 export const UNIFORM_LABEL: Record<UniformKind, string> = {
   white_shirt: 'White dress shirt + tie',
   black_shirt: 'Black dress shirt + tie',
   dress: 'Black cocktail dress',
+  black_tshirt: 'Black T-shirt',
 };
-export const UNIFORM_SHORT: Record<UniformKind, string> = { white_shirt: 'White shirt', black_shirt: 'Black shirt', dress: 'Dress' };
+export const UNIFORM_SHORT: Record<UniformKind, string> = { white_shirt: 'White shirt', black_shirt: 'Black shirt', dress: 'Dress', black_tshirt: 'Black T-shirt' };
 
 /** Which uniform this person wears: shift override, else the event's floor/bar default. */
 export function uniformFor(s: { uniform?: string | null; position_code: string | null; position_detail: string | null;
@@ -21,6 +22,15 @@ export function UniformIcon({ kind, size = 32 }: { kind: UniformKind; size?: num
         <path d="M27 5 Q32 9.5 37 5 L42.5 7.5 Q45.8 8.8 46.2 12.8 L49.4 46.5 L45.2 46.5 L42.6 20.5 Q41 28.5 41.3 33.5 L43.4 60.5 L20.6 60.5 L22.7 33.5 Q23 28.5 21.4 20.5 L18.8 46.5 L14.6 46.5 L17.8 12.8 Q18.2 8.8 21.5 7.5 Z" fill="#1A1714" />
         <path d="M21.9 9.5 Q22.6 15 21.6 20.5 M42.1 9.5 Q41.4 15 42.4 20.5" stroke="#F6F2EC" strokeWidth="0.6" fill="none" />
         <path d="M27 5.6 Q32 10.6 37 5.6" stroke="#FFFFFF" strokeWidth="2" fill="none" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  if (kind === 'black_tshirt') {
+    return (
+      <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden="true">
+        <path d="M23 9 Q32 15 41 9 L53 13.5 L61 26 L51.5 31.5 L47.5 25.5 L47.5 58 L16.5 58 L16.5 25.5 L12.5 31.5 L3 26 L11 13.5 Z" fill="#1A1714" stroke="#1A1714" strokeWidth="2" strokeLinejoin="round" />
+        <path d="M24.5 9.6 Q32 15.6 39.5 9.6" stroke="#F6F2EC" strokeWidth="1.6" fill="none" strokeLinecap="round" />
+        <path d="M16.5 25.5 L16.5 20 M47.5 25.5 L47.5 20" stroke="#6B625A" strokeWidth="1.2" />
       </svg>
     );
   }
