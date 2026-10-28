@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { eventsBetween, allStaff, addDays, isoDay, hhmm, startIso, endIso, sortShifts, type AEvent, type AStaff, type AShift } from './api';
+import { eventsBetween, allStaff, addDays, isoDay, hhmm, startIso, endIso, sortShifts, flagsOf, flagText, type AEvent, type AStaff, type AShift } from './api';
 
 type Drag = { kind: 'shift'; shift: AShift } | { kind: 'staff'; staff: AStaff };
 
@@ -14,6 +14,7 @@ export function Day() {
   const [drag, setDrag] = useState<Drag | null>(null);
   const [q, setQ] = useState('');
   const [err, setErr] = useState('');
+  const [fill, setFill] = useState<AEvent | null>(null);
 
   const load = async () => {
     const [evs, st, av] = await Promise.all([
@@ -87,7 +88,7 @@ export function Day() {
 
       <section className="pool">
         <div className="row wrap">
-          <b>Available, not booked</b><span className="muted sm">drag onto an event</span>
+          <b>Available, not booked</b><span className="muted sm hide-sm">drag onto an event</span>
           <div className="grow" />
           <input className="search" placeholder="Search any staff…" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
@@ -134,14 +135,13 @@ export function Day() {
                   onDragStart={() => setDrag({ kind: 'shift', shift: s })} onDragEnd={() => setDrag(null)}>
                   <input className="code" defaultValue={s.position_code ?? ''} disabled={locked} aria-label="Position"
                     onBlur={(ev) => ev.target.value !== (s.position_code ?? '') && setCode(s, ev.target.value.trim().toUpperCase())} />
-                  <span className="grow">{s.staff?.full_name}</span>
-                  {s.attendance && <span className={'flag ' + s.attendance}>{s.attendance === 'no_show' ? 'NO-SHOW' : 'CANCELLED'}</span>}
-                  {!locked && <input type="time" className={'leave-in' + (s.leave_by ? ' set' : '')} title="Needs to leave around (reminder for the manager)" aria-label={`${s.staff?.full_name} needs to leave around`}
+                  <span className="grow rname"><span className={s.attendance ? 'struck' : ''}>{s.staff?.full_name}</span>{flagsOf(s).map((f) => <span key={f.flag} className={'ftag ' + f.flag}>{flagText(f)}</span>)}</span>
+                  {!locked && <input type="time" className={'hide-sm leave-in' + (s.leave_by ? ' set' : '')} title="Needs to leave around (reminder for the manager)" aria-label={`${s.staff?.full_name} needs to leave around`}
                     defaultValue={localHM(s.leave_by)} onBlur={(ev) => ev.target.value !== localHM(s.leave_by) && setLeave(e, s, ev.target.value)} />}
                   <span className={'dot ' + s.status} title={s.status} />
                   {!locked && (
                     <>
-                      <select aria-label="Move to" value="" onChange={(ev) => { const t = floorEvents.find((x) => x.id === ev.target.value); if (t) moveTo(t, s); }}>
+                      <select className="hide-sm" aria-label="Move to" value="" onChange={(ev) => { const t = floorEvents.find((x) => x.id === ev.target.value); if (t) moveTo(t, s); }}>
                         <option value="">⇄</option>
                         {floorEvents.filter((x) => x.id !== e.id).map((x) => <option key={x.id} value={x.id}>{x.title}</option>)}
                       </select>
@@ -150,13 +150,33 @@ export function Day() {
                   )}
                 </div>
               ))}
-              {!locked && short > 0 && <div className="open-spots">{short} open spot{short > 1 ? 's' : ''}</div>}
+              {!locked && short > 0 && <button className="open-spots" onClick={() => setFill(e)}>+ {short} open spot{short > 1 ? 's' : ''} · tap to fill</button>}
               {drag && !locked && <div className="drop-hint">Drop here</div>}
             </section>
           );
         })}
       </div>
       {events && !events.length && <p className="muted">No events this day.</p>}
+      {fill && (
+        <>
+          <div className="adm-scrim" onClick={() => setFill(null)} />
+          <aside className="adm-panel" aria-label={`Fill ${fill.title}`}>
+            <div className="row" style={{ justifyContent: 'space-between' }}><span className="kick">FILL · {fill.title.toUpperCase()}</span><button className="sq" aria-label="Close" onClick={() => setFill(null)}>×</button></div>
+            <div className="serif" style={{ fontSize: 22 }}>{q ? 'Search results' : 'Said yes, not booked'}</div>
+            <input className="search" placeholder="Search any staff…" value={q} onChange={(ev) => setQ(ev.target.value)} />
+            <div className="adm-card" style={{ padding: '4px 14px' }}>
+              {pool.slice(0, 40).map((st) => (
+                <div key={st.id} className="need">
+                  {st.staff_private?.tier && <i className={'tier-dot ' + st.staff_private.tier}>{st.staff_private.tier}</i>}
+                  <div className="grow"><b>{st.full_name}</b><span>{avail[st.id] === 'yes' ? 'said yes' : avail[st.id] === 'maybe' ? 'not sure' : 'not asked'}{st.staff_private?.ranking != null ? ` · #${st.staff_private.ranking}` : ''}</span></div>
+                  <button className="abtn sm ok" onClick={() => addTo(fill, st)}>Add</button>
+                </div>
+              ))}
+              {!pool.length && <div className="muted sm" style={{ padding: '12px 0' }}>{q ? 'No match.' : 'Nobody said yes yet. Search to add anyone.'}</div>}
+            </div>
+          </aside>
+        </>
+      )}
     </div>
   );
 }

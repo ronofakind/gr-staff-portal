@@ -6,7 +6,10 @@ import { LangContext, type Lang } from './lib/i18n';
 import { Login } from './pages/Login';
 import { Home } from './pages/Home';
 import { Shift } from './pages/Shift';
-import { AdminLayout } from './admin/AdminLayout';
+import { AdminLayout, More } from './admin/AdminLayout';
+import { Today } from './admin/Today';
+import { Hours } from './admin/Hours';
+import { Reliability } from './admin/Reliability';
 import { Week } from './admin/Week';
 import { Day } from './admin/Day';
 import { EventForm } from './admin/EventForm';
@@ -51,7 +54,11 @@ export function App() {
         <Route path="/me" element={<Home me={me} />} />
         {me.role === 'admin' && (
           <Route path="/admin" element={<AdminLayout />}>
-            <Route index element={<Week />} />
+            <Route index element={<Today />} />
+            <Route path="week" element={<Week />} />
+            <Route path="hours" element={<Hours />} />
+            <Route path="reliability" element={<Reliability />} />
+            <Route path="more" element={<More />} />
             <Route path="day" element={<Day />} />
             <Route path="event/:id" element={<EventForm />} />
             <Route path="staff" element={<StaffAdmin />} />

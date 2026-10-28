@@ -3,12 +3,14 @@ import { supabase } from '../lib/supabase';
 import { Link } from 'react-router-dom';
 import { allStaff, type AStaff } from './api';
 import { uploadPhoto } from '../lib/photo';
-import { PhotoPicker } from '../components/Avatar';
+import { PhotoPicker, Avatar } from '../components/Avatar';
+import { StaffProfile } from './StaffProfile';
 
 export function Staff() {
   const [list, setList] = useState<AStaff[] | null>(null);
   const [q, setQ] = useState(''); const [show, setShow] = useState<'active' | 'all'>('active');
   const [open, setOpen] = useState<string | null>(null);
+  const [prof, setProf] = useState<AStaff | null>(null);
   const [flags, setFlags] = useState<Record<string, { ns: number; c: number }>>({});
   const load = () => {
     allStaff().then(setList);
@@ -20,7 +22,8 @@ export function Staff() {
   };
   useEffect(() => { load(); }, []);
 
-  const rows = (list ?? []).filter((s) => (show === 'all' || s.active) && s.full_name.toLowerCase().includes(q.toLowerCase()));
+  const rows = (list ?? []).filter((s) => (show === 'all' || s.active) && s.full_name.toLowerCase().includes(q.toLowerCase()))
+    .sort((a, b) => (a.staff_private?.ranking ?? 9999) - (b.staff_private?.ranking ?? 9999) || a.full_name.localeCompare(b.full_name));
   return (
     <div className="stack-lg">
       <div className="toolbar">
@@ -34,26 +37,28 @@ export function Staff() {
       {open === 'new' && <Editor onDone={() => { setOpen(null); load(); }} />}
       <div className="table-wrap">
         <table className="table">
-          <thead><tr><th>Name</th><th>Role</th><th>Positions</th><th>Phone</th><th>Email</th><th>Rank</th><th /></tr></thead>
+          <thead><tr><th>#</th><th>Name</th><th>Tier</th><th className="hide-sm">Role</th><th className="hide-sm">Positions</th><th className="hide-sm">Phone</th><th className="hide-sm">Email</th><th className="hide-sm" /></tr></thead>
           <tbody>
             {rows.map((s) => (
               <Fragment key={s.id}>
                 <tr className={s.active ? '' : 'inactive'}>
-                  <td className="strong">{s.full_name}{flags[s.id]?.ns ? <span className="flag no_show" title="No-shows"> {flags[s.id].ns} no-show{flags[s.id].ns > 1 ? 's' : ''}</span> : null}{flags[s.id]?.c ? <span className="flag cancelled" title="Cancellations"> {flags[s.id].c} cancelled</span> : null}</td>
-                  <td>{s.role}{s.department !== 'floor' ? ` · ${s.department}` : ''}</td>
-                  <td>{s.positions.join(', ')}</td>
-                  <td>{s.phone}</td>
-                  <td>{s.email ?? <span className="muted">—</span>}</td>
-                  <td>{s.staff_private?.ranking ?? ''}</td>
-                  <td><div className="row"><Link className="btn sm" to={`/admin/view/${s.id}`}>View as</Link><button className="btn sm" onClick={() => setOpen(open === s.id ? null : s.id)}>{open === s.id ? 'Close' : 'Edit'}</button></div></td>
+                  <td className="muted">{s.staff_private?.ranking ?? ''}</td>
+                  <td className="strong"><button className="name-btn" onClick={() => setProf(s)}><Avatar name={s.full_name} url={s.photo_url} size={30} /><span>{s.full_name}</span></button>{flags[s.id]?.ns ? <span className="flag no_show" title="No-shows"> {flags[s.id].ns} no-show{flags[s.id].ns > 1 ? 's' : ''}</span> : null}{flags[s.id]?.c ? <span className="flag cancelled" title="Cancellations"> {flags[s.id].c} cancelled</span> : null}</td>
+                  <td>{s.staff_private?.tier ? <i className={'tier-dot ' + s.staff_private.tier}>{s.staff_private.tier}</i> : <span className="muted">–</span>}</td>
+                  <td className="hide-sm">{s.role}{s.department !== 'floor' ? ` · ${s.department}` : ''}</td>
+                  <td className="hide-sm">{s.positions.join(', ')}</td>
+                  <td className="hide-sm">{s.phone}</td>
+                  <td className="hide-sm">{s.email ?? <span className="muted">—</span>}</td>
+                  <td className="hide-sm"><div className="row"><Link className="btn sm" to={`/admin/view/${s.id}`}>View as</Link><button className="btn sm" onClick={() => setProf(s)}>Open ›</button><button className="btn sm" onClick={() => setOpen(open === s.id ? null : s.id)}>{open === s.id ? 'Close' : 'Edit'}</button></div></td>
                 </tr>
-                {open === s.id && <tr><td colSpan={7}><Editor s={s} onDone={() => { setOpen(null); load(); }} /></td></tr>}
+                {open === s.id && <tr><td colSpan={8}><Editor s={s} onDone={() => { setOpen(null); load(); }} /></td></tr>}
               </Fragment>
             ))}
           </tbody>
         </table>
       </div>
       {!list && <div className="muted">Loading…</div>}
+      {prof && <StaffProfile s={prof} onClose={() => setProf(null)} onEdit={() => { setOpen(prof.id); setProf(null); }} />}
     </div>
   );
 }
