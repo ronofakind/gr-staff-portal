@@ -79,7 +79,7 @@ export function Availability({ me, preview = false }: { me: Staff; preview?: boo
       </div>
       {err && <p className="error">{err}</p>}
 
-      {asks === null ? <div className="loading" style={{ minHeight: 160 }} /> : (
+      {asks === null ? <div className="loading" style={{ minHeight: 160 }} /> : asks.length > 0 && (
         <section className="stack" style={{ gap: 10 }}>
           {asks.map((a) => (
             <div key={a.id} className={'av-row' + (a.status === 'asked' ? ' waiting' : '')}>
