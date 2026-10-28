@@ -3,19 +3,31 @@ import { Link } from 'react-router-dom';
 import { supabase, SHIFT_SELECT, type ShiftRow, type Staff } from '../lib/supabase';
 import { useT, useLang } from '../lib/i18n';
 import { time, longDate, dayBadge, minus } from '../lib/format';
-import { ManagingToday } from './Manage';
 import { Avatar } from '../components/Avatar';
 
 export function Home({ me, base = '', preview = false }: { me: Staff; base?: string; preview?: boolean }) {
   const t = useT(); const lang = useLang();
   const [shifts, setShifts] = useState<ShiftRow[] | null>(null);
+  const [teams, setTeams] = useState<Record<string, { full_name: string; photo_url: string | null }[]>>({});
 
   const load = async () => {
     const since = new Date(Date.now() - 12 * 3600e3).toISOString();
     const { data } = await supabase.from('shifts').select(SHIFT_SELECT)
       .eq('staff_id', me.id).neq('status', 'declined').gte('planned_start', since)
       .order('planned_start').limit(30);
-    setShifts((data as unknown as ShiftRow[]) ?? []);
+    const rows = (data as unknown as ShiftRow[]) ?? [];
+    setShifts(rows);
+    // Events this person manages: load the team so it shows right on the shift card.
+    const managed = rows.filter((r) => r.events.manager_id === me.id).map((r) => r.events.id);
+    if (managed.length) {
+      const { data: crew } = await supabase.from('shifts').select('event_id,staff(full_name,photo_url)')
+        .in('event_id', managed).neq('status', 'declined').order('planned_start');
+      const map: typeof teams = {};
+      for (const c of (crew ?? []) as unknown as { event_id: string; staff: { full_name: string; photo_url: string | null } }[]) {
+        (map[c.event_id] ??= []).push(c.staff);
+      }
+      setTeams(map);
+    }
   };
   useEffect(() => { load(); }, []);
 
@@ -73,11 +85,11 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
               <Tile label={t('ends')} v={next.planned_end ? time(next.planned_end, lang) : '—'} />
             </div>
             <Link className="btn primary" to={`${base}/shift/${next.id}`}>{t('details')}</Link>
+            {teams[next.events.id] && <TeamStrip eventId={next.events.id} team={teams[next.events.id]} base={base} />}
           </section>
         </>
       )}
 
-      {!preview && <ManagingToday meId={me.id} isAdmin={me.role === 'admin'} />}
 
       {rest.length > 0 && (
         <>
@@ -92,7 +104,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
                     <div className="strong">{s.events.title}</div>
                     <div className="muted sm">{time(s.planned_start, lang)}{s.planned_end ? ` – ${time(s.planned_end, lang)}` : ''}</div>
                   </div>
-                  <Status s={s.status} />
+                  {teams[s.events.id] ? <span className="pill dark">Team {teams[s.events.id].length}</span> : <Status s={s.status} />}
                 </Link>
               );
             })}
@@ -112,4 +124,17 @@ export function Status({ s }: { s: ShiftRow['status'] }) {
   const map = { booked: ['pill accent', t('toConfirm')], confirmed: ['pill ok', t('confirmed')], declined: ['pill', t('declined')] } as const;
   const [cls, label] = map[s];
   return <span className={cls}>{label}</span>;
+}
+
+function TeamStrip({ eventId, team, base }: { eventId: string; team: { full_name: string; photo_url: string | null }[]; base: string }) {
+  return (
+    <Link to={base ? `${base}` : `/manage/${eventId}`} className="team-strip">
+      <div className="grow">
+        <div className="eyebrow accent">You're managing · team of {team.length}</div>
+        <div className="faces">{team.slice(0, 6).map((p, i) => <Avatar key={i} name={p.full_name} url={p.photo_url} size={34} />)}
+          {team.length > 6 && <span className="more">+{team.length - 6}</span>}</div>
+      </div>
+      <span className="btn sm">Team ›</span>
+    </Link>
+  );
 }
