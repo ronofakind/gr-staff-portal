@@ -15,14 +15,14 @@ export type AShift = {
 export type AEvent = {
   id: string; event_date: string; title: string; address: string | null; department: 'floor' | 'bar' | 'kitchen';
   description: string | null; dress_code: string | null; bring: string | null;
-  start_time: string | null; end_time: string | null; staff_needed: number; manager_id: string | null;
+  start_time: string | null; end_time: string | null; staff_needed: number; manager_id: string | null; hours_submitted_at: string | null;
   venue_id: string | null; timeline: { time: string; label: string }[];
   event_private: { client: string | null; punch_code: string } | null;
   shifts: AShift[];
 };
 
 export const EVENT_SELECT = `id,event_date,title,address,department,description,dress_code,bring,start_time,end_time,
-  staff_needed,manager_id,venue_id,timeline,event_private(client,punch_code),
+  staff_needed,manager_id,hours_submitted_at,venue_id,timeline,event_private(client,punch_code),
   shifts(id,event_id,staff_id,position_code,position_detail,planned_start,status,changed_at,notified_at,attendance,staff:staff!shifts_staff_id_fkey(full_name))`;
 
 export async function eventsBetween(from: string, to: string) {

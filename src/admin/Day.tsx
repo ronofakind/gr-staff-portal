@@ -123,6 +123,7 @@ export function Day() {
                 <div className="row">
                   <Link className="btn sm" to={`/admin/event/${e.id}`}>Details</Link>
                   {!locked && <Link className="btn sm" to={`/manage/${e.id}`}>Run shift</Link>}
+                  {e.hours_submitted_at && <span className="pill ok">✓ Hours submitted</span>}
                   {e.event_private && <span className="muted sm">Punch code <b>{e.event_private.punch_code}</b></span>}
                 </div>
               </header>

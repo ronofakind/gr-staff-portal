@@ -12,7 +12,7 @@ type Row = {
 };
 type Ev = { id: string; title: string; event_date: string };
 type EvFull = Ev & { address: string | null; start_time: string | null; end_time: string | null; description: string | null;
-  dress_code: string | null; venues: { address: string | null; staff_notes: string | null } | null };
+  dress_code: string | null; hours_submitted_at: string | null; venues: { address: string | null; staff_notes: string | null } | null };
 
 const L = {
   fr: { team: 'Équipe', notIn: 'Pas commencé', start: 'Commencer', end: 'Terminer', startAll: 'Commencer tous', endAll: 'Terminer tous',
@@ -52,11 +52,13 @@ export function Manage() {
   const [open, setOpen] = useState<Row | null>(null);
   const [draft, setDraft] = useState({ in: '', out: '' });
   const [ask, setAsk] = useState<Ask>(null);
+  const [review, setReview] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
 
   const load = async () => {
     const [e, s] = await Promise.all([
-      supabase.from('events').select('id,title,event_date,address,start_time,end_time,description,dress_code,venues(address,staff_notes)').eq('id', eventId!).single(),
+      supabase.from('events').select('id,title,event_date,address,start_time,end_time,description,dress_code,hours_submitted_at,venues(address,staff_notes)').eq('id', eventId!).single(),
       supabase.from('shifts').select('id,position_code,position_detail,planned_start,planned_end,attendance,staff:staff!shifts_staff_id_fkey(full_name,photo_url,phone),punches(punch_in,punch_out)')
         .eq('event_id', eventId!).neq('status', 'declined').order('planned_start'),
     ]);
@@ -169,6 +171,77 @@ export function Manage() {
         );
       })}
       <p className="hint" style={{ textAlign: 'center' }}>Tap a name for times, no-show or cancelled</p>
+
+      <div className="submit-bar">
+        <div className="grow">
+          <b>{ev.hours_submitted_at ? '✓ Hours submitted' : 'End of night'}</b>
+          <span>{ev.hours_submitted_at ? `${new Date(ev.hours_submitted_at).toLocaleString('en-CA', { weekday: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' })} · you can still edit` : "Check everyone's times, then send"}</span>
+        </div>
+        <button className="btn-ink" style={{ height: 46, padding: '0 18px', borderRadius: 23 }} onClick={() => setReview(true)}>{ev.hours_submitted_at ? 'Resubmit ›' : 'Submit hours ›'}</button>
+      </div>
+
+      {review && (() => {
+        const missing = active.filter((r) => !r.punches?.punch_in || !r.punches?.punch_out);
+        const done = active.filter((r) => r.punches?.punch_in && r.punches?.punch_out);
+        const total = done.reduce((n, r) => n + hours(r.punches!.punch_in!, r.punches!.punch_out!), 0);
+        const submit = async () => {
+          setBusy(true); setErr('');
+          const { error } = await supabase.rpc('manager_submit_hours', { p_event: ev.id });
+          setBusy(false);
+          if (error) { setErr(error.message); return; }
+          setReview(false); await load();
+        };
+        return (
+          <div className="review">
+            <div className="page v2" style={{ paddingBottom: 170 }}>
+              <header className="row" style={{ paddingTop: 12 }}>
+                <button className="back" style={{ border: 'none', cursor: 'pointer' }} aria-label="Back" onClick={() => setReview(false)}>‹</button>
+                <span className="kicker">{ev.title} · {new Date(ev.event_date + 'T12:00:00').toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
+              </header>
+              <div style={{ padding: '0 6px' }}>
+                <div className="serif" style={{ fontSize: 32, lineHeight: 1 }}>Submit hours</div>
+                <div className="muted sm" style={{ marginTop: 4 }}>Review everyone's times before you send.</div>
+              </div>
+              {missing.length > 0 && (
+                <div className="todo" style={{ alignItems: 'flex-start' }}>
+                  <span className="bang-sm">!</span>
+                  <div className="grow"><b>{missing.length} {missing.length === 1 ? 'person is' : 'people are'} missing a time</b>
+                    <span>{missing.map((r) => first(r.staff?.full_name)).join(', ')} · tap Fix to add it before you submit.</span></div>
+                </div>
+              )}
+              {rows.map((r) => {
+                const pin = r.punches?.punch_in ?? null; const pout = r.punches?.punch_out ?? null;
+                const miss = !r.attendance && (!pin || !pout);
+                return (
+                  <div key={r.id} className={'rv' + (miss ? ' miss' : '') + (r.attendance ? ' out' : '')}>
+                    <div className={'ring sm ' + (r.attendance ? '' : miss ? 'late' : 'working')}><Avatar name={r.staff?.full_name ?? '?'} url={r.staff?.photo_url} size={36} /></div>
+                    <div className="grow" style={{ minWidth: 0 }}>
+                      <div className="nm">{r.staff?.full_name}</div>
+                      <div className="tm">{r.attendance ? (r.attendance === 'no_show' ? 'No-show' : 'Cancelled')
+                        : `${pin ? time(pin, lang) : 'no start time'} → ${pout ? time(pout, lang) : 'no end time'}`}</div>
+                    </div>
+                    {r.attendance ? <span className="muted sm strong">0 h</span>
+                      : miss ? <button className="pill-red" style={{ height: 32 }} onClick={() => { setReview(false); setOpen(r); setDraft({ in: hm(pin) || hm(r.planned_start), out: hm(pout) }); }}>Fix ›</button>
+                      : <span className="serif" style={{ fontSize: 20 }}>{hours(pin!, pout!)}<span className="muted" style={{ fontSize: 12, fontFamily: 'Inter' }}> h</span></span>}
+                  </div>
+                );
+              })}
+              <div className="spread muted sm" style={{ padding: '4px 6px' }}>
+                <span>{done.length} complete{missing.length ? ` · ${missing.length} missing` : ''}{flaggedN ? ` · ${flaggedN} out` : ''}</span>
+                <span>Total <b className="serif" style={{ fontSize: 22, color: 'var(--ink)' }}>{total}</b> h</span>
+              </div>
+              {err && <p className="error">{err}</p>}
+            </div>
+            <div className="review-foot">
+              {missing.length > 0 ? <>
+                <button className="btn-ink" onClick={() => { const r = missing[0]; setReview(false); setOpen(r); setDraft({ in: hm(r.punches?.punch_in ?? null) || hm(r.planned_start), out: hm(r.punches?.punch_out ?? null) }); }}>Fix {missing.length} missing time{missing.length > 1 ? 's' : ''}</button>
+                <button className="btn-ghost" style={{ height: 44, color: 'var(--accent)', borderColor: 'var(--accent)' }} disabled={busy} onClick={submit}>Submit anyway</button>
+              </> : <button className="btn-ink" style={{ background: 'var(--ok)' }} disabled={busy} onClick={submit}>{busy ? 'Sending…' : `Submit ${total} h`}</button>}
+              <span className="muted" style={{ fontSize: 11, textAlign: 'center' }}>You can still edit after submitting, until the pay period is closed.</span>
+            </div>
+          </div>
+        );
+      })()}
 
       {open && (
         <>
