@@ -22,11 +22,13 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
       .eq('staff_id', me.id).neq('status', 'declined').gte('planned_start', since)
       .order('planned_start').limit(30);
     const rows = (data as unknown as ShiftRow[]) ?? [];
+    console.info('[home]', rows.length, rows.map((r) => r.events.manager_id === me.id));
     setShifts(rows);
     const managed = rows.filter((r) => r.events.manager_id === me.id).map((r) => r.events.id);
     if (managed.length) {
-      const { data: crew } = await supabase.from('shifts').select('event_id,position_code,position_detail,staff(full_name,photo_url)')
+      const { data: crew, error: cErr } = await supabase.from('shifts').select('event_id,position_code,position_detail,staff(full_name,photo_url)')
         .in('event_id', managed).neq('status', 'declined').order('planned_start');
+      if (cErr) console.warn('[team]', cErr.message);
       const map: typeof teams = {};
       for (const c of (crew ?? []) as unknown as { event_id: string; position_code: string | null; position_detail: string | null; staff: { full_name: string; photo_url: string | null } }[]) {
         (map[c.event_id] ??= []).push({ ...c.staff, position_code: c.position_code, position_detail: c.position_detail });
