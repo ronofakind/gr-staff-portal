@@ -23,7 +23,7 @@ export type AEvent = {
 
 export const EVENT_SELECT = `id,event_date,title,address,department,description,dress_code,bring,start_time,end_time,
   staff_needed,manager_id,venue_id,timeline,event_private(client,punch_code),
-  shifts(id,event_id,staff_id,position_code,position_detail,planned_start,status,changed_at,notified_at,attendance,staff(full_name))`;
+  shifts(id,event_id,staff_id,position_code,position_detail,planned_start,status,changed_at,notified_at,attendance,staff:staff!shifts_staff_id_fkey(full_name))`;
 
 export async function eventsBetween(from: string, to: string) {
   const { data, error } = await supabase.from('events').select(EVENT_SELECT)

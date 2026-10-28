@@ -57,7 +57,7 @@ export function Manage() {
   const load = async () => {
     const [e, s] = await Promise.all([
       supabase.from('events').select('id,title,event_date,address,start_time,end_time,description,dress_code,venues(address,staff_notes)').eq('id', eventId!).single(),
-      supabase.from('shifts').select('id,position_code,position_detail,planned_start,planned_end,attendance,staff(full_name,photo_url,phone),punches(punch_in,punch_out)')
+      supabase.from('shifts').select('id,position_code,position_detail,planned_start,planned_end,attendance,staff:staff!shifts_staff_id_fkey(full_name,photo_url,phone),punches(punch_in,punch_out)')
         .eq('event_id', eventId!).neq('status', 'declined').order('planned_start'),
     ]);
     setEv(e.data as unknown as EvFull);
