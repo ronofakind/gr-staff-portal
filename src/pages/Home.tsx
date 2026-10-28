@@ -40,7 +40,6 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
         {!preview ? <Link to="/profile" aria-label="My profile" style={{ marginLeft: 'auto' }}><Avatar name={me.full_name} url={me.photo_url} /></Link> : <span style={{ marginLeft: 'auto' }}><Avatar name={me.full_name} url={me.photo_url} /></span>}
       </header>
 
-      {!preview && <ManagingToday meId={me.id} isAdmin={me.role === 'admin'} />}
 
       {pending.map((s) => (
         <section key={s.id} className="card confirm stack">
@@ -77,6 +76,8 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
           </section>
         </>
       )}
+
+      {!preview && <ManagingToday meId={me.id} isAdmin={me.role === 'admin'} />}
 
       {rest.length > 0 && (
         <>
