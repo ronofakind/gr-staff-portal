@@ -70,7 +70,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
         <div key={s.id} className="todo">
           <div className="grow">
             <b>{pending.length > 1 ? 'Shift needs your answer' : '1 shift needs your answer'}</b>
-            <span>{dayBadge(s.events.event_date, lang).dow} {dayBadge(s.events.event_date, lang).day} · {s.events.title} · {time(s.planned_start, lang)} · {role(s)}</span>
+            <span>{dayBadge(s.events.event_date, lang).dow} {dayBadge(s.events.event_date, lang).day} · {s.events.title} · {s.time_tbc ? 'time TBC' : time(s.planned_start, lang)} · {role(s)}</span>
           </div>
           <div className="row">
             <button className="pill-line" onClick={() => respond(s.id, 'declined')}>Can't</button>
@@ -90,7 +90,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
           <section className="next" style={{ gap: 14, padding: 18 }}>
             <div className="top-line">
               <span>{dayWord.toUpperCase()} · {role(next).toUpperCase()}</span>
-              <Countdown iso={minus(next.planned_start, next.arrive_before_min)} start={next.planned_start} />
+              {!next.time_tbc && <Countdown iso={minus(next.planned_start, next.arrive_before_min)} start={next.planned_start} />}
             </div>
             <div className="spread" style={{ alignItems: 'flex-end' }}>
               <div style={{ minWidth: 0 }}>
@@ -100,8 +100,8 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
               <span className="wear-tile" style={{ width: 52, height: 52, borderRadius: 14 }} title={UNIFORM_LABEL[uniformFor(next)]}><UniformIcon kind={uniformFor(next)} size={38} /></span>
             </div>
             <div className="row2">
-              <div className="tbox"><small>Be there</small><BigTime iso={minus(next.planned_start, next.arrive_before_min)} small /></div>
-              <div className="tbox"><small>Shift starts</small><BigTime iso={next.planned_start} small /></div>
+              <div className="tbox"><small>Be there</small>{next.time_tbc ? <span className="big serif sm-big">TBC</span> : <BigTime iso={minus(next.planned_start, next.arrive_before_min)} small />}</div>
+              <div className="tbox"><small>Shift starts</small>{next.time_tbc ? <span className="big serif sm-big">TBC</span> : <BigTime iso={next.planned_start} small />}</div>
             </div>
             <div className="row2">
               <Link className="light-btn" style={{ height: 46, borderRadius: 14 }} to={`${base}/shift/${next.id}`}>Details</Link>
@@ -123,7 +123,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
               return (
                 <Link key={s.id} to={teams[s.events.id] && !preview ? `/manage/${s.events.id}` : `${base}/shift/${s.id}`} className="agenda-row" style={{ minHeight: 64 }}>
                   <div className="d" style={{ width: 40, alignItems: 'center' }}><small>{b.dow}</small><b>{b.day}</b></div>
-                  <div className="what" style={{ gap: 1 }}><b>{s.events.title}</b><span>Be there {time(minus(s.planned_start, s.arrive_before_min), lang).replace(/\s?[ap]\.?m\.?/i, '')} · {role(s)}{teams[s.events.id] && !preview ? ` · team ${teams[s.events.id].length}` : ''}</span></div>
+                  <div className="what" style={{ gap: 1 }}><b>{s.events.title}</b><span>{s.time_tbc ? 'Time TBC' : `Be there ${time(minus(s.planned_start, s.arrive_before_min), lang).replace(/\s?[ap]\.?m\.?/i, '')}`} · {role(s)}{teams[s.events.id] && !preview ? ` · team ${teams[s.events.id].length}` : ''}</span></div>
                   <span className="wear-mini" style={{ width: 32, height: 32, borderRadius: 9 }} title={UNIFORM_LABEL[uniformFor(s)]}><UniformIcon kind={uniformFor(s)} size={24} /></span>
                   {s.status === 'confirmed' ? <span className="ok-dot" aria-label="Confirmed" /> : <span className="tag-ask" style={{ height: 26, fontSize: 11 }}>Confirm</span>}
                 </Link>

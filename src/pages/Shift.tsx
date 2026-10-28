@@ -56,9 +56,9 @@ export function Shift({ backTo = '/' }: { backTo?: string }) {
 
       <section className="next" style={{ gap: 16 }}>
         <div className="times" style={{ borderTop: 'none', paddingTop: 0 }}>
-          <div><small className="kicker" style={{ color: 'var(--dim)' }}>Be there</small><BigTime iso={arrive} /></div>
+          <div><small className="kicker" style={{ color: 'var(--dim)' }}>Be there</small>{s.time_tbc ? <span className="big serif">TBC</span> : <BigTime iso={arrive} />}</div>
           <div className="grow" />
-          <div style={{ textAlign: 'right' }}><small className="kicker" style={{ color: 'var(--dim)' }}>Shift starts</small><b style={{ fontSize: 20 }}>{time(s.planned_start, lang)}</b></div>
+          <div style={{ textAlign: 'right' }}><small className="kicker" style={{ color: 'var(--dim)' }}>Shift starts</small><b style={{ fontSize: 20 }}>{s.time_tbc ? 'TBC' : time(s.planned_start, lang)}</b></div>
         </div>
         <div className="pos-row">
           <span className="pos-badge serif">{s.position_code && s.position_code.length <= 3 ? s.position_code : role.slice(0, 2).toUpperCase()}</span>

@@ -389,3 +389,19 @@ body:has(.v2) { background: #F6F2EC; }
 .crew .act.locked { border: none; background: #EFE9E1; color: #B8AFA4; cursor: not-allowed; }
 .locked-pill { height: 34px; padding: 0 12px; border-radius: 17px; background: #EFE9E1; color: var(--muted); font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; }
 .early-flag { color: #9A7413; }
+.crew { gap: 8px; padding: 12px 10px 12px 12px; }
+.crew .nm { white-space: normal; overflow: visible; text-overflow: clip; font-size: 14px; line-height: 1.2; }
+.ring { width: 48px; height: 48px; }
+.ring .avatar { width: 40px !important; height: 40px !important; }
+.crew .ic { width: 30px; height: 30px; border-radius: 15px; }
+.crew .ic.ghost { visibility: hidden; }
+.act-slot { position: relative; width: 64px; flex: 0 0 auto; display: flex; justify-content: center; }
+.crew .act { width: 64px; padding: 0; }
+.crew .act.done-mark { display: flex; align-items: center; justify-content: center; color: var(--ok); font-weight: 800; border: none; background: none; }
+.leave-tag { position: absolute; left: 50%; top: calc(100% + 3px); transform: translateX(-50%); font-size: 10px; font-weight: 700; color: #9A7413; white-space: nowrap; }
+.leave-tag.inline { position: static; transform: none; align-self: flex-start; font-size: 12px; background: #FBF1D3; padding: 4px 10px; border-radius: 11px; }
+.note-box { background: #fff; border-radius: 18px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+.note-box span { font-size: 13px; font-weight: 700; } .note-box em { font-style: normal; font-weight: 500; color: var(--soft); }
+.note-box textarea { border: 1.5px solid #E2D9CC; border-radius: 12px; padding: 8px 10px; font: 500 14px Inter, system-ui, sans-serif; resize: none; }
+.rv-note { font-size: 12px; color: #4A433C; background: #F6F2EC; border-radius: 8px; padding: 4px 8px; margin-top: 3px; }
+.link-btn { border: none; background: none; padding: 2px 0 0; font: 600 12px Inter, system-ui, sans-serif; text-decoration: underline; color: var(--ink); cursor: pointer; align-self: flex-start; }

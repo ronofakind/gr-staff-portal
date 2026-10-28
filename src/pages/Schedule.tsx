@@ -7,14 +7,14 @@ import { TabBar } from '../components/TabBar';
 import { todayIso, isBar } from './Home';
 
 type S = { id: string; status: 'booked' | 'confirmed' | 'declined'; position_code: string | null; position_detail: string | null;
-  planned_start: string; planned_end: string | null; events: { event_date: string; title: string } };
+  planned_start: string; planned_end: string | null; time_tbc: boolean; events: { event_date: string; title: string } };
 
 const D = (iso: string) => new Date(iso + 'T12:00:00');
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const add = (s: string, n: number) => { const d = D(s); d.setDate(d.getDate() + n); return iso(d); };
 const monday = (s: string) => add(s, -((D(s).getDay() + 6) % 7));
 const DOW = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
-const hrs = (s: S) => s.planned_end ? (new Date(s.planned_end).getTime() - new Date(s.planned_start).getTime()) / 3600e3 : 0;
+const hrs = (s: S) => !s.time_tbc && s.planned_end ? (new Date(s.planned_end).getTime() - new Date(s.planned_start).getTime()) / 3600e3 : 0;
 const role = (s: S) => s.position_code === 'MD' ? 'MD' : s.position_detail ? s.position_detail.replace(/^bar\s*-\s*/i, '') : isBar(s.position_code, null) ? 'Bar' : 'Waiter';
 
 export function Schedule({ me, base = '', preview = false }: { me: Staff; base?: string; preview?: boolean }) {
@@ -36,7 +36,7 @@ export function Schedule({ me, base = '', preview = false }: { me: Staff; base?:
   useEffect(() => {
     setRows(null);
     Promise.all([
-      supabase.from('shifts').select('id,status,position_code,position_detail,planned_start,planned_end,events!inner(event_date,title)')
+      supabase.from('shifts').select('id,status,position_code,position_detail,planned_start,planned_end,time_tbc,events!inner(event_date,title)')
         .eq('staff_id', me.id).neq('status', 'declined').gte('events.event_date', range.from).lte('events.event_date', range.to),
       supabase.from('availability').select('for_date,status').eq('staff_id', me.id).eq('status', 'no').gte('for_date', range.from).lte('for_date', range.to),
     ]).then(([s, a]) => {
@@ -100,7 +100,7 @@ export function Schedule({ me, base = '', preview = false }: { me: Staff; base?:
                   {list.map((s) => (
                     <Link key={s.id} to={`${base}/shift/${s.id}`}>
                       <b>{s.events.title}</b>
-                      <span>{time(s.planned_start, lang)} · {role(s)}</span>
+                      <span>{s.time_tbc ? 'Time TBC' : time(s.planned_start, lang)} · {role(s)}</span>
                     </Link>
                   ))}
                 </div>
@@ -143,7 +143,7 @@ export function Schedule({ me, base = '', preview = false }: { me: Staff; base?:
           {(byDay[sel] ?? []).length === 0 && <div className="card muted sm">{off.has(sel) ? 'Unavailable' : 'No shift'}</div>}
           {(byDay[sel] ?? []).map((s) => (
             <Link key={s.id} to={`${base}/shift/${s.id}`} className="day-card">
-              <div className="grow"><small>{time(s.planned_start, lang)} · {role(s)}{s.status === 'booked' ? ' · to confirm' : ''}</small><div className="serif">{s.events.title}</div></div>
+              <div className="grow"><small>{s.time_tbc ? 'Time TBC' : time(s.planned_start, lang)} · {role(s)}{s.status === 'booked' ? ' · to confirm' : ''}</small><div className="serif">{s.events.title}</div></div>
               <span className="go">›</span>
             </Link>
           ))}

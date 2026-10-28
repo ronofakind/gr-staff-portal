@@ -7,7 +7,7 @@ import { Avatar } from '../components/Avatar';
 
 type Row = {
   id: string; position_code: string | null; position_detail: string | null; planned_start: string; planned_end: string | null;
-  attendance: 'no_show' | 'cancelled' | null;
+  attendance: 'no_show' | 'cancelled' | null; leave_by: string | null; manager_note: string | null;
   staff: { full_name: string; photo_url: string | null; phone: string | null } | null; punches: { punch_in: string | null; punch_out: string | null } | null;
 };
 type Ev = { id: string; title: string; event_date: string };
@@ -60,7 +60,7 @@ export function Manage() {
   const load = async () => {
     const [e, s] = await Promise.all([
       supabase.from('events').select('id,title,event_date,address,start_time,end_time,description,dress_code,hours_submitted_at,venues(address,staff_notes)').eq('id', eventId!).single(),
-      supabase.from('shifts').select('id,position_code,position_detail,planned_start,planned_end,attendance,staff:staff!shifts_staff_id_fkey(full_name,photo_url,phone),punches(punch_in,punch_out)')
+      supabase.from('shifts').select('id,position_code,position_detail,planned_start,planned_end,attendance,leave_by,manager_note,staff:staff!shifts_staff_id_fkey(full_name,photo_url,phone),punches(punch_in,punch_out)')
         .eq('event_id', eventId!).neq('status', 'declined').order('planned_start'),
     ]);
     setEv(e.data as unknown as EvFull);
@@ -172,20 +172,23 @@ export function Manage() {
                   </div>
                   <button className="who" aria-label={`Options for ${r.staff?.full_name}`} onClick={() => { setOpen(r); setDraft({ in: hm(pin) || hm(r.planned_start), out: hm(pout) }); }}>
                     <span className="nm">{r.staff?.full_name}</span>
-                    <span className="rl">{roleLabel(r.position_code, r.position_detail)}</span>
+                    <span className="rl">{roleLabel(r.position_code, r.position_detail)}{r.manager_note ? ' · 📝 note' : ''}</span>
                     {r.attendance ? <span className="st red">{r.attendance === 'no_show' ? 'No-show' : 'Cancelled'}</span>
                       : pout ? <span className="st">{time(pin!, lang)} → {time(pout, lang)} · {hours(pin!, pout)} {t.hours}</span>
                       : pin ? <span className="st ok">Working · since {time(pin, lang)}{new Date(pin).getTime() < new Date(r.planned_start).getTime() - 3 * 3600e3 && <b className="early-flag"> · early start</b>}</span>
                       : isLate ? <span className="st red">Late · {Math.round((Date.now() - new Date(r.planned_start).getTime()) / 60000)} min</span>
                       : <span className="st">{t.notIn}</span>}
                   </button>
-                  {tel && !r.attendance && <>
+                  {tel && !r.attendance ? <>
                     <a className="ic" href={`tel:${tel}`} aria-label={`Call ${r.staff!.full_name}`}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z" /></svg></a>
                     <a className="ic" href={`sms:${tel}`} aria-label={`Text ${r.staff!.full_name}`}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg></a>
-                  </>}
-                  {r.attendance ? <button className="act undo" onClick={() => mark(r.id, null)}>Undo</button>
-                    : !pin ? (gate(r).kind === 'locked' ? <button className="act locked" disabled title={gate(r).label}>{t.start}</button> : <button className="act start" onClick={() => startRows([r])}>{t.start}</button>)
-                    : !pout ? <button className="act end" onClick={() => set([{ id: r.id, in: pin, out: now() }])}>{t.end}</button> : null}
+                  </> : <><span className="ic ghost" aria-hidden="true" /><span className="ic ghost" aria-hidden="true" /></>}
+                  <div className="act-slot">
+                    {r.attendance ? <button className="act undo" onClick={() => mark(r.id, null)}>Undo</button>
+                      : !pin ? (gate(r).kind === 'locked' ? <button className="act locked" disabled title={gate(r).label}>{t.start}</button> : <button className="act start" onClick={() => startRows([r])}>{t.start}</button>)
+                      : !pout ? <button className="act end" onClick={() => set([{ id: r.id, in: pin, out: now() }])}>{t.end}</button> : <span className="act done-mark">✓</span>}
+                    {r.leave_by && !pout && !r.attendance && <span className="leave-tag">⏱ Leaves ~{time(r.leave_by, lang).replace(':00', '')}</span>}
+                  </div>
                 </div>
               );
             })}
@@ -256,6 +259,8 @@ export function Manage() {
                       <div className="nm">{r.staff?.full_name}</div>
                       <div className="tm">{r.attendance ? (r.attendance === 'no_show' ? 'No-show' : 'Cancelled')
                         : `${pin ? time(pin, lang) : 'no start time'} → ${pout ? time(pout, lang) : 'no end time'}`}</div>
+                      {r.manager_note ? <div className="rv-note">📝 {r.manager_note}</div>
+                        : <button className="link-btn" onClick={() => { setReview(false); setOpen(r); setDraft({ in: hm(pin) || hm(r.planned_start), out: hm(pout) }); }}>+ Add note</button>}
                     </div>
                     {r.attendance ? <span className="muted sm strong">0 h</span>
                       : miss ? <button className="pill-red" style={{ height: 32 }} onClick={() => { setReview(false); setOpen(r); setDraft({ in: hm(pin) || hm(r.planned_start), out: hm(pout) }); }}>Fix ›</button>
@@ -307,6 +312,8 @@ export function Manage() {
                   <button className="big-opt red" onClick={() => setAsk({ row: open, kind: 'no_show' })}>No-show<small>Didn't come, no notice</small></button>
                   <button className="big-opt ink" onClick={() => setAsk({ row: open, kind: 'cancelled' })}>Cancelled<small>Called in / sent home</small></button>
                 </div>}
+            {open.leave_by && <span className="leave-tag inline">⏱ Needs to leave ~{time(open.leave_by, lang)} · reminder only</span>}
+            <NoteBox key={open.id} initial={open.manager_note ?? ''} onSave={async (v) => { setErr(''); const { error } = await supabase.rpc('manager_set_note', { p_shift: open.id, p_note: v }); if (error) setErr(error.message); await load(); }} />
             <button className="btn-ghost" style={{ height: 46 }} onClick={() => setOpen(null)}>Close</button>
           </div>
         </>
@@ -355,5 +362,17 @@ export function ManagingToday({ meId, isAdmin }: { meId: string; isAdmin: boolea
         </Link>
       ))}
     </>
+  );
+}
+
+function NoteBox({ initial, onSave }: { initial: string; onSave: (v: string) => Promise<void> }) {
+  const [v, setV] = useState(initial); const [saved, setSaved] = useState(false);
+  return (
+    <div className="note-box">
+      <span>Note for Ronnie <em>(optional)</em></span>
+      <textarea rows={2} value={v} placeholder="e.g. had an emergency" onChange={(e) => { setV(e.target.value); setSaved(false); }} />
+      {v.trim() !== initial.trim() && <button className="btn-ink" style={{ height: 40 }} onClick={async () => { await onSave(v); setSaved(true); }}>Save note</button>}
+      {saved && <small className="okc">✓ Note saved</small>}
+    </div>
   );
 }
