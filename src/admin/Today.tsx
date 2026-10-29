@@ -141,13 +141,16 @@ function Live({ e }: { e: AEvent }) {
     issues = [...cancelled.map((s) => ['red', name(s), 'cancelled'] as [string, string, string]), ...unsure.map((s) => ['amber', name(s), 'not confirmed yet'] as [string, string, string])];
   } else {
     const ns = all.filter((s) => s.attendance === 'no_show');
-    const late = all.filter((s) => !s.attendance && !s.punches?.punch_in && new Date(s.planned_start).getTime() < now);
+    const missing = all.filter((s) => !s.attendance && !s.punches?.punch_in && new Date(s.planned_start).getTime() < now);
+    const lateIn = all.filter((s) => !s.attendance && flagsOf(s).some((f) => f.flag === 'late'));
+    const late = [...missing, ...lateIn];
     const working = all.filter((s) => s.punches?.punch_in && !(s.punches.punch_out && new Date(s.punches.punch_out).getTime() <= now));
     const done = all.filter((s) => s.punches?.punch_out && new Date(s.punches.punch_out).getTime() <= now);
     const leaving = working.filter((s) => s.leave_by);
     boxes = [[working.length, 'working', 'ok'], [late.length, 'late', late.length ? 'amber' : ''], [ns.length, 'no-show', ns.length ? 'red' : ''], [done.length, 'done', '']];
     issues = [...ns.map((s) => ['red', name(s), 'no-show'] as [string, string, string]),
-      ...late.map((s) => ['amber', name(s), `late ${Math.round((now - new Date(s.planned_start).getTime()) / 60000)} min`] as [string, string, string]),
+      ...missing.map((s) => ['amber', name(s), `not here · ${Math.round((now - new Date(s.planned_start).getTime()) / 60000)} min late`] as [string, string, string]),
+      ...lateIn.map((s) => ['amber', name(s), `started ${tTime(s.punches!.punch_in)} · ${flagsOf(s)[0].min} min late`] as [string, string, string]),
       ...leaving.map((s) => ['grey', name(s), `leaves ~${tTime(s.leave_by)}`] as [string, string, string])];
   }
   const startsIn = Math.round((firstStart - now) / 60000);
