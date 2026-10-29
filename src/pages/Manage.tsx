@@ -66,8 +66,11 @@ export function Manage() {
         .eq('event_id', eventId!).neq('status', 'declined').order('planned_start'),
     ]);
     setEv(e.data as unknown as EvFull);
+    // Within each call time: lead (MD / bar manager) first, then everyone A–Z by first name.
+    const lead = (r: Row) => (r.position_code === 'MD' || r.position_code === 'BM' ? 0 : 1);
     setRows(((s.data ?? []) as unknown as Row[]).sort((a, b) => a.planned_start.localeCompare(b.planned_start)
-      || (a.position_code === 'MD' ? -1 : b.position_code === 'MD' ? 1 : Number(a.position_code) - Number(b.position_code))));
+      || lead(a) - lead(b)
+      || (a.staff?.full_name ?? '').localeCompare(b.staff?.full_name ?? '', 'fr', { sensitivity: 'base' })));
   };
   useEffect(() => { load(); const id = setInterval(load, 30000); return () => clearInterval(id); }, [eventId]);
 
