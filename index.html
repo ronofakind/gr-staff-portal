@@ -6,12 +6,25 @@
   <meta name="theme-color" content="#F6F2EC" />
   <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="G&amp;R" />
   <title>G&amp;R</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 </head>
 <body>
   <div id="root"></div>
+  <script>
+    // Admin pages install as their own home-screen app ("G&R Admin", opens on /admin).
+    window.grAppMode = function () {
+      var admin = location.pathname.indexOf('/admin') === 0;
+      var set = function (sel, attr, v) { var el = document.querySelector(sel); if (el) el.setAttribute(attr, v); };
+      set('link[rel="manifest"]', 'href', admin ? '/manifest-admin.webmanifest' : '/manifest.webmanifest');
+      set('link[rel="apple-touch-icon"]', 'href', admin ? '/admin-apple-touch-icon.png' : '/apple-touch-icon.png');
+      set('meta[name="apple-mobile-web-app-title"]', 'content', admin ? 'G&R Admin' : 'G&R');
+      document.title = admin ? 'G&R Admin' : 'G&R';
+    };
+    document.addEventListener('DOMContentLoaded', window.grAppMode);
+  </script>
   <script type="module" src="/src/main.tsx"></script>
 </body>
 </html>

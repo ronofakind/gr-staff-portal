@@ -89,7 +89,7 @@ export function App() {
 function NotStaff({ lang }: { lang: Lang }) {
   return (
     <main className="login">
-      <img src="/logo-full.png" alt="G&R à votre service" className="login-logo" />
+      <img src="/logo-mark.png" alt="G&R" className="login-logo mark" />
       <div className="card stack">
         <p>{lang === 'fr' ? "Ce courriel n'est pas dans l'équipe G&R. Parle à Ronnie." : "This email isn't on the G&R team. Talk to Ronnie."}</p>
         <button className="btn" onClick={() => supabase.auth.signOut().then(() => window.location.replace('/'))}>{lang === 'fr' ? 'Déconnexion' : 'Log out'}</button>

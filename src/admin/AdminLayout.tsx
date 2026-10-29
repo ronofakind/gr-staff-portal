@@ -1,4 +1,5 @@
 import { NavLink, Outlet, Link } from 'react-router-dom';
+import { useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 
 const I = (d: string) => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" dangerouslySetInnerHTML={{ __html: d }} />;
@@ -22,6 +23,8 @@ const TABS: [string, string, keyof typeof ICONS][] = [
 ];
 
 export function AdminLayout() {
+  // Switch the page to the admin home-screen app (name, icon, start page) while on /admin.
+  useEffect(() => { (window as unknown as { grAppMode?: () => void }).grAppMode?.(); return () => { setTimeout(() => (window as unknown as { grAppMode?: () => void }).grAppMode?.(), 0); }; }, []);
   return (
     <div className="adm">
       <nav className="adm-side" aria-label="Admin">

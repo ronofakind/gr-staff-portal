@@ -92,7 +92,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
   return (
     <main className="page v2">
       <header className="v2-head">
-        <img className="logo" src="/logo-full.png" alt="G&R" />
+        <img className="logo" src="/logo-mark.png" alt="G&R" />
         <div className="hello"><b>Hi {first}</b><span>{longDate(today, lang)}</span></div>
         {!preview ? <Link to="/profile" aria-label="My profile"><Avatar name={me.full_name} url={me.photo_url} size={38} /></Link> : <Avatar name={me.full_name} url={me.photo_url} size={38} />}
       </header>
