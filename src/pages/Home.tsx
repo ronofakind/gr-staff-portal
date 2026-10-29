@@ -114,12 +114,12 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
         const team = teams[s.events.id];
         if (team && !preview) {
           const ended = team.every((m) => m.punches?.punch_out && new Date(m.punches.punch_out).getTime() <= Date.now());
-          const total = team.reduce((n, m) => n + (m.punches?.punch_in && m.punches.punch_out ? hrs(q15(m.punches.punch_in), q15(m.punches.punch_out)) : 0), 0);
+          const total = team.reduce((n, m) => n + (m.punches?.punch_in && m.punches.punch_out ? hrs(m.punches.punch_in, m.punches.punch_out) : 0), 0);
           const sub = s.events.hours_submitted_at;
           return sub ? (
             <div key={s.id} className="done-card mgr">
               <span className="ck">✓</span>
-              <div className="grow"><small>YOU MANAGED · {s.events.title.toUpperCase()}</small><b>Hours submitted {t12(sub)}</b><span>{team.length} people · {total} h · you {hrs(q15(s.punches!.punch_in!), q15(s.punches!.punch_out!))} h</span>
+              <div className="grow"><small>YOU MANAGED · {s.events.title.toUpperCase()}</small><b>Hours submitted {t12(sub)}</b><span>{team.length} people · {total} h · you {hrs(s.punches!.punch_in!, s.punches!.punch_out!)} h</span>
                 <Link to={`/manage/${s.events.id}`} className="done-link">Open team · fix &amp; resubmit ›</Link></div>
             </div>
           ) : (
@@ -136,7 +136,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
             <span className="ck">✓</span>
             <div className="grow">
               <small>DONE {s.events.event_date === todayIso() ? 'TONIGHT' : ''} · {s.events.title.toUpperCase()}</small>
-              <div className="ln"><span className="serif">{range(s.punches!.punch_in!, s.punches!.punch_out!)}</span><b>{hrs(q15(s.punches!.punch_in!), q15(s.punches!.punch_out!))} h</b></div>
+              <div className="ln"><span className="serif">{range(s.punches!.punch_in!, s.punches!.punch_out!)}</span><b>{hrs(s.punches!.punch_in!, s.punches!.punch_out!)} h</b></div>
               <div className="ln sm"><span>Thanks, {first}!</span>
                 {st === 'open' ? <span className="gold">Question sent ✓ · waiting</span>
                   : st === 'fixed' ? <span className="okc">Fixed ✓</span>
