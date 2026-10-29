@@ -30,7 +30,15 @@ export function Hours() {
   const hours = worked.reduce((n, r) => n + hoursBetween(r.s.punches!.punch_in, r.s.punches!.punch_out), 0);
   const flagged = rows.filter((r) => flagsOf(r.s).some((f) => f.flag === 'early' || f.flag === 'late'));
   const noShows = rows.filter((r) => r.s.attendance === 'no_show');
-  const notes = rows.filter((r) => r.s.manager_note);
+  const notes = rows.filter((r) => r.s.manager_note && !r.s.note_archived_at);
+  const archivedNotes = rows.filter((r) => r.s.manager_note && r.s.note_archived_at);
+  const [showArch, setShowArch] = useState(false);
+  const [names, setNames] = useState<Record<string, string>>({});
+  useEffect(() => { const ids = [...new Set(archivedNotes.map((r) => r.s.note_archived_by).filter(Boolean))] as string[]; if (ids.length) supabase.from('staff').select('id,full_name').in('id', ids).then(({ data }) => setNames(Object.fromEntries((data ?? []).map((x: { id: string; full_name: string }) => [x.id, x.full_name.split(' ')[0]])))); }, [archivedNotes.length]);
+  const archiveNote = async (id: string, on: boolean) => {
+    const { data: me } = await supabase.rpc('me');
+    await supabase.from('shifts').update(on ? { note_archived_at: new Date().toISOString(), note_archived_by: me ?? null } : { note_archived_at: null, note_archived_by: null }).eq('id', id); load();
+  };
 
   const people = useMemo(() => {
     const m = new Map<string, { name: string; rows: Row[] }>();
@@ -142,12 +150,17 @@ export function Hours() {
         </section>
       )}
 
-      {notes.length > 0 && (
+      {(notes.length > 0 || archivedNotes.length > 0) && (
         <section className="stack">
-          <div className="sec"><span className="serif">Notes from managers</span></div>
+          <div className="sec"><span className="serif">Notes from managers</span><span className="muted sm">{notes.length} open</span></div>
           <div className="adm-card" style={{ padding: '4px 16px' }}>
-            {notes.map((r) => <div key={r.s.id} className="need"><span>📝</span><div className="grow"><b>{r.s.staff?.full_name} · {dLabel(r.e.event_date)} · {r.e.title}</b><span>{r.s.manager_note}</span></div></div>)}
+            {!notes.length && <div className="muted sm" style={{ padding: '12px 0' }}>No open notes.</div>}
+            {notes.map((r) => <div key={r.s.id} className="need"><span>📝</span><div className="grow"><b>{r.s.staff?.full_name} · {dLabel(r.e.event_date)} · {r.e.title}</b><span>{r.s.manager_note}</span></div><button className="abtn sm" onClick={() => archiveNote(r.s.id, true)}>Archive</button></div>)}
           </div>
+          {archivedNotes.length > 0 && <div className="arch-box">
+            <button className="arch-toggle" onClick={() => setShowArch(!showArch)}>{showArch ? '▾' : '▸'} Archived · {archivedNotes.length}</button>
+            {showArch && archivedNotes.map((r) => <div key={r.s.id} className="arch-row"><span className="grow"><b style={{ color: 'var(--ink)' }}>{r.s.staff?.full_name} · {dLabel(r.e.event_date)}</b> · {r.s.manager_note}<br />Archived {r.s.note_archived_by && names[r.s.note_archived_by] ? `by ${names[r.s.note_archived_by]} ` : ''}{new Date(r.s.note_archived_at!).toLocaleString('en-CA', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' })}</span><button className="abtn sm" onClick={() => archiveNote(r.s.id, false)}>Restore</button></div>)}
+          </div>}
         </section>
       )}
 

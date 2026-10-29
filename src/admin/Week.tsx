@@ -73,7 +73,7 @@ function EventCard({ e }: { e: AEvent }) {
         <div className="bar"><div style={{ width: `${pct}%` }} className={short > 0 ? 'fill warn' : 'fill'} /></div>
       </div>
       <div className="row">
-        <Link className="btn sm" to={`/admin/event/${e.id}`}>Edit</Link>
+        <Link className="btn sm" to={`/admin/event/${e.id}`}>Open</Link>
         <Link className="btn sm primary" to={`/admin/day?d=${e.event_date}`}>Assign</Link>
       </div>
     </div>

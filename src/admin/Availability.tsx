@@ -7,7 +7,7 @@ type Tier = 'A' | 'B' | 'C';
 type Ask = { id: string; for_date: string; department: string; label: string; approx_start: string | null; staff_needed: number; tiers_sent: Tier[]; created_at: string };
 type Row = { id: string; staff_id: string; for_date: string; status: string; tier: string | null; from_time: string | null; until_time: string | null; ask_id: string | null };
 type Weekly = { staff_id: string; dow: number; status: 'yes' | 'from' | 'no'; from_time: string | null };
-type Off = { staff_id: string; from_date: string; to_date: string; reason: string | null };
+type Off = { staff_id: string; from_date: string; to_date: string; reason: string | null; every_dow: number | null };
 
 const TIERS: Tier[] = ['A', 'B', 'C'];
 export const tiersFor = (n: number): Tier[] => (n <= 8 ? ['A'] : n <= 20 ? ['A', 'B'] : ['A', 'B', 'C']);
@@ -35,7 +35,7 @@ export function Availability() {
     const [ev, st, w, o, a, r, x] = await Promise.all([
       eventsBetween(month, last), staff.length ? Promise.resolve(staff) : allStaff(),
       supabase.from('staff_weekly').select('staff_id,dow,status,from_time'),
-      supabase.from('days_off').select('staff_id,from_date,to_date,reason').gte('to_date', today),
+      supabase.from('days_off').select('staff_id,from_date,to_date,reason,every_dow').gte('to_date', today),
       supabase.from('avail_asks').select('*').gte('for_date', today).order('for_date'),
       supabase.from('availability').select('id,staff_id,for_date,status,tier,from_time,until_time,ask_id').not('ask_id', 'is', null).gte('for_date', today),
       supabase.from('avail_exceptions').select('staff_id,for_date').gte('for_date', today),
@@ -59,7 +59,7 @@ export function Availability() {
 
   /** Why someone is skipped automatically for a date (or null). */
   const skipWhy = (s: AStaff, d: string) => {
-    const o = off.find((x) => x.staff_id === s.id && x.from_date <= d && x.to_date >= d);
+    const o = off.find((x) => x.staff_id === s.id && x.from_date <= d && x.to_date >= d && (x.every_dow == null || x.every_dow === dow(d)));
     if (o) return `Day off${o.reason ? ` (${o.reason})` : ''}`;
     const w = weekly.find((x) => x.staff_id === s.id && x.dow === dow(d));
     if (w?.status === 'no' && !opened.has(`${s.id}|${d}`)) return `Not on ${D(d).toLocaleDateString('en-CA', { weekday: 'long' })}s`;

@@ -25,7 +25,7 @@ export function AdminLayout() {
   return (
     <div className="adm">
       <nav className="adm-side" aria-label="Admin">
-        <div className="adm-brand"><span className="serif">G&amp;R</span><small>ADMIN</small></div>
+        <Link to="/admin" className="adm-brand" aria-label="Today"><span className="adm-logo"><img src="/logo-mark.png" alt="G&amp;R" /></span><small>ADMIN</small></Link>
         <Link to="/admin/event/new" className="adm-new"><span>+</span>New event</Link>
         {NAV.map(([to, label, ic]) => (
           <NavLink key={to} to={to} end={to === '/admin'} className={({ isActive }) => 'adm-link' + (isActive ? ' on' : '')}>{I(ICONS[ic])}{label}</NavLink>
@@ -34,7 +34,7 @@ export function AdminLayout() {
         <Link to="/me" className="adm-link">My shifts</Link>
         <button className="adm-link" onClick={() => supabase.auth.signOut().then(() => window.location.replace('/'))}>Log out</button>
       </nav>
-      <main className="adm-main"><Outlet /></main>
+      <main className="adm-main"><Link to="/admin" className="adm-mtop" aria-label="Today"><img src="/logo-mark.png" alt="G&amp;R" /><small>ADMIN</small></Link><Outlet /></main>
       <Link to="/admin/event/new" className="adm-fab" aria-label="New event">+</Link>
       <nav className="adm-tabs" aria-label="Admin tabs">
         {TABS.map(([to, label, ic]) => (

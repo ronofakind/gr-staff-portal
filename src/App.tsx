@@ -13,6 +13,8 @@ import { Reliability } from './admin/Reliability';
 import { Week } from './admin/Week';
 import { Day } from './admin/Day';
 import { EventForm } from './admin/EventForm';
+import { EventDetail } from './admin/EventDetail';
+import { Free } from './admin/Free';
 import { Staff as StaffAdmin } from './admin/Staff';
 import { ViewAs } from './admin/ViewAs';
 import { Manage } from './pages/Manage';
@@ -60,7 +62,10 @@ export function App() {
             <Route path="reliability" element={<Reliability />} />
             <Route path="more" element={<More />} />
             <Route path="day" element={<Day />} />
-            <Route path="event/:id" element={<EventForm />} />
+            <Route path="event/new" element={<EventForm />} />
+            <Route path="event/:id" element={<EventDetail />} />
+            <Route path="event/:id/edit" element={<EventForm />} />
+            <Route path="free" element={<Free />} />
             <Route path="staff" element={<StaffAdmin />} />
             <Route path="availability" element={<AdminAvail />} />
             <Route path="tiers" element={<Tiers />} />
