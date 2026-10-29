@@ -71,7 +71,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
   const doneToday = shifts.filter((s) => isDone(s) && s.events.event_date === todayIso());
   const [next, ...rest] = shifts.filter((s) => !isDone(s));
   const pending = shifts.filter((s) => s.status === 'booked');
-  const first = me.full_name.split(' ')[0];
+  const first = me.nickname || me.full_name.split(' ')[0];
   const today = todayIso();
 
   const whenLabel = (s: ShiftRow) => {
@@ -203,6 +203,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
                   <div className="d" style={{ width: 40, alignItems: 'center' }}><small>{b.dow}</small><b>{b.day}</b></div>
                   <div className="what" style={{ gap: 5 }}><b>{s.events.title}</b>
                     <span className="pos-row2"><span className={'pos-pill' + (isLead(s) ? ' lead' : '')}>{role(s)}</span>{teams[s.events.id] && !preview ? <span>team {teams[s.events.id].length}</span> : null}</span></div>
+                  <span className="row-wear" title={UNIFORM_LABEL[uniformFor(s)]}><UniformIcon kind={uniformFor(s)} size={30} /></span>
                   <div className="row-time"><small>Starts</small>{s.time_tbc ? <b className="tbc">Time TBC</b> : <b><span className="serif">{time(s.planned_start, lang).replace(/\s?[ap]\.?\s?m\.?/i, '')}</span><i>{/p\.?\s?m/i.test(time(s.planned_start, lang)) ? ' PM' : ' AM'}</i></b>}</div>
                   {s.status === 'confirmed' ? <span className="ok-dot" aria-label="Confirmed" /> : <span className="tag-ask" style={{ height: 26, fontSize: 11 }}>Confirm</span>}
                 </Link>

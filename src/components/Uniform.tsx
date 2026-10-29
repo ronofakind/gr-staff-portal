@@ -15,7 +15,11 @@ export function uniformFor(s: { uniform?: string | null; position_code: string |
   return (s.uniform || (bar ? s.events.uniform_bar : s.events.uniform_floor) || (bar ? 'black_shirt' : 'white_shirt')) as UniformKind;
 }
 
+const IMG: Partial<Record<UniformKind, string>> = { white_shirt: '/uniform/shirt_white.png', black_shirt: '/uniform/shirt_black.png', dress: '/uniform/dress.png' };
+const pic = (src: string, size: number) => <img src={src} alt="" width={size} height={size} style={{ objectFit: 'contain', display: 'block' }} />;
+
 export function UniformIcon({ kind, size = 32 }: { kind: UniformKind; size?: number }) {
+  if (IMG[kind]) return pic(IMG[kind]!, size);
   if (kind === 'dress') {
     return (
       <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden="true">
@@ -53,12 +57,9 @@ export const wearsApron = (kind: UniformKind) => kind !== 'dress';
 /** Lines already shown as tiles (shirt, pants, shoes, apron, belt) — not repeated as chips. */
 export const TILE_LINE = /shirt|tie\b|pants|pantalon|shoes|souliers|chaussures|apron|tablier|belt|ceinture|dress\b/i;
 
-export function PantsIcon({ size = 44 }: { size?: number }) {
-  return <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden="true"><path d="M18 6 H46 L50 60 H37 L32 22 L27 60 H14 Z" fill="#1A1714" /><path d="M18 12 H46" stroke="#F6F2EC" strokeWidth="1.5" /></svg>;
+export function PantsIcon({ size = 44 }: { size?: number }) { return pic('/uniform/pants.png', size); }
+export function ShoesIcon({ size = 44, who = 'both' }: { size?: number; who?: 'men' | 'women' | 'both' }) {
+  if (who === 'both') return <span style={{ display: 'flex', gap: 2 }}>{pic('/uniform/shoe_men.png', size * 0.85)}{pic('/uniform/shoe_women.png', size * 0.85)}</span>;
+  return pic(`/uniform/shoe_${who}.png`, size);
 }
-export function ShoesIcon({ size = 44 }: { size?: number }) {
-  return <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden="true"><path d="M6 40 Q6 30 14 30 L26 30 Q30 30 34 34 L44 38 Q58 40 58 47 L58 50 L6 50 Z" fill="#1A1714" /><path d="M6 50 H58" stroke="#6B625A" strokeWidth="3" /><path d="M22 31 Q26 36 33 34" stroke="#F6F2EC" strokeWidth="1.4" fill="none" /></svg>;
-}
-export function ApronIcon({ size = 44 }: { size?: number }) {
-  return <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden="true"><path d="M22 6 Q32 4 42 6" stroke="#1A1714" strokeWidth="2.4" fill="none" /><path d="M20 24 H44 L48 58 H16 Z" fill="#1A1714" /><path d="M6 24 H20 M44 24 H58 M22 6 L20 24 M42 6 L44 24" stroke="#1A1714" strokeWidth="2.4" /><rect x="25" y="36" width="14" height="9" rx="2" fill="none" stroke="#F6F2EC" strokeWidth="1.4" /></svg>;
-}
+export function ApronIcon({ size = 44 }: { size?: number }) { return pic('/uniform/apron.png', size); }

@@ -12,7 +12,7 @@ export function ViewAs() {
   const { staffId } = useParams();
   const [who, setWho] = useState<Staff | null>(null);
   useEffect(() => {
-    supabase.from('staff').select('id,full_name,email,phone,language,role,photo_url').eq('id', staffId!).single()
+    supabase.from('staff').select('id,full_name,nickname,email,phone,language,role,photo_url').eq('id', staffId!).single()
       .then(({ data }) => setWho(data as Staff));
   }, [staffId]);
   if (!who) return <div className="loading" />;

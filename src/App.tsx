@@ -36,7 +36,7 @@ export function App() {
 
   useEffect(() => {
     if (!session) { setMe(session === null ? null : undefined); return; }
-    supabase.from('staff').select('id,full_name,email,phone,language,role,photo_url')
+    supabase.from('staff').select('id,full_name,nickname,email,phone,language,role,photo_url')
       .eq('auth_user_id', session.user.id).maybeSingle()
       .then(({ data }) => setMe((data as Staff) ?? null));
   }, [session]);

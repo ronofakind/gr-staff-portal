@@ -110,7 +110,7 @@ export function Shift({ backTo = '/' }: { backTo?: string }) {
         </div>
         <div className="wear-tiles">
           {kind !== 'dress' && <div className="wear-tile2"><PantsIcon /><b>Black dress pants</b><span className="no">✕ No jeans</span></div>}
-          <div className="wear-tile2"><ShoesIcon /><b>Black dress shoes</b><span className="no">✕ No running shoes</span></div>
+          <div className="wear-tile2"><ShoesIcon who={kind === 'dress' ? 'women' : 'both'} /><b>Black dress shoes</b><span className="no">✕ No running shoes</span></div>
           {wearsApron(kind) && <div className="wear-tile2"><ApronIcon /><b>Black apron</b></div>}
         </div>
         {(extras.length > 0 || bring.length > 0) && <div className="chips">{[...extras, ...bring].map((x, i) => <span key={i} className="wear-chip">{x}</span>)}</div>}

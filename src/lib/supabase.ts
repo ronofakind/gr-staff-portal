@@ -10,7 +10,7 @@ export const supabase = createClient(
 );
 
 export type Staff = {
-  id: string; full_name: string; email: string | null; phone: string | null;
+  id: string; full_name: string; nickname?: string | null; email: string | null; phone: string | null;
   language: 'fr' | 'en'; role: 'staff' | 'manager' | 'admin'; photo_url: string | null;
 };
 
