@@ -738,3 +738,7 @@ main.page.slide-right > :not(.tabbar):not(.save-bar):not(.sheet):not(.scrim) { a
 .d-call { width: 44px; height: 44px; border-radius: 22px; background: #1A1714; display: flex; align-items: center; justify-content: center; flex: 0 0 auto; }
 .d-call.ok { background: #1B7F5C; }
 .details .look { display: flex; align-items: center; gap: 12px; }
+/* Coming up rows: never squash the position pill */
+.agenda-row .what .pos-row2 { flex-wrap: nowrap; min-width: 0; }
+.agenda-row .what .pos-pill { white-space: nowrap; flex: 0 0 auto; height: 24px; line-height: 24px; }
+.agenda-row .what .pos-row2 span:not(.pos-pill) { display: none; }
