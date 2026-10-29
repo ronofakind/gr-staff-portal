@@ -39,7 +39,7 @@ export function Today() {
       const seen = new Set<string>();
       for (const e of recent) for (const s of e.shifts) {
         if (seen.has(s.id)) continue; seen.add(s.id);
-        for (const f of flagsOf(s)) n.push({ key: s.id + f.flag, red: true, title: `⚑ ${s.staff?.full_name ?? '?'} · ${flagText(f).toLowerCase()}`, sub: `${e.event_date === today ? 'Today' : 'Yesterday'} · ${e.title}`, action: 'View', to: '/admin/reliability' });
+        for (const f of flagsOf(s).filter((x) => x.flag !== 'early')) n.push({ key: s.id + f.flag, red: true, title: `⚑ ${s.staff?.full_name ?? '?'} · ${flagText(f).toLowerCase()}`, sub: `${e.event_date === today ? 'Today' : 'Yesterday'} · ${e.title}`, action: 'View', to: '/admin/reliability' });
       }
       for (const e of ahead.filter((x) => x.department !== 'bar')) {
         const booked = e.shifts.filter((s) => s.status !== 'declined').length;
