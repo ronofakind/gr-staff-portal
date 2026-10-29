@@ -131,14 +131,25 @@ function write_(ss, name, d, rows) {
   push(['', '', '', '', 'COMBINED', '=SUM(' + totals.join(',') + ')'], 7);
 
   const n = out.length;
-  const S = 919; // scratch rows 919-925 keep the template's formats for rows 1-7 while we write
-  sh.getRange(1, 1, 7, 6).copyFormatToRange(sh, 1, 6, S, S + 6);
-  sh.getRange(1, 1, S - 1, 6).clearContent();
-  sh.getRange(1, 3, S - 1, 1).clearDataValidations();
-  fmt.forEach((f, i) => sh.getRange(S + f - 1, 1, 1, 6).copyFormatToRange(sh, 1, 6, i + 1, i + 1));
+  sh.getRange(1, 1, sh.getMaxRows(), 6).clearContent();
+  sh.getRange(1, 3, sh.getMaxRows(), 1).clearDataValidations();
+  sh.getRange(1, 1, n, 6).breakApart();
   sh.getRange(1, 1, n, 6).setValues(out);
+  const NAVY = '#1F4E78', BLUE = '#D9EAF6', GREY = '#EDEDED', GREEN = '#E0EFD9';
+  const band = (i, cols, bg, color) => sh.getRange(i + 1, 1, 1, cols).merge().setBackground(bg).setFontColor(color || '#000000')
+    .setFontWeight('bold').setHorizontalAlignment('center');
+  fmt.forEach((f, i) => {
+    const row = sh.getRange(i + 1, 1, 1, 6);
+    if (f !== 7) row.clearDataValidations();
+    if (f === 1 && i === 0) band(i, 6, NAVY);
+    else if (f === 1) row.setBackground('#FFFFFF').setBorder(false, false, false, false, false, false);
+    else if (f === 2) { band(i, 6, NAVY, '#FFFFFF'); sh.getRange(i + 1, 1).setNumberFormat('dddd, mmmm d, yyyy'); }
+    else if (f === 3) band(i, 6, BLUE);
+    else if (f === 4) band(i, 6, NAVY, '#FFFFFF');
+    else if (f === 5) { band(i, 3, GREY); sh.getRange(i + 1, 4, 1, 3).setBackground(GREY).setFontWeight('bold').setHorizontalAlignment('center'); }
+    else if (f === 6) band(i, 6, GREEN);
+  });
   out.forEach((r, i) => { if (fmt[i] === 7 && r[1]) sh.getRange(i + 1, 3).insertCheckboxes(); });
-  out.forEach((r, i) => { if (fmt[i] === 2) sh.getRange(i + 1, 1).setNumberFormat('dddd, mmmm d, yyyy'); });
   out.forEach((r, i) => { if (/TOTAL|COMBINED/.test(r[4])) sh.getRange(i + 1, 5, 1, 2).setFontWeight('bold'); });
   sh.deleteRows(n + 3, sh.getMaxRows() - n - 2);
 }
