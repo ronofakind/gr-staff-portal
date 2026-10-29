@@ -11,12 +11,15 @@ export function Hours() {
   const [closed, setClosed] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const [draft, setDraft] = useState<Record<string, { in?: string; out?: string }>>({});
+  const [qs, setQs] = useState<{ id: string; shift_id: string; kind: string; claimed_at: string | null; note: string | null; created_at: string }[]>([]);
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
   const today = isoDay(new Date());
 
   const load = async () => {
     const [evs, pp] = await Promise.all([eventsBetween(p.start, p.end), supabase.from('pay_periods').select('closed_at').eq('start_date', p.start).maybeSingle()]);
     setEvents(evs.filter((e) => e.department !== 'bar')); setClosed((pp.data?.closed_at as string) ?? null);
+    const ids = evs.flatMap((e) => e.shifts.map((x) => x.id));
+    if (ids.length) { const { data: q } = await supabase.from('hours_questions').select('id,shift_id,kind,claimed_at,note,created_at').eq('status', 'open').in('shift_id', ids); setQs((q ?? []) as typeof qs); } else setQs([]);
   };
   useEffect(() => { setEvents(null); load(); }, [p.start]);
 
@@ -92,6 +95,37 @@ export function Hours() {
         <div className={'k' + (flagged.length ? ' amber' : '')}><small>LATE / EARLY</small><b>{flagged.length}</b></div>
         <div className="k"><small>NO-SHOWS</small><b>{noShows.length}</b></div>
       </div>
+
+      {qs.length > 0 && (
+        <section className="stack">
+          <div className="sec"><span className="serif">Hours questions from staff</span><span className="muted sm">Fix it, or tell them it’s correct</span></div>
+          <div className="adm-card" style={{ padding: '4px 16px' }}>
+            {qs.map((q) => {
+              const r = rows.find((x) => x.s.id === q.shift_id); if (!r) return null;
+              const claimed = q.claimed_at ? hm24(q.claimed_at) : '';
+              const fix = async () => {
+                const inT = q.kind === 'start' && claimed ? claimed : hm24(r.s.punches?.punch_in ?? null);
+                const outT = q.kind === 'end' && claimed ? claimed : hm24(r.s.punches?.punch_out ?? null);
+                setDraft({ ...draft, [r.s.id]: { in: inT, out: outT } });
+              };
+              const resolve = async (st: 'fixed' | 'correct') => {
+                if (st === 'fixed' && draft[r.s.id]) await save(r);
+                const { data: me } = await supabase.rpc('me');
+                await supabase.from('hours_questions').update({ status: st, resolved_at: new Date().toISOString(), resolved_by: me }).eq('id', q.id); load();
+              };
+              return (
+                <div key={q.id} className="need">
+                  <span className="dotr" />
+                  <div className="grow"><b>{r.s.staff?.full_name} · {dLabel(r.e.event_date)} · {r.e.title}</b>
+                    <span>Recorded {tTime(r.s.punches?.punch_in ?? null)} – {tTime(r.s.punches?.punch_out ?? null)} · says {q.kind === 'other' ? 'something else' : `${q.kind} ${q.claimed_at ? tTime(q.claimed_at) : ''}`}{q.note ? ` · “${q.note}”` : ''}</span></div>
+                  {draft[r.s.id] ? <>{times(r)}<button className="abtn sm ok" onClick={() => resolve('fixed')}>Save as fixed</button></>
+                    : <><button className="abtn sm dark" onClick={fix}>Fix</button><button className="abtn sm" onClick={() => resolve('correct')}>It’s correct</button></>}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {missing.length > 0 && (
         <section className="stack">
