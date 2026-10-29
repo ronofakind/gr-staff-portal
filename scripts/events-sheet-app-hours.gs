@@ -15,7 +15,7 @@ const SUPABASE_URL = 'https://oigqdecyhmeuvrpoikdv.supabase.co';
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('G&R app')
     .addItem('Connect the app', 'connect')
-    .addItem('Update today now', 'refresh')
+    .addItem('Update today now', 'syncToday')
     .addToUi();
 }
 
@@ -45,6 +45,9 @@ function refresh() {
   syncDate_(now);
   if (Number(Utilities.formatDate(now, TZ, 'H')) < 6) syncDate_(addDays_(now, -1));
 }
+
+/** Rebuild today's tab now (also in the G&R app menu). */
+function syncToday() { syncDate_(new Date(), true); }
 
 /** Run by hand to rebuild one date, e.g. syncOne('2026-10-28'). */
 function syncOne(ymd) { syncDate_(new Date(ymd + 'T12:00:00'), true); }
@@ -114,7 +117,7 @@ function write_(ss, name, d, rows) {
         const gone = r.attendance === 'no_show' || r.attendance === 'cancelled';
         const code = BAR[r.position_code] || r.position_code === 'MD' ? r.position_code : (kind === 'bar' ? (r.position_code || '') : ++n);
         const row = out.length + 1;
-        push([code, r.full_name.toUpperCase(), !gone,
+        push([code, r.full_name.toUpperCase(), !gone && !!r.punch_in,
           !gone && r.punch_in ? dayFrac(q15(r.punch_in)) : '',
           !gone && r.punch_out ? dayFrac(q15(r.punch_out)) : '',
           '=IF(OR(D' + row + '="",E' + row + '=""),"",24*MOD(TIMEVALUE(E' + row + ')-TIMEVALUE(D' + row + '),1))'], 7);
@@ -135,6 +138,7 @@ function write_(ss, name, d, rows) {
   fmt.forEach((f, i) => sh.getRange(S + f - 1, 1, 1, 6).copyFormatToRange(sh, 1, 6, i + 1, i + 1));
   sh.getRange(1, 1, n, 6).setValues(out);
   out.forEach((r, i) => { if (fmt[i] === 7 && r[1]) sh.getRange(i + 1, 3).insertCheckboxes(); });
+  out.forEach((r, i) => { if (fmt[i] === 2) sh.getRange(i + 1, 1).setNumberFormat('dddd, mmmm d, yyyy'); });
   out.forEach((r, i) => { if (/TOTAL|COMBINED/.test(r[4])) sh.getRange(i + 1, 5, 1, 2).setFontWeight('bold'); });
   sh.deleteRows(n + 3, sh.getMaxRows() - n - 2);
 }
