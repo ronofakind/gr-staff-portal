@@ -164,7 +164,8 @@ function Live({ e }: { e: AEvent }) {
         : <div className="okc sm strong">✓ Nothing to flag</div>}
       <div className="row" style={{ justifyContent: 'flex-end', gap: 8, borderTop: '1px solid var(--line)', paddingTop: 12 }}>
         <a className="abtn sm" href={phones.length ? `sms:/open?addresses=${phones.join(',')}` : undefined}>Message</a>
-        <Link className="abtn sm dark" to={`/admin/event/${e.id}`}>Team ›</Link>
+        <Link className="abtn sm" to={`/admin/event/${e.id}`}>Team ›</Link>
+        <Link className="abtn sm dark" to={`/manage/${e.id}`}>Check-in{started && <i className="live-dot" />}</Link>
       </div>
     </div>
   );
