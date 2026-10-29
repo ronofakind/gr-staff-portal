@@ -744,8 +744,7 @@ main.page.slide-right > :not(.tabbar):not(.save-bar):not(.sheet):not(.scrim) { a
 .agenda-row .what .pos-row2 span:not(.pos-pill) { display: none; }
 /* ── Admin push Oct 29 ── */
 .adm-brand { text-decoration: none; color: inherit; align-items: center; }
-.adm-logo { background: #F6F2EC; border-radius: 12px; padding: 6px 12px; display: inline-flex; align-items: center; }
-.adm-logo img { height: 34px; width: auto; display: block; }
+.adm-logo { height: 40px; width: auto; display: block; }
 .adm-mtop { display: none; }
 @media (max-width: 820px) { .adm-mtop { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 12px; text-decoration: none; color: var(--muted); }
   .adm-mtop img { height: 30px; } .adm-mtop small { font-size: 10px; letter-spacing: .14em; font-weight: 700; } }

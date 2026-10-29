@@ -25,7 +25,7 @@ export function AdminLayout() {
   return (
     <div className="adm">
       <nav className="adm-side" aria-label="Admin">
-        <Link to="/admin" className="adm-brand" aria-label="Today"><span className="adm-logo"><img src="/logo-mark.png" alt="G&amp;R" /></span><small>ADMIN</small></Link>
+        <Link to="/admin" className="adm-brand" aria-label="Today"><img className="adm-logo" src="/logo-white.png" alt="G&amp;R" /><small>ADMIN</small></Link>
         <Link to="/admin/event/new" className="adm-new"><span>+</span>New event</Link>
         {NAV.map(([to, label, ic]) => (
           <NavLink key={to} to={to} end={to === '/admin'} className={({ isActive }) => 'adm-link' + (isActive ? ' on' : '')}>{I(ICONS[ic])}{label}</NavLink>
