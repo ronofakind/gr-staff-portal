@@ -25,6 +25,7 @@ export function Login({ mustSetPin }: { mustSetPin?: boolean }) {
       const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password: value });
       if (error) throw new Error(t('badLogin'));
       localStorage.setItem('gr_email', email.trim());
+      if (window.location.pathname !== '/') window.location.replace('/');
     });
     if (step === 'code') return run(async () => {
       const { error } = await supabase.auth.verifyOtp({ email: email.trim(), token: value, type: 'email' });
@@ -36,7 +37,7 @@ export function Login({ mustSetPin }: { mustSetPin?: boolean }) {
       const { error } = await supabase.auth.updateUser({ password: value });
       if (error) throw new Error(error.message);
       localStorage.removeItem('gr_needs_pin');
-      window.location.reload();
+      window.location.replace('/');
     });
   };
 
@@ -50,7 +51,7 @@ export function Login({ mustSetPin }: { mustSetPin?: boolean }) {
   const digits = step !== 'email';
   return (
     <main className="login">
-      <img src="/logo-full.png" alt="G&R à votre service" className="login-logo" />
+      <img src="/logo-mark.png" alt="G&R" className="login-logo mark" />
       <form onSubmit={submit} className="card stack">
         {step === 'email' && (
           <label className="field">{t('email')}

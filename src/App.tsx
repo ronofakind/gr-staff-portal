@@ -87,7 +87,7 @@ function NotStaff({ lang }: { lang: Lang }) {
       <img src="/logo-full.png" alt="G&R à votre service" className="login-logo" />
       <div className="card stack">
         <p>{lang === 'fr' ? "Ce courriel n'est pas dans l'équipe G&R. Parle à Ronnie." : "This email isn't on the G&R team. Talk to Ronnie."}</p>
-        <button className="btn" onClick={() => supabase.auth.signOut()}>{lang === 'fr' ? 'Déconnexion' : 'Log out'}</button>
+        <button className="btn" onClick={() => supabase.auth.signOut().then(() => window.location.replace('/'))}>{lang === 'fr' ? 'Déconnexion' : 'Log out'}</button>
       </div>
     </main>
   );

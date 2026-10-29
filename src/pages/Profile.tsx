@@ -88,7 +88,7 @@ export function Profile({ me }: { me: Staff }) {
         </section>
       </>}
 
-      <button className="btn" onClick={() => supabase.auth.signOut()}>Log out</button>
+      <button className="btn" onClick={() => supabase.auth.signOut().then(() => window.location.replace('/'))}>Log out</button>
       <TabBar />
       {edit && <EditSheet kind={edit} me={me} phone={phone} onClose={() => setEdit(null)} onPhone={(v) => { setPhone(v); setMsg('✓ Saved'); }} />}
     </main>

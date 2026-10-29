@@ -32,7 +32,7 @@ export function AdminLayout() {
         ))}
         <div className="grow" />
         <Link to="/me" className="adm-link">My shifts</Link>
-        <button className="adm-link" onClick={() => supabase.auth.signOut()}>Log out</button>
+        <button className="adm-link" onClick={() => supabase.auth.signOut().then(() => window.location.replace('/'))}>Log out</button>
       </nav>
       <main className="adm-main"><Outlet /></main>
       <Link to="/admin/event/new" className="adm-fab" aria-label="New event">+</Link>
@@ -56,7 +56,7 @@ export function More() {
       <div><div className="kick">MORE</div><h1 className="serif-h">Everything else</h1></div>
       <div className="adm-card" style={{ padding: '4px 16px' }}>
         {items.map(([to, label, ic]) => <Link key={to} to={to} className="more-row">{I(ICONS[ic])}<span className="grow">{label}</span>›</Link>)}
-        <button className="more-row" onClick={() => supabase.auth.signOut()}><span className="grow">Log out</span></button>
+        <button className="more-row" onClick={() => supabase.auth.signOut().then(() => window.location.replace('/'))}><span className="grow">Log out</span></button>
       </div>
     </div>
   );
