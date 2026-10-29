@@ -6,6 +6,7 @@ import {
   type AStaff, type Line, type Venue, type Client,
 } from './api';
 import { tiersFor } from './Availability';
+import { AddressInput, type AddressParts } from '../components/AddressInput';
 
 type Tier = 'A' | 'B' | 'C';
 type Ev = { id: string; department: 'floor' | 'bar' | 'kitchen'; staffing: Omit<Line, 'names'>[] | null; manager_id: string | null };
@@ -56,6 +57,7 @@ export function EventForm() {
   const [venueId, setVenueId] = useState<string | null>(null); const [title, setTitle] = useState('');
   const [clientId, setClientId] = useState<string>(''); const [newClient, setNewClient] = useState<string | null>(null);
   const [address, setAddress] = useState(''); const [ends, setEnds] = useState('~ midnight');
+  const [parts, setParts] = useState<AddressParts | null>(null);
   const [uFloor, setUFloor] = useState('white_shirt'); const [uBar, setUBar] = useState('black_shirt');
   const [note, setNote] = useState(''); const [staffNote, setStaffNote] = useState(''); const [showStaffNote, setShowStaffNote] = useState(false);
   const [rateSet, setRateSet] = useState<string | null>(null);
@@ -157,7 +159,7 @@ export function EventForm() {
       setClients([...clients, { id: c.id, name: newClient.trim(), rate_sets: [] }]);
     }
     if (!vId && title.trim()) {
-      const { data: v, error } = await supabase.from('venues').insert({ name: title.trim(), address: address || null, usual_client_id: cId, uniform_floor: uFloor, uniform_bar: uBar }).select('id').single();
+      const { data: v, error } = await supabase.from('venues').insert({ name: title.trim(), address: address || null, ...(parts ? { street: parts.street, unit: parts.unit || null, city: parts.city, province: parts.province, postal_code: parts.postal_code } : {}), usual_client_id: cId, uniform_floor: uFloor, uniform_bar: uBar }).select('id').single();
       if (error && !error.message.includes('duplicate')) throw error;
       vId = v?.id ?? (await supabase.from('venues').select('id').eq('name', title.trim()).single()).data?.id ?? null; setVenueId(vId);
     } else if (vId) {
@@ -293,7 +295,7 @@ export function EventForm() {
           {venue?.usual_client_id && venue.usual_client_id === clientId && <small className="okc">Filled from the venue · change if needed</small>}
         </label>
         <label className="ef-f"><span>ENDS · approx.</span><select value={ends} onChange={(e) => setEnds(e.target.value)}>{ENDS.map(([l]) => <option key={l}>{l}</option>)}</select></label>
-        <label className="ef-f ef-wide"><span>ADDRESS · auto</span><input value={address} onChange={(e) => setAddress(e.target.value)} placeholder="Full address, suite / floor" /></label>
+        <div className="ef-f ef-wide"><span>ADDRESS · {venue?.address ? 'auto' : 'start typing, pick from the list'}</span><AddressInput value={address} onChange={(v) => { setAddress(v); setParts(null); }} onPick={setParts} placeholder="Start typing the address…" /><small className="muted">Add the suite, floor or entrance at the end if needed.</small></div>
         <label className="ef-f"><span>FLOOR UNIFORM</span><select value={uFloor} onChange={(e) => setUFloor(e.target.value)}>{UNIFORMS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></label>
         <label className="ef-f"><span>BAR UNIFORM</span><select value={uBar} onChange={(e) => setUBar(e.target.value)}>{UNIFORMS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select><small className="muted">Remembered per venue</small></label>
         <label className="ef-f ef-wide"><span>EVENT NOTE (optional)</span><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Sit-down dinner · 250 guests" /></label>
