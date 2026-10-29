@@ -20,7 +20,7 @@ export type ShiftRow = {
   planned_start: string; planned_end: string | null; arrive_before_min: number; uniform: string | null; time_tbc?: boolean; plan?: unknown; cal_token?: string; punches?: { punch_in: string | null; punch_out: string | null } | null;
   events: {
     id: string; event_date: string; title: string; address: string | null; department: string; manager_id: string | null;
-    description: string | null; dress_code: string | null; bring: string | null;
+    description: string | null; dress_code: string | null; bring: string | null; notes?: string | null;
     timeline: { time: string; label: string }[]; uniform_floor: string | null; uniform_bar: string | null; plan?: unknown; hours_submitted_at?: string | null;
     venues: { name: string; address: string | null; staff_notes: string | null } | null;
     manager: { full_name: string; photo_url: string | null; phone: string | null } | null;
@@ -28,6 +28,6 @@ export type ShiftRow = {
 };
 
 export const SHIFT_SELECT = `id,status,position_code,position_detail,planned_start,planned_end,arrive_before_min,uniform,time_tbc,plan,cal_token,
-  events(id,event_date,title,address,department,description,dress_code,bring,timeline,manager_id,uniform_floor,uniform_bar,plan,hours_submitted_at,
+  events(id,event_date,title,address,department,description,dress_code,bring,notes,timeline,manager_id,uniform_floor,uniform_bar,plan,hours_submitted_at,
     venues(name,address,staff_notes),
     manager:staff!events_manager_id_fkey(full_name,photo_url,phone))`;

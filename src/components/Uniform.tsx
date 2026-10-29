@@ -63,3 +63,8 @@ export function ShoesIcon({ size = 44, who = 'both' }: { size?: number; who?: 'm
   return pic(`/uniform/shoe_${who}.png`, size);
 }
 export function ApronIcon({ size = 44 }: { size?: number }) { return pic('/uniform/apron.png', size); }
+
+export function TieIcon({ size = 44 }: { size?: number }) { return pic('/uniform/tie.png', size); }
+export function WineKeyIcon({ size = 44 }: { size?: number }) { return pic('/uniform/winekey.png', size); }
+/** Bar positions: bar manager, barback, bartender. */
+export const isBarPos = (code: string | null, detail: string | null) => /^(BM|BB|BT)$/.test(code ?? '') || /^bar\b|bartend|barback|barmaid/i.test(detail ?? '');

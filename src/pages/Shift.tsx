@@ -4,8 +4,8 @@ import { supabase, SHIFT_SELECT, type ShiftRow } from '../lib/supabase';
 import { useT, useLang } from '../lib/i18n';
 import { time, longDate, minus, mapsUrl } from '../lib/format';
 import { Avatar } from '../components/Avatar';
-import { UniformIcon, uniformFor, UNIFORM_LABEL, PantsIcon, ShoesIcon, ApronIcon, wearsApron, TILE_LINE } from '../components/Uniform';
-import { Status, BigTime, isBar } from './Home';
+import { UniformIcon, uniformFor, UNIFORM_LABEL, PantsIcon, ShoesIcon, ApronIcon, TieIcon, WineKeyIcon, isBarPos } from '../components/Uniform';
+import { Status, isBar } from './Home';
 
 export function Shift({ backTo = '/' }: { backTo?: string }) {
   const t = useT(); const lang = useLang();
@@ -26,55 +26,45 @@ export function Shift({ backTo = '/' }: { backTo?: string }) {
   const lead = md ?? ev.manager;
   const address = ev.address || ev.venues?.address || '';
   const arrive = minus(s.planned_start, s.arrive_before_min);
-  const steps = [
-    { time: time(arrive, lang), label: lead ? `${lang === 'fr' ? 'Arrivée, présente-toi à' : 'Arrive, check in with'} ${lead.full_name.split(' ')[0]}` : (lang === 'fr' ? 'Arrivée' : 'Arrive'), strong: true },
-    { time: time(s.planned_start, lang), label: lang === 'fr' ? 'Début du quart, punch in' : 'Shift starts', strong: true },
-    ...(ev.timeline ?? []).map((x) => ({ time: x.time, label: x.label, strong: false })),
-    ...(s.planned_end ? [{ time: '~' + time(s.planned_end, lang), label: lang === 'fr' ? 'Fin, punch out' : 'Ends', strong: false }] : []),
-  ];
   const cal = s.cal_token && !/android/i.test(navigator.userAgent) ? `/api/cal?t=${s.cal_token}` : calendarUrl(ev.title, arrive, s.planned_end, address);
 
   const kind = uniformFor(s);
-  // Pants / shoes / apron are always shown as tiles; anything else in the dress code stays as a chip.
-  const extras = (ev.dress_code ?? '').split(/[\n,]+/).map((x) => x.trim()).filter((x) => x && !TILE_LINE.test(x));
-  const bring = (ev.bring ?? '').split('\n').map((x) => x.trim()).filter(Boolean);
   const role = s.position_code === 'MD' ? 'MD' : s.position_detail ? s.position_detail.replace(/^bar\s*-\s*/i, '') : isBar(s.position_code, null) ? 'Bar' : 'Waiter';
   const venueName = ev.venues?.name ?? ev.title;
   const d = new Date(ev.event_date + 'T12:00:00');
   const tel = lead?.phone?.replace(/[^\d+]/g, '');
 
+  const bar = isBarPos(s.position_code, s.position_detail);
+  const dress = kind === 'dress';
+  const tiles: { icon: JSX.Element; name: string; no?: string }[] = [
+    ...(!bar && !dress && kind !== 'black_tshirt' ? [{ icon: <TieIcon size={68} />, name: 'Black tie' }] : []),
+    ...(!dress ? [{ icon: <PantsIcon size={68} />, name: 'Black dress pants', no: 'No jeans' }] : []),
+    { icon: <ShoesIcon size={dress ? 76 : 64} who={dress ? 'women' : 'both'} />, name: 'Black dress shoes', no: 'No running shoes' },
+    ...(!dress ? [{ icon: <ApronIcon size={68} />, name: 'Black apron' }] : []),
+    ...(bar ? [{ icon: <WineKeyIcon size={68} />, name: 'Wine key' }] : []),
+  ];
+  const shirtLabel = UNIFORM_LABEL[kind].replace(' + tie', '');
+
   return (
-    <main className="page v2">
+    <main className="page v2 details">
       <header className="row" style={{ paddingTop: 12 }}>
         <Link to={backTo} className="back" aria-label={t('back')}>‹</Link>
-        <span className="kicker">{longDate(ev.event_date, lang)}</span>
-      </header>
-      <div className="spread" style={{ alignItems: 'flex-end', padding: '0 6px' }}>
-        <div className="serif" style={{ fontSize: 36, lineHeight: 1 }}>{ev.title}</div>
+        <span className="kicker grow">{longDate(ev.event_date, lang)}</span>
         <Status s={s.status} />
-      </div>
+      </header>
+      <div className="serif" style={{ fontSize: 36, lineHeight: 1, padding: '0 6px' }}>{ev.title}</div>
 
-      <section className="next" style={{ gap: 16 }}>
-        <div className="times" style={{ borderTop: 'none', paddingTop: 0 }}>
-          <div><small className="kicker" style={{ color: 'var(--dim)' }}>Be there</small>{s.time_tbc ? <span className="big serif">TBC</span> : <BigTime iso={arrive} />}</div>
-          <div className="grow" />
-          <div style={{ textAlign: 'right' }}><small className="kicker" style={{ color: 'var(--dim)' }}>Shift starts</small><b style={{ fontSize: 20 }}>{s.time_tbc ? 'TBC' : time(s.planned_start, lang)}</b></div>
-        </div>
-        <div className="pos-row">
-          <span className="pos-badge serif">{s.position_code && s.position_code.length <= 3 ? s.position_code : role.slice(0, 2).toUpperCase()}</span>
-          <div><small className="kicker" style={{ color: 'var(--dim)' }}>Your position</small><b>{s.position_detail ? s.position_detail.replace(/^bar\s*-\s*/i, '') : role}</b></div>
-        </div>
+      <section className="d-start">
+        <div className="grow"><small>Shift starts</small>
+          {s.time_tbc ? <b className="serif">TBC</b> : <b className="serif">{time(s.planned_start, lang).replace(/\s?[ap]\.?\s?m\.?/i, '')}<i>{/p\.?\s?m/i.test(time(s.planned_start, lang)) ? ' PM' : ' AM'}</i></b>}</div>
+        <div className="d-pos"><small>Your position</small><span className="pos-pill-lg">{role}</span></div>
       </section>
 
-      {(s.plan || ev.plan) ? (
-        <Link to={`${backTo === '/' ? '' : backTo}/shift/${s.id}/plan`} className="plan-link">
-          <span className="ic">📋</span>
-          <div className="grow"><b>Your plan tonight</b><span>Your role, side, leads, wine + water, clearing</span></div>
-          <span className="go">›</span>
-        </Link>
-      ) : null}
+      {ev.description && <>
+        <div className="d-sec">The event</div>
+        <section className="card d-event"><b>{ev.description}</b></section>
+      </>}
 
-      <div className="sec-head"><span className="serif">Where</span></div>
       <section className="where">
         <div className="map">
           <svg viewBox="0 0 358 150" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
@@ -101,41 +91,37 @@ export function Shift({ backTo = '/' }: { backTo?: string }) {
         </div>
       </section>
 
-      <div className="sec-head"><span className="serif">What to wear</span></div>
-      <section className="card stack" style={{ gap: 14 }}>
-        <div className="row" style={{ gap: 16 }}>
-          <span className="wear-big"><UniformIcon kind={kind} size={66} /></span>
-          <div><div className="kicker">{kind === 'dress' ? 'Dress' : kind === 'black_tshirt' ? 'Top' : 'Shirt'}</div><div className="serif" style={{ fontSize: 24, lineHeight: 1.1 }}>{UNIFORM_LABEL[kind].replace(' + tie', '')}</div>
-            {(kind === 'white_shirt' || kind === 'black_shirt') && <div className="muted sm">With black tie</div>}</div>
-        </div>
-        <div className="wear-tiles">
-          {kind !== 'dress' && <div className="wear-tile2"><PantsIcon /><b>Black dress pants</b><span className="no">✕ No jeans</span></div>}
-          <div className="wear-tile2"><ShoesIcon who={kind === 'dress' ? 'women' : 'both'} /><b>Black dress shoes</b><span className="no">✕ No running shoes</span></div>
-          {wearsApron(kind) && <div className="wear-tile2"><ApronIcon /><b>Black apron</b></div>}
-        </div>
-        {(extras.length > 0 || bring.length > 0) && <div className="chips">{[...extras, ...bring].map((x, i) => <span key={i} className="wear-chip">{x}</span>)}</div>}
+      {(s.plan || ev.plan) ? (
+        <Link to={`${backTo === '/' ? '' : backTo}/shift/${s.id}/plan`} className="plan-link">
+          <span className="ic">📋</span>
+          <div className="grow"><b>Your plan tonight</b><span>Your role, side, leads, wine + water, clearing</span></div>
+          <span className="go">›</span>
+        </Link>
+      ) : null}
+
+      <div className="d-sec">Uniform</div>
+      <section className="uni-hero"><UniformIcon kind={kind} size={92} /><div><small>{dress ? 'Dress' : kind === 'black_tshirt' ? 'Top' : 'Shirt'}</small><div className="serif">{shirtLabel}</div></div></section>
+      <section className="uni-grid">
+        {tiles.map((x) => <div key={x.name} className="uni-tile"><div className="ic">{x.icon}</div><b>{x.name}</b>{x.no && <span className="no">✕ {x.no}</span>}</div>)}
       </section>
 
-      <div className="sec-head"><span className="serif">The event</span></div>
-      <section className="card stack" style={{ gap: 14 }}>
-        {ev.description && <div className="row" style={{ gap: 12 }}>
-          <span className="ev-ic"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="7" width="18" height="13" rx="2" /><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg></span>
-          <b style={{ fontSize: 16 }}>{ev.description}</b></div>}
-        {lead && (
-          <div className="look">
-            <Avatar name={lead.full_name} url={lead.photo_url} size={60} />
-            <div className="grow" style={{ minWidth: 0 }}>
-              <div className="kicker red">Look for</div>
-              <div style={{ fontSize: 17, fontWeight: 600 }}>{lead.full_name}</div>
-              <div className="muted sm">MD on site</div>
-            </div>
-            {tel && <>
-              <a className="circle ok" href={`tel:${tel}`} aria-label={`Call ${lead.full_name}`}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z" /></svg></a>
-              <a className="circle" href={`sms:${tel}`} aria-label={`Text ${lead.full_name}`}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg></a>
-            </>}
+      <div className="d-sec">Notes</div>
+      <section className="d-notes">{ev.notes ? ev.notes : <span className="empty">&nbsp;</span>}</section>
+
+      {lead && <>
+        <div className="d-sec">Look for</div>
+        <section className="look card">
+          <Avatar name={lead.full_name} url={lead.photo_url} size={52} />
+          <div className="grow" style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 16, fontWeight: 700 }}>{lead.full_name}</div>
+            <div className="muted sm">MD on site</div>
           </div>
-        )}
-      </section>
+          {tel && <>
+            <a className="d-call ok" href={`tel:${tel}`} aria-label={`Call ${lead.full_name}`}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z" /></svg></a>
+            <a className="d-call" href={`sms:${tel}`} aria-label={`Text ${lead.full_name}`}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg></a>
+          </>}
+        </section>
+      </>}
     </main>
   );
 }
