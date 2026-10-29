@@ -15,7 +15,7 @@ export function uniformFor(s: { uniform?: string | null; position_code: string |
   return (s.uniform || (bar ? s.events.uniform_bar : s.events.uniform_floor) || (bar ? 'black_shirt' : 'white_shirt')) as UniformKind;
 }
 
-const IMG: Partial<Record<UniformKind, string>> = { white_shirt: '/uniform/shirt_white.png', black_shirt: '/uniform/shirt_black.png', dress: '/uniform/dress.png' };
+const IMG: Partial<Record<UniformKind, string>> = { white_shirt: '/uniform/shirt_white.png', black_shirt: '/uniform/shirt_black.png', dress: '/uniform/dress.png', black_tshirt: '/uniform/tshirt.png' };
 const pic = (src: string, size: number) => <img src={src} alt="" width={size} height={size} style={{ objectFit: 'contain', display: 'block' }} />;
 
 export function UniformIcon({ kind, size = 32 }: { kind: UniformKind; size?: number }) {
@@ -53,7 +53,7 @@ export function UniformIcon({ kind, size = 32 }: { kind: UniformKind; size?: num
 }
 
 /** Everyone wears the black apron, except with the black cocktail dress. */
-export const wearsApron = (kind: UniformKind) => kind !== 'dress';
+export const wearsApron = (kind: UniformKind) => kind !== 'dress' && kind !== 'black_tshirt';
 /** Lines already shown as tiles (shirt, pants, shoes, apron, belt) — not repeated as chips. */
 export const TILE_LINE = /shirt|tie\b|pants|pantalon|shoes|souliers|chaussures|apron|tablier|belt|ceinture|dress\b/i;
 

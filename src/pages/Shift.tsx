@@ -40,7 +40,7 @@ export function Shift({ backTo = '/' }: { backTo?: string }) {
     ...(!bar && !dress && kind !== 'black_tshirt' ? [{ icon: <TieIcon size={68} />, name: 'Black tie' }] : []),
     ...(!dress ? [{ icon: <PantsIcon size={68} />, name: 'Black dress pants', no: 'No jeans' }] : []),
     { icon: <ShoesIcon size={dress ? 76 : 64} who={dress ? 'women' : 'both'} />, name: 'Black dress shoes', no: 'No running shoes' },
-    ...(!dress ? [{ icon: <ApronIcon size={68} />, name: 'Black apron' }] : []),
+    ...(!dress && kind !== 'black_tshirt' ? [{ icon: <ApronIcon size={68} />, name: 'Black apron' }] : []),
     ...(bar ? [{ icon: <WineKeyIcon size={68} />, name: 'Wine key' }] : []),
   ];
   const shirtLabel = UNIFORM_LABEL[kind].replace(' + tie', '');

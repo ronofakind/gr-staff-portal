@@ -27,7 +27,7 @@ export default async function handler(req, res) {
   const lines = [
     e.time_tbc ? 'Time to be confirmed' : `Be there ${hm(arrive)} · shift starts ${hm(start)}`,
     e.role && `Position: ${e.role}`,
-    e.uniform && `Wear: ${[UNIFORM[e.uniform] || e.uniform, ...(e.uniform === 'dress' ? [] : ['black dress pants (no jeans)']), 'black dress shoes (no running shoes)', ...(e.uniform === 'dress' ? [] : ['black apron']), ...String(e.dress || '').split(/[\n,]+/).map((x) => x.trim()).filter((x) => x && !/shirt|tie\b|pants|shoes|apron|belt|dress\b/i.test(x))].join(', ')}`,
+    e.uniform && `Wear: ${[UNIFORM[e.uniform] || e.uniform, ...(e.uniform === 'dress' ? [] : ['black dress pants (no jeans)']), 'black dress shoes (no running shoes)', ...(e.uniform === 'dress' || e.uniform === 'black_tshirt' ? [] : ['black apron']), ...String(e.dress || '').split(/[\n,]+/).map((x) => x.trim()).filter((x) => x && !/shirt|tie\b|pants|shoes|apron|belt|dress\b/i.test(x))].join(', ')}`,
     e.md_name && `Look for: ${e.md_name}${e.md_phone ? ' · ' + e.md_phone : ''}`,
     e.description && e.description,
     'Details: https://gr-staff-portal.vercel.app/me',
