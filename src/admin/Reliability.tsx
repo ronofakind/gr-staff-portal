@@ -52,7 +52,7 @@ export function Reliability() {
           </div>
         ))}
       </div>
-      <p className="muted sm">No-shows and cancels come from the manager’s screen. Late = started more than 10 min after their call. Early start = started more than 3 h before.</p>
+      <p className="muted sm">No-shows and cancels come from the manager’s screen. Late = started more than 10 min after their call. Early start = a manager started them before the call time.</p>
     </div>
   );
 }

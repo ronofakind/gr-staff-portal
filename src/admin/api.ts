@@ -70,7 +70,7 @@ export const addDays = (iso: string, n: number) => {
 };
 export const hhmm = (t: string | null) => (t ? t.slice(0, 5) : '');
 
-/** Flags computed from a shift: no-show / cancelled / late (>10 min after call) / early start (>3 h before call). */
+/** Flags computed from a shift: no-show / cancelled / late (>10 min after call) / early start (started before call on purpose). */
 export type Flag = 'no_show' | 'cancelled' | 'late' | 'early';
 export const FLAG_LABEL: Record<Flag, string> = { no_show: 'NO-SHOW', cancelled: 'CANCELLED', late: 'LATE', early: 'EARLY START' };
 export function flagsOf(s: { attendance: string | null; planned_start: string; punches: { punch_in: string | null } | null }): { flag: Flag; min?: number }[] {
@@ -79,7 +79,7 @@ export function flagsOf(s: { attendance: string | null; planned_start: string; p
   const pin = s.punches?.punch_in; if (!pin) return [];
   const diff = Math.round((new Date(pin).getTime() - new Date(s.planned_start).getTime()) / 60000);
   if (diff > 10) return [{ flag: 'late', min: diff }];
-  if (diff < -180) return [{ flag: 'early', min: -diff }];
+  if (diff < -1) return [{ flag: 'early', min: -diff }];
   return [];
 }
 export const flagText = (f: { flag: Flag; min?: number }) => f.flag === 'late' ? `LATE ${f.min} MIN` : FLAG_LABEL[f.flag];

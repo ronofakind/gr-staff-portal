@@ -8,7 +8,7 @@ import { Avatar } from '../components/Avatar';
 type Row = {
   id: string; position_code: string | null; position_detail: string | null; planned_start: string; planned_end: string | null;
   attendance: 'no_show' | 'cancelled' | null; leave_by: string | null; manager_note: string | null;
-  staff: { full_name: string; photo_url: string | null; phone: string | null } | null; punches: { punch_in: string | null; punch_out: string | null } | null;
+  staff: { full_name: string; photo_url: string | null; phone: string | null } | null; punches: { punch_in: string | null; punch_out: string | null; arrived_at: string | null; updated_at: string } | null;
 };
 type Ev = { id: string; title: string; event_date: string };
 type EvFull = Ev & { address: string | null; start_time: string | null; end_time: string | null; description: string | null;
@@ -54,13 +54,15 @@ export function Manage() {
   const [ask, setAsk] = useState<Ask>(null);
   const [review, setReview] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [early, setEarly] = useState<Row[] | null>(null);
+  const [endSheet, setEndSheet] = useState<Row[] | null>(null);
+  const [endPick, setEndPick] = useState<'now' | 'next' | 'pick'>('next'); const [endTime, setEndTime] = useState('');
+  const [, setTick] = useState(0);
   const [err, setErr] = useState('');
 
   const load = async () => {
     const [e, s] = await Promise.all([
       supabase.from('events').select('id,title,event_date,address,start_time,end_time,description,dress_code,hours_submitted_at,venues(address,staff_notes)').eq('id', eventId!).single(),
-      supabase.from('shifts').select('id,position_code,position_detail,planned_start,planned_end,attendance,leave_by,manager_note,staff:staff!shifts_staff_id_fkey(full_name,photo_url,phone),punches(punch_in,punch_out)')
+      supabase.from('shifts').select('id,position_code,position_detail,planned_start,planned_end,attendance,leave_by,manager_note,staff:staff!shifts_staff_id_fkey(full_name,photo_url,phone),punches(punch_in,punch_out,arrived_at,updated_at)')
         .eq('event_id', eventId!).neq('status', 'declined').order('planned_start'),
     ]);
     setEv(e.data as unknown as EvFull);
@@ -69,10 +71,10 @@ export function Manage() {
   };
   useEffect(() => { load(); const id = setInterval(load, 30000); return () => clearInterval(id); }, [eventId]);
 
-  const set = async (list: { id: string; in: string | null; out: string | null }[]) => {
+  const set = async (list: { id: string; in: string | null; out: string | null; arrived?: string | null }[]) => {
     setErr('');
     for (const r of list) {
-      const { error } = await supabase.rpc('manager_set_punch', { p_shift: r.id, p_in: r.in, p_out: r.out });
+      const { error } = await supabase.rpc('manager_set_punch', { p_shift: r.id, p_in: r.in, p_out: r.out, p_arrived: r.arrived ?? null });
       if (error) { setErr(error.message); break; }
     }
     await load();
@@ -85,23 +87,40 @@ export function Manage() {
   };
   const now = () => new Date().toISOString();
   const todayMtl = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' });
-  /** ok: within 3 h of call · early: 3–6 h before (ask first, flagged) · locked: earlier, or not the event day */
-  const gate = (r: Row): { kind: 'ok' | 'early' | 'locked'; label?: string } => {
+  /** ok: from 3 h before call · locked: earlier, or not the event day (early starts go through the name sheet) */
+  const gate = (r: Row): { kind: 'ok' | 'locked'; label?: string } => {
     const call = new Date(r.planned_start).getTime(); const mins = (call - Date.now()) / 60000;
     const at = (ms: number) => new Date(ms).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' });
     if (ev && todayMtl < ev.event_date) {
       const d = new Date(ev.event_date + 'T12:00:00').toLocaleDateString('en-CA', { weekday: 'short' });
       return { kind: 'locked', label: `Opens ${d} ${at(call - 3 * 3600e3)}` };
     }
-    if (mins > 360) return { kind: 'locked', label: `Opens ${at(call - 3 * 3600e3)}` };
-    if (mins > 180) return { kind: 'early' };
+    if (mins > 180) return { kind: 'locked', label: `Opens ${at(call - 3 * 3600e3)}` };
     return { kind: 'ok' };
+  };
+  /** Start = attendance. Before call: starts at call. After call: starts at arrival, nearest 15 min (never before call). */
+  const startAt = (r: Row) => {
+    const call = new Date(r.planned_start).getTime(); const t = Date.now();
+    return new Date(t < call ? call : Math.max(call, Math.round(t / 900000) * 900000)).toISOString();
   };
   const startRows = (list: Row[]) => {
     const go = list.filter((r) => gate(r).kind !== 'locked');
-    if (!go.length) return;
-    if (go.some((r) => gate(r).kind === 'early')) setEarly(go);
-    else set(go.map((r) => ({ id: r.id, in: now(), out: null })));
+    if (go.length) set(go.map((r) => ({ id: r.id, in: startAt(r), out: null, arrived: now() })));
+  };
+  const nowMs = Date.now();
+  const isWorking = (r: Row) => !r.attendance && !!r.punches?.punch_in && (!r.punches.punch_out || new Date(r.punches.punch_out).getTime() > nowMs);
+  const scheduled = rows.filter((r) => !r.attendance && r.punches?.punch_out && new Date(r.punches.punch_out).getTime() > nowMs);
+  useEffect(() => { if (!scheduled.length) return; const id = setInterval(() => setTick((x) => x + 1), 1000); return () => clearInterval(id); }, [scheduled.length]);
+  const q15 = (ms: number) => Math.round(ms / 900000) * 900000;
+  const nextQ = () => Math.ceil((Date.now() + 60000) / 900000) * 900000;
+  const endAll = async (list: Row[]) => {
+    let at: number;
+    if (endPick === 'now') at = Date.now();
+    else if (endPick === 'next') at = nextQ();
+    else { if (!endTime) return; at = new Date(toIso(ev!.event_date, endTime, list[0].planned_start)).getTime(); }
+    if (at > Date.now() + 30 * 60000) { setErr('Pick a time within 30 minutes.'); return; }
+    setEndSheet(null);
+    await set(list.map((r) => ({ id: r.id, in: r.punches!.punch_in, out: new Date(at).toISOString() })));
   };
 
   if (!ev) return <div className="loading" />;
@@ -109,8 +128,11 @@ export function Manage() {
   const groups = Array.from(new Set(rows.map((r) => r.planned_start)));
   const barN = active.filter((r) => isBar(r.position_code, r.position_detail)).length;
   const floorN = active.length - barN;
-  const workingN = active.filter((r) => r.punches?.punch_in && !r.punches?.punch_out).length;
-  const doneN = active.filter((r) => r.punches?.punch_out).length;
+  const workingN = active.filter(isWorking).length;
+  const doneN = active.filter((r) => r.punches?.punch_out && !isWorking(r)).length;
+  const outstanding = active.filter((r) => r.punches?.punch_in && !r.punches.punch_out);
+  const changedSince = ev.hours_submitted_at ? rows.some((r) => r.punches?.updated_at && r.punches.updated_at > ev.hours_submitted_at!) : false;
+  const endsAt = scheduled.length ? scheduled.map((r) => r.punches!.punch_out!).sort()[0] : null;
   const late = active.filter((r) => !r.punches?.punch_in && new Date(r.planned_start).getTime() < Date.now());
   const flaggedN = rows.length - active.length;
   const pct = (n: number) => `${rows.length ? (n / rows.length) * 100 : 0}%`;
@@ -144,12 +166,30 @@ export function Manage() {
         </div>
         {late.length > 0 && <div className="mt-late">{late.length} late · not started {lateMin} min after their start</div>}
       </section>
+      {endsAt ? (() => {
+        const left = Math.max(0, new Date(endsAt).getTime() - nowMs); const mm = Math.floor(left / 60000); const ss = Math.floor((left % 60000) / 1000);
+        const frac = Math.min(1, left / (30 * 60000));
+        return (
+          <section className="ending">
+            <div className="row" style={{ gap: 14 }}>
+              <svg width="64" height="64" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="27" fill="none" stroke="#3A342E" strokeWidth="6" /><circle cx="32" cy="32" r="27" fill="none" stroke="#E0C27A" strokeWidth="6" strokeLinecap="round" strokeDasharray="169.6" strokeDashoffset={169.6 * (1 - frac)} transform="rotate(-90 32 32)" /><text x="32" y="38" textAnchor="middle" fontFamily="Fraunces, Georgia, serif" fontSize="17" fill="#F6F2EC">{mm}:{String(ss).padStart(2, '0')}</text></svg>
+              <div className="grow"><small>ENDING EVERYONE</small><div className="serif" style={{ fontSize: 26, lineHeight: 1.05 }}>at {time(endsAt, lang)}</div><span>{scheduled.length} people{doneN ? ` · ${doneN} already ended keep their times` : ''}</span></div>
+            </div>
+            <div className="ending-btns">
+              <button onClick={() => set(scheduled.map((r) => ({ id: r.id, in: r.punches!.punch_in, out: new Date(new Date(r.punches!.punch_out!).getTime() + 15 * 60000).toISOString() })))}>+15 min</button>
+              <button onClick={() => { setEndPick('pick'); setEndTime(hm(endsAt)); setEndSheet(scheduled); }}>Change time</button>
+              <button className="red" onClick={() => set(scheduled.map((r) => ({ id: r.id, in: r.punches!.punch_in, out: null })))}>Cancel</button>
+            </div>
+          </section>
+        );
+      })() : outstanding.length > 0 && (
+        <button className="endall-btn" onClick={() => { setEndPick('next'); setEndTime(''); setEndSheet(outstanding); }}>End all… <span>{outstanding.length} still working</span></button>
+      )}
       {err && <p className="error">{err}</p>}
 
       {groups.map((g) => {
         const grp = rows.filter((r) => r.planned_start === g);
         const notIn = grp.filter((r) => !r.attendance && !r.punches?.punch_in);
-        const working = grp.filter((r) => !r.attendance && r.punches?.punch_in && !r.punches?.punch_out);
         return (
           <section key={g} className="stack" style={{ gap: 10 }}>
             <div className="grp-head">
@@ -157,12 +197,14 @@ export function Manage() {
               {notIn.length > 0 && (gate(notIn[0]).kind === 'locked'
                 ? <span className="locked-pill">🔒 {gate(notIn[0]).label}</span>
                 : <button className="btn-go" onClick={() => startRows(notIn)}>Start remaining ({notIn.length})</button>)}
-              {notIn.length === 0 && working.length > 0 && <button className="pill-line" onClick={() => set(working.map((r) => ({ id: r.id, in: r.punches!.punch_in, out: now() })))}>End all ({working.length})</button>}
             </div>
             {grp.map((r) => {
               const pin = r.punches?.punch_in ?? null; const pout = r.punches?.punch_out ?? null;
               const isLate = !r.attendance && !pin && new Date(r.planned_start).getTime() < Date.now();
-              const ring = r.attendance ? '' : pout ? 'done' : pin ? 'working' : isLate ? 'late' : '';
+              const arr = r.punches?.arrived_at ?? null; const callMs = new Date(r.planned_start).getTime();
+              const ended = !!pout && new Date(pout).getTime() <= nowMs; const endsLater = !!pout && !ended;
+              const isEarly = !!pin && new Date(pin).getTime() < callMs - 60000; const wasLate = !!pin && new Date(pin).getTime() > callMs + 10 * 60000;
+              const ring = r.attendance ? '' : ended ? 'done' : pin ? (isEarly || wasLate ? 'flag' : 'working') : isLate ? 'late' : '';
               const tel = r.staff?.phone?.replace(/[^\d+]/g, '');
               return (
                 <div key={r.id} className={'crew' + (r.attendance ? ' flagged' : '')}>
@@ -174,8 +216,11 @@ export function Manage() {
                     <span className="nm">{r.staff?.full_name}</span>
                     <span className="rl">{roleLabel(r.position_code, r.position_detail)}{r.manager_note ? ' · 📝 note' : ''}</span>
                     {r.attendance ? <span className="st red">{r.attendance === 'no_show' ? 'No-show' : 'Cancelled'}</span>
-                      : pout ? <span className="st">{time(pin!, lang)} → {time(pout, lang)} · {hours(pin!, pout)} {t.hours}</span>
-                      : pin ? <span className="st ok">Working · since {time(pin, lang)}{new Date(pin).getTime() < new Date(r.planned_start).getTime() - 3 * 3600e3 && <b className="early-flag"> · early start</b>}</span>
+                      : ended ? <span className="st">{time(pin!, lang)} → {time(pout!, lang)} · {hours(pin!, pout!)} {t.hours}</span>
+                      : endsLater ? <span className="st gold">Working · ends {time(pout!, lang)}</span>
+                      : pin ? (isEarly ? <span className="st gold">Starts {time(pin, lang)} · early start</span>
+                        : wasLate ? <span className="st gold">{arr ? `Here ${time(arr, lang)} · ` : ''}starts {time(pin, lang)} · late</span>
+                        : <span className="st ok">{arr && new Date(arr).getTime() < callMs ? `Here ${time(arr, lang)} · ` : ''}{new Date(pin).getTime() > nowMs ? 'starts' : 'started'} {time(pin, lang)}</span>)
                       : isLate ? <span className="st red">Late · {Math.round((Date.now() - new Date(r.planned_start).getTime()) / 60000)} min</span>
                       : <span className="st">{t.notIn}</span>}
                   </button>
@@ -186,7 +231,7 @@ export function Manage() {
                   <div className="act-slot">
                     {r.attendance ? <button className="act undo" onClick={() => mark(r.id, null)}>Undo</button>
                       : !pin ? (gate(r).kind === 'locked' ? <button className="act locked" disabled title={gate(r).label}>{t.start}</button> : <button className="act start" onClick={() => startRows([r])}>{t.start}</button>)
-                      : !pout ? <button className="act end" onClick={() => set([{ id: r.id, in: pin, out: now() }])}>{t.end}</button> : <span className="act done-mark">✓</span>}
+                      : !ended ? <button className="act end" onClick={() => set([{ id: r.id, in: pin, out: now() }])}>{t.end}</button> : <span className="act done-mark">✓</span>}
                     {r.leave_by && !pout && !r.attendance && <span className="leave-tag">⏱ Leaves ~{time(r.leave_by, lang).replace(':00', '')}</span>}
                   </div>
                 </div>
@@ -199,23 +244,24 @@ export function Manage() {
 
       <div className="submit-bar">
         <div className="grow">
-          <b>{ev.hours_submitted_at ? '✓ Hours submitted' : 'End of night'}</b>
-          <span>{ev.hours_submitted_at ? `${new Date(ev.hours_submitted_at).toLocaleString('en-CA', { weekday: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' })} · you can still edit` : "Check everyone's times, then send"}</span>
+          <b className={changedSince ? 'gold' : ''}>{changedSince ? '↻ Times changed since you submitted' : ev.hours_submitted_at ? '✓ Hours submitted' : endsAt ? `Submit now with ${time(endsAt, lang)} as the end` : 'End of night'}</b>
+          <span>{ev.hours_submitted_at ? `Submitted ${new Date(ev.hours_submitted_at).toLocaleString('en-CA', { weekday: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' })}${changedSince ? ' · Ronnie has the older version' : ' · you can still edit'}` : endsAt ? 'Change anything after? You can resubmit.' : "Check everyone's times, then send"}</span>
         </div>
         <button className="btn-ink" style={{ height: 46, padding: '0 18px', borderRadius: 23 }} onClick={() => setReview(true)}>{ev.hours_submitted_at ? 'Resubmit ›' : 'Submit hours ›'}</button>
       </div>
 
-      {early && (
+      {endSheet && (
         <>
-          <div className="scrim top" onClick={() => setEarly(null)} />
-          <div className="dialog" role="alertdialog" aria-label="Early start">
-            <div className="bang" style={{ background: '#FBF1D3', color: '#9A7413' }}>!</div>
-            <div className="serif">Start {early.length === 1 ? early[0].staff?.full_name : `${early.length} people`} early?</div>
-            <p>The call time is {time(early[0].planned_start, lang)} — that's more than 3 hours from now.<br />Only do this if they're really starting now. Ronnie will see it flagged.</p>
-            <div className="btns">
-              <button className="btn-red" style={{ background: '#9A7413' }} onClick={() => { const l = early; setEarly(null); set(l.map((r) => ({ id: r.id, in: now(), out: null }))); }}>Yes, start now</button>
-              <button className="btn-ghost" onClick={() => setEarly(null)}>Go back</button>
-            </div>
+          <div className="scrim" onClick={() => setEndSheet(null)} />
+          <div className="sheet" role="dialog" aria-label="End all">
+            <div className="grab" />
+            <div><div className="kicker">End all · {endSheet.length} still working</div><div className="serif" style={{ fontSize: 24, lineHeight: 1.15 }}>When does the night end?</div></div>
+            <button className={'opt' + (endPick === 'now' ? ' on' : '')} onClick={() => setEndPick('now')}><i /><span><b>Now · {time(now(), lang)}</b><small>Counts as {time(new Date(q15(Date.now())).toISOString(), lang)} with our 15-min rounding</small></span></button>
+            <button className={'opt' + (endPick === 'next' ? ' on' : '')} onClick={() => setEndPick('next')}><i /><span><b>In a few minutes · {time(new Date(nextQ()).toISOString(), lang)}</b><small>Everyone ends then. You can still change or cancel it.</small></span></button>
+            <button className={'opt' + (endPick === 'pick' ? ' on' : '')} onClick={() => setEndPick('pick')}><i /><span><b>Pick a time</b><small>Up to 30 min from now</small></span>{endPick === 'pick' && <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} onClick={(e) => e.stopPropagation()} />}</button>
+            {doneN > 0 && <div className="muted sm">The {doneN} who already ended keep their own times.</div>}
+            {err && <p className="error">{err}</p>}
+            <button className="btn-ink" onClick={() => endAll(endSheet)}>End {endSheet.length} {endSheet.length === 1 ? 'person' : 'people'} at {endPick === 'now' ? time(now(), lang) : endPick === 'next' ? time(new Date(nextQ()).toISOString(), lang) : endTime ? fmt12(endTime) : '…'}</button>
           </div>
         </>
       )}
@@ -296,6 +342,16 @@ export function Manage() {
                 <div className="muted sm">{roleLabel(open.position_code, open.position_detail)} · {isBar(open.position_code, open.position_detail) ? 'BAR' : 'FLOOR'} · start {time(open.planned_start, lang)}</div></div>
             </div>
             {!open.attendance && (
+              <div className="starts-from">
+                <span className="kicker">Starts from</span>
+                <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+                  <button className={draft.in === hm(open.planned_start) ? 'on' : ''} onClick={() => setDraft({ ...draft, in: hm(open.planned_start) })}>Call time · {time(open.planned_start, lang)}</button>
+                  <button className={draft.in === hm(now()) ? 'on' : ''} onClick={() => setDraft({ ...draft, in: hm(now()) })}>Now · {time(now(), lang)}</button>
+                </div>
+                {draft.in && toIso(ev.event_date, draft.in, open.planned_start) < new Date(new Date(open.planned_start).getTime() - 60000).toISOString() && <div className="early-note">Early start · Ronnie sees it flagged with your name.</div>}
+              </div>
+            )}
+            {!open.attendance && (
               <div className="times-box">
                 <label>Start time<input type="time" value={draft.in} onChange={(e) => setDraft({ ...draft, in: e.target.value })} /></label>
                 <label>End time<input type="time" value={draft.out} onChange={(e) => setDraft({ ...draft, out: e.target.value })} /></label>
@@ -304,8 +360,8 @@ export function Manage() {
             {!open.attendance && <button className="btn-ink" onClick={async () => {
               const i = draft.in ? toIso(ev.event_date, draft.in, open.planned_start) : null;
               const o = draft.out ? toIso(ev.event_date, draft.out, i ?? open.planned_start) : null;
-              await set([{ id: open.id, in: i, out: o }]); setOpen(null);
-            }}>Save times</button>}
+              await set([{ id: open.id, in: i, out: o, arrived: open.punches?.arrived_at ? null : (i ? now() : null) }]); setOpen(null);
+            }}>{open.punches?.punch_in ? 'Save times' : draft.in ? `Start from ${fmt12(draft.in)}` : 'Save times'}</button>}
             {open.attendance
               ? <button className="btn-ghost" onClick={() => mark(open.id, null)}>Undo {open.attendance === 'no_show' ? 'no-show' : 'cancelled'}</button>
               : <div className="two">
