@@ -681,3 +681,29 @@ main.page.slide-right > :not(.tabbar):not(.save-bar):not(.sheet):not(.scrim) { a
 .month-card { background: #fff; border-radius: 20px; padding: 14px 16px; display: flex; align-items: center; gap: 14px; text-decoration: none; color: var(--ink); }
 .month-card small { font-size: 11px; letter-spacing: .14em; font-weight: 700; color: var(--muted); } .month-card .serif { font-size: 24px; font-weight: 500; } .month-card span { font-size: 12px; color: var(--muted); }
 .sheet-note { border: none; border-radius: 16px; padding: 12px 14px; font: 500 15px Inter, system-ui, sans-serif; background: #fff; resize: none; }
+
+/* Home v4: clearer time + position */
+.next .pos-line { display: flex; align-items: center; gap: 10px; background: #2A2521; border-radius: 14px; padding: 9px 12px; }
+.next .pos-line small { font-size: 11px; letter-spacing: .12em; font-weight: 700; color: #B8AFA4; text-transform: uppercase; flex: 1; }
+.pos-pill-lg { height: 28px; padding: 0 12px; border-radius: 14px; background: #F6F2EC; color: #1A1714; font-size: 14px; font-weight: 800; display: inline-flex; align-items: center; }
+.next .tbox.start { background: #F6F2EC; color: #1A1714; flex: 1.3; }
+.next .tbox.start small { color: #7A7268; }
+.next .tbox .tb-note { display: block; font-size: 11px; color: var(--dim); margin-top: 2px; }
+.next .top-line .day-word { color: #E0C27A; font-weight: 800; }
+.pos-row2 { display: flex; align-items: center; gap: 8px; }
+.pos-pill { height: 22px; padding: 0 9px; border-radius: 11px; background: #EFE9E1; color: #1A1714; font-size: 12px; font-weight: 700; display: inline-flex; align-items: center; }
+.pos-pill.lead { background: #1A1714; color: #F6F2EC; }
+.agenda-row .what .pos-row2 span:not(.pos-pill) { font-size: 12px; color: var(--muted); }
+.row-time { text-align: right; flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end; }
+.row-time small { font-size: 10px; letter-spacing: .1em; font-weight: 700; color: var(--soft); text-transform: uppercase; }
+.row-time b { font-size: 13px; font-weight: 700; color: var(--muted); white-space: nowrap; }
+.row-time b .serif { font-size: 22px; font-weight: 500; color: var(--ink); }
+.row-time b i { font-style: normal; }
+.row-time b.tbc { font-size: 14px; color: #9A7413; }
+/* Uniform v4 tiles */
+.wear-tiles { display: flex; gap: 8px; }
+.wear-tile2 { flex: 1 1 0; background: #F6F2EC; border-radius: 16px; padding: 12px 6px 10px; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; }
+.wear-tile2 b { font-size: 13px; line-height: 1.15; }
+.wear-tile2 .no { font-size: 11.5px; font-weight: 700; color: #9B2226; }
+.agenda-row .what .pos-pill { font-size: 12px; color: #1A1714; }
+.agenda-row .what .pos-pill.lead { color: #F6F2EC; }

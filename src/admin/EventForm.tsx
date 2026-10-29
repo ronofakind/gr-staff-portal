@@ -12,7 +12,7 @@ type F = {
 
 const empty = (d: string): F => ({
   event_date: d, title: '', client: '', address: '', department: 'floor', start_time: '17:00', end_time: '',
-  staff_needed: 0, manager_id: '', description: '', dress_code: 'Black dress pants, Black shoes, Black belt', bring: '', timeline: '',
+  staff_needed: 0, manager_id: '', description: '', dress_code: '', bring: '', timeline: '',
   uniform_floor: 'white_shirt', uniform_bar: 'black_shirt',
 });
 

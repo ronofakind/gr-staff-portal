@@ -80,6 +80,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
     const h = Math.round((new Date(minus(s.planned_start, s.arrive_before_min)).getTime() - Date.now()) / 3600e3);
     return `${day}${h > 0 && h < 48 ? ` · in ${h} h` : ''}`;
   };
+  const isLead = (s: ShiftRow) => s.position_code === 'MD' || s.position_code === 'BM';
   const role = (s: ShiftRow) => s.position_code === 'MD' ? 'MD' : s.position_detail ? s.position_detail.replace(/^bar\s*-\s*/i, '') : isBar(s.position_code, null) ? 'Bar' : 'Waiter';
 
   return (
@@ -157,7 +158,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
         return (
           <section className="next" style={{ gap: 14, padding: 18 }}>
             <div className="top-line">
-              <span>{dayWord.toUpperCase()} · {role(next).toUpperCase()}</span>
+              <span className="day-word">{dayWord.toUpperCase()}</span>
               {!next.time_tbc && <Countdown iso={minus(next.planned_start, next.arrive_before_min)} start={next.planned_start} />}
             </div>
             <div className="spread" style={{ alignItems: 'flex-end' }}>
@@ -167,9 +168,10 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
               </div>
               <span className="wear-tile" style={{ width: 52, height: 52, borderRadius: 14 }} title={UNIFORM_LABEL[uniformFor(next)]}><UniformIcon kind={uniformFor(next)} size={38} /></span>
             </div>
+            <div className="pos-line"><small>Your position</small><span className="pos-pill-lg">{role(next)}</span></div>
             <div className="row2">
-              <div className="tbox"><small>Be there</small>{next.time_tbc ? <span className="big serif sm-big">TBC</span> : <BigTime iso={minus(next.planned_start, next.arrive_before_min)} small />}</div>
-              <div className="tbox"><small>Shift starts</small>{next.time_tbc ? <span className="big serif sm-big">TBC</span> : <BigTime iso={next.planned_start} small />}</div>
+              <div className="tbox start"><small>Shift starts</small>{next.time_tbc ? <span className="big serif sm-big">TBC</span> : <BigTime iso={next.planned_start} small />}</div>
+              <div className="tbox"><small>Be there</small>{next.time_tbc ? <span className="big serif sm-big">TBC</span> : <><BigTime iso={minus(next.planned_start, next.arrive_before_min)} small /><span className="tb-note">{next.arrive_before_min} min before</span></>}</div>
             </div>
             <div className="row2">
               <Link className="light-btn" style={{ height: 46, borderRadius: 14 }} to={`${base}/shift/${next.id}`}>Details</Link>
@@ -199,8 +201,9 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
               return (
                 <Link key={s.id} to={teams[s.events.id] && !preview ? `/manage/${s.events.id}` : `${base}/shift/${s.id}`} className="agenda-row" style={{ minHeight: 64 }}>
                   <div className="d" style={{ width: 40, alignItems: 'center' }}><small>{b.dow}</small><b>{b.day}</b></div>
-                  <div className="what" style={{ gap: 1 }}><b>{s.events.title}</b><span>{s.time_tbc ? 'Time TBC' : `Be there ${time(minus(s.planned_start, s.arrive_before_min), lang).replace(/\s?[ap]\.?m\.?/i, '')}`} · {role(s)}{teams[s.events.id] && !preview ? ` · team ${teams[s.events.id].length}` : ''}</span></div>
-                  <span className="wear-mini" style={{ width: 32, height: 32, borderRadius: 9 }} title={UNIFORM_LABEL[uniformFor(s)]}><UniformIcon kind={uniformFor(s)} size={24} /></span>
+                  <div className="what" style={{ gap: 5 }}><b>{s.events.title}</b>
+                    <span className="pos-row2"><span className={'pos-pill' + (isLead(s) ? ' lead' : '')}>{role(s)}</span>{teams[s.events.id] && !preview ? <span>team {teams[s.events.id].length}</span> : null}</span></div>
+                  <div className="row-time"><small>Starts</small>{s.time_tbc ? <b className="tbc">Time TBC</b> : <b><span className="serif">{time(s.planned_start, lang).replace(/\s?[ap]\.?\s?m\.?/i, '')}</span><i>{/p\.?\s?m/i.test(time(s.planned_start, lang)) ? ' PM' : ' AM'}</i></b>}</div>
                   {s.status === 'confirmed' ? <span className="ok-dot" aria-label="Confirmed" /> : <span className="tag-ask" style={{ height: 26, fontSize: 11 }}>Confirm</span>}
                 </Link>
               );

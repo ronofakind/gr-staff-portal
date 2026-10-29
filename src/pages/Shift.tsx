@@ -4,7 +4,7 @@ import { supabase, SHIFT_SELECT, type ShiftRow } from '../lib/supabase';
 import { useT, useLang } from '../lib/i18n';
 import { time, longDate, minus, mapsUrl } from '../lib/format';
 import { Avatar } from '../components/Avatar';
-import { UniformIcon, uniformFor, UNIFORM_LABEL } from '../components/Uniform';
+import { UniformIcon, uniformFor, UNIFORM_LABEL, PantsIcon, ShoesIcon, ApronIcon, wearsApron, TILE_LINE } from '../components/Uniform';
 import { Status, BigTime, isBar } from './Home';
 
 export function Shift({ backTo = '/' }: { backTo?: string }) {
@@ -35,8 +35,8 @@ export function Shift({ backTo = '/' }: { backTo?: string }) {
   const cal = s.cal_token && !/android/i.test(navigator.userAgent) ? `/api/cal?t=${s.cal_token}` : calendarUrl(ev.title, arrive, s.planned_end, address);
 
   const kind = uniformFor(s);
-  const extras = (ev.dress_code ? ev.dress_code.split(/[\n,]+/) : kind === 'dress' ? ['Black closed-toe shoes'] : ['Black dress pants', 'Black shoes', 'Black belt'])
-    .map((x) => x.trim()).filter((x) => x && !/shirt|tie\b/i.test(x));
+  // Pants / shoes / apron are always shown as tiles; anything else in the dress code stays as a chip.
+  const extras = (ev.dress_code ?? '').split(/[\n,]+/).map((x) => x.trim()).filter((x) => x && !TILE_LINE.test(x));
   const bring = (ev.bring ?? '').split('\n').map((x) => x.trim()).filter(Boolean);
   const role = s.position_code === 'MD' ? 'MD' : s.position_detail ? s.position_detail.replace(/^bar\s*-\s*/i, '') : isBar(s.position_code, null) ? 'Bar' : 'Waiter';
   const venueName = ev.venues?.name ?? ev.title;
@@ -107,6 +107,11 @@ export function Shift({ backTo = '/' }: { backTo?: string }) {
           <span className="wear-big"><UniformIcon kind={kind} size={66} /></span>
           <div><div className="kicker">{kind === 'dress' ? 'Dress' : kind === 'black_tshirt' ? 'Top' : 'Shirt'}</div><div className="serif" style={{ fontSize: 24, lineHeight: 1.1 }}>{UNIFORM_LABEL[kind].replace(' + tie', '')}</div>
             {(kind === 'white_shirt' || kind === 'black_shirt') && <div className="muted sm">With black tie</div>}</div>
+        </div>
+        <div className="wear-tiles">
+          {kind !== 'dress' && <div className="wear-tile2"><PantsIcon /><b>Black dress pants</b><span className="no">✕ No jeans</span></div>}
+          <div className="wear-tile2"><ShoesIcon /><b>Black dress shoes</b><span className="no">✕ No running shoes</span></div>
+          {wearsApron(kind) && <div className="wear-tile2"><ApronIcon /><b>Black apron</b></div>}
         </div>
         {(extras.length > 0 || bring.length > 0) && <div className="chips">{[...extras, ...bring].map((x, i) => <span key={i} className="wear-chip">{x}</span>)}</div>}
       </section>
