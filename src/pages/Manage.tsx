@@ -198,15 +198,17 @@ export function Manage() {
         return (
           <section key={g} className="stack" style={{ gap: 10 }}>
             <div className="grp-head">
-              <span className="serif">{time(g, lang)} call</span>
-              {notIn.length > 0 && (gate(notIn[0]).kind === 'locked'
-                ? <span className="locked-pill">🔒 {gate(notIn[0]).label}</span>
-                : <button className="btn-go" onClick={() => startRows(notIn)}>Start remaining ({notIn.length})</button>)}
+              <span className="grp-time">{time(g, lang)}</span>
+              <span className="grp-n">{grp.length} {grp.length === 1 ? 'person' : 'people'}</span>
+              <span className="grp-rule" />
+              {notIn.length === 0 ? <span className="grp-st ok">✓ All started</span>
+                : gate(notIn[0]).kind === 'locked' ? <span className="grp-st">🔒 {gate(notIn[0]).label}</span>
+                : <button className="btn-go" onClick={() => startRows(notIn)}>Start remaining ({notIn.length})</button>}
             </div>
             {grp.map((r) => {
               const pin = r.punches?.punch_in ?? null; const pout = r.punches?.punch_out ?? null;
               const isLate = !r.attendance && !pin && new Date(r.planned_start).getTime() < Date.now();
-              const arr = r.punches?.arrived_at ?? null; const callMs = new Date(r.planned_start).getTime();
+              const callMs = new Date(r.planned_start).getTime();
               const ended = !!pout && new Date(pout).getTime() <= nowMs; const endsLater = !!pout && !ended;
               const isEarly = !!pin && new Date(pin).getTime() < callMs - 60000; const wasLate = !!pin && new Date(pin).getTime() > callMs + 10 * 60000;
               const ring = r.attendance ? '' : ended ? 'done' : pin ? (isEarly || wasLate ? 'flag' : 'working') : isLate ? 'late' : '';
@@ -223,11 +225,9 @@ export function Manage() {
                     {r.attendance ? <span className="st red">{r.attendance === 'no_show' ? 'No-show' : 'Cancelled'}</span>
                       : ended ? <span className="st">{time(pin!, lang)} → {time(pout!, lang)} · {hours(pin!, pout!)} {t.hours}</span>
                       : endsLater ? <span className="st gold">Working · ends {time(pout!, lang)}</span>
-                      : pin ? (isEarly ? <span className="st gold">Starts {time(pin, lang)} · early start</span>
-                        : wasLate ? <span className="st gold">{arr ? `Here ${time(arr, lang)} · ` : ''}starts {time(pin, lang)} · late</span>
-                        : <span className="st ok">{arr && new Date(arr).getTime() < callMs ? `Here ${time(arr, lang)} · ` : ''}{new Date(pin).getTime() > nowMs ? 'starts' : 'started'} {time(pin, lang)}</span>)
-                      : isLate ? <span className="st red">Late · {Math.round((Date.now() - new Date(r.planned_start).getTime()) / 60000)} min</span>
-                      : <span className="st">{t.notIn}</span>}
+                      : pin ? <span className="st ok">{new Date(pin).getTime() > nowMs ? 'Starts' : 'Started'} {time(pin, lang)}{isEarly ? <i className="st-tag">EARLY</i> : wasLate ? <i className="st-tag">LATE</i> : null}</span>
+                      : isLate ? <span className="st red">Not here · {Math.round((Date.now() - new Date(r.planned_start).getTime()) / 60000)} min late</span>
+                      : <span className="st">Starts {time(r.planned_start, lang)}</span>}
                   </button>
                   {tel && !r.attendance ? <>
                     <a className="ic" href={`tel:${tel}`} aria-label={`Call ${r.staff!.full_name}`}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z" /></svg></a>
@@ -344,7 +344,7 @@ export function Manage() {
             <div className="row" style={{ gap: 12 }}>
               <Avatar name={open.staff?.full_name ?? '?'} url={open.staff?.photo_url} size={48} />
               <div><div className="serif" style={{ fontSize: 22 }}>{open.staff?.full_name}</div>
-                <div className="muted sm">{roleLabel(open.position_code, open.position_detail)} · {isBar(open.position_code, open.position_detail) ? 'BAR' : 'FLOOR'} · start {time(open.planned_start, lang)}</div></div>
+                <div className="muted sm">{roleLabel(open.position_code, open.position_detail)} · {isBar(open.position_code, open.position_detail) ? 'BAR' : 'FLOOR'} · start {time(open.planned_start, lang)}{open.punches?.arrived_at ? ` · arrived ${time(open.punches.arrived_at, lang)}` : ''}</div></div>
             </div>
             {!open.attendance && (
               <div className="starts-from">
