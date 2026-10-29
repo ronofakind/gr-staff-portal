@@ -1,21 +1,34 @@
 /**
  * G&R — "APP · <DATE>" tabs in Events 2026, filled from the staff app.
  *
- * Paste this whole file into Events 2026 → Extensions → Apps Script (replace what's there), then:
- *   1. Project Settings (gear) → Script properties → add:
- *        SUPABASE_URL  = https://oigqdecyhmeuvrpoikdv.supabase.co
- *        SUPABASE_KEY  = the "anon public" key (Supabase → Project Settings → API)
- *        SHEET_TOKEN   = the value of sheet_token (Supabase → Table Editor → app_secrets)
- *   2. Pick "setup" in the function menu, click Run, and allow access. Done.
+ * One-time setup (no code): in the sheet, open the "G&R app" menu → "Connect the app",
+ * paste the two values it asks for, then click Allow when Google asks.
  *
- * What it does (America/Toronto):
  *   - 11:30 AM every day: builds tomorrow's tab (team + start times, no hours yet).
  *   - Every 15 min: refreshes today's tab, and yesterday's until 6 AM (events past midnight).
- *     A tab is only rewritten when something changed in the app.
  * Hours go on the tab of the date the event STARTED. It only reads from the app; it never writes back.
  */
 const TZ = 'America/Toronto';
 const TEMPLATE = 'BLANK TEMPLATE';
+const SUPABASE_URL = 'https://oigqdecyhmeuvrpoikdv.supabase.co';
+
+function onOpen() {
+  SpreadsheetApp.getUi().createMenu('G&R app')
+    .addItem('Connect the app', 'connect')
+    .addItem('Update today now', 'refresh')
+    .addToUi();
+}
+
+function connect() {
+  const ui = SpreadsheetApp.getUi();
+  const a = ui.prompt('Connect the app (1 of 2)', 'Paste the Supabase "anon public" key:', ui.ButtonSet.OK_CANCEL);
+  if (a.getSelectedButton() !== ui.Button.OK || !a.getResponseText().trim()) return;
+  const b = ui.prompt('Connect the app (2 of 2)', 'Paste the sheet_token value:', ui.ButtonSet.OK_CANCEL);
+  if (b.getSelectedButton() !== ui.Button.OK || !b.getResponseText().trim()) return;
+  PropertiesService.getScriptProperties().setProperties({ SUPABASE_KEY: a.getResponseText().trim(), SHEET_TOKEN: b.getResponseText().trim() });
+  setup();
+  ui.alert('Connected. Tomorrow\'s tab is built every day at 11:30, and tabs update every 15 minutes.');
+}
 
 function setup() {
   ScriptApp.getProjectTriggers().forEach((t) => ScriptApp.deleteTrigger(t));
@@ -53,7 +66,7 @@ function syncDate_(d, force) {
 
 function fetch_(ymd) {
   const p = PropertiesService.getScriptProperties();
-  const res = UrlFetchApp.fetch(p.getProperty('SUPABASE_URL') + '/rest/v1/rpc/hours_sheet', {
+  const res = UrlFetchApp.fetch(SUPABASE_URL + '/rest/v1/rpc/hours_sheet', {
     method: 'post', contentType: 'application/json', muteHttpExceptions: true,
     headers: { apikey: p.getProperty('SUPABASE_KEY'), Authorization: 'Bearer ' + p.getProperty('SUPABASE_KEY') },
     payload: JSON.stringify({ p_token: p.getProperty('SHEET_TOKEN'), p_date: ymd }),
