@@ -1,3 +1,4 @@
+import { QuarterTime } from '../components/QuarterTime';
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -262,7 +263,7 @@ export function Manage() {
             <div><div className="kicker">End all · {endSheet.length} still working</div><div className="serif" style={{ fontSize: 24, lineHeight: 1.15 }}>When does the night end?</div></div>
             <button className={'opt' + (endPick === 'now' ? ' on' : '')} onClick={() => setEndPick('now')}><i /><span><b>Now · {time(now(), lang)}</b><small>Counts as {time(new Date(q15(Date.now())).toISOString(), lang)} with our 15-min rounding</small></span></button>
             <button className={'opt' + (endPick === 'next' ? ' on' : '')} onClick={() => setEndPick('next')}><i /><span><b>In a few minutes · {time(new Date(nextQ()).toISOString(), lang)}</b><small>Everyone ends then. You can still change or cancel it.</small></span></button>
-            <button className={'opt' + (endPick === 'pick' ? ' on' : '')} onClick={() => setEndPick('pick')}><i /><span><b>Pick a time</b><small>Up to 30 min from now</small></span>{endPick === 'pick' && <input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} onClick={(e) => e.stopPropagation()} />}</button>
+            <button className={'opt' + (endPick === 'pick' ? ' on' : '')} onClick={() => setEndPick('pick')}><i /><span><b>Pick a time</b><small>Up to 30 min from now</small></span>{endPick === 'pick' && <QuarterTime value={endTime} onChange={setEndTime} label="End time" />}</button>
             {doneN > 0 && <div className="muted sm">The {doneN} who already ended keep their own times.</div>}
             {err && <p className="error">{err}</p>}
             <button className="btn-ink" onClick={() => endAll(endSheet)}>End {endSheet.length} {endSheet.length === 1 ? 'person' : 'people'} at {endPick === 'now' ? time(now(), lang) : endPick === 'next' ? time(new Date(nextQ()).toISOString(), lang) : endTime ? fmt12(endTime) : '…'}</button>
@@ -357,8 +358,8 @@ export function Manage() {
             )}
             {!open.attendance && (
               <div className="times-box">
-                <label>Start time<input type="time" value={draft.in} onChange={(e) => setDraft({ ...draft, in: e.target.value })} /></label>
-                <label>End time<input type="time" value={draft.out} onChange={(e) => setDraft({ ...draft, out: e.target.value })} /></label>
+                <label>Start time<QuarterTime value={draft.in} onChange={(v) => setDraft({ ...draft, in: v })} /></label>
+                <label>End time<QuarterTime value={draft.out} onChange={(v) => setDraft({ ...draft, out: v })} /></label>
               </div>
             )}
             {!open.attendance && <button className="btn-ink" onClick={async () => {

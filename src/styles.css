@@ -933,3 +933,8 @@ main.page.slide-right > :not(.tabbar):not(.save-bar):not(.sheet):not(.scrim) { a
 .alert-card .pill-red { background: #fff; color: var(--accent, #9B2226); }
 .folder-link { display: inline-flex; margin-top: 8px; height: 34px; align-items: center; padding: 0 12px; border-radius: 17px; background: #fff; font-size: 13px; font-weight: 700; color: var(--ink, #1A1714); text-decoration: none; }
 .v2-head img.logo { height: 36px; }
+
+.qtime { display: inline-flex; align-items: center; gap: 4px; }
+.qtime select { height: 40px; padding: 0 8px; border-radius: 10px; border: 1.5px solid #E4DCD1; background: #fff; font: inherit; font-size: 16px; font-weight: 600; color: #1A1714; -webkit-appearance: none; appearance: none; text-align: center; }
+.qtime .colon { font-weight: 700; }
+.qtime.need select { border-color: #E0C27A; }

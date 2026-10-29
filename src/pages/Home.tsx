@@ -1,3 +1,4 @@
+import { QuarterTime } from '../components/QuarterTime';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase, SHIFT_SELECT, type ShiftRow, type Staff } from '../lib/supabase';
@@ -259,7 +260,7 @@ function AskHours({ s, onClose, onSent }: { s: ShiftRow; onClose: () => void; on
         <div className="starts-from"><div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
           {(['start', 'end', 'other'] as const).map((k) => <button key={k} className={kind === k ? 'on' : ''} onClick={() => setKind(k)}>{k === 'start' ? 'Start time' : k === 'end' ? 'End time' : 'Other'}</button>)}
         </div></div>
-        {kind !== 'other' && <div className="times-box"><label>{kind === 'start' ? 'I started at' : 'I ended at'}<input type="time" value={t} onChange={(e) => setT(e.target.value)} /></label></div>}
+        {kind !== 'other' && <div className="times-box"><label>{kind === 'start' ? 'I started at' : 'I ended at'}<QuarterTime value={t} onChange={setT} /></label></div>}
         <textarea className="sheet-note" rows={2} value={note} placeholder={kind === 'other' ? 'What happened?' : 'Note (optional) · e.g. my manager asked me to help set up'} onChange={(e) => setNote(e.target.value)} />
         <div className="muted sm">Goes to Ronnie and your manager. Your hours stay as they are until they check.</div>
         {err && <p className="error">{err}</p>}

@@ -1,3 +1,4 @@
+import { QuarterTime } from '../components/QuarterTime';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { eventsBetween, addDays, isoDay, endIso, startIso, periodOf, hoursBetween, tTime, dLabel, flagsOf, flagText, type AEvent, type AShift } from './api';
@@ -74,8 +75,8 @@ export function Hours() {
 
   const times = (r: Row) => (
     <div className="row" style={{ gap: 6 }}>
-      <input type="time" className="tin" aria-label="Start" value={draft[r.s.id]?.in ?? hm24(r.s.punches?.punch_in ?? null)} onChange={(ev) => setDraft({ ...draft, [r.s.id]: { ...draft[r.s.id], in: ev.target.value } })} />
-      <input type="time" className={'tin' + (!r.s.punches?.punch_out ? ' need' : '')} aria-label="End" value={draft[r.s.id]?.out ?? hm24(r.s.punches?.punch_out ?? null)} onChange={(ev) => setDraft({ ...draft, [r.s.id]: { ...draft[r.s.id], out: ev.target.value } })} />
+      <QuarterTime className="tin" label="Start" value={draft[r.s.id]?.in ?? hm24(r.s.punches?.punch_in ?? null)} onChange={(v) => setDraft({ ...draft, [r.s.id]: { ...draft[r.s.id], in: v } })} />
+      <QuarterTime className={'tin' + (!r.s.punches?.punch_out ? ' need' : '')} label="End" value={draft[r.s.id]?.out ?? hm24(r.s.punches?.punch_out ?? null)} onChange={(v) => setDraft({ ...draft, [r.s.id]: { ...draft[r.s.id], out: v } })} />
       {draft[r.s.id] && <button className="abtn sm dark" onClick={() => save(r)}>Save</button>}
     </div>
   );
