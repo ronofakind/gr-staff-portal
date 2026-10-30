@@ -1085,3 +1085,8 @@ main.page.slide-right > :not(.tabbar):not(.save-bar):not(.sheet):not(.scrim) { a
 .sg-h, .sg-r { grid-template-columns: 105px 140px 100px 100px 80px minmax(0, 1fr) 36px; }
 @media (max-width: 820px) { .sg-r { grid-template-columns: 1.4fr 1fr 64px 64px 32px; } }
 .grp-end { font: 500 13px Inter, sans-serif; font-style: normal; color: #9A9187; margin-left: 2px; }
+
+/* Oct 30: initials in the theme colour; name-sheet buttons keep their full height */
+div.avatar { color: var(--accent); background: var(--accent-bg); }
+.photo-view-ini { color: var(--accent); background: var(--accent-bg); }
+.sheet > * { flex-shrink: 0; }
