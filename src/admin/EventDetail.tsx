@@ -210,7 +210,7 @@ function Lands({ evs, lines, items, venue, md }: { evs: AEvent[]; lines: L[]; it
   };
   void bar;
   return (
-    <div className="lands-grid">
+    <div className="lands-one">
       <div className="stack" style={{ gap: 10 }}>
         <div className="row wrap" style={{ gap: 8, alignItems: 'center' }}>
           <span className="kick">Preview as</span>
@@ -218,12 +218,6 @@ function Lands({ evs, lines, items, venue, md }: { evs: AEvent[]; lines: L[]; it
           <div className="seg3"><button className={sex === 'm' ? 'on' : ''} onClick={() => setSex('m')}>Men</button><button className={sex === 'f' ? 'on' : ''} onClick={() => setSex('f')}>Women</button></div>
         </div>
         <div className="phone-frame"><div className="phone-screen"><ShiftView s={s} lead={md} preview /></div></div>
-      </div>
-      <div className="stack" style={{ gap: 12 }}>
-        <div><div className="kick">What's on their page (top to bottom)</div>
-          <ol className="lands-list"><li>Date + ✓ Confirmed</li><li>Venue name</li><li>Shift starts + your position</li><li>The event: type + guests (no client)</li><li>Map, address, Directions, Add to calendar</li><li>Uniform for their line</li><li>Notes</li><li>Manager On-Site, with call / message</li></ol></div>
-        <div className="lands-never"><b>Never on staff phones</b>Client, billing, files, other groups' times, end times, tiers.</div>
-        <div className="muted sm">Read-only preview. Nothing is sent.</div>
       </div>
     </div>
   );

@@ -1169,3 +1169,4 @@ div.avatar { color: var(--accent); background: var(--accent-bg); }
   .ed2-sec { break-inside: avoid; border: 1px solid #ddd; }
   body { background: #fff; }
 }
+.lands-one { display: flex; flex-direction: column; gap: 10px; }
