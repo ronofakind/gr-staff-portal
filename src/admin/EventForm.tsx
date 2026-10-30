@@ -486,9 +486,11 @@ export function EventForm() {
         <div className="stack" style={{ gap: 12, paddingTop: 14 }}>
           <div className="row wrap" style={{ justifyContent: 'space-between', gap: 8 }}>
             <span className="row sm" style={{ gap: 8 }}>
-              <button type="button" className={'tog' + (driveWanted ? ' on' : ' off')} aria-pressed={driveWanted} onClick={() => setDriveOn(!driveWanted)}>{driveWanted ? '●' : '○'}</button>
-              <b>Create folder on Save</b>
-              {client && <small className="tag" style={{ height: 20 }}>{driveDefault ? 'ON' : 'OFF'} for {client.name.split(' (')[0]}</small>}
+              <button type="button" role="switch" aria-checked={driveWanted} className={'sw' + (driveWanted ? ' on' : '')} onClick={() => setDriveOn(!driveWanted)}>
+                <span className="sw-track"><span className="sw-knob" /></span><span className="sw-lbl">{driveWanted ? 'ON' : 'OFF'}</span>
+              </button>
+              <b>{driveWanted ? 'A folder will be created on Save' : 'No folder will be created'}</b>
+              {client && <small className="tag" style={{ height: 20 }}>Usually {driveDefault ? 'ON' : 'OFF'} for {client.name.split(' (')[0]}</small>}
             </span>
             {drive ? <span className="muted sm">Connected as {drive.email} · <button type="button" className="link-btn" onClick={async () => { if (confirm('Disconnect Google Drive?')) { await supabase.rpc('google_disconnect'); setDrive(null); } }}>Disconnect</button></span>
               : <button type="button" className="abtn sm dark" onClick={async () => {

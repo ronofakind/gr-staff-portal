@@ -1102,3 +1102,12 @@ div.avatar { color: var(--accent); background: var(--accent-bg); }
 .abtn.danger-fill { background: var(--accent); border-color: var(--accent); color: #fff; }
 .del-ev { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid #E8C4C6; background: var(--accent-bg); border-radius: 14px; max-width: 360px; }
 .ef-float .del-ev { max-width: none; }
+
+/* Oct 30: clear sliding switch (Create folder on Save) */
+.sw { display: inline-flex; align-items: center; gap: 8px; border: 0; background: none; padding: 0; cursor: pointer; font: 700 12px Inter, sans-serif; color: #7A7268; }
+.sw-track { position: relative; width: 52px; height: 30px; border-radius: 15px; background: #D4CBC0; transition: background .2s; flex: 0 0 auto; }
+.sw-knob { position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: transform .2s; }
+.sw.on .sw-track { background: var(--ok); }
+.sw.on .sw-knob { transform: translateX(22px); }
+.sw.on .sw-lbl { color: var(--ok); }
+.sw-lbl { min-width: 26px; }
