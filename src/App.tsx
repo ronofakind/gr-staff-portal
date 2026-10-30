@@ -24,6 +24,7 @@ import { Availability as StaffAvail } from './pages/Availability';
 import { EventPlan } from './pages/EventPlan';
 import { Availability as AdminAvail } from './admin/Availability';
 import { Tiers } from './admin/Tiers';
+import { Incidents } from './admin/Incidents';
 
 export function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
@@ -60,6 +61,7 @@ export function App() {
             <Route path="week" element={<Week />} />
             <Route path="hours" element={<Hours />} />
             <Route path="reliability" element={<Reliability />} />
+            <Route path="incidents" element={<Incidents />} />
             <Route path="more" element={<More />} />
             <Route path="day" element={<Day />} />
             <Route path="event/new" element={<EventForm />} />

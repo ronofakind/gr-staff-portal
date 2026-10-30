@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { useLang } from '../lib/i18n';
 import { time } from '../lib/format';
 import { Avatar } from '../components/Avatar';
+import { IncidentSheet, kindLabel, type Incident } from '../components/IncidentReport';
 
 type Row = {
   id: string; position_code: string | null; position_detail: string | null; planned_start: string; planned_end: string | null;
@@ -163,17 +164,18 @@ export function Manage() {
   const [endPick, setEndPick] = useState<'now' | 'next' | 'pick'>('next'); const [endTime, setEndTime] = useState('');
   const [, setTick] = useState(0);
   const [err, setErr] = useState('');
-  const [adding, setAdding] = useState(false); const [notices, setNotices] = useState<{ id: string; body: string; created_at: string }[]>([]);
+  const [adding, setAdding] = useState(false); const [incOpen, setIncOpen] = useState(false); const [incidents, setIncidents] = useState<Incident[]>([]); const [notices, setNotices] = useState<{ id: string; body: string; created_at: string }[]>([]);
   const [seen, setSeen] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('gr-notice-seen') || '[]'); } catch { return []; } });
   const [reason, setReason] = useState(''); const [why, setWhy] = useState(''); const [leftAt, setLeftAt] = useState('');
 
   const load = async () => {
     const [e, s] = await Promise.all([
       supabase.from('events').select('id,title,event_date,address,start_time,end_time,description,dress_code,hours_submitted_at,drive_folder_url,venues(address,staff_notes)').eq('id', eventId!).single(),
-      supabase.from('shifts').select('id,position_code,position_detail,planned_start,planned_end,attendance,left_early,attendance_reason,added_note,adder:staff!shifts_added_by_fkey(full_name),leave_by,manager_note,staff:staff!shifts_staff_id_fkey(full_name,photo_url,phone),punches(punch_in,punch_out,arrived_at,updated_at)')
+      supabase.from('shifts').select('id,staff_id,position_code,position_detail,planned_start,planned_end,attendance,left_early,attendance_reason,added_note,adder:staff!shifts_added_by_fkey(full_name),leave_by,manager_note,staff:staff!shifts_staff_id_fkey(full_name,photo_url,phone),punches(punch_in,punch_out,arrived_at,updated_at)')
         .eq('event_id', eventId!).neq('status', 'declined').order('planned_start'),
     ]);
     setEv(e.data as unknown as EvFull);
+    supabase.from('incidents').select('id,kind,involved_staff,involved_other,happened_at,body,audio_path,audio_sec,photos,created_at').eq('event_id', eventId!).order('created_at', { ascending: false }).then(({ data }) => setIncidents((data ?? []) as Incident[]));
     supabase.from('event_notices').select('id,body,created_at').eq('event_id', eventId!).order('created_at', { ascending: false }).then(({ data }) => setNotices((data ?? []) as { id: string; body: string; created_at: string }[]));
     // Within each call time: lead (MD / bar manager) first, then everyone A–Z by first name.
     const lead = (r: Row) => (r.position_code === 'MD' || r.position_code === 'BM' ? 0 : 1);
@@ -284,6 +286,10 @@ export function Manage() {
           <div key={n.id} className="notice"><span className="notice-ic">⇄</span><div className="grow"><b>{n.body}</b><small>{time(n.created_at, lang)}</small></div>
             <button onClick={() => { const v = [...seen, n.id]; setSeen(v); try { localStorage.setItem('gr-notice-seen', JSON.stringify(v)); } catch { /* private mode */ } }}>OK</button></div>
         ))}
+        {incidents.length > 0 && (
+          <div className="inc-sent"><span className="inc-bang">!</span><div className="grow"><b>{incidents.length === 1 ? 'Incident report sent' : `${incidents.length} incident reports sent`}</b>
+            <small>{incidents.map((x) => `${kindLabel(x.kind)}${x.involved_staff.length ? ' · ' + x.involved_staff.map((id) => first(rows.find((r) => r.staff && (r as unknown as { staff_id?: string }).staff_id === id)?.staff?.full_name) || '').filter(Boolean).join(', ') : ''}${x.audio_sec ? ` · 🎙 ${Math.floor(x.audio_sec / 60)}:${String(x.audio_sec % 60).padStart(2, '0')}` : ''} · ${time(x.created_at, lang)}`).join('  |  ')}</small></div></div>
+        )}
         {ev.drive_folder_url && <a className="folder-link" href={ev.drive_folder_url} target="_blank" rel="noreferrer">Event folder · floor plan, run of show ›</a>}
       </div>
 
@@ -380,6 +386,7 @@ export function Manage() {
       })}
       {!ev.hours_submitted_at && <button className="add-staff" onClick={() => setAdding(true)}>+ Add staff</button>}
       <p className="hint" style={{ textAlign: 'center' }}>Tap a name for times, no-show, left early or cancelled</p>
+      <div className="inc-entry"><button onClick={() => setIncOpen(true)}>⚠ Incident report</button><small>Emergencies only</small></div>
 
       <div className="submit-bar">
         <div className="grow">
@@ -516,6 +523,15 @@ export function Manage() {
         </>
       )}
 
+      {incOpen && (
+        <>
+          <div className="scrim" onClick={() => setIncOpen(false)} />
+          <SwipeSheet onClose={() => setIncOpen(false)} label="Incident report">
+            <IncidentSheet eventId={ev.id} eventDate={ev.event_date} team={rows.filter((r) => r.staff).map((r) => ({ id: (r as unknown as { staff_id: string }).staff_id, name: r.staff!.full_name }))}
+              onClose={() => setIncOpen(false)} onSent={() => { setIncOpen(false); load(); }} />
+          </SwipeSheet>
+        </>
+      )}
       {adding && <AddStaff ev={ev} lang={lang} onClose={() => setAdding(false)} onDone={() => { setAdding(false); load(); }} />}
 
       {ask && (() => {
