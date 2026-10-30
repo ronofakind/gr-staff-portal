@@ -16,3 +16,14 @@ export function PhotoPicker({ name, url, onPick, size = 72 }: { name: string; ur
     </label>
   );
 }
+
+/** Full-size photo, tap anywhere or Close to dismiss. */
+export function PhotoViewer({ name, url, sub, onClose }: { name: string; url?: string | null; sub?: string; onClose: () => void }) {
+  return (
+    <div className="photo-view" role="dialog" aria-label={`Photo of ${name}`} onClick={onClose}>
+      {url ? <img src={url} alt={name} /> : <div className="photo-view-ini">{initials(name)}</div>}
+      <div className="photo-view-n"><b className="serif">{name}</b>{sub && <small>{sub}</small>}</div>
+      <button className="photo-view-x" onClick={onClose}>Close</button>
+    </div>
+  );
+}

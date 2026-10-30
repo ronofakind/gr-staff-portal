@@ -1067,3 +1067,16 @@ main.page.slide-right > :not(.tabbar):not(.save-bar):not(.sheet):not(.scrim) { a
 .inc-card.c-note { box-shadow: inset 3px 0 0 var(--ink); } .inc-card.c-note .inc-note { background: #FBF9F5; }
 .inc-card.c-photo { background: #EEF5F0; box-shadow: inset 3px 0 0 #BFDFCD; } .inc-card.c-photo .muted { color: var(--ok); font-weight: 600; }
 .inc-card.c-photo .inc-add { border-color: #A9C9B6; color: var(--ok); } .inc-card.c-photo .inc-ph { background: #D3E3D9; }
+
+/* Photos (Oct 30): tap the photo on the team list, big photo in the name sheet, full-size viewer */
+.ring.tap { padding: 0; background: none; cursor: pointer; }
+.ns-head { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; padding-top: 2px; }
+.ns-photo { border: 0; background: none; padding: 0; border-radius: 50%; cursor: pointer; box-shadow: 0 0 0 3px #fff, 0 0 0 5px #E4DCD1; margin-bottom: 6px; }
+.ns-photo .avatar { display: flex; align-items: center; justify-content: center; object-fit: cover; }
+.look-photo { border: 0; background: none; padding: 0; border-radius: 50%; cursor: pointer; flex: 0 0 auto; }
+.look-photo .avatar { object-fit: cover; }
+.photo-view { position: fixed; inset: 0; z-index: 80; background: rgba(26,23,20,.94); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 24px; }
+.photo-view img { width: min(86vw, 420px); height: min(86vw, 420px); object-fit: cover; border-radius: 24px; }
+.photo-view-ini { width: min(70vw, 300px); height: min(70vw, 300px); border-radius: 24px; background: #3A342E; color: #F6F2EC; display: flex; align-items: center; justify-content: center; font: 600 80px Inter, sans-serif; }
+.photo-view-n { color: #fff; text-align: center; display: flex; flex-direction: column; gap: 2px; } .photo-view-n b { font-size: 26px; font-weight: 500; } .photo-view-n small { color: #B8AFA4; font-size: 13px; }
+.photo-view-x { height: 44px; padding: 0 24px; border-radius: 22px; border: 0; background: #fff; font: 700 14px Inter, sans-serif; cursor: pointer; }

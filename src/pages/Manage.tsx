@@ -4,7 +4,7 @@ import { Link, useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useLang } from '../lib/i18n';
 import { time } from '../lib/format';
-import { Avatar } from '../components/Avatar';
+import { Avatar, PhotoViewer } from '../components/Avatar';
 import { IncidentSheet, kindLabel, type Incident } from '../components/IncidentReport';
 
 type Row = {
@@ -165,6 +165,7 @@ export function Manage() {
   const [endPick, setEndPick] = useState<'now' | 'next' | 'pick'>('next'); const [endTime, setEndTime] = useState('');
   const [, setTick] = useState(0);
   const [err, setErr] = useState('');
+  const [bigPhoto, setBigPhoto] = useState(false);
   const [adding, setAdding] = useState(false); const [incOpen, setIncOpen] = useState(false); const [incidents, setIncidents] = useState<Incident[]>([]); const [notices, setNotices] = useState<{ id: string; body: string; created_at: string }[]>([]);
   const [seen, setSeen] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('gr-notice-seen') || '[]'); } catch { return []; } });
   const [reason, setReason] = useState(''); const [why, setWhy] = useState(''); const [leftAt, setLeftAt] = useState('');
@@ -354,10 +355,9 @@ export function Manage() {
               const tel = r.staff?.phone?.replace(/[^\d+]/g, '');
               return (
                 <div key={r.id} className={'crew' + (r.attendance ? ' flagged' : '') + (r.left_early ? ' left' : '')}>
-                  <div className={'ring ' + ring}>
+                  <button className={'ring tap ' + ring} aria-label={`Options for ${r.staff?.full_name}`} onClick={() => { setOpen(r); setDraft({ in: hm(pin) || hm(r.planned_start), out: hm(pout) }); }}>
                     <Avatar name={r.staff?.full_name ?? '?'} url={r.staff?.photo_url} size={44} />
-                    {isBar(r.position_code, r.position_detail) ? <span className="dept-tag is-bar">BAR</span> : <span className="dept-tag is-floor">FLOOR</span>}
-                  </div>
+                  </button>
                   <button className="who" aria-label={`Options for ${r.staff?.full_name}`} onClick={() => { setOpen(r); setDraft({ in: hm(pin) || hm(r.planned_start), out: hm(pout) }); }}>
                     <span className="nm">{r.staff?.full_name}{r.adder && <i className="added-tag">ADDED BY {r.adder.full_name.split(' ')[0].toUpperCase()}</i>}</span>
                     <span className="rl">{roleLabel(r.position_code, r.position_detail)}{r.manager_note ? ' · 📝 note' : ''}</span>
@@ -386,7 +386,7 @@ export function Manage() {
         );
       })}
       {!ev.hours_submitted_at && <button className="add-staff" onClick={() => setAdding(true)}>+ Add staff</button>}
-      <p className="hint" style={{ textAlign: 'center' }}>Tap a name for times, no-show, left early or cancelled</p>
+      <p className="hint" style={{ textAlign: 'center' }}>Tap a name or photo for times, no-show, left early or cancelled</p>
       <div className="inc-entry"><button onClick={() => setIncOpen(true)}>⚠ Incident report</button><small>Emergencies only</small></div>
 
       <div className="submit-bar">
@@ -481,10 +481,11 @@ export function Manage() {
         <>
           <div className="scrim" onClick={() => setOpen(null)} />
           <SwipeSheet onClose={() => setOpen(null)} label={`Options for ${open.staff?.full_name}`}>
-            <div className="row" style={{ gap: 12 }}>
-              <Avatar name={open.staff?.full_name ?? '?'} url={open.staff?.photo_url} size={48} />
-              <div><div className="serif" style={{ fontSize: 22 }}>{open.staff?.full_name}</div>
-                <div className="muted sm">{roleLabel(open.position_code, open.position_detail)} · {isBar(open.position_code, open.position_detail) ? 'BAR' : 'FLOOR'} · start {time(open.planned_start, lang)}{open.punches?.arrived_at ? ` · arrived ${time(open.punches.arrived_at, lang)}` : ''}</div></div>
+            <div className="ns-head">
+              <button className="ns-photo" aria-label="See the photo full size" onClick={() => setBigPhoto(true)}><Avatar name={open.staff?.full_name ?? '?'} url={open.staff?.photo_url} size={112} /></button>
+              <div className="serif" style={{ fontSize: 24 }}>{open.staff?.full_name}</div>
+              <div className="muted sm">{roleLabel(open.position_code, open.position_detail)} · start {time(open.planned_start, lang)}{open.punches?.arrived_at ? ` · arrived ${time(open.punches.arrived_at, lang)}` : ''}</div>
+              {open.staff?.photo_url && <small className="muted" style={{ fontSize: 11 }}>Tap the photo to see it full size</small>}
             </div>
             {!open.attendance && (
               <div className="starts-from">
@@ -533,6 +534,7 @@ export function Manage() {
           </SwipeSheet>
         </>
       )}
+      {open && bigPhoto && <PhotoViewer name={open.staff?.full_name ?? ''} url={open.staff?.photo_url} sub={roleLabel(open.position_code, open.position_detail)} onClose={() => setBigPhoto(false)} />}
       {adding && <AddStaff ev={ev} lang={lang} onClose={() => setAdding(false)} onDone={() => { setAdding(false); load(); }} />}
 
       {ask && (() => {

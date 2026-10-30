@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { supabase, SHIFT_SELECT, type ShiftRow } from '../lib/supabase';
 import { useT, useLang } from '../lib/i18n';
 import { time, longDate, minus, mapsUrl } from '../lib/format';
-import { Avatar } from '../components/Avatar';
+import { Avatar, PhotoViewer } from '../components/Avatar';
 import { UniformIcon, uniformFor, uniformLabel, PantsIcon, ShoesIcon, ApronIcon, TieIcon, WineKeyIcon, isBarPos, lineKey, PIECE } from '../components/Uniform';
 import { Status, isBar } from './Home';
 
@@ -12,6 +12,7 @@ export function Shift({ backTo = '/' }: { backTo?: string }) {
   const { id } = useParams();
   const [s, setS] = useState<ShiftRow | null>(null);
   const [md, setMd] = useState<{ full_name: string; photo_url: string | null; phone: string | null } | null>(null);
+  const [leadPhoto, setLeadPhoto] = useState(false);
 
   useEffect(() => {
     supabase.from('shifts').select(SHIFT_SELECT).eq('id', id!).single().then(({ data }) => {
@@ -126,16 +127,17 @@ export function Shift({ backTo = '/' }: { backTo?: string }) {
       {lead && <>
         <div className="d-sec">Look for</div>
         <section className="look card">
-          <Avatar name={lead.full_name} url={lead.photo_url} size={52} />
+          <button className="look-photo" aria-label={`See ${lead.full_name}'s photo`} onClick={() => setLeadPhoto(true)}><Avatar name={lead.full_name} url={lead.photo_url} size={56} /></button>
           <div className="grow" style={{ minWidth: 0 }}>
             <div style={{ fontSize: 16, fontWeight: 700 }}>{lead.full_name}</div>
-            <div className="muted sm">MD on site</div>
+            <div className="muted sm">MD on site{lead.photo_url ? ' · tap the photo' : ''}</div>
           </div>
           {tel && <>
             <a className="d-call ok" href={`tel:${tel}`} aria-label={`Call ${lead.full_name}`}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z" /></svg></a>
             <a className="d-call" href={`sms:${tel}`} aria-label={`Text ${lead.full_name}`}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg></a>
           </>}
         </section>
+        {leadPhoto && <PhotoViewer name={lead.full_name} url={lead.photo_url} sub="MD on site · look for them when you arrive" onClose={() => setLeadPhoto(false)} />}
       </>}
     </main>
   );
