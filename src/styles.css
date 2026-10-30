@@ -1058,3 +1058,12 @@ main.page.slide-right > :not(.tabbar):not(.save-bar):not(.sheet):not(.scrim) { a
 .inc-note { width: 100%; box-sizing: border-box; min-height: 104px; border-radius: 12px; border: 1.5px solid #E4DCD1; background: #F6F2EC; padding: 10px 12px; font: 500 15px Inter, sans-serif; resize: vertical; }
 .inc-card.inc-photos { flex-direction: row; align-items: center; flex-wrap: wrap; }
 .inc-card .inc-team { background: #F6F2EC; }
+/* Incident report colours (v3, Oct 30) */
+.inc-card.c-what { background: #FBF1F1; box-shadow: inset 3px 0 0 #E8C4C6; } .inc-card.c-what .kicker { color: var(--accent); }
+.inc-card.c-what .rchip { background: #fff; } .inc-card.c-what .rchip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.inc-card.c-who { background: #F8F2E7; box-shadow: inset 3px 0 0 #E2D3B8; } .inc-card.c-who .kicker { color: #8A6A3D; }
+.inc-card.c-who .rchip { background: #fff; } .inc-card.c-who .rchip.on { background: #4A3B2A; border-color: #4A3B2A; color: #fff; }
+.times-box.c-when { box-shadow: inset 3px 0 0 #D6CDC1; }
+.inc-card.c-note { box-shadow: inset 3px 0 0 var(--ink); } .inc-card.c-note .inc-note { background: #FBF9F5; }
+.inc-card.c-photo { background: #EEF5F0; box-shadow: inset 3px 0 0 #BFDFCD; } .inc-card.c-photo .muted { color: var(--ok); font-weight: 600; }
+.inc-card.c-photo .inc-add { border-color: #A9C9B6; color: var(--ok); } .inc-card.c-photo .inc-ph { background: #D3E3D9; }

@@ -47,11 +47,11 @@ export function IncidentSheet({ eventId, eventDate, team, onClose, onSent }: { e
         <div><div className="serif" style={{ fontSize: 22 }}>Incident report</div>
           <div className="muted sm">Emergencies only · goes to Ronnie only</div></div>
       </div>
-      <div className="inc-card">
+      <div className="inc-card c-what">
         <span className="kicker">What happened</span>
         <div className="inc-grid2">{INCIDENT_KINDS.map(([k, l]) => <button key={k} type="button" className={'rchip' + (kind === k ? ' on' : '')} onClick={() => setKind(k)}>{l}</button>)}</div>
       </div>
-      <div className="inc-card">
+      <div className="inc-card c-who">
         <span className="kicker">Who was involved</span>
         <div className="inc-chips">
           {who.map((id) => <button key={id} type="button" className="rchip on" onClick={() => toggle(who, setWho, id)}>{team.find((p) => p.id === id)?.name.split(' ').slice(0, 2).join(' ')} ×</button>)}
@@ -60,12 +60,12 @@ export function IncidentSheet({ eventId, eventDate, team, onClose, onSent }: { e
         </div>
         {showTeam && <div className="inc-team">{team.filter((p) => !who.includes(p.id)).map((p) => <button key={p.id} type="button" onClick={() => { setWho([...who, p.id]); setShowTeam(false); }}>{p.name}</button>)}</div>}
       </div>
-      <div className="times-box"><label>When<QuarterTime value={when} onChange={setWhen} label="When it happened" /></label></div>
-      <div className="inc-card">
+      <div className="times-box c-when"><label>When<QuarterTime value={when} onChange={setWhen} label="When it happened" /></label></div>
+      <div className="inc-card c-note">
         <span className="kicker">Note</span>
         <textarea className="inc-note" rows={4} value={body} onChange={(e) => setBody(e.target.value)} placeholder="What happened, who was there, what you did…" />
       </div>
-      <div className="inc-card inc-photos">
+      <div className="inc-card inc-photos c-photo">
         {photos.map((f, i) => <span key={i} className="inc-ph">{f.name.slice(0, 10)}<button type="button" onClick={() => setPhotos(photos.filter((_, k) => k !== i))}>×</button></span>)}
         <label className="inc-add">+<input type="file" accept="image/*" multiple onChange={(e) => { setPhotos([...photos, ...Array.from(e.target.files ?? [])].slice(0, 6)); e.target.value = ''; }} /></label>
         <span className="muted sm">Photos (optional)</span>
