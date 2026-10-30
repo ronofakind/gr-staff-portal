@@ -175,7 +175,7 @@ const totalF_ = (row) => '=IF(OR(D' + row + '="",E' + row + '=""),"",LET(h,24*MO
 const noteFor_ = (r) => r.attendance === 'no_show' ? 'NO SHOW' : r.attendance === 'cancelled' ? 'CANCELLED' : r.attendance === 'left_early' ? 'LEFT EARLY' : '';
 const norm_ = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z]+/g, ' ').trim();
 const gone_ = (r) => r.attendance === 'no_show' || r.attendance === 'cancelled';
-/** Same text style the day tabs use ("4:30 p.m."), so TIMEVALUE works. */
+/** "4:30 p.m." label; written to the sheet as a time value (day fraction), never as text. */
 const txt_ = (dt) => Utilities.formatDate(dt, TZ, 'h:mm a').toLowerCase().replace('am', 'a.m.').replace('pm', 'p.m.');
 const sameTime_ = (a, b) => { try { return a !== '' && b !== '' && Math.abs(tv_(a) - tv_(b)) < 1e-6; } catch (e) { return false; } };
 function tv_(v) {
@@ -229,8 +229,10 @@ function fillDayAndPayroll_(ss, d, rows) {
         const set = (col, val, prefill) => {
           const cell = day.getRange(p.row, col); const cur = cell.getValue();
           if (val === '' || cur === val || (col < 6 && sameTime_(cur, val))) return;
-          if (cur === '' || cur === wrote[key(col)] || (prefill && sameTime_(cur, prefill))) {
-            cell.setNumberFormat('@').setValue(val); wrote[key(col)] = val;
+          const mine = wrote[key(col)] !== undefined && (cur === wrote[key(col)] || (col < 6 && sameTime_(cur, wrote[key(col)])));
+          if (cur === '' || mine || (prefill && sameTime_(cur, prefill))) {
+            if (col < 6) cell.setNumberFormat('h":"mm" "am/pm').setValue(tv_(val)); else cell.setValue(val);
+            wrote[key(col)] = val;
           } else issues.push(name + ': the tab says ' + (cur instanceof Date ? txt_(cur) : cur) + ', the app says ' + val + '. Left the tab as is.');
         };
         if (gone_(r)) { set(7, noteFor_(r)); return; }
