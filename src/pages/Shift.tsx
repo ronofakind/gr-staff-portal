@@ -127,7 +127,7 @@ export function Shift({ backTo = '/' }: { backTo?: string }) {
       <section className="d-notes">{ev.notes ? ev.notes : <span className="empty">&nbsp;</span>}</section>
 
       {lead && <>
-        <div className="d-sec">Look for</div>
+        <div className="d-sec">Manager On-Site</div>
         <section className="look card">
           <button className="look-photo" aria-label={`See ${lead.full_name}'s photo`} onClick={() => setLeadPhoto(true)}><Avatar name={lead.full_name} url={lead.photo_url} size={56} /></button>
           <div className="grow" style={{ minWidth: 0 }}>
@@ -139,7 +139,7 @@ export function Shift({ backTo = '/' }: { backTo?: string }) {
             <a className="d-call" href={`sms:${tel}`} aria-label={`Text ${lead.full_name}`}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg></a>
           </>}
         </section>
-        {leadPhoto && <PhotoViewer name={lead.full_name} url={lead.photo_url} sub="MD on site · look for them when you arrive" onClose={() => setLeadPhoto(false)} />}
+        {leadPhoto && <PhotoViewer name={lead.full_name} url={lead.photo_url} sub="Manager On-Site · find them when you arrive" onClose={() => setLeadPhoto(false)} />}
       </>}
     </main>
   );
