@@ -969,3 +969,24 @@ main.page.slide-right > :not(.tabbar):not(.save-bar):not(.sheet):not(.scrim) { a
 .vp-grp { font-size: 10px; letter-spacing: .12em; font-weight: 800; color: var(--muted); padding: 10px 12px 4px; border-top: 1px solid var(--line); margin-top: 4px; }
 @media (max-width: 820px) { .ef .fold-s { display: none; } .ef .fold.open .fold-s { display: none; } }
 .uni-extra { width: 56px; height: 56px; border-radius: 28px; background: #FBF0D6; color: #7A5A0E; font: 700 28px Inter, sans-serif; display: flex; align-items: center; justify-content: center; }
+
+/* Name sheet v4 (Oct 30): swipe down to close, quieter outcome buttons, left early, reasons */
+.sheet.swipe { max-height: 92vh; overflow-y: auto; transition: transform .2s ease; touch-action: pan-y; }
+.sheet .grab-hint { font-size: 10px; color: #9A9187; text-align: center; margin-top: -8px; }
+.wrong { border-top: 1px solid var(--line); padding-top: 12px; display: flex; flex-direction: column; gap: 8px; }
+.wrong-q { font-size: 12px; color: var(--muted); text-align: center; }
+.wrong-row { display: flex; gap: 6px; }
+.qopt { flex: 1 1 0; height: 38px; border-radius: 19px; background: transparent; font: 600 13px Inter, system-ui, sans-serif; cursor: pointer; white-space: nowrap; }
+.qopt.red { border: 1px solid #E8C4C6; color: var(--accent); } .qopt.gold { border: 1px solid #E6CF95; color: #9A7413; } .qopt.grey { border: 1px solid #D6CDC1; color: #4A443D; }
+.qopt:disabled { opacity: .4; cursor: default; }
+.st.muted-st { color: var(--muted); font-weight: 600; }
+.st-tag.gold { color: #9A7413; background: #F6EBD0; }
+.crew.left { background: #FBF6EA; }
+.dialog.ask { gap: 12px; max-height: 90vh; overflow-y: auto; top: 50%; }
+.ask-time { width: 100%; background: #fff; border-radius: 14px; padding: 10px 12px; display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 14px; }
+.ask-gold { width: 100%; background: #FBF6EA; border-radius: 14px; padding: 10px 12px; font-size: 13px; color: #6B4E0A; box-sizing: border-box; }
+.ask-reason { width: 100%; display: flex; flex-direction: column; gap: 8px; text-align: left; }
+.ask-reason .chips { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.rchip { height: 36px; border-radius: 12px; background: #fff; border: 1px solid #E4DCD1; font: 600 13px Inter, sans-serif; cursor: pointer; color: var(--ink); }
+.rchip.on { border-color: var(--ink); background: var(--ink); color: #F6F2EC; }
+.ask-note { height: 42px; border-radius: 12px; border: 1.5px solid #E4DCD1; padding: 0 12px; font: 500 14px Inter, sans-serif; background: #fff; }

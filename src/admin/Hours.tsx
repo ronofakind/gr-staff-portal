@@ -28,7 +28,7 @@ export function Hours() {
   const past = rows.filter((r) => r.e.event_date < today || r.s.punches?.punch_out);
   const missing = past.filter((r) => !r.s.attendance && (!r.s.punches?.punch_in || !r.s.punches?.punch_out) && r.e.event_date < today);
   const worked = rows.filter((r) => r.s.punches?.punch_in && r.s.punches?.punch_out);
-  const hours = worked.reduce((n, r) => n + hoursBetween(r.s.punches!.punch_in, r.s.punches!.punch_out), 0);
+  const hours = worked.reduce((n, r) => n + hoursBetween(r.s.punches!.punch_in, r.s.punches!.punch_out, r.s.left_early), 0);
   const flagged = rows.filter((r) => flagsOf(r.s).some((f) => f.flag === 'early' || f.flag === 'late'));
   const noShows = rows.filter((r) => r.s.attendance === 'no_show');
   const notes = rows.filter((r) => r.s.manager_note && !r.s.note_archived_at);
@@ -44,7 +44,7 @@ export function Hours() {
   const people = useMemo(() => {
     const m = new Map<string, { name: string; rows: Row[] }>();
     for (const r of rows) { const k = r.s.staff_id; if (!m.has(k)) m.set(k, { name: r.s.staff?.full_name ?? '?', rows: [] }); m.get(k)!.rows.push(r); }
-    return [...m.entries()].map(([id, v]) => ({ id, ...v, hours: v.rows.reduce((n, r) => n + hoursBetween(r.s.punches?.punch_in ?? null, r.s.punches?.punch_out ?? null), 0) }))
+    return [...m.entries()].map(([id, v]) => ({ id, ...v, hours: v.rows.reduce((n, r) => n + hoursBetween(r.s.punches?.punch_in ?? null, r.s.punches?.punch_out ?? null, r.s.left_early), 0) }))
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [rows]);
 
@@ -68,7 +68,7 @@ export function Hours() {
     const lines = [['Name', 'Date', 'Event', 'Start', 'End', 'Hours', 'Flag'].join(',')];
     for (const r of [...rows].sort((a, b) => (a.s.staff?.full_name ?? '').localeCompare(b.s.staff?.full_name ?? '') || a.e.event_date.localeCompare(b.e.event_date)))
       lines.push([r.s.staff?.full_name, r.e.event_date, r.e.title, tTime(r.s.punches?.punch_in ?? null), tTime(r.s.punches?.punch_out ?? null),
-        hoursBetween(r.s.punches?.punch_in ?? null, r.s.punches?.punch_out ?? null), flagsOf(r.s).map(flagText).join(' ')].map((x) => `"${String(x ?? '').replace(/"/g, '""')}"`).join(','));
+        hoursBetween(r.s.punches?.punch_in ?? null, r.s.punches?.punch_out ?? null, r.s.left_early), flagsOf(r.s).map(flagText).join(' ')].map((x) => `"${String(x ?? '').replace(/"/g, '""')}"`).join(','));
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv' })); a.download = `hours-${p.start}-to-${p.end}.csv`; a.click();
   };
   const step = (n: number) => setP(n < 0 ? periodOf(addDays(p.start, -1)) : periodOf(addDays(p.end, 1)));
@@ -183,7 +183,7 @@ export function Hours() {
                     </tr>
                     {open === x.id && x.rows.map((r) => (
                       <tr key={r.s.id} className="sub"><td>{dLabel(r.e.event_date)} · {r.e.title}</td><td colSpan={2}>{times(r)}</td>
-                        <td>{hoursBetween(r.s.punches?.punch_in ?? null, r.s.punches?.punch_out ?? null) || ''} {flagsOf(r.s).map((f) => <span key={f.flag} className="ftag">{flagText(f)}</span>)}</td></tr>
+                        <td>{hoursBetween(r.s.punches?.punch_in ?? null, r.s.punches?.punch_out ?? null, r.s.left_early) || ''} {flagsOf(r.s).map((f) => <span key={f.flag} className="ftag">{flagText(f)}</span>)}</td></tr>
                     ))}
                   </Fragment>
                 );

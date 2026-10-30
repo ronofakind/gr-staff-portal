@@ -135,7 +135,7 @@ function write_(ss, name, d, rows) {
         push([code, r.full_name.toUpperCase(), !gone && !!r.punch_in,
           !gone && r.punch_in ? dayFrac(q15(r.punch_in)) : '',
           !gone && r.punch_out ? dayFrac(q15(r.punch_out)) : '',
-          totalF_(row), gone ? noteFor_(r) : ''], 7);
+          totalF_(row), noteFor_(r)], 7);
       });
       const last = out.length;
       push(['', '', '', '', kind === 'bar' ? 'BAR STAFF TOTAL' : 'FLOOR STAFF TOTAL', '=SUM(F' + first + ':F' + last + ')'], 7);

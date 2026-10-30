@@ -1,5 +1,5 @@
 import { QuarterTime } from '../components/QuarterTime';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useLang } from '../lib/i18n';
@@ -8,7 +8,7 @@ import { Avatar } from '../components/Avatar';
 
 type Row = {
   id: string; position_code: string | null; position_detail: string | null; planned_start: string; planned_end: string | null;
-  attendance: 'no_show' | 'cancelled' | null; leave_by: string | null; manager_note: string | null;
+  attendance: 'no_show' | 'cancelled' | null; leave_by: string | null; manager_note: string | null; left_early?: boolean; attendance_reason?: string | null;
   staff: { full_name: string; photo_url: string | null; phone: string | null } | null; punches: { punch_in: string | null; punch_out: string | null; arrived_at: string | null; updated_at: string } | null;
 };
 type Ev = { id: string; title: string; event_date: string };
@@ -42,9 +42,27 @@ function roleLabel(code: string | null, detail: string | null) {
 }
 const fmt12 = (t: string) => { const [h, m] = t.split(':').map(Number); return `${((h + 11) % 12) + 1}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`; };
 const hm = (iso: string | null) => iso ? new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Toronto' }) : '';
+/** Bottom sheet that closes when dragged down from its top (grab bar or header), or when its content is scrolled to the top. */
+function SwipeSheet({ onClose, label, children }: { onClose: () => void; label: string; children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null); const start = useRef<number | null>(null); const [dy, setDy] = useState(0);
+  return (
+    <div ref={ref} className="sheet swipe" role="dialog" aria-label={label} style={dy ? { transform: `translateY(${dy}px)`, transition: 'none' } : undefined}
+      onTouchStart={(e) => { const el = ref.current!; const t = e.target as HTMLElement; if (el.scrollTop <= 0 && !t.closest('input,select,textarea,.qtime')) start.current = e.touches[0].clientY; }}
+      onTouchMove={(e) => { if (start.current == null) return; const d = e.touches[0].clientY - start.current; setDy(d > 0 ? d : 0); }}
+      onTouchEnd={() => { if (start.current != null && dy > 90) onClose(); start.current = null; setDy(0); }}>
+      <div className="grab" /><div className="grab-hint">Swipe down to close</div>
+      {children}
+    </div>
+  );
+}
+const REASONS: Record<'no_show' | 'cancelled' | 'left_early', string[]> = {
+  no_show: ['No answer', 'Wrong day', 'Other'],
+  cancelled: ['Sick', 'Family emergency', 'Sent home', 'Other'],
+  left_early: ['Family emergency', 'Sick', 'Injured', 'Other'],
+};
 const hours = (a: string, b: string) => Math.round((new Date(b).getTime() - new Date(a).getTime()) / 900000) / 4;
 
-type Ask = { row: Row; kind: 'no_show' | 'cancelled' } | null;
+type Ask = { row: Row; kind: 'no_show' | 'cancelled' | 'left_early' } | null;
 
 export function Manage() {
   const { eventId } = useParams(); const lang = useLang(); const t = L[lang];
@@ -59,11 +77,12 @@ export function Manage() {
   const [endPick, setEndPick] = useState<'now' | 'next' | 'pick'>('next'); const [endTime, setEndTime] = useState('');
   const [, setTick] = useState(0);
   const [err, setErr] = useState('');
+  const [reason, setReason] = useState(''); const [why, setWhy] = useState(''); const [leftAt, setLeftAt] = useState('');
 
   const load = async () => {
     const [e, s] = await Promise.all([
       supabase.from('events').select('id,title,event_date,address,start_time,end_time,description,dress_code,hours_submitted_at,drive_folder_url,venues(address,staff_notes)').eq('id', eventId!).single(),
-      supabase.from('shifts').select('id,position_code,position_detail,planned_start,planned_end,attendance,leave_by,manager_note,staff:staff!shifts_staff_id_fkey(full_name,photo_url,phone),punches(punch_in,punch_out,arrived_at,updated_at)')
+      supabase.from('shifts').select('id,position_code,position_detail,planned_start,planned_end,attendance,left_early,attendance_reason,leave_by,manager_note,staff:staff!shifts_staff_id_fkey(full_name,photo_url,phone),punches(punch_in,punch_out,arrived_at,updated_at)')
         .eq('event_id', eventId!).neq('status', 'declined').order('planned_start'),
     ]);
     setEv(e.data as unknown as EvFull);
@@ -83,11 +102,26 @@ export function Manage() {
     }
     await load();
   };
+  const fullReason = () => [reason, why.trim()].filter(Boolean).join(' · ');
   const mark = async (id: string, v: 'no_show' | 'cancelled' | null) => {
     setErr('');
-    const { error } = await supabase.rpc('manager_set_attendance', { p_shift: id, p_attendance: v });
+    const { error } = v ? await supabase.rpc('manager_set_attendance', { p_shift: id, p_attendance: v, p_reason: fullReason() })
+      : await supabase.rpc('manager_set_attendance', { p_shift: id, p_attendance: null });
     if (error) setErr(error.message);
     setAsk(null); setOpen(null); await load();
+  };
+  const leftEarly = async (r: Row) => {
+    setErr(''); if (!leftAt) return setErr('Pick the time they left.');
+    const out = toIso(ev!.event_date, leftAt, r.punches?.punch_in ?? r.planned_start);
+    const { error } = await supabase.rpc('manager_set_left_early', { p_shift: r.id, p_out: out, p_reason: fullReason() });
+    if (error) { setErr(error.message); return; }
+    setAsk(null); setOpen(null); await load();
+  };
+  const undoLeft = async (id: string) => { setErr(''); const { error } = await supabase.rpc('manager_undo_left_early', { p_shift: id }); if (error) setErr(error.message); setOpen(null); await load(); };
+  const openAsk = (row: Row, kind: 'no_show' | 'cancelled' | 'left_early') => {
+    setReason(''); setWhy(''); setErr('');
+    if (kind === 'left_early') { const o = row.punches?.punch_out; const ms = o && new Date(o).getTime() <= Date.now() ? new Date(o).getTime() : Date.now(); setLeftAt(hm(new Date(Math.round(ms / 900000) * 900000).toISOString())); }
+    setAsk({ row, kind });
   };
   const now = () => new Date().toISOString();
   const todayMtl = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' });
@@ -214,7 +248,7 @@ export function Manage() {
               const ring = r.attendance ? '' : ended ? 'done' : pin ? (isEarly || wasLate ? 'flag' : 'working') : isLate ? 'late' : '';
               const tel = r.staff?.phone?.replace(/[^\d+]/g, '');
               return (
-                <div key={r.id} className={'crew' + (r.attendance ? ' flagged' : '')}>
+                <div key={r.id} className={'crew' + (r.attendance ? ' flagged' : '') + (r.left_early ? ' left' : '')}>
                   <div className={'ring ' + ring}>
                     <Avatar name={r.staff?.full_name ?? '?'} url={r.staff?.photo_url} size={44} />
                     {isBar(r.position_code, r.position_detail) ? <span className="dept-tag is-bar">BAR</span> : <span className="dept-tag is-floor">FLOOR</span>}
@@ -222,7 +256,8 @@ export function Manage() {
                   <button className="who" aria-label={`Options for ${r.staff?.full_name}`} onClick={() => { setOpen(r); setDraft({ in: hm(pin) || hm(r.planned_start), out: hm(pout) }); }}>
                     <span className="nm">{r.staff?.full_name}</span>
                     <span className="rl">{roleLabel(r.position_code, r.position_detail)}{r.manager_note ? ' · 📝 note' : ''}</span>
-                    {r.attendance ? <span className="st red">{r.attendance === 'no_show' ? 'No-show' : 'Cancelled'}</span>
+                    {r.attendance ? <span className="st muted-st">{r.attendance === 'no_show' ? 'No-show' : 'Cancelled'}{r.attendance_reason ? ` · ${r.attendance_reason}` : ''}</span>
+                      : r.left_early && pin && pout ? <span className="st gold">{time(pin, lang)} → {time(pout, lang)} · {hours(pin, pout)} {t.hours}<i className="st-tag gold">LEFT EARLY</i></span>
                       : ended ? <span className="st">{time(pin!, lang)} → {time(pout!, lang)} · {hours(pin!, pout!)} {t.hours}</span>
                       : endsLater ? <span className="st gold">Working · ends {time(pout!, lang)}</span>
                       : pin ? <span className="st ok">{new Date(pin).getTime() > nowMs ? 'Starts' : 'Started'} {time(pin, lang)}{isEarly ? <i className="st-tag">EARLY</i> : wasLate ? <i className="st-tag">LATE</i> : null}</span>
@@ -245,7 +280,7 @@ export function Manage() {
           </section>
         );
       })}
-      <p className="hint" style={{ textAlign: 'center' }}>Tap a name for times, no-show or cancelled</p>
+      <p className="hint" style={{ textAlign: 'center' }}>Tap a name for times, no-show, left early or cancelled</p>
 
       <div className="submit-bar">
         <div className="grow">
@@ -258,8 +293,7 @@ export function Manage() {
       {endSheet && (
         <>
           <div className="scrim" onClick={() => setEndSheet(null)} />
-          <div className="sheet" role="dialog" aria-label="End all">
-            <div className="grab" />
+          <SwipeSheet onClose={() => setEndSheet(null)} label="End all">
             <div><div className="kicker">End all · {endSheet.length} still working</div><div className="serif" style={{ fontSize: 24, lineHeight: 1.15 }}>When does the night end?</div></div>
             <button className={'opt' + (endPick === 'now' ? ' on' : '')} onClick={() => setEndPick('now')}><i /><span><b>Now · {time(now(), lang)}</b><small>Counts as {time(new Date(q15(Date.now())).toISOString(), lang)} with our 15-min rounding</small></span></button>
             <button className={'opt' + (endPick === 'next' ? ' on' : '')} onClick={() => setEndPick('next')}><i /><span><b>In a few minutes · {time(new Date(nextQ()).toISOString(), lang)}</b><small>Everyone ends then. You can still change or cancel it.</small></span></button>
@@ -267,7 +301,7 @@ export function Manage() {
             {doneN > 0 && <div className="muted sm">The {doneN} who already ended keep their own times.</div>}
             {err && <p className="error">{err}</p>}
             <button className="btn-ink" onClick={() => endAll(endSheet)}>End {endSheet.length} {endSheet.length === 1 ? 'person' : 'people'} at {endPick === 'now' ? time(now(), lang) : endPick === 'next' ? time(new Date(nextQ()).toISOString(), lang) : endTime ? fmt12(endTime) : '…'}</button>
-          </div>
+          </SwipeSheet>
         </>
       )}
 
@@ -309,7 +343,7 @@ export function Manage() {
                     <div className="grow" style={{ minWidth: 0 }}>
                       <div className="nm">{r.staff?.full_name}</div>
                       <div className="tm">{r.attendance ? (r.attendance === 'no_show' ? 'No-show' : 'Cancelled')
-                        : `${pin ? time(pin, lang) : 'no start time'} → ${pout ? time(pout, lang) : 'no end time'}`}</div>
+                        : `${pin ? time(pin, lang) : 'no start time'} → ${pout ? time(pout, lang) : 'no end time'}${r.left_early ? ' · left early' : ''}`}</div>
                       {r.manager_note ? <div className="rv-note">📝 {r.manager_note}</div>
                         : <button className="link-btn" onClick={() => { setReview(false); setOpen(r); setDraft({ in: hm(pin) || hm(r.planned_start), out: hm(pout) }); }}>+ Add note</button>}
                     </div>
@@ -339,8 +373,7 @@ export function Manage() {
       {open && (
         <>
           <div className="scrim" onClick={() => setOpen(null)} />
-          <div className="sheet" role="dialog" aria-label={`Options for ${open.staff?.full_name}`}>
-            <div className="grab" />
+          <SwipeSheet onClose={() => setOpen(null)} label={`Options for ${open.staff?.full_name}`}>
             <div className="row" style={{ gap: 12 }}>
               <Avatar name={open.staff?.full_name ?? '?'} url={open.staff?.photo_url} size={48} />
               <div><div className="serif" style={{ fontSize: 22 }}>{open.staff?.full_name}</div>
@@ -369,31 +402,51 @@ export function Manage() {
             }}>{open.punches?.punch_in ? 'Save times' : draft.in ? `Start from ${fmt12(draft.in)}` : 'Save times'}</button>}
             {open.attendance
               ? <button className="btn-ghost" onClick={() => mark(open.id, null)}>Undo {open.attendance === 'no_show' ? 'no-show' : 'cancelled'}</button>
-              : <div className="two">
-                  <button className="big-opt red" onClick={() => setAsk({ row: open, kind: 'no_show' })}>No-show<small>Didn't come, no notice</small></button>
-                  <button className="big-opt ink" onClick={() => setAsk({ row: open, kind: 'cancelled' })}>Cancelled<small>Called in / sent home</small></button>
+              : open.left_early ? <button className="btn-ghost" onClick={() => undoLeft(open.id)}>Undo left early{open.attendance_reason ? ` · ${open.attendance_reason}` : ''}</button>
+              : <div className="wrong">
+                  <div className="wrong-q">Something went wrong tonight?</div>
+                  <div className="wrong-row">
+                    <button className="qopt red" onClick={() => openAsk(open, 'no_show')}>No-show</button>
+                    <button className="qopt gold" disabled={!open.punches?.punch_in} title={open.punches?.punch_in ? '' : 'Start them first'} onClick={() => openAsk(open, 'left_early')}>Left early</button>
+                    <button className="qopt grey" onClick={() => openAsk(open, 'cancelled')}>Cancelled</button>
+                  </div>
                 </div>}
             {open.leave_by && <span className="leave-tag inline">⏱ Needs to leave ~{time(open.leave_by, lang)} · reminder only</span>}
             <NoteBox key={open.id} initial={open.manager_note ?? ''} onSave={async (v) => { setErr(''); const { error } = await supabase.rpc('manager_set_note', { p_shift: open.id, p_note: v }); if (error) setErr(error.message); await load(); }} />
-            <button className="btn-ghost" style={{ height: 46 }} onClick={() => setOpen(null)}>Close</button>
-          </div>
+          </SwipeSheet>
         </>
       )}
 
-      {ask && (
-        <>
-          <div className="scrim top" onClick={() => setAsk(null)} />
-          <div className="dialog" role="alertdialog" aria-label="Confirm">
-            <div className="bang">!</div>
-            <div className="serif">Mark {first(ask.row.staff?.full_name)} {ask.row.staff?.full_name.split(' ').slice(1).join(' ')}<br />as {ask.kind === 'no_show' ? 'a no-show' : 'cancelled'}?</div>
-            <p>They won't get hours for {ev.title}.{ask.row.punches?.punch_in ? ' Their start time will be cleared.' : ''}<br />You can undo it from the team list.</p>
-            <div className="btns">
-              <button className="btn-red" onClick={() => mark(ask.row.id, ask.kind)}>Yes, mark {ask.kind === 'no_show' ? 'no-show' : 'cancelled'}</button>
-              <button className="btn-ghost" onClick={() => setAsk(null)}>Go back</button>
+      {ask && (() => {
+        const nm = ask.row.staff?.full_name ?? ''; const f = first(nm);
+        const pin = ask.row.punches?.punch_in ?? null;
+        const outIso = ask.kind === 'left_early' && leftAt ? toIso(ev.event_date, leftAt, pin ?? ask.row.planned_start) : null;
+        return (
+          <>
+            <div className="scrim top" onClick={() => setAsk(null)} />
+            <div className="dialog ask" role="alertdialog" aria-label="Confirm">
+              <div className="serif">{ask.kind === 'left_early' ? `${f} left early?` : <>Mark {f} {nm.split(' ').slice(1).join(' ')}<br />as {ask.kind === 'no_show' ? 'a no-show' : 'cancelled'}?</>}</div>
+              {ask.kind === 'left_early' ? <>
+                <div className="ask-time"><b>{f} left at</b><QuarterTime value={leftAt} onChange={setLeftAt} label="Time they left" /></div>
+                {pin && outIso && outIso <= pin && <div className="ask-gold" style={{ color: 'var(--accent)' }}>The time they left must be after {time(pin, lang)}.</div>}
+                {pin && outIso && outIso > pin && <div className="ask-gold"><b>{time(pin, lang)} → {time(outIso, lang)} · {hours(pin, outIso)} h</b><br />Paid and billed for the hours worked only. No 4-hour minimum.</div>}
+              </> : <p>They won't get hours for {ev.title}.{pin ? ' Their start time will be cleared.' : ''} You can undo it from the team list.</p>}
+              <div className="ask-reason">
+                <span className="kicker">Reason (optional)</span>
+                <div className="chips">{REASONS[ask.kind].map((x) => <button key={x} type="button" className={'rchip' + (reason === x ? ' on' : '')} onClick={() => setReason(reason === x ? '' : x)}>{x}</button>)}</div>
+                <input className="ask-note" value={why} onChange={(e) => setWhy(e.target.value)} placeholder="Or write a note…" />
+              </div>
+              {err && <p className="error">{err}</p>}
+              <div className="btns">
+                {ask.kind === 'left_early'
+                  ? <button className="btn-ink" onClick={() => leftEarly(ask.row)}>Yes, {f} left at {leftAt ? fmt12(leftAt) : '…'}</button>
+                  : <button className={ask.kind === 'no_show' ? 'btn-red' : 'btn-ink'} onClick={() => mark(ask.row.id, ask.kind as 'no_show' | 'cancelled')}>Yes, mark {ask.kind === 'no_show' ? 'no-show' : 'cancelled'}</button>}
+                <button className="btn-ghost" onClick={() => setAsk(null)}>Go back</button>
+              </div>
             </div>
-          </div>
-        </>
-      )}
+          </>
+        );
+      })()}
     </main>
   );
 }

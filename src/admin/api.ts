@@ -8,7 +8,7 @@ export type AStaff = {
 
 export type AShift = {
   id: string; event_id: string; staff_id: string; position_code: string | null; position_detail: string | null;
-  planned_start: string; status: 'booked' | 'confirmed' | 'declined'; changed_at: string; notified_at: string | null; attendance: 'no_show' | 'cancelled' | null; leave_by: string | null;
+  planned_start: string; status: 'booked' | 'confirmed' | 'declined'; changed_at: string; notified_at: string | null; attendance: 'no_show' | 'cancelled' | null; left_early?: boolean; attendance_reason?: string | null; leave_by: string | null;
   punches: { punch_in: string | null; punch_out: string | null } | null; manager_note?: string | null; note_archived_at?: string | null; note_archived_by?: string | null;
   staff: { full_name: string; phone?: string | null } | null;
 };
@@ -24,7 +24,7 @@ export type AEvent = {
 
 export const EVENT_SELECT = `id,event_date,title,address,department,description,dress_code,bring,start_time,end_time,
   staff_needed,manager_id,hours_submitted_at,venue_id,timeline,event_private(client,punch_code),ends_label,staffing,notes,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,drive_folder_url,
-  shifts(id,event_id,staff_id,position_code,position_detail,planned_start,status,changed_at,notified_at,attendance,leave_by,manager_note,note_archived_at,note_archived_by,punches(punch_in,punch_out),staff:staff!shifts_staff_id_fkey(full_name,phone))`;
+  shifts(id,event_id,staff_id,position_code,position_detail,planned_start,status,changed_at,notified_at,attendance,left_early,attendance_reason,leave_by,manager_note,note_archived_at,note_archived_by,punches(punch_in,punch_out),staff:staff!shifts_staff_id_fkey(full_name,phone))`;
 
 export async function eventsBetween(from: string, to: string) {
   const { data, error } = await supabase.from('events').select(EVENT_SELECT)
@@ -92,7 +92,8 @@ export function periodOf(iso: string) {
 }
 /** Paid hours: real time rounded to 15 min, minimum 4 h per shift (Ronnie, Oct 29 2026: paid and billed). */
 export const MIN_HOURS = 4;
-export const hoursBetween = (a: string | null, b: string | null) => a && b ? Math.max(MIN_HOURS, Math.round((new Date(b).getTime() - new Date(a).getTime()) / 900000) * 0.25) : 0;
+/** Paid/billed hours: 15-min rounding, minimum 4 h, except left early (emergency) = real hours. */
+export const hoursBetween = (a: string | null, b: string | null, exact = false) => { if (!a || !b) return 0; const h = Math.round((new Date(b).getTime() - new Date(a).getTime()) / 900000) * 0.25; return exact ? h : Math.max(MIN_HOURS, h); };
 export const tTime = (iso: string | null) => iso ? new Date(iso).toLocaleTimeString('en-CA', { timeZone: 'America/Toronto', hour: 'numeric', minute: '2-digit' }).replace(/\./g, '') : '';
 export const dLabel = (iso: string, o: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric' }) => new Date(iso + 'T12:00:00').toLocaleDateString('en-CA', o).replace(/\./g, '');
 

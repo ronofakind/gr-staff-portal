@@ -5,7 +5,7 @@ import { Avatar } from '../components/Avatar';
 import { isoDay, flagsOf, hoursBetween, dLabel, type AStaff, type Flag } from './api';
 
 const DOW = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-type Sh = { id: string; planned_start: string; attendance: string | null; punches: { punch_in: string | null; punch_out: string | null } | null; events: { event_date: string; title: string } };
+type Sh = { id: string; planned_start: string; attendance: string | null; left_early?: boolean; punches: { punch_in: string | null; punch_out: string | null } | null; events: { event_date: string; title: string } };
 
 /** Side panel (desktop) / full screen (phone) with everything about one person. */
 export function StaffProfile({ s, onClose, onEdit }: { s: AStaff; onClose: () => void; onEdit: () => void }) {
@@ -24,7 +24,7 @@ export function StaffProfile({ s, onClose, onEdit }: { s: AStaff; onClose: () =>
     Promise.all([
       supabase.from('staff_weekly').select('dow,status,from_time').eq('staff_id', s.id),
       supabase.from('days_off').select('id,from_date,to_date,reason,every_dow,added_by_admin,created_at,days_off_private(note)').eq('staff_id', s.id).gte('to_date', today).order('from_date'),
-      supabase.from('shifts').select('id,planned_start,attendance,punches(punch_in,punch_out),events!inner(event_date,title)').eq('staff_id', s.id).neq('status', 'declined')
+      supabase.from('shifts').select('id,planned_start,attendance,left_early,punches(punch_in,punch_out),events!inner(event_date,title)').eq('staff_id', s.id).neq('status', 'declined')
         .gte('events.event_date', today.slice(0, 4) + '-01-01'),
     ]).then(([w, o, sh]) => {
       setWeek(Object.fromEntries(((w.data ?? []) as { dow: number; status: string; from_time: string | null }[]).map((x) => [x.dow, x])));
@@ -57,7 +57,7 @@ export function StaffProfile({ s, onClose, onEdit }: { s: AStaff; onClose: () =>
   };
   const offShown = off.filter((o, i) => o.every_dow == null || off.findIndex((x) => x.every_dow === o.every_dow) === i);
   const month = shifts.filter((x) => x.events.event_date.slice(0, 7) === today.slice(0, 7));
-  const monthHours = month.reduce((n, x) => n + hoursBetween(x.punches?.punch_in ?? null, x.punches?.punch_out ?? null), 0);
+  const monthHours = month.reduce((n, x) => n + hoursBetween(x.punches?.punch_in ?? null, x.punches?.punch_out ?? null, x.left_early), 0);
   const count = (f: Flag) => shifts.filter((x) => flagsOf(x).some((y) => y.flag === f)).length;
   const last = shifts.find((x) => flagsOf(x).length);
   const tel = s.phone?.replace(/[^\d+]/g, '');
