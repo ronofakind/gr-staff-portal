@@ -113,8 +113,8 @@ function AddStaff({ ev, onClose, onDone, lang }: { ev: EvFull; onClose: () => vo
               {!p.here && <span className="muted">›</span>}
             </button>))}</div>}
           {q.trim().length >= 2 && all && !list.length && <div className="muted sm">No one by that name. Ask Ronnie to add them first.</div>}
-          <div className="muted sm" style={{ textAlign: 'center' }}>Shows as you type (2 letters) · first or last name · accents don’t matter</div>
           {err && <p className="error">{err}</p>}
+          <button className="btn-ghost" style={{ height: 46 }} onClick={onClose}>Close</button>
         </> : <>
           <div className="row" style={{ gap: 12 }}><Avatar name={pick.full_name} url={null} size={48} />
             <div><div className="serif" style={{ fontSize: 22 }}>{pick.full_name}</div>
@@ -126,7 +126,8 @@ function AddStaff({ ev, onClose, onDone, lang }: { ev: EvFull; onClose: () => vo
           {err && <p className="error">{err}</p>}
           <button className="btn-ink" disabled={busy} onClick={() => add(true)}>{busy ? 'Adding…' : `Add ${f(pick.full_name)} · started ${start ? fmt12(start) : '…'}`}</button>
           <button className="btn-ghost" style={{ height: 44 }} disabled={busy} onClick={() => add(false)}>Add, not started yet</button>
-          <button className="link-btn" onClick={() => setPick(null)}>‹ Back to search</button>
+          <button className="link-btn" style={{ color: 'var(--ink)' }} onClick={() => setPick(null)}>‹ Back to search</button>
+          <button className="btn-ghost" style={{ height: 46 }} onClick={onClose}>Close</button>
         </>}
       </SwipeSheet>
       {move && (

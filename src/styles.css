@@ -1050,3 +1050,11 @@ main.page.slide-right > :not(.tabbar):not(.save-bar):not(.sheet):not(.scrim) { a
 .inc-body { background: #F6F2EC; border-radius: 14px; padding: 12px; font-size: 13px; line-height: 1.45; white-space: pre-wrap; }
 .inc-pics { display: flex; gap: 8px; flex-wrap: wrap; } .inc-pics img { width: 84px; height: 84px; object-fit: cover; border-radius: 12px; display: block; }
 @media (max-width: 1100px) { .inc-grid { grid-template-columns: 1fr; } .inc-side { position: static; } .inc-kpis { grid-template-columns: 1fr 1fr; } }
+.inc-icon { width: 48px; height: 48px; border-radius: 24px; background: #F8E3E4; color: var(--accent); display: flex; align-items: center; justify-content: center; font: 800 20px Inter, sans-serif; flex: 0 0 auto; }
+.inc-card { background: #fff; border-radius: 16px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.inc-card .kicker { margin: 0; }
+.inc-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.inc-card .rchip { background: #F6F2EC; border-color: #E4DCD1; } .inc-card .rchip.on { background: var(--ink); border-color: var(--ink); color: #F6F2EC; }
+.inc-note { width: 100%; box-sizing: border-box; min-height: 104px; border-radius: 12px; border: 1.5px solid #E4DCD1; background: #F6F2EC; padding: 10px 12px; font: 500 15px Inter, sans-serif; resize: vertical; }
+.inc-card.inc-photos { flex-direction: row; align-items: center; flex-wrap: wrap; }
+.inc-card .inc-team { background: #F6F2EC; }
