@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { DeleteEvent } from './DeleteEvent';
 import { supabase } from '../lib/supabase';
 import {
   allStaff, bookingChange, isoDay, startIso, endIso, addDays, dLabel, parseTime, ap12, roleOfShift, ROLES, UNIFORMS, ENDS,
@@ -388,11 +389,7 @@ export function EventForm() {
     catch (e) { setBusy(false); setErr((e as Error).message); }
   };
 
-  const del = async () => {
-    if (!confirm('Delete this event (floor and bar) and its bookings?')) return;
-    for (const e of existing) await supabase.from('events').delete().eq('id', e.id);
-    nav(`/admin/day?d=${date}`);
-  };
+
 
   if (!loaded) return <div className="muted">Loading…</div>;
 
@@ -565,10 +562,14 @@ export function EventForm() {
             <span className="serif" style={{ fontSize: 20 }}>More (optional)</span>
             {!showStaffNote ? <div><button type="button" className="abtn sm" onClick={() => setShowStaffNote(true)}>+ Note for staff</button></div>
               : <label className="ef-f"><span>NOTE FOR STAFF · shows in their event details</span><textarea rows={2} value={staffNote} onChange={(e) => setStaffNote(e.target.value)} placeholder="Enter by the loading dock on Cathcart." /></label>}
-            {!isNew && <div><button type="button" className="abtn" style={{ color: 'var(--accent)' }} onClick={del}>Delete event</button></div>}
           </div>
         </div>
       </Fold>
+      <div className="ef-float">
+        {!isNew && id && <DeleteEvent id={id} />}
+        <span className="grow" />
+        <button className="abtn dark" disabled={busy}>{busy ? 'Saving…' : 'Save event'}</button>
+      </div>
     </form>
   );
 }

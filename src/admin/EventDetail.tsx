@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { DriveFiles } from '../components/DriveFiles';
+import { DeleteEvent } from './DeleteEvent';
 import { EVENT_SELECT, allStaff, ap12, dLabel, addDays, roleName, roleOfShift, UNIFORMS, type AEvent, type AShift, type AStaff } from './api';
 
 type Avail = { staff_id: string; status: string; tier: string | null };
@@ -85,6 +86,7 @@ export function EventDetail() {
           <Link className="abtn" to={`/admin/event/${e.id}/edit`}>Edit</Link>
           <Link className="abtn" to={`/admin/free?d=${e.event_date}`}>Who's available {dLabel(e.event_date, { month: 'short', day: 'numeric' })}{tally.yes ? ` · ${tally.yes}` : ''}</Link>
           <Link className="abtn dark" to={`/manage/${e.id}`}>Open team (live)</Link>
+          <DeleteEvent id={e.id} />
         </div>
       </div>
 

@@ -1091,3 +1091,14 @@ div.avatar { color: var(--accent); background: var(--accent-bg); }
 .photo-view-ini { color: var(--accent); background: var(--accent-bg); }
 .sheet > * { flex-shrink: 0; }
 .as-search { -webkit-appearance: none; appearance: none; }
+
+/* Oct 30: floating Save on the event form; delete event */
+.ef { padding-bottom: 90px; }
+.ef-float { position: sticky; bottom: 12px; z-index: 30; display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin-top: 8px;
+  background: rgba(255,255,255,.94); backdrop-filter: blur(8px); border: 1px solid #E4DCD1; border-radius: 18px; box-shadow: 0 8px 28px rgba(26,23,20,.14); }
+.ef-float .grow { flex: 1 1 auto; }
+.ef-float .abtn.dark { min-width: 160px; height: 44px; font-size: 15px; }
+.abtn.danger { color: var(--accent); border-color: #E8C4C6; }
+.abtn.danger-fill { background: var(--accent); border-color: var(--accent); color: #fff; }
+.del-ev { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid #E8C4C6; background: var(--accent-bg); border-radius: 14px; max-width: 360px; }
+.ef-float .del-ev { max-width: none; }
