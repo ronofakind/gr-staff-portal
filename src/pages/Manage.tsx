@@ -8,7 +8,7 @@ import { Avatar } from '../components/Avatar';
 
 type Row = {
   id: string; position_code: string | null; position_detail: string | null; planned_start: string; planned_end: string | null;
-  attendance: 'no_show' | 'cancelled' | null; leave_by: string | null; manager_note: string | null; left_early?: boolean; attendance_reason?: string | null;
+  attendance: 'no_show' | 'cancelled' | null; leave_by: string | null; manager_note: string | null; left_early?: boolean; attendance_reason?: string | null; added_note?: string | null; adder?: { full_name: string } | null;
   staff: { full_name: string; photo_url: string | null; phone: string | null } | null; punches: { punch_in: string | null; punch_out: string | null; arrived_at: string | null; updated_at: string } | null;
 };
 type Ev = { id: string; title: string; event_date: string };
@@ -64,6 +64,92 @@ const hours = (a: string, b: string) => Math.round((new Date(b).getTime() - new 
 
 type Ask = { row: Row; kind: 'no_show' | 'cancelled' | 'left_early' } | null;
 
+type Pick = { id: string; full_name: string; nickname: string | null; department: string; positions: string[]; here: boolean;
+  elsewhere_title: string | null; elsewhere_start: string | null; elsewhere_manager: string | null; elsewhere_shift: string | null; elsewhere_started: boolean | null };
+const ROLE_OF: Record<string, string> = { waiter: 'W', w: 'W', md: 'MD', manager: 'MD', bt: 'BT', bartender: 'BT', barmaid: 'BT', bb: 'BB', barback: 'BB', bm: 'BM', 'bar manager': 'BM', bus: 'BUS', busboy: 'BUS' };
+const ROLE_NAME: Record<string, string> = { W: 'Waiter', MD: 'MD', BT: 'Bartender', BB: 'Barback', BM: 'Bar manager', BUS: 'Busboy' };
+const rolesOf = (p: Pick) => { const r = [...new Set(p.positions.map((x) => ROLE_OF[x.toLowerCase()]).filter(Boolean))]; return r.length ? r : [p.department === 'bar' ? 'BT' : 'W']; };
+const norm = (x: string) => x.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+/** "+ Add staff": search everyone, flag who is booked elsewhere tonight, pick role (only if 2), start time, notes. */
+function AddStaff({ ev, onClose, onDone, lang }: { ev: EvFull; onClose: () => void; onDone: () => void; lang: 'fr' | 'en' }) {
+  const [all, setAll] = useState<Pick[] | null>(null); const [q, setQ] = useState('');
+  const [pick, setPick] = useState<Pick | null>(null); const [move, setMove] = useState<Pick | null>(null);
+  const [role, setRole] = useState(''); const [start, setStart] = useState(''); const [note, setNote] = useState('');
+  const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
+  useEffect(() => { supabase.rpc('manager_staff_search', { p_event: ev.id }).then(({ data, error }) => { if (error) setErr(error.message); setAll((data ?? []) as Pick[]); }); }, [ev.id]);
+  const words = norm(q).split(/\s+/).filter(Boolean);
+  const list = q.trim().length < 2 || !all ? [] : all.filter((p) => words.every((w) => norm(p.full_name + ' ' + (p.nickname ?? '')).includes(w)))
+    .sort((a, b) => Number(a.here) - Number(b.here) || Number(!norm(a.full_name).startsWith(words[0])) - Number(!norm(b.full_name).startsWith(words[0])) || a.full_name.localeCompare(b.full_name)).slice(0, 8);
+  const choose = (p: Pick) => {
+    setErr(''); setRole(rolesOf(p).length === 1 ? rolesOf(p)[0] : ''); setNote('');
+    setStart(hm(new Date(Math.round(Date.now() / 900000) * 900000).toISOString()));
+    if (p.elsewhere_shift) setMove(p); else setPick(p);
+  };
+  const add = async (started: boolean) => {
+    if (!pick) return; if (!role) return setErr('Pick the role for tonight.'); if (!start) return setErr('Pick a start time.');
+    setBusy(true); setErr('');
+    const iso = toIso(ev.event_date, start, new Date().toISOString());
+    const { error } = await supabase.rpc('manager_add_staff', { p_event: ev.id, p_staff: pick.id, p_code: role, p_detail: ROLE_NAME[role] ?? role, p_start: iso, p_started: started, p_note: note, p_move_shift: pick.elsewhere_shift });
+    setBusy(false); if (error) { setErr(error.message); return; }
+    onDone();
+  };
+  const f = (n: string) => n.split(' ')[0];
+  return (
+    <>
+      <div className="scrim" onClick={onClose} />
+      <SwipeSheet onClose={onClose} label="Add staff">
+        {!pick ? <>
+          <div className="serif" style={{ fontSize: 24 }}>Add staff</div>
+          <input className="as-search" autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Start typing a name…" />
+          {!all && <div className="muted sm">Loading names…</div>}
+          {list.length > 0 && <div className="as-list">{list.map((p) => (
+            <button key={p.id} className={'as-opt' + (p.here ? ' off' : '')} disabled={p.here} onClick={() => choose(p)}>
+              <Avatar name={p.full_name} url={null} size={36} />
+              <span className="grow"><b>{p.full_name}</b>
+                <small>{rolesOf(p).map((r) => ROLE_NAME[r]).join(' · ')}{p.here ? ' · already on this event'
+                  : p.elsewhere_title ? <> · <b className="gold">Booked tonight · {p.elsewhere_title} {time(p.elsewhere_start!, lang)}</b></> : ''}</small></span>
+              {!p.here && <span className="muted">›</span>}
+            </button>))}</div>}
+          {q.trim().length >= 2 && all && !list.length && <div className="muted sm">No one by that name. Ask Ronnie to add them first.</div>}
+          <div className="muted sm" style={{ textAlign: 'center' }}>Shows as you type (2 letters) · first or last name · accents don’t matter</div>
+          {err && <p className="error">{err}</p>}
+        </> : <>
+          <div className="row" style={{ gap: 12 }}><Avatar name={pick.full_name} url={null} size={48} />
+            <div><div className="serif" style={{ fontSize: 22 }}>{pick.full_name}</div>
+              <div className="muted sm">{rolesOf(pick).length > 1 ? 'Their profile has 2 roles, pick one' : ROLE_NAME[role] ?? role}{pick.elsewhere_title ? ` · moving from ${pick.elsewhere_title}` : ''}</div></div></div>
+          {rolesOf(pick).length > 1 && <div><span className="kicker">Role tonight</span>
+            <div className="row" style={{ gap: 8, marginTop: 6 }}>{rolesOf(pick).map((r) => <button key={r} className={'rchip' + (role === r ? ' on' : '')} style={{ padding: '0 16px' }} onClick={() => setRole(r)}>{ROLE_NAME[r] ?? r}</button>)}</div></div>}
+          <div className="times-box"><label>Started at<QuarterTime value={start} onChange={setStart} label="Start time" /></label></div>
+          <label className="as-note"><span className="kicker">Notes (optional)</span><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. client asked for one more on the bar…" /></label>
+          {err && <p className="error">{err}</p>}
+          <button className="btn-ink" disabled={busy} onClick={() => add(true)}>{busy ? 'Adding…' : `Add ${f(pick.full_name)} · started ${start ? fmt12(start) : '…'}`}</button>
+          <button className="btn-ghost" style={{ height: 44 }} disabled={busy} onClick={() => add(false)}>Add, not started yet</button>
+          <button className="link-btn" onClick={() => setPick(null)}>‹ Back to search</button>
+        </>}
+      </SwipeSheet>
+      {move && (
+        <>
+          <div className="scrim top" onClick={() => setMove(null)} />
+          <div className="dialog ask" role="alertdialog" aria-label="Switching events">
+            <div className="bang gold">⇄</div>
+            <div className="serif">Is {f(move.full_name)} switching to your event?</div>
+            <div className="ask-time" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 4 }}>
+              <div className="spread"><span className="muted">Booked tonight</span><b>{move.elsewhere_title} · {time(move.elsewhere_start!, lang)}</b></div>
+              {move.elsewhere_manager && <div className="spread"><span className="muted">Manager there</span><b>{f(move.elsewhere_manager)}</b></div>}
+            </div>
+            <p>Yes = {f(move.full_name)} comes off {move.elsewhere_manager ? f(move.elsewhere_manager) + '’s' : 'that'} list right away and {move.elsewhere_manager ? 'he gets' : 'they get'} a notice.{move.elsewhere_started ? ' Already started there: that time ends at the switch, both parts are paid.' : ''}</p>
+            <div className="btns">
+              <button className="btn-ink" onClick={() => { setPick(move); setMove(null); }}>Yes, move {f(move.full_name)} to my event</button>
+              <button className="btn-ghost" onClick={() => setMove(null)}>No, cancel</button>
+            </div>
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
 export function Manage() {
   const { eventId } = useParams(); const lang = useLang(); const t = L[lang];
   const [ev, setEv] = useState<EvFull | null>(null);
@@ -77,22 +163,30 @@ export function Manage() {
   const [endPick, setEndPick] = useState<'now' | 'next' | 'pick'>('next'); const [endTime, setEndTime] = useState('');
   const [, setTick] = useState(0);
   const [err, setErr] = useState('');
+  const [adding, setAdding] = useState(false); const [notices, setNotices] = useState<{ id: string; body: string; created_at: string }[]>([]);
+  const [seen, setSeen] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('gr-notice-seen') || '[]'); } catch { return []; } });
   const [reason, setReason] = useState(''); const [why, setWhy] = useState(''); const [leftAt, setLeftAt] = useState('');
 
   const load = async () => {
     const [e, s] = await Promise.all([
       supabase.from('events').select('id,title,event_date,address,start_time,end_time,description,dress_code,hours_submitted_at,drive_folder_url,venues(address,staff_notes)').eq('id', eventId!).single(),
-      supabase.from('shifts').select('id,position_code,position_detail,planned_start,planned_end,attendance,left_early,attendance_reason,leave_by,manager_note,staff:staff!shifts_staff_id_fkey(full_name,photo_url,phone),punches(punch_in,punch_out,arrived_at,updated_at)')
+      supabase.from('shifts').select('id,position_code,position_detail,planned_start,planned_end,attendance,left_early,attendance_reason,added_note,adder:staff!shifts_added_by_fkey(full_name),leave_by,manager_note,staff:staff!shifts_staff_id_fkey(full_name,photo_url,phone),punches(punch_in,punch_out,arrived_at,updated_at)')
         .eq('event_id', eventId!).neq('status', 'declined').order('planned_start'),
     ]);
     setEv(e.data as unknown as EvFull);
+    supabase.from('event_notices').select('id,body,created_at').eq('event_id', eventId!).order('created_at', { ascending: false }).then(({ data }) => setNotices((data ?? []) as { id: string; body: string; created_at: string }[]));
     // Within each call time: lead (MD / bar manager) first, then everyone A–Z by first name.
     const lead = (r: Row) => (r.position_code === 'MD' || r.position_code === 'BM' ? 0 : 1);
     setRows(((s.data ?? []) as unknown as Row[]).sort((a, b) => a.planned_start.localeCompare(b.planned_start)
       || lead(a) - lead(b)
       || (a.staff?.full_name ?? '').localeCompare(b.staff?.full_name ?? '', 'fr', { sensitivity: 'base' })));
   };
-  useEffect(() => { load(); const id = setInterval(load, 30000); return () => clearInterval(id); }, [eventId]);
+  useEffect(() => {
+    load(); const id = setInterval(load, 10000); // other managers' changes (moves, adds) show within ~10 s
+    const vis = () => { if (document.visibilityState === 'visible') load(); };
+    document.addEventListener('visibilitychange', vis);
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', vis); };
+  }, [eventId]);
 
   const set = async (list: { id: string; in: string | null; out: string | null; arrived?: string | null }[]) => {
     setErr('');
@@ -186,6 +280,10 @@ export function Manage() {
       <div style={{ padding: '0 6px' }}>
         <div className="serif" style={{ fontSize: 34, lineHeight: 1 }}>{ev.title}</div>
         <div className="muted sm" style={{ marginTop: 4 }}>{new Date(ev.event_date + 'T12:00:00').toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric' })}{ev.start_time ? ` · ${fmt12(ev.start_time)}${ev.end_time ? ` – ${fmt12(ev.end_time)}` : ''}` : ''}</div>
+        {notices.filter((n) => !seen.includes(n.id)).map((n) => (
+          <div key={n.id} className="notice"><span className="notice-ic">⇄</span><div className="grow"><b>{n.body}</b><small>{time(n.created_at, lang)}</small></div>
+            <button onClick={() => { const v = [...seen, n.id]; setSeen(v); try { localStorage.setItem('gr-notice-seen', JSON.stringify(v)); } catch { /* private mode */ } }}>OK</button></div>
+        ))}
         {ev.drive_folder_url && <a className="folder-link" href={ev.drive_folder_url} target="_blank" rel="noreferrer">Event folder · floor plan, run of show ›</a>}
       </div>
 
@@ -254,7 +352,7 @@ export function Manage() {
                     {isBar(r.position_code, r.position_detail) ? <span className="dept-tag is-bar">BAR</span> : <span className="dept-tag is-floor">FLOOR</span>}
                   </div>
                   <button className="who" aria-label={`Options for ${r.staff?.full_name}`} onClick={() => { setOpen(r); setDraft({ in: hm(pin) || hm(r.planned_start), out: hm(pout) }); }}>
-                    <span className="nm">{r.staff?.full_name}</span>
+                    <span className="nm">{r.staff?.full_name}{r.adder && <i className="added-tag">ADDED BY {r.adder.full_name.split(' ')[0].toUpperCase()}</i>}</span>
                     <span className="rl">{roleLabel(r.position_code, r.position_detail)}{r.manager_note ? ' · 📝 note' : ''}</span>
                     {r.attendance ? <span className="st muted-st">{r.attendance === 'no_show' ? 'No-show' : 'Cancelled'}{r.attendance_reason ? ` · ${r.attendance_reason}` : ''}</span>
                       : r.left_early && pin && pout ? <span className="st gold">{time(pin, lang)} → {time(pout, lang)} · {hours(pin, pout)} {t.hours}<i className="st-tag gold">LEFT EARLY</i></span>
@@ -280,6 +378,7 @@ export function Manage() {
           </section>
         );
       })}
+      {!ev.hours_submitted_at && <button className="add-staff" onClick={() => setAdding(true)}>+ Add staff</button>}
       <p className="hint" style={{ textAlign: 'center' }}>Tap a name for times, no-show, left early or cancelled</p>
 
       <div className="submit-bar">
@@ -416,6 +515,8 @@ export function Manage() {
           </SwipeSheet>
         </>
       )}
+
+      {adding && <AddStaff ev={ev} lang={lang} onClose={() => setAdding(false)} onDone={() => { setAdding(false); load(); }} />}
 
       {ask && (() => {
         const nm = ask.row.staff?.full_name ?? ''; const f = first(nm);
