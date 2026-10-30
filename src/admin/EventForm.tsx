@@ -7,40 +7,71 @@ import {
 } from './api';
 import { tiersFor } from './Availability';
 import { AddressInput, type AddressParts } from '../components/AddressInput';
+import { defaultPieces, defaultItems, type UniItems, type UniItemsMap, type UniLineKey } from '../components/Uniform';
 
 const MEN: [string, string][] = [['white_shirt', 'White dress shirt'], ['black_shirt', 'Black dress shirt'], ['black_tshirt', 'Black T-shirt']];
 const WOMEN: [string, string][] = [['white_shirt', 'White dress shirt'], ['black_shirt', 'Black dress shirt'], ['dress', 'Black cocktail dress'], ['black_tshirt', 'Black T-shirt']];
 const uniName = (k: string) => (k.startsWith('custom:') ? k.slice(7) : [...MEN, ...WOMEN].find(([u]) => u === k)?.[1].replace('dress shirt', 'shirt').replace('Black cocktail dress', 'dress') ?? k).toLowerCase();
-const pieces = (k: string, bar: boolean) => k.startsWith('custom:') ? ['Custom for this event'] : k === 'dress' ? ['Long sleeve', ...(bar ? ['Wine key'] : []), 'No apron', 'Black shoes']
-  : k === 'black_tshirt' ? ['No apron', 'No tie', ...(bar ? ['Wine key'] : []), 'Black pants', 'Black shoes'] : [bar ? 'No tie' : 'Black tie', ...(bar ? ['Wine key'] : []), 'Black apron', 'Black pants', 'Black shoes'];
 
-function UniLine({ who, opts, value, set, bar }: { who: string; opts: [string, string][]; value: string; set: (v: string) => void; bar: boolean }) {
+type Mode = 'floor' | 'bar' | 'both';
+/** Items for a line, falling back to the defaults for its shirt pick. */
+const itemsOf = (items: UniItemsMap, k: UniLineKey, kind: string): UniItems => items[k] ?? defaultItems(kind, k.startsWith('bar'));
+
+function UniLine({ who, opts, value, set, bar, items, setItems }: { who: string; opts: [string, string][]; value: string; set: (v: string) => void; bar: boolean; items: UniItems; setItems: (i: UniItems) => void }) {
   const custom = value.startsWith('custom:');
+  const [adding, setAdding] = useState<string | null>(null);
+  const known = defaultPieces(value, bar).map((p) => p.name);
+  const all = [...known, ...items.on.filter((x) => !known.includes(x)), ...items.off.filter((x) => !known.includes(x) && !items.on.includes(x))];
+  const toggle = (n: string) => items.on.includes(n) ? setItems({ ...items, on: items.on.filter((x) => x !== n), off: [...items.off, n] }) : setItems({ ...items, off: items.off.filter((x) => x !== n), on: [...items.on, n] });
+  const pick = (k: string) => { set(k); if (!k.startsWith('custom:') || !custom) setItems(defaultItems(k, bar, items.extra)); };
+  const addExtra = () => { const t = (adding ?? '').trim(); if (t && !items.extra.includes(t)) setItems({ ...items, extra: [...items.extra, t] }); setAdding(null); };
   return (
     <div className="uni-line">
       <span className="uni-who">{who}</span>
       <div className="stack" style={{ gap: 6 }}>
         <div className="row wrap" style={{ gap: 6 }}>
-          {opts.map(([k, l]) => <button type="button" key={k} className={'uchip' + (value === k ? ' on' : '')} onClick={() => set(k)}>{l}</button>)}
+          {opts.map(([k, l]) => <button type="button" key={k} className={'uchip' + (value === k ? ' on' : '')} onClick={() => pick(k)}>{l}</button>)}
           {custom ? <input className="uchip-in" autoFocus value={value.slice(7)} onChange={(e) => set('custom:' + e.target.value)} placeholder="e.g. All black, no tie" />
-            : <button type="button" className="uchip" onClick={() => set('custom:')}>Custom…</button>}
+            : <button type="button" className="uchip" onClick={() => pick('custom:')}>Custom…</button>}
         </div>
-        <div className="row wrap" style={{ gap: 4 }}>{pieces(value, bar).map((p) => <span key={p} className="upiece">{p}</span>)}</div>
+        <div className="row wrap" style={{ gap: 4 }}>
+          {all.map((p) => { const on = items.on.includes(p); return <button type="button" key={p} className={'upc' + (on ? ' on' : ' off')} onClick={() => toggle(p)} title={on ? 'Worn · tap to take off' : 'Not worn · tap to add back'}>{on ? '✓ ' : ''}{p}</button>; })}
+          {items.extra.map((p) => <span key={p} className="upc extra">✓ {p}<button type="button" aria-label={`Remove ${p}`} onClick={() => setItems({ ...items, extra: items.extra.filter((x) => x !== p) })}>×</button></span>)}
+          {adding !== null ? <input className="upc-in" autoFocus value={adding} placeholder="e.g. White gloves" onChange={(e) => setAdding(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addExtra(); } if (e.key === 'Escape') setAdding(null); }} onBlur={addExtra} />
+            : <button type="button" className="upc add" onClick={() => setAdding('')}>+ Add</button>}
+        </div>
       </div>
     </div>
   );
 }
-function UniDept({ label, sub, bar, men, women, setMen, setWomen }: { label: string; sub: string; bar: boolean; men: string; women: string; setMen: (v: string) => void; setWomen: (v: string) => void }) {
+function UniDept({ label, sub, bar, men, women, setMen, setWomen, items, setItems }: { label: string; sub: string; bar: boolean; men: string; women: string; setMen: (v: string) => void; setWomen: (v: string) => void; items: UniItemsMap; setItems: (k: UniLineKey, i: UniItems) => void }) {
+  const km: UniLineKey = bar ? 'bar_m' : 'floor_m'; const kw: UniLineKey = bar ? 'bar_w' : 'floor_w';
   return (
     <div className={'uni-dept' + (bar ? ' is-bar' : '')}>
       <div><b>● {label}</b><small className="muted" style={{ display: 'block' }}>{sub}</small></div>
       <div className="stack" style={{ gap: 10 }}>
-        <UniLine who="MEN" opts={MEN} value={men} set={setMen} bar={bar} />
-        <UniLine who="WOMEN" opts={WOMEN} value={women} set={setWomen} bar={bar} />
+        <UniLine who="MEN" opts={MEN} value={men} set={setMen} bar={bar} items={itemsOf(items, km, men)} setItems={(i) => setItems(km, i)} />
+        <UniLine who="WOMEN" opts={WOMEN} value={women} set={setWomen} bar={bar} items={itemsOf(items, kw, women)} setItems={(i) => setItems(kw, i)} />
       </div>
     </div>
   );
 }
+
+/** A numbered block that folds; open/closed is remembered in this browser. */
+function Fold({ n, title, summary, open, setOpen, children, id }: { n: number; title: string; summary: string; open: boolean; setOpen: (o: boolean) => void; children: React.ReactNode; id?: string }) {
+  return (
+    <section className={'fold' + (open ? ' open' : '')} id={id}>
+      <button type="button" className="fold-h" onClick={() => setOpen(!open)} aria-expanded={open}>
+        <span className="fold-c">{open ? '▾' : '▸'}</span><span className="fold-n">{n}</span><b className="fold-t">{title}</b>
+        <span className="fold-s">{summary}</span>
+      </button>
+      {open && <div className="fold-b">{children}</div>}
+    </section>
+  );
+}
+const FOLD_KEY = 'gr-ef-fold';
+const readFold = (): Record<number, boolean> => { try { return JSON.parse(localStorage.getItem(FOLD_KEY) || '{}'); } catch { return {}; } };
 
 type Tier = 'A' | 'B' | 'C';
 type Ev = { id: string; department: 'floor' | 'bar' | 'kitchen'; staffing: Omit<Line, 'names'>[] | null; manager_id: string | null };
@@ -97,6 +128,14 @@ export function EventForm() {
   const [unit, setUnit] = useState(''); const [folder, setFolder] = useState(''); const [showFolder, setShowFolder] = useState(false);
   const [note, setNote] = useState(''); const [staffNote, setStaffNote] = useState(''); const [showStaffNote, setShowStaffNote] = useState(false);
   const [rateSet, setRateSet] = useState<string | null>(null);
+  const [items, setItemsMap] = useState<UniItemsMap>({});
+  const setItems = (k: UniLineKey, i: UniItems) => setItemsMap((m) => ({ ...m, [k]: i }));
+  const [mode, setModeRaw] = useState<Mode>('floor');
+  const [fold, setFoldMap] = useState<Record<number, boolean>>(readFold);
+  const isOpen = (n: number) => fold[n] ?? true;
+  const setFold = (n: number, o: boolean) => { const f = { ...fold, [n]: o }; setFoldMap(f); try { localStorage.setItem(FOLD_KEY, JSON.stringify(f)); } catch { /* private mode */ } };
+  const allFold = (o: boolean) => { const f = Object.fromEntries([1, 2, 3, 4, 5, 6].map((n) => [n, o])); setFoldMap(f); try { localStorage.setItem(FOLD_KEY, JSON.stringify(f)); } catch { /* private mode */ } };
+  const [privateId, setPrivateId] = useState<string | null>(null); // a private-home client used as the venue
   const [lines, setLines] = useState<Line[]>([blankLine('floor', 'MD', '17:00'), blankLine('floor', 'W', '17:00')]);
   const [existing, setExisting] = useState<Ev[]>([]); const [oldShifts, setOldShifts] = useState<Sh[]>([]);
   const [askTiers, setAskTiers] = useState<Tier[] | null>(null); const [askBar, setAskBar] = useState<'georges' | 'team'>('georges');
@@ -108,8 +147,8 @@ export function EventForm() {
 
   // Lists
   useEffect(() => {
-    supabase.from('venues').select('id,name,address,usual_client_id,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w').order('name').then(({ data }) => setVenues((data ?? []) as Venue[]));
-    supabase.from('clients').select('id,name,rate_sets').order('name').then(({ data }) => setClients((data ?? []) as Client[]));
+    supabase.from('venues').select('id,name,address,usual_client_id,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,uniform_items').order('name').then(({ data }) => setVenues((data ?? []) as Venue[]));
+    supabase.from('clients').select('id,name,rate_sets,kind,address,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,uniform_items').order('name').then(({ data }) => setClients((data ?? []) as Client[]));
     allStaff().then((s) => setStaff(s.filter((x) => x.active)));
   }, []);
 
@@ -129,10 +168,11 @@ export function EventForm() {
       setEnds(e.ends_label ?? (ENDS.find(([, t]) => t && e.end_time?.startsWith(t))?.[0] ?? '~ midnight'));
       setUFloor(e.uniform_floor ?? 'white_shirt'); setUBar(e.uniform_bar ?? 'black_shirt');
       setUFloorW(e.uniform_floor_w ?? e.uniform_floor ?? 'white_shirt'); setUBarW(e.uniform_bar_w ?? e.uniform_bar ?? 'black_shirt');
-      setFolder(e.drive_folder_url ?? ''); setShowFolder(!!e.drive_folder_url);
+      setFolder(e.drive_folder_url ?? ''); setShowFolder(!!e.drive_folder_url); setItemsMap((e.uniform_items ?? {}) as UniItemsMap);
       setNote(e.description ?? ''); setStaffNote(e.notes ?? ''); setShowStaffNote(!!e.notes);
       const ordered = [...evs].sort((a) => (a.department === 'floor' ? -1 : 1));
-      setLines(ordered.flatMap((x) => linesFor(x, shifts)));
+      const ls = ordered.flatMap((x) => linesFor(x, shifts)); setLines(ls);
+      setModeRaw(ls.some((l) => l.dept === 'bar') ? (ls.some((l) => l.dept === 'floor') ? 'both' : 'bar') : 'floor');
       setLoaded(true);
     })();
   }, [id]);
@@ -182,7 +222,37 @@ export function EventForm() {
     if (v.usual_client_id) setClientId(v.usual_client_id);
     if (v.uniform_floor) setUFloor(v.uniform_floor); if (v.uniform_bar) setUBar(v.uniform_bar);
     setUFloorW(v.uniform_floor_w ?? v.uniform_floor ?? uFloorW); setUBarW(v.uniform_bar_w ?? v.uniform_bar ?? uBarW);
+    setItemsMap(v.uniform_items ?? {}); setPrivateId(null);
   };
+  /** A private-home client is also the venue: title, client, address and uniforms come from the client card. */
+  const pickPrivate = (c: Client) => {
+    setVenueId(null); setPrivateId(c.id); setTitle(c.name); setClientId(c.id); setRateSet(null); setAddress(c.address ?? ''); setParts(null);
+    if (c.uniform_floor) setUFloor(c.uniform_floor); if (c.uniform_bar) setUBar(c.uniform_bar);
+    setUFloorW(c.uniform_floor_w ?? c.uniform_floor ?? uFloorW); setUBarW(c.uniform_bar_w ?? c.uniform_bar ?? uBarW);
+    setItemsMap(c.uniform_items ?? {});
+  };
+  const privates = clients.filter((c) => c.kind === 'private_home');
+  useEffect(() => { if (!privateId && !venueId && title) { const c = privates.find((x) => x.name === title); if (c) setPrivateId(c.id); } }, [title, clients.length]);
+
+  // Staffing toggle: limits the grid's departments and which uniform rows show.
+  const setMode = (m: Mode) => {
+    const drop = m === 'floor' ? 'bar' : m === 'bar' ? 'floor' : null;
+    const gone = drop ? lines.filter((l) => l.dept === drop) : [];
+    if (gone.some((l) => l.names.length) && !confirm(`Remove the ${drop} lines (and the names on them)?`)) return;
+    let next = drop ? lines.filter((l) => l.dept !== drop) : lines;
+    if (!next.length) next = m === 'bar' ? [blankLine('bar', 'BM', '17:00'), blankLine('bar', 'BT', '17:00')] : [blankLine('floor', 'MD', '17:00'), blankLine('floor', 'W', '17:00')];
+    if (m === 'both' && !next.some((l) => l.dept === 'bar')) next = [...next, blankLine('bar', 'BM', next[0]?.start ?? '17:00')];
+    setLines(next); setModeRaw(m);
+  };
+  useEffect(() => { // a bar line added (typed or pasted) while on Floor → Both
+    const f = lines.some((l) => l.dept === 'floor'); const b = lines.some((l) => l.dept === 'bar');
+    if (b && mode === 'floor') setModeRaw(f ? 'both' : 'bar'); if (f && mode === 'bar') setModeRaw(b ? 'both' : 'floor');
+  }, [lines]);
+  const showFloor = mode !== 'bar'; const showBar = mode !== 'floor';
+  const lineItems = (): UniItemsMap => ({
+    ...(showFloor ? { floor_m: itemsOf(items, 'floor_m', uFloor), floor_w: itemsOf(items, 'floor_w', uFloorW) } : {}),
+    ...(showBar ? { bar_m: itemsOf(items, 'bar_m', uBar), bar_w: itemsOf(items, 'bar_w', uBarW) } : {}),
+  });
 
   const floorN = lines.filter((l) => l.dept === 'floor').reduce((n, l) => n + l.count, 0);
   const tiers = askTiers ?? tiersFor(floorN || 1);
@@ -197,12 +267,16 @@ export function EventForm() {
       if (error) throw error; cId = c.id; setClientId(c.id); setNewClient(null);
       setClients([...clients, { id: c.id, name: newClient.trim(), rate_sets: [] }]);
     }
-    if (!vId && title.trim()) {
-      const { data: v, error } = await supabase.from('venues').insert({ name: title.trim(), address: address || null, uniform_floor_w: uFloorW, uniform_bar_w: uBarW, ...(parts ? { street: parts.street, unit: unit || parts.unit || null, city: parts.city, province: parts.province, postal_code: parts.postal_code } : {}), usual_client_id: cId, uniform_floor: uFloor, uniform_bar: uBar }).select('id').single();
+    const priv = privateId ? clients.find((c) => c.id === privateId) : null;
+    if (priv) {
+      vId = null; cId = priv.id;
+      await supabase.from('clients').update({ uniform_floor: uFloor, uniform_bar: uBar, uniform_floor_w: uFloorW, uniform_bar_w: uBarW, uniform_items: lineItems(), ...(!priv.address && address ? { address } : {}) }).eq('id', priv.id);
+    } else if (!vId && title.trim()) {
+      const { data: v, error } = await supabase.from('venues').insert({ name: title.trim(), address: address || null, uniform_floor_w: uFloorW, uniform_bar_w: uBarW, ...(parts ? { street: parts.street, unit: unit || parts.unit || null, city: parts.city, province: parts.province, postal_code: parts.postal_code } : {}), usual_client_id: cId, uniform_floor: uFloor, uniform_bar: uBar, uniform_items: lineItems() }).select('id').single();
       if (error && !error.message.includes('duplicate')) throw error;
       vId = v?.id ?? (await supabase.from('venues').select('id').eq('name', title.trim()).single()).data?.id ?? null; setVenueId(vId);
     } else if (vId) {
-      await supabase.from('venues').update({ uniform_floor: uFloor, uniform_bar: uBar, uniform_floor_w: uFloorW, uniform_bar_w: uBarW, ...(venue && !venue.address && address ? { address } : {}), ...(venue && !venue.usual_client_id && cId ? { usual_client_id: cId } : {}) }).eq('id', vId);
+      await supabase.from('venues').update({ uniform_floor: uFloor, uniform_bar: uBar, uniform_floor_w: uFloorW, uniform_bar_w: uBarW, uniform_items: lineItems(), ...(venue && !venue.address && address ? { address } : {}), ...(venue && !venue.usual_client_id && cId ? { usual_client_id: cId } : {}) }).eq('id', vId);
     }
     const endT = ENDS.find(([l]) => l === ends)?.[1] ?? null;
     let firstId: string | null = null;
@@ -217,13 +291,13 @@ export function EventForm() {
         event_date: forDate, title: title.trim(), venue_id: vId, address: (address + (unit.trim() ? `, ${unit.trim()}` : '')) || null, department: dept,
         start_time: start, end_time: endT, ends_label: ends, staff_needed: ls.reduce((n, l) => n + l.count, 0),
         manager_id: lead ? keep(lead)[0] ?? null : null, description: note || null, notes: staffNote || null,
-        uniform_floor: uFloor, uniform_bar: uBar, uniform_floor_w: uFloorW, uniform_bar_w: uBarW, drive_folder_url: folder.trim() || null, staffing: ls.map(({ dept: d, code, start: s, count }) => ({ dept: d, code, start: s, count })),
+        uniform_floor: uFloor, uniform_bar: uBar, uniform_floor_w: uFloorW, uniform_bar_w: uBarW, uniform_items: lineItems(), drive_folder_url: folder.trim() || null, staffing: ls.map(({ dept: d, code, start: s, count }) => ({ dept: d, code, start: s, count })),
       };
       const res = old ? await supabase.from('events').update(row).eq('id', old.id).select('id').single() : await supabase.from('events').insert(row).select('id').single();
       if (res.error) throw res.error;
       const evId = res.data.id as string; firstId ??= evId;
-      const priv = await supabase.from('event_private').upsert({ event_id: evId, client: client?.name ?? (newClient || null), client_id: cId, rate_set: rateSet }, { onConflict: 'event_id' });
-      if (priv.error) throw priv.error;
+      const pv = await supabase.from('event_private').upsert({ event_id: evId, client: client?.name ?? (newClient || null), client_id: cId, rate_set: rateSet }, { onConflict: 'event_id' });
+      if (pv.error) throw pv.error;
 
       // Shifts: book new names, move changed ones, remove dropped ones (never anyone who already punched in).
       const want = ls.flatMap((l) => keep(l).map((sid) => ({ sid, l })));
@@ -323,67 +397,81 @@ export function EventForm() {
       </div>
       {err && <p className="error">{err}</p>}
 
-      <div className="adm-card ef-top">
-        <label className="ef-f"><span>DATE</span><input type="date" required value={date} onChange={(e) => setDate(e.target.value)} /></label>
-        <div className="ef-f ef-venue"><span>VENUE · this is the title staff see</span><VenuePicker venues={venues} value={title} venue={venue} onPick={pickVenue} onNew={(name) => { setVenueId(null); setTitle(name); }} /></div>
-        <label className="ef-f"><span>CLIENT · only you see it</span>
-          {newClient !== null ? <div className="row"><input autoFocus value={newClient} onChange={(e) => setNewClient(e.target.value)} placeholder="New client name" /><button type="button" className="abtn sm" onClick={() => setNewClient(null)}>×</button></div>
-            : <select value={clientId} onChange={(e) => { if (e.target.value === '__new') { setNewClient(''); setClientId(''); } else { setClientId(e.target.value); setRateSet(null); } }}>
-              <option value="">—</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}<option value="__new">+ New client…</option>
-            </select>}
-          {venue?.usual_client_id && venue.usual_client_id === clientId && <small className="okc">Filled from the venue · change if needed</small>}
-        </label>
-        <label className="ef-f"><span>ENDS · approx.</span><select value={ends} onChange={(e) => setEnds(e.target.value)}>{ENDS.map(([l]) => <option key={l}>{l}</option>)}</select></label>
-        <div className="ef-f ef-wide"><span>ADDRESS · {venue?.address ? 'auto' : 'start typing, pick from the list'}</span><div className="row" style={{ gap: 8, alignItems: 'flex-start' }}><div style={{ flex: '1 1 auto' }}><AddressInput value={address} onChange={(v) => { setAddress(v); setParts(null); }} onPick={(p) => { setParts(p); if (p.unit) setUnit(p.unit); }} placeholder="Start typing the address…" /></div><input aria-label="Apt / unit / floor" style={{ width: 150, flex: '0 0 auto' }} value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="Apt / unit / floor" /></div></div>
-        <div className="ef-f"><span>UNIFORM</span><button type="button" className="vp-btn" onClick={() => document.getElementById('uni-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}><span className="grow" style={{ fontWeight: 500, fontSize: 13, textAlign: 'left' }}>Floor: {uniName(uFloor)} / {uniName(uFloorW)}{lines.some((l) => l.dept === 'bar') ? ` · Bar: ${uniName(uBar)} / ${uniName(uBarW)}` : ''}</span>↓</button><small className="muted">Men / women · set below the staffing</small></div>
-        <label className="ef-f ef-wide"><span>EVENT NOTE (optional)</span><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Sit-down dinner · 250 guests" /></label>
+      <div className="row" style={{ gap: 8, justifyContent: 'flex-end' }}>
+        <button type="button" className="abtn sm" onClick={() => allFold(true)}>Expand all</button>
+        <button type="button" className="abtn sm" onClick={() => allFold(false)}>Collapse all</button>
       </div>
 
-      <Grid lines={lines} setLines={setLines} staff={staff} day={day} />
-
-      <div className="adm-card uni-card" id="uni-card">
-        <div className="sec" style={{ padding: 0 }}><span className="serif">Uniforms · per department, men and women</span><span className="muted sm">{venue ? 'Filled from the venue · ' : ''}each person sees only their own</span></div>
-        <UniDept label="Floor" sub="MD · waiters · busboys" bar={false} men={uFloor} women={uFloorW} setMen={setUFloor} setWomen={setUFloorW} />
-        {lines.some((l) => l.dept === 'bar') && <UniDept label="Bar" sub="Shows because there's a Bar line" bar men={uBar} women={uBarW} setMen={setUBar} setWomen={setUBarW} />}
-        <small className="muted">Pieces follow the pick: a shirt adds apron + pants (+ tie on floor, wine key on bar). Cocktail dress = long sleeve, no apron. Black T-shirt = no apron, no tie. Custom… is for this event only.</small>
-      </div>
-
-      <div className="adm-card stack drive-card" style={{ gap: 12 }}>
-        <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
-          <span className="serif" style={{ fontSize: 22 }}>Event folder · Google Drive</span>
-          <span className="row sm" style={{ gap: 8 }}><span className="muted">Create folder on Save</span><span className="tog off" aria-disabled title="Needs Google Drive connected">○</span></span>
+      <Fold n={1} title="Event & client" open={isOpen(1)} setOpen={(o) => setFold(1, o)}
+        summary={[dLabel(date, { weekday: 'short', month: 'short', day: 'numeric' }), title || 'no venue yet', client && client.name !== title ? client.name : privateId ? 'private home' : ''].filter(Boolean).join(' · ')}>
+        <div className="ef-top">
+          <label className="ef-f"><span>DATE</span><input type="date" required value={date} onChange={(e) => setDate(e.target.value)} /></label>
+          <div className="ef-f ef-venue"><span>VENUE · this is the title staff see</span><VenuePicker venues={venues} privates={privates} value={title} venue={venue} privateId={privateId} onPick={pickVenue} onPrivate={pickPrivate} onNew={(name) => { setVenueId(null); setPrivateId(null); setTitle(name); }} /></div>
+          <label className="ef-f"><span>CLIENT · only you see it</span>
+            {newClient !== null ? <div className="row"><input autoFocus value={newClient} onChange={(e) => setNewClient(e.target.value)} placeholder="New client name" /><button type="button" className="abtn sm" onClick={() => setNewClient(null)}>×</button></div>
+              : <select value={clientId} onChange={(e) => {
+                const v = e.target.value; if (v === '__new') { setNewClient(''); setClientId(''); return; }
+                const c = clients.find((x) => x.id === v); if (c?.kind === 'private_home') pickPrivate(c); else { setClientId(v); setRateSet(null); }
+              }}>
+                <option value="">—</option>
+                {clients.filter((c) => !c.kind).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {privates.length > 0 && <optgroup label="── Private homes ──">{privates.map((c) => <option key={c.id} value={c.id}>{c.name} · private home</option>)}</optgroup>}
+                {clients.some((c) => c.kind === 'roaming') && <optgroup label="── Venue changes each time ──">{clients.filter((c) => c.kind === 'roaming').map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</optgroup>}
+                <option value="__new">+ New client…</option>
+              </select>}
+            {privateId ? <small className="okc">Private home · the client is the venue</small> : venue?.usual_client_id && venue.usual_client_id === clientId && <small className="okc">Filled from the venue · change if needed</small>}
+          </label>
+          <label className="ef-f"><span>ENDS · approx.</span><select value={ends} onChange={(e) => setEnds(e.target.value)}>{ENDS.map(([l]) => <option key={l}>{l}</option>)}</select></label>
+          <div className="ef-f ef-wide"><span>ADDRESS · {venue?.address || privateId ? 'auto' : 'start typing, pick from the list'}</span><div className="row" style={{ gap: 8, alignItems: 'flex-start' }}><div style={{ flex: '1 1 auto' }}><AddressInput value={address} onChange={(v) => { setAddress(v); setParts(null); }} onPick={(p) => { setParts(p); if (p.unit) setUnit(p.unit); }} placeholder="Start typing the address…" /></div><input aria-label="Apt / unit / floor" style={{ width: 150, flex: '0 0 auto' }} value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="Apt / unit / floor" /></div></div>
+          <div className="ef-f"><span>STAFFING</span>
+            <div className="seg3">{(['floor', 'bar', 'both'] as Mode[]).map((m) => <button type="button" key={m} className={mode === m ? 'on' : ''} onClick={() => setMode(m)}>{m === 'floor' ? 'Floor' : m === 'bar' ? 'Bar' : 'Both'}</button>)}</div>
+            <small className="muted">Sets the Dept choices in the grid and which uniforms show</small></div>
+          <label className="ef-f ef-wide"><span>EVENT NOTE (optional)</span><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Sit-down dinner · 250 guests" /></label>
         </div>
-        <div className="drive-grid">
-          <div className="stack" style={{ gap: 8 }}>
-            <span className="kick" style={{ fontSize: 11 }}>FOLDER IT WILL CREATE</span>
-            <div className="drive-path"><small>G&amp;R Events 2026 › {new Date(date + 'T12:00:00').toLocaleDateString('en-CA', { month: '2-digit' })} {new Date(date + 'T12:00:00').toLocaleDateString('en-CA', { month: 'long' })} ›</small><b>{date} · {title || 'Venue'}{client ? ` · ${client.name.split(' ').slice(-1)[0]}` : ''}</b></div>
-            <div className="drive-connect"><b>Connect Google Drive</b><span>Creating folders and showing their files needs Google Drive connected to the app (a one-time setup Ronnie does). Until then, link a folder below.</span></div>
+      </Fold>
+
+      <Fold n={2} id="uni-card" title="Uniforms" open={isOpen(2)} setOpen={(o) => setFold(2, o)}
+        summary={[showFloor && `Floor · men ${uniName(uFloor)} · women ${uniName(uFloorW)}`, showBar && `Bar · men ${uniName(uBar)} · women ${uniName(uBarW)}`].filter(Boolean).join('  ·  ')}>
+        <div className="uni-card">
+          <div className="muted sm" style={{ paddingBottom: 6 }}>Showing <b>{mode === 'both' ? 'Floor + Bar' : mode === 'bar' ? 'Bar' : 'Floor'}</b> · from the Staffing toggle above{venue || privateId ? ' · filled from the ' + (privateId ? 'client card' : 'venue') : ''}</div>
+          {showFloor && <UniDept label="Floor" sub="MD · waiters · busboys" bar={false} men={uFloor} women={uFloorW} setMen={setUFloor} setWomen={setUFloorW} items={items} setItems={setItems} />}
+          {showBar && <UniDept label="Bar" sub="BM · bartenders · barbacks" bar men={uBar} women={uBarW} setMen={setUBar} setWomen={setUBarW} items={items} setItems={setItems} />}
+          <small className="muted"><b className="okc">Green ✓</b> = they wear it · tap to switch off (crossed out) · tap again to switch on. <b style={{ color: '#8A6A12' }}>Gold</b> = something you added for this event · × removes it. Staff see exactly the pieces left on for their line.</small>
+        </div>
+      </Fold>
+
+      <Fold n={3} title="Staffing" open={isOpen(3)} setOpen={(o) => setFold(3, o)}
+        summary={(() => { const t = lines.reduce((x, l) => x + l.count, 0); const nm = lines.reduce((x, l) => x + l.names.length, 0); return `${floorN} floor · ${t - floorN} bar · ${t} total · ${nm} of ${t} named`; })()}>
+        <Grid lines={lines} setLines={setLines} staff={staff} day={day} mode={mode} />
+      </Fold>
+
+      <Fold n={4} title="Event folder" open={isOpen(4)} setOpen={(o) => setFold(4, o)} summary={folder.trim() ? 'Google Drive · folder linked' : 'Google Drive · not linked'}>
+        <div className="stack" style={{ gap: 12, paddingTop: 14 }}>
+          <div className="drive-grid">
+            <div className="stack" style={{ gap: 8 }}>
+              <span className="kick" style={{ fontSize: 11 }}>FOLDER IT WILL CREATE</span>
+              <div className="drive-path"><small>G&amp;R Events 2026 › {new Date(date + 'T12:00:00').toLocaleDateString('en-CA', { month: '2-digit' })} {new Date(date + 'T12:00:00').toLocaleDateString('en-CA', { month: 'long' })} ›</small><b>{date} · {title || 'Venue'}{client ? ` · ${client.name.split(' ').slice(-1)[0]}` : ''}</b></div>
+              <div className="drive-connect"><b>Connect Google Drive</b><span>Creating folders and showing their files needs Google Drive connected to the app (a one-time setup Ronnie does). Until then, link a folder.</span></div>
+            </div>
+            <div className="stack" style={{ gap: 8 }}>
+              <span className="kick" style={{ fontSize: 11 }}>OR LINK AN EXISTING FOLDER</span>
+              {!showFolder ? <button type="button" className="abtn" style={{ borderStyle: 'dashed' }} onClick={() => setShowFolder(true)}>Link an existing Drive folder…</button>
+                : <input className="ef-in" value={folder} onChange={(e) => setFolder(e.target.value)} placeholder="Paste the Drive folder link" />}
+              <small className="muted">The link shows on the event page and on the manager’s check-in screen (MD + BM). Staff don’t get files for now.</small>
+            </div>
           </div>
-          <div className="stack" style={{ gap: 8 }}>
-            <span className="kick" style={{ fontSize: 11 }}>OR LINK AN EXISTING FOLDER</span>
-            {!showFolder ? <button type="button" className="abtn" style={{ borderStyle: 'dashed' }} onClick={() => setShowFolder(true)}>Link an existing Drive folder…</button>
-              : <input className="ef-in" value={folder} onChange={(e) => setFolder(e.target.value)} placeholder="Paste the Drive folder link" />}
-            <small className="muted">The link shows on the event page and on the manager’s check-in screen (MD + BM). Staff don’t get files for now.</small>
-          </div>
         </div>
-      </div>
+      </Fold>
 
-      <div className="ef-2">
-        <div className="adm-card stack" style={{ gap: 12 }}>
-          <div className="sec" style={{ padding: 0 }}><span className="serif">Ask availability</span><span className="muted sm">staff only see the date</span></div>
-          <div className="row wrap" style={{ gap: 8 }}><b className="sm" style={{ width: 40 }}>Floor</b>
-            {(['A', 'B', 'C'] as Tier[]).map((t) => <button type="button" key={t} className={'tchip t' + t + (tiers.includes(t) ? ' on' : '')} onClick={() => setAskTiers(tiers.includes(t) ? tiers.filter((x) => x !== t) : [...tiers, t].sort() as Tier[])}>{tiers.includes(t) ? '✓ ' : ''}{t}</button>)}
-            <span className="muted sm">{floorN} needed{askTiers ? '' : ' → suggested'}</span></div>
-          <div className="row wrap" style={{ gap: 8 }}><b className="sm" style={{ width: 40 }}>Bar</b>
-            <button type="button" className={'abtn sm' + (askBar === 'team' ? ' dark' : '')} onClick={() => setAskBar('team')}>Bar team</button>
-            <button type="button" className={'abtn sm' + (askBar === 'georges' ? ' dark' : '')} onClick={() => setAskBar('georges')}>Georges books it</button></div>
-          <div className="row" style={{ gap: 18 }}>
-            <label className="radio"><input type="radio" checked={askWhen === 'save'} onChange={() => setAskWhen('save')} /> Ask when I save</label>
-            <label className="radio"><input type="radio" checked={askWhen === 'later'} onChange={() => setAskWhen('later')} /> Later</label></div>
-        </div>
-        <div className="stack" style={{ gap: 14 }}>
-          {client && client.rate_sets.length >= 2 && (
-            <div className="adm-card stack" style={{ gap: 10 }}>
+      <Fold n={5} title="Alerts & billing" open={isOpen(5)} setOpen={(o) => setFold(5, o)}
+        summary={['Changes recorded on Save', client && client.rate_sets.length >= 2 ? `${client.name} rates: ${client.rate_sets.find((r) => r.key === (rateSet ?? client.rate_sets[0].key))?.label ?? ''}` : ''].filter(Boolean).join(' · ')}>
+        <div className="ef-2">
+          <div className="stack" style={{ gap: 8 }}>
+            <span className="serif" style={{ fontSize: 20 }}>Alerts</span>
+            <span className="muted sm">Booked / moved / removed people are recorded when you press Save. They get a red card on their Home only if this event’s confirmations were already sent. Nothing goes out until you press Save.</span>
+          </div>
+          {client && client.rate_sets.length >= 2 ? (
+            <div className="stack" style={{ gap: 10 }}>
               <div className="sec" style={{ padding: 0 }}><span className="serif">Billing</span><span className="muted sm">only you see it</span></div>
               {client.rate_sets.map((r, i) => (
                 <label key={r.key} className={'bill' + ((rateSet ?? client.rate_sets[0].key) === r.key ? ' on' : '')}>
@@ -393,37 +481,61 @@ export function EventForm() {
               ))}
               <span className="muted sm">Goes with the event to the invoice builder.</span>
             </div>
-          )}
-          <div className="adm-card stack" style={{ gap: 10 }}>
-            <span className="serif" style={{ fontSize: 22 }}>More (optional)</span>
+          ) : <span className="muted sm">Billing shows only when the client has more than one rate set (e.g. La Nesra).</span>}
+        </div>
+      </Fold>
+
+      <Fold n={6} title="Ask availability & more" open={isOpen(6)} setOpen={(o) => setFold(6, o)}
+        summary={`${showFloor ? `Floor ${tiers.join('+')}` : ''}${showFloor && showBar ? ' · ' : ''}${showBar ? (askBar === 'team' ? 'Bar team' : 'Georges books bar') : ''} · ${askWhen === 'save' ? 'ask on Save' : 'later'}`}>
+        <div className="ef-2">
+          <div className="stack" style={{ gap: 12 }}>
+            <div className="sec" style={{ padding: 0 }}><span className="serif">Ask availability</span><span className="muted sm">staff only see the date</span></div>
+            {showFloor && <div className="row wrap" style={{ gap: 8 }}><b className="sm" style={{ width: 40 }}>Floor</b>
+              {(['A', 'B', 'C'] as Tier[]).map((t) => <button type="button" key={t} className={'tchip t' + t + (tiers.includes(t) ? ' on' : '')} onClick={() => setAskTiers(tiers.includes(t) ? tiers.filter((x) => x !== t) : [...tiers, t].sort() as Tier[])}>{tiers.includes(t) ? '✓ ' : ''}{t}</button>)}
+              <span className="muted sm">{floorN} needed{askTiers ? '' : ' → suggested'}</span></div>}
+            {showBar && <div className="row wrap" style={{ gap: 8 }}><b className="sm" style={{ width: 40 }}>Bar</b>
+              <button type="button" className={'abtn sm' + (askBar === 'team' ? ' dark' : '')} onClick={() => setAskBar('team')}>Bar team</button>
+              <button type="button" className={'abtn sm' + (askBar === 'georges' ? ' dark' : '')} onClick={() => setAskBar('georges')}>Georges books it</button></div>}
+            <div className="row" style={{ gap: 18 }}>
+              <label className="radio"><input type="radio" checked={askWhen === 'save'} onChange={() => setAskWhen('save')} /> Ask when I save</label>
+              <label className="radio"><input type="radio" checked={askWhen === 'later'} onChange={() => setAskWhen('later')} /> Later</label></div>
+          </div>
+          <div className="stack" style={{ gap: 10 }}>
+            <span className="serif" style={{ fontSize: 20 }}>More (optional)</span>
             {!showStaffNote ? <div><button type="button" className="abtn sm" onClick={() => setShowStaffNote(true)}>+ Note for staff</button></div>
               : <label className="ef-f"><span>NOTE FOR STAFF · shows in their event details</span><textarea rows={2} value={staffNote} onChange={(e) => setStaffNote(e.target.value)} placeholder="Enter by the loading dock on Cathcart." /></label>}
+            {!isNew && <div><button type="button" className="abtn" style={{ color: 'var(--accent)' }} onClick={del}>Delete event</button></div>}
           </div>
-          {!isNew && <div><button type="button" className="abtn" style={{ color: 'var(--accent)' }} onClick={del}>Delete event</button></div>}
         </div>
-      </div>
-      <div className="muted sm">Save only saves. Booked / moved / removed people are recorded; nothing is sent to staff yet.</div>
+      </Fold>
     </form>
   );
 }
 
 /** Searchable venue dropdown with "+ New venue". */
-function VenuePicker({ venues, value, venue, onPick, onNew }: { venues: Venue[]; value: string; venue: Venue | null; onPick: (v: Venue) => void; onNew: (name: string) => void }) {
+function VenuePicker({ venues, privates, value, venue, privateId, onPick, onPrivate, onNew }: { venues: Venue[]; privates: Client[]; value: string; venue: Venue | null; privateId: string | null; onPick: (v: Venue) => void; onPrivate: (c: Client) => void; onNew: (name: string) => void }) {
   const [open, setOpen] = useState(false); const [q, setQ] = useState('');
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => { const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); }; document.addEventListener('mousedown', h); return () => document.removeEventListener('mousedown', h); }, []);
   const list = venues.filter((v) => v.name.toLowerCase().includes(q.toLowerCase()));
+  const homes = privates.filter((c) => c.name.toLowerCase().includes(q.toLowerCase()));
   return (
     <div className="vp" ref={ref}>
-      <button type="button" className={'vp-btn' + (open ? ' on' : '')} onClick={() => { setOpen(!open); setQ(''); }}>{value || <span className="muted">Pick a venue…</span>}{value && !venue && <small className="tag amber" style={{ height: 20 }}>new</small>}<span className="grow" />▾</button>
+      <button type="button" className={'vp-btn' + (open ? ' on' : '')} onClick={() => { setOpen(!open); setQ(''); }}>{value || <span className="muted">Pick a venue…</span>}{privateId && <small className="tag" style={{ height: 20 }}>private home</small>}{value && !venue && !privateId && <small className="tag amber" style={{ height: 20 }}>new</small>}<span className="grow" />▾</button>
       {open && (
         <div className="vp-list">
           <input autoFocus placeholder="Type to search venues…" value={q} onChange={(e) => setQ(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (list[0]) { onPick(list[0]); setOpen(false); } else if (q.trim()) { onNew(q.trim()); setOpen(false); } } }} />
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (list[0]) { onPick(list[0]); setOpen(false); } else if (homes[0]) { onPrivate(homes[0]); setOpen(false); } else if (q.trim()) { onNew(q.trim()); setOpen(false); } } }} />
           <div className="vp-scroll">
             {list.map((v) => (
               <button type="button" key={v.id} className={'vp-opt' + (venue?.id === v.id ? ' on' : '')} onClick={() => { onPick(v); setOpen(false); }}>
                 <b>{v.name}{venue?.id === v.id ? ' ✓' : ''}</b><small>{v.address ?? <span className="accent">address missing</span>}</small>
+              </button>
+            ))}
+            {homes.length > 0 && <div className="vp-grp">PRIVATE HOMES · the client is the venue</div>}
+            {homes.map((c) => (
+              <button type="button" key={c.id} className={'vp-opt' + (privateId === c.id ? ' on' : '')} onClick={() => { onPrivate(c); setOpen(false); }}>
+                <b>{c.name} · private home{privateId === c.id ? ' ✓' : ''}</b><small>{c.address ?? <span className="accent">address missing</span>}</small>
               </button>
             ))}
           </div>
@@ -437,12 +549,12 @@ function VenuePicker({ venues, value, venue, onPick, onNew }: { venues: Venue[];
 const ROLE_KEYS: Record<string, string> = { md: 'MD', w: 'W', waiter: 'W', waiters: 'W', bus: 'BUS', busboy: 'BUS', bm: 'BM', 'bar manager': 'BM', bt: 'BT', bartender: 'BT', bartenders: 'BT', bb: 'BB', barback: 'BB', barbacks: 'BB' };
 
 /** The staffing grid: one line per role + start time. */
-function Grid({ lines, setLines, staff, day }: { lines: Line[]; setLines: (l: Line[]) => void; staff: AStaff[]; day: DayInfo }) {
+function Grid({ lines, setLines, staff, day, mode }: { lines: Line[]; setLines: (l: Line[]) => void; staff: AStaff[]; day: DayInfo; mode: Mode }) {
   const wrap = useRef<HTMLDivElement>(null);
   const upd = (i: number, p: Partial<Line>) => setLines(lines.map((l, k) => (k === i ? { ...l, ...p } : l)));
   const focusRow = (i: number) => setTimeout(() => wrap.current?.querySelector<HTMLElement>(`[data-row="${i}"] select`)?.focus(), 0);
   const addAfter = (i: number, copy = false) => {
-    const src = lines[i]; const nl = copy ? { ...src, names: [] } : blankLine(src?.dept ?? 'floor', src?.code === 'MD' ? 'W' : src?.code === 'BM' ? 'BT' : src?.code ?? 'W', src?.start ?? '17:00');
+    const src = lines[i]; const nl = copy ? { ...src, names: [] } : blankLine(src?.dept ?? (mode === 'bar' ? 'bar' : 'floor'), src?.code === 'MD' ? 'W' : src?.code === 'BM' ? 'BT' : src?.code ?? 'W', src?.start ?? '17:00');
     const next = [...lines]; next.splice(i + 1, 0, nl); setLines(next); focusRow(i + 1);
   };
   const keys = (i: number) => (e: React.KeyboardEvent) => {
@@ -479,13 +591,13 @@ function Grid({ lines, setLines, staff, day }: { lines: Line[]; setLines: (l: Li
   const md = n(floor.filter((l) => l.code === 'MD'));
 
   return (
-    <div className="adm-card grid-card" ref={wrap}>
+    <div className="grid-card" ref={wrap}>
       <div className="sec" style={{ padding: '4px 4px 10px' }}><span className="serif">Staffing · one line per start time</span><span className="muted sm hide-sm">Tab → next cell · Enter → new line · ⌘D duplicate line · paste rows from the sheet</span></div>
       <div className="sg">
         <div className="sg-h"><span>DEPT</span><span>ROLE</span><span>START</span><span>HOW MANY</span><span>NAMES</span><span /></div>
         {lines.map((l, i) => (
           <div key={i} className={'sg-r ' + (l.dept === 'bar' ? 'is-bar' : 'is-floor')} data-row={i} onKeyDown={keys(i)} onPaste={paste(i)}>
-            <select aria-label="Department" value={l.dept} onChange={(e) => { const d = e.target.value as 'floor' | 'bar'; upd(i, { dept: d, code: d === 'bar' ? 'BT' : 'W', names: [] }); }}><option value="floor">● Floor</option><option value="bar">● Bar</option></select>
+            <select aria-label="Department" value={l.dept} onChange={(e) => { const d = e.target.value as 'floor' | 'bar'; upd(i, { dept: d, code: d === 'bar' ? 'BT' : 'W', names: [] }); }}>{(mode !== 'bar' || l.dept === 'floor') && <option value="floor">● Floor</option>}{(mode !== 'floor' || l.dept === 'bar') && <option value="bar">● Bar</option>}</select>
             <select aria-label="Role" value={l.code} onChange={(e) => upd(i, { code: e.target.value, names: [] })} className={l.code === 'MD' || l.code === 'BM' ? 'strong' : ''}>{ROLES.filter((r) => r.dept === l.dept).map((r) => <option key={r.code} value={r.code}>{r.label}</option>)}</select>
             <TimeCell value={l.start} onChange={(v) => upd(i, { start: v })} />
             <input aria-label="How many" type="number" min={0} value={l.count} onChange={(e) => upd(i, { count: Math.max(0, Number(e.target.value)) })} className={l.count >= 10 ? 'strong' : ''} />

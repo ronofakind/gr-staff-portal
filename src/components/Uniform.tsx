@@ -73,3 +73,25 @@ export function TieIcon({ size = 44 }: { size?: number }) { return pic('/uniform
 export function WineKeyIcon({ size = 44 }: { size?: number }) { return pic('/uniform/winekey.png', size); }
 /** Bar positions: bar manager, barback, bartender. */
 export const isBarPos = (code: string | null, detail: string | null) => /^(BM|BB|BT)$/.test(code ?? '') || /^bar\b|bartend|barback|barmaid/i.test(detail ?? '');
+
+// ── Uniform pieces per line (event form v3) ─────────────────────────
+export type UniItems = { on: string[]; off: string[]; extra: string[] };
+export type UniLineKey = 'floor_m' | 'floor_w' | 'bar_m' | 'bar_w';
+export type UniItemsMap = Partial<Record<UniLineKey, UniItems>>;
+export const PIECE = { tie: 'Black tie', apron: 'Black apron', pants: 'Black pants', shoes: 'Black shoes', key: 'Wine key' } as const;
+
+/** Pieces that go with a shirt pick, and whether each is worn by default (tie floor only, wine key bar, no apron with dress or black T-shirt). */
+export function defaultPieces(kind: string, bar: boolean): { name: string; on: boolean }[] {
+  const p = (name: string, on: boolean) => ({ name, on });
+  if (kind.startsWith('custom:')) return [];
+  if (kind === 'dress') return [...(bar ? [p(PIECE.key, true)] : []), p(PIECE.shoes, true), p(PIECE.apron, false)];
+  if (kind === 'black_tshirt') return [...(bar ? [p(PIECE.key, true)] : []), p(PIECE.pants, true), p(PIECE.shoes, true), p(PIECE.apron, false), ...(bar ? [] : [p(PIECE.tie, false)])];
+  return bar ? [p(PIECE.key, true), p(PIECE.apron, true), p(PIECE.pants, true), p(PIECE.shoes, true), p(PIECE.tie, false)]
+    : [p(PIECE.tie, true), p(PIECE.apron, true), p(PIECE.pants, true), p(PIECE.shoes, true)];
+}
+export const defaultItems = (kind: string, bar: boolean, extra: string[] = []): UniItems => {
+  const d = defaultPieces(kind, bar);
+  return { on: d.filter((x) => x.on).map((x) => x.name), off: d.filter((x) => !x.on).map((x) => x.name), extra };
+};
+/** The line a person belongs to. */
+export const lineKey = (bar: boolean, sex?: string | null): UniLineKey => `${bar ? 'bar' : 'floor'}_${sex === 'f' ? 'w' : 'm'}` as UniLineKey;

@@ -4,7 +4,7 @@ import { supabase, SHIFT_SELECT, type ShiftRow } from '../lib/supabase';
 import { useT, useLang } from '../lib/i18n';
 import { time, longDate, minus, mapsUrl } from '../lib/format';
 import { Avatar } from '../components/Avatar';
-import { UniformIcon, uniformFor, uniformLabel, PantsIcon, ShoesIcon, ApronIcon, TieIcon, WineKeyIcon, isBarPos } from '../components/Uniform';
+import { UniformIcon, uniformFor, uniformLabel, PantsIcon, ShoesIcon, ApronIcon, TieIcon, WineKeyIcon, isBarPos, lineKey, PIECE } from '../components/Uniform';
 import { Status, isBar } from './Home';
 
 export function Shift({ backTo = '/' }: { backTo?: string }) {
@@ -36,10 +36,25 @@ export function Shift({ backTo = '/' }: { backTo?: string }) {
 
   const bar = isBarPos(s.position_code, s.position_detail);
   const dress = kind === 'dress';
-  const tiles: { icon: JSX.Element; name: string; no?: string }[] = [
+  const shoes = <ShoesIcon size={dress ? 76 : 64} who={s.me?.sex === 'f' || dress ? 'women' : s.me?.sex === 'm' ? 'men' : 'both'} />;
+  // Event form v3: the admin picked exactly which pieces this line wears (+ extras). Shift-level overrides keep the old rules.
+  const picked = !s.uniform ? ev.uniform_items?.[lineKey(bar, s.me?.sex)] : undefined;
+  const pieceTile: Record<string, { icon: JSX.Element; name: string; no?: string }> = {
+    [PIECE.tie]: { icon: <TieIcon size={68} />, name: 'Black tie' },
+    [PIECE.pants]: { icon: <PantsIcon size={68} />, name: 'Black dress pants', no: 'No jeans' },
+    [PIECE.shoes]: { icon: shoes, name: 'Black dress shoes', no: 'No running shoes' },
+    [PIECE.apron]: { icon: <ApronIcon size={68} />, name: 'Black apron' },
+    [PIECE.key]: { icon: <WineKeyIcon size={68} />, name: 'Wine key' },
+  };
+  const order = [PIECE.tie, PIECE.pants, PIECE.shoes, PIECE.apron, PIECE.key] as string[];
+  const tiles: { icon: JSX.Element; name: string; no?: string }[] = picked ? [
+    ...order.filter((p) => picked.on.includes(p)).map((p) => pieceTile[p]),
+    ...picked.on.filter((p) => !order.includes(p)).map((p) => ({ icon: <span className="uni-extra">+</span>, name: p })),
+    ...picked.extra.map((p) => ({ icon: <span className="uni-extra">+</span>, name: p })),
+  ] : [
     ...(!bar && !dress && kind !== 'black_tshirt' ? [{ icon: <TieIcon size={68} />, name: 'Black tie' }] : []),
     ...(!dress ? [{ icon: <PantsIcon size={68} />, name: 'Black dress pants', no: 'No jeans' }] : []),
-    { icon: <ShoesIcon size={dress ? 76 : 64} who={s.me?.sex === 'f' || dress ? 'women' : s.me?.sex === 'm' ? 'men' : 'both'} />, name: 'Black dress shoes', no: 'No running shoes' },
+    { icon: shoes, name: 'Black dress shoes', no: 'No running shoes' },
     ...(!dress && kind !== 'black_tshirt' ? [{ icon: <ApronIcon size={68} />, name: 'Black apron' }] : []),
     ...(bar ? [{ icon: <WineKeyIcon size={68} />, name: 'Wine key' }] : []),
   ];

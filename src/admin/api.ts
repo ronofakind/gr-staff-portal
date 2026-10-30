@@ -104,8 +104,9 @@ export const ROLES: { dept: 'floor' | 'bar'; code: string; label: string }[] = [
 ];
 export const roleName = (code: string | null) => ROLES.find((r) => r.code === code)?.label ?? (code && /^\d+$/.test(code) ? 'Waiter' : code ?? '');
 export const roleOfShift = (code: string | null) => (code && /^\d+$/.test(code) ? 'W' : code ?? 'W');
-export type Venue = { id: string; name: string; address: string | null; usual_client_id: string | null; uniform_floor: string | null; uniform_bar: string | null; uniform_floor_w?: string | null; uniform_bar_w?: string | null };
-export type Client = { id: string; name: string; rate_sets: { key: string; label: string; rates: Record<string, number> }[] };
+export type Venue = { id: string; name: string; address: string | null; usual_client_id: string | null; uniform_floor: string | null; uniform_bar: string | null; uniform_floor_w?: string | null; uniform_bar_w?: string | null; uniform_items?: import('../components/Uniform').UniItemsMap | null };
+export type Client = { id: string; name: string; rate_sets: { key: string; label: string; rates: Record<string, number> }[]; kind?: 'private_home' | 'roaming' | null; address?: string | null;
+  uniform_floor?: string | null; uniform_bar?: string | null; uniform_floor_w?: string | null; uniform_bar_w?: string | null; uniform_items?: import('../components/Uniform').UniItemsMap | null };
 export const UNIFORMS: [string, string][] = [['white_shirt', 'White dress shirt'], ['black_shirt', 'Black dress shirt'], ['dress', 'Black cocktail dress'], ['black_tshirt', 'Black T-shirt']];
 export const ENDS: [string, string | null][] = [['~ 10 PM', '22:00'], ['~ 11 PM', '23:00'], ['~ midnight', '00:00'], ['~ 1 AM', '01:00'], ['~ 2 AM', '02:00'], ['late', null]];
 /** "545" → "17:45", "5:45pm" → "17:45", "1130" → "11:30" (AM/PM guessed for evening events: 1–9 → PM). */
