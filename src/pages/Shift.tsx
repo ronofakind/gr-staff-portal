@@ -8,11 +8,9 @@ import { UniformIcon, uniformFor, uniformLabel, PantsIcon, ShoesIcon, ApronIcon,
 import { Status, isBar } from './Home';
 
 export function Shift({ backTo = '/' }: { backTo?: string }) {
-  const t = useT(); const lang = useLang();
   const { id } = useParams();
   const [s, setS] = useState<ShiftRow | null>(null);
   const [md, setMd] = useState<{ full_name: string; photo_url: string | null; phone: string | null } | null>(null);
-  const [leadPhoto, setLeadPhoto] = useState(false);
 
   useEffect(() => {
     supabase.from('shifts').select(SHIFT_SELECT).eq('id', id!).single().then(({ data }) => {
@@ -23,8 +21,15 @@ export function Shift({ backTo = '/' }: { backTo?: string }) {
   }, [id]);
 
   if (!s) return <div className="loading" />;
+  return <ShiftView s={s} lead={md ?? s.events.manager} backTo={backTo} />;
+}
+
+type Lead = { full_name: string; photo_url: string | null; phone: string | null } | null;
+/** The staff event page itself. Also rendered read-only in the admin "How it lands in the app" preview. */
+export function ShiftView({ s, lead, backTo = '/', preview = false }: { s: ShiftRow; lead: Lead; backTo?: string; preview?: boolean }) {
+  const t = useT(); const lang = useLang();
+  const [leadPhoto, setLeadPhoto] = useState(false);
   const ev = s.events;
-  const lead = md ?? ev.manager;
   const address = ev.address || ev.venues?.address || '';
   const arrive = minus(s.planned_start, s.arrive_before_min);
   const cal = s.cal_token && !/android/i.test(navigator.userAgent) ? `/api/cal?t=${s.cal_token}` : calendarUrl(ev.title, arrive, s.planned_end, address);
@@ -62,7 +67,7 @@ export function Shift({ backTo = '/' }: { backTo?: string }) {
   const shirtLabel = uniformLabel(kind).replace(' + tie', '');
 
   return (
-    <main className="page v2 details">
+    <main className={'page v2 details' + (preview ? ' preview' : '')}>
       <header className="row" style={{ paddingTop: 12 }}>
         <Link to={backTo} className="back" aria-label={t('back')}>‹</Link>
         <span className="kicker grow">{longDate(ev.event_date, lang)}</span>
@@ -76,9 +81,12 @@ export function Shift({ backTo = '/' }: { backTo?: string }) {
         <div className="d-pos"><small>Your position</small><span className="pos-pill-lg">{role}</span></div>
       </section>
 
-      {ev.description && <>
+      {(ev.event_type || ev.guests || ev.description) && <>
         <div className="d-sec">The event</div>
-        <section className="card d-event"><b>{ev.description}</b></section>
+        <section className="card d-event">
+          {(ev.event_type || ev.guests) && <b>{[ev.event_type, ev.guests ? `${ev.guests} guests` : null].filter(Boolean).join(' · ')}</b>}
+          {ev.description && (ev.event_type || ev.guests ? <span className="muted sm" style={{ display: 'block', marginTop: 4 }}>{ev.description}</span> : <b>{ev.description}</b>)}
+        </section>
       </>}
 
       <section className="where">

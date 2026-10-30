@@ -158,6 +158,7 @@ export function EventForm() {
   const [dup, setDup] = useState<{ dates: string[]; pick: string; names: 'none' | 'leads' | 'all' } | null>(null);
   const [lastAt, setLastAt] = useState<{ date: string; lines: Line[] } | null>(null);
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false); const [loaded, setLoaded] = useState(isNew);
+  useEffect(() => { if (loaded && params.get('dup') === '1' && date) setDup((d) => d ?? { dates: [], pick: addDays(date, 1), names: 'none' }); }, [loaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Lists
   useEffect(() => {
