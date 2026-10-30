@@ -25,6 +25,7 @@ import { EventPlan } from './pages/EventPlan';
 import { Availability as AdminAvail } from './admin/Availability';
 import { Tiers } from './admin/Tiers';
 import { Incidents } from './admin/Incidents';
+import { Hours as HoursPage } from './pages/Hours';
 
 export function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
@@ -79,6 +80,7 @@ export function App() {
         <Route path="/schedule" element={<Schedule me={me} />} />
         <Route path="/shift/:id" element={<Shift />} />
         <Route path="/shift/:id/plan" element={<EventPlan />} />
+        <Route path="/hours" element={<HoursPage me={me} />} />
         <Route path="/availability" element={<StaffAvail me={me} />} />
         <Route path="/manage/:eventId" element={<Manage />} />
         <Route path="/profile" element={<Profile me={me} />} />

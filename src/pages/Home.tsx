@@ -7,6 +7,7 @@ import { time, longDate, dayBadge, minus } from '../lib/format';
 import { Avatar } from '../components/Avatar';
 import { TabBar } from '../components/TabBar';
 import { UniformIcon, uniformFor, uniformLabel } from '../components/Uniform';
+import { payPeriod, paidHours, periodLabel, payDayLabel } from '../lib/hours';
 
 type Mate = { full_name: string; photo_url: string | null; position_code: string | null; position_detail: string | null; punches: { punch_in: string | null; punch_out: string | null } | null };
 type Q = { shift_id: string; status: 'open' | 'fixed' | 'correct' };
@@ -23,7 +24,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
   const [shifts, setShifts] = useState<ShiftRow[] | null>(null);
   const [teams, setTeams] = useState<Record<string, Mate[]>>({});
   const [qs, setQs] = useState<Record<string, Q['status']>>({});
-  const [month, setMonth] = useState<{ n: number; h: number } | null>(null);
+  const [month, setMonth] = useState<{ n: number; h: number; wait: number } | null>(null);
   const [askQ, setAskQ] = useState<ShiftRow | null>(null);
   const [alerts, setAlerts] = useState<{ id: string; kind: string; title: string; body: string | null; event_id: string | null }[]>([]);
 
@@ -36,11 +37,12 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
     setShifts(rows);
     if (rows.length) supabase.from('hours_questions').select('shift_id,status').in('shift_id', rows.map((r) => r.id)).order('created_at')
       .then(({ data: q }) => setQs(Object.fromEntries(((q ?? []) as Q[]).map((x) => [x.shift_id, x.status]))));
-    const m0 = todayIso().slice(0, 8) + '01';
-    supabase.from('shifts').select('punches(punch_in,punch_out),events!inner(event_date)').eq('staff_id', me.id).neq('status', 'declined')
-      .gte('events.event_date', m0).lte('events.event_date', todayIso()).then(({ data: ms }) => {
-        const done = ((ms ?? []) as unknown as { punches: { punch_in: string | null; punch_out: string | null } | null }[]).filter((x) => x.punches?.punch_in && x.punches.punch_out && new Date(x.punches.punch_out).getTime() <= Date.now());
-        setMonth({ n: done.length, h: done.reduce((n, x) => n + hrs(x.punches!.punch_in!, x.punches!.punch_out!), 0) });
+    const per = payPeriod(todayIso());
+    supabase.from('shifts').select('attendance,left_early,punches(punch_in,punch_out),events!inner(event_date,hours_submitted_at)').eq('staff_id', me.id).neq('status', 'declined')
+      .gte('events.event_date', per.start).lte('events.event_date', per.end).then(({ data: ms }) => {
+        const done = ((ms ?? []) as unknown as { attendance: string | null; left_early: boolean | null; punches: { punch_in: string | null; punch_out: string | null } | null; events: { hours_submitted_at: string | null } }[])
+          .filter((x) => !x.attendance && x.punches?.punch_in && x.punches.punch_out && new Date(x.punches.punch_out).getTime() <= Date.now());
+        setMonth({ n: done.length, h: done.reduce((n, x) => n + paidHours(x.punches!.punch_in!, x.punches!.punch_out!, !!x.left_early), 0), wait: done.filter((x) => !x.events.hours_submitted_at).length });
       });
     const managed = rows.filter((r) => r.events.manager_id === me.id).map((r) => r.events.id);
     if (managed.length) {
@@ -198,13 +200,13 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
         );
       })()}
 
-      {month && month.n > 0 && (
-        <Link to={`${base}/schedule`} className="month-card">
-          <div className="grow"><small>{new Date().toLocaleDateString('en-CA', { month: 'long', timeZone: 'America/Toronto' }).toUpperCase()} SO FAR</small>
-            <div className="row" style={{ gap: 18 }}><span><b className="serif">{month.n}</b> shift{month.n > 1 ? 's' : ''}</span><span><b className="serif">{month.h}</b> hours</span></div></div>
-          <span className="muted sm">Schedule ›</span>
-        </Link>
-      )}
+      {month && month.n > 0 && (() => { const per = payPeriod(todayIso()); return (
+        <Link to={base ? `${base}/schedule` : '/hours'} className="month-card hz-home">
+          <div className="grow"><small>THIS PAY PERIOD · {periodLabel(per).toUpperCase()}</small>
+            <div className="row" style={{ gap: 18 }}><span><b className="serif">{month.h}</b> h</span><span><b className="serif">{month.n}</b> shift{month.n > 1 ? 's' : ''}</span></div>
+            <span className="okc sm strong">Paid {payDayLabel(per)}{month.wait ? ` · ${month.wait} shift${month.wait > 1 ? 's' : ''} waiting` : ''}</span></div>
+          <span className="sm strong">Hours ›</span>
+        </Link>); })()}
 
       {rest.length > 0 && (
         <>
@@ -232,7 +234,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
   );
 }
 
-function AskHours({ s, onClose, onSent }: { s: ShiftRow; onClose: () => void; onSent: () => void }) {
+export function AskHours({ s, onClose, onSent }: { s: { id: string; events: { title: string }; punches?: { punch_in: string | null; punch_out: string | null } | null }; onClose: () => void; onSent: () => void }) {
   const lang = useLang();
   const [kind, setKind] = useState<'start' | 'end' | 'other'>('start');
   const [t, setT] = useState(''); const [note, setNote] = useState(''); const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
@@ -255,14 +257,14 @@ function AskHours({ s, onClose, onSent }: { s: ShiftRow; onClose: () => void; on
     <>
       <div className="scrim" onClick={onClose} />
       <div className="sheet" role="dialog" aria-label="Something wrong with your hours">
-        <div className="grab" />
-        <div><div className="kicker">{s.events.title} · {range(pin, pout)}</div><div className="serif" style={{ fontSize: 24, lineHeight: 1.15 }}>What’s wrong with your hours?</div></div>
+        <button className="sheet-x" aria-label="Close" onClick={onClose}>✕</button>
+        <div><div className="kicker">{s.events.title} · {range(pin, pout)}</div><div className="serif" style={{ fontSize: 24, lineHeight: 1.15, paddingRight: 44 }}>What’s wrong with your hours?</div></div>
         <div className="starts-from"><div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
           {(['start', 'end', 'other'] as const).map((k) => <button key={k} className={kind === k ? 'on' : ''} onClick={() => setKind(k)}>{k === 'start' ? 'Start time' : k === 'end' ? 'End time' : 'Other'}</button>)}
         </div></div>
         {kind !== 'other' && <div className="times-box"><label>{kind === 'start' ? 'I started at' : 'I ended at'}<QuarterTime value={t} onChange={setT} /></label></div>}
         <textarea className="sheet-note" rows={2} value={note} placeholder={kind === 'other' ? 'What happened?' : 'Note (optional) · e.g. my manager asked me to help set up'} onChange={(e) => setNote(e.target.value)} />
-        <div className="muted sm">Goes to Ronnie and your manager. Your hours stay as they are until they check.</div>
+        <div className="muted sm">Goes to Ronnie. Your hours stay as they are until he checks.</div>
         {err && <p className="error">{err}</p>}
         <button className="btn-ink" disabled={busy || (kind !== 'other' && !t) || (kind === 'other' && !note.trim())} onClick={send}>{busy ? 'Sending…' : 'Send'}</button>
       </div>

@@ -1195,3 +1195,34 @@ div.avatar { color: var(--accent); background: var(--accent-bg); }
 .sheet-x { position: absolute; top: 14px; right: 14px; width: 36px; height: 36px; border-radius: 18px; border: 0; background: #E9E2D8; color: var(--ink); font-size: 15px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 2; }
 .sheet:has(.sheet-x) { padding-top: 18px; }
 .wk-seg button { white-space: nowrap; }
+
+/* Push 22 · Hours tab */
+.hz-per { display: flex; align-items: center; gap: 8px; text-align: center; }
+.hz-per .grow { display: flex; flex-direction: column; } .hz-per small { color: var(--muted); font-size: 12px; }
+.hz-per .round:disabled { opacity: .3; }
+.hz-big { background: var(--ink); color: #F6F2EC; border-radius: 22px; padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; }
+.hz-big small { font-size: 11px; color: #B8AFA4; letter-spacing: .08em; font-weight: 700; }
+.hz-num { font-size: 46px; line-height: 1; } .hz-num span { font-size: 18px; color: #B8AFA4; }
+.hz-paid { font-size: 12px; color: #9FD8B8; font-weight: 700; }
+.hz-chip { font-size: 11.5px; font-weight: 700; border-radius: 10px; padding: 4px 9px; }
+.hz-chip.ok { color: #5CC08E; background: #23352C; } .hz-chip.gold { color: #E0C27A; background: #3A3222; } .hz-chip.red { color: #F2A9AE; background: #3A2526; }
+.hz-row { width: 100%; background: #fff; border: 0; border-radius: 16px; padding: 10px 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; font: inherit; color: var(--ink); cursor: pointer; text-align: left; }
+.hz-row.asked { box-shadow: inset 0 0 0 2px var(--accent); }
+.hz-row b { font-size: 14px; } .hz-row span { display: block; font-size: 12px; color: var(--muted); } .hz-row em { display: block; font-style: normal; font-size: 11.5px; color: #9A7413; font-weight: 600; }
+.hz-d { width: 38px; text-align: center; } .hz-d small { display: block; font-size: 10px; font-weight: 800; color: var(--muted); } .hz-d b { font-size: 22px; line-height: 1; font-weight: 500; }
+.hz-h { font-size: 20px; } .hz-h span { display: inline; font-size: 12px; color: var(--muted); }
+.hz-tag { display: inline-block; font-size: 10.5px; font-weight: 800; border-radius: 8px; padding: 2px 7px; white-space: nowrap; }
+.hz-tag.ok { color: var(--ok); background: var(--ok-bg); } .hz-tag.gold { color: #8A6A12; background: #FBF3E0; } .hz-tag.red { color: var(--accent); background: var(--accent-bg); } .hz-tag.grey { color: #4A443D; background: #ECE6DC; }
+.hz-qwrap { flex: 1 1 100%; }
+.hz-q { border-radius: 12px; padding: 8px 10px; font-size: 12.5px; text-align: left; }
+.hz-q small, .hz-q i { display: block; margin-top: 3px; } .hz-q small { color: var(--muted); } .hz-q i { color: var(--ink); }
+.hz-q.red { background: var(--accent-bg); color: #6E1A1D; } .hz-q.ok { background: var(--ok-bg); color: var(--ok); } .hz-q.grey { background: #F1ECE4; color: #4A443D; }
+.hz-break { padding: 4px 14px; } .hz-break > div { display: flex; justify-content: space-between; gap: 10px; padding: 9px 0; border-bottom: 1px solid #EFE9E0; font-size: 14px; } .hz-break > div:last-child { border-bottom: 0; } .hz-break span { color: var(--muted); }
+.hz-wait { background: #FBF3E0; border: 1px solid #EBD9A8; border-radius: 14px; padding: 10px 12px; font-size: 12.5px; color: #6B5310; }
+.hz-chart { display: flex; align-items: flex-end; gap: 6px; height: 130px; box-sizing: border-box; }
+.hz-chart button { flex: 1 1 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; height: 100%; border: 0; background: none; padding: 0; cursor: pointer; }
+.hz-chart i { width: 100%; border-radius: 5px; background: var(--ok); } .hz-chart i.cur { background: #C9C0B4; } .hz-chart small { font-size: 9px; color: var(--muted); }
+.hz-home { border: 2px solid var(--ok); }
+.tabbar a { font-size: 10.5px; }
+.hq-why { display: block; width: 100%; max-width: 420px; margin-top: 6px; height: 34px; border-radius: 10px; border: 1.5px solid #E4DCD1; padding: 0 10px; font: inherit; font-size: 13px; }
+.hz-home b.serif { color: var(--ink); font-size: 26px; }

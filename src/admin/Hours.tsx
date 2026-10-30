@@ -12,6 +12,7 @@ export function Hours() {
   const [closed, setClosed] = useState<string | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const [draft, setDraft] = useState<Record<string, { in?: string; out?: string }>>({});
+  const [why, setWhy] = useState<Record<string, string>>({});
   const [qs, setQs] = useState<{ id: string; shift_id: string; kind: string; claimed_at: string | null; note: string | null; created_at: string }[]>([]);
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
   const today = isoDay(new Date());
@@ -120,13 +121,14 @@ export function Hours() {
               const resolve = async (st: 'fixed' | 'correct') => {
                 if (st === 'fixed' && draft[r.s.id]) await save(r);
                 const { data: me } = await supabase.rpc('me');
-                await supabase.from('hours_questions').update({ status: st, resolved_at: new Date().toISOString(), resolved_by: me }).eq('id', q.id); load();
+                await supabase.from('hours_questions').update({ status: st, resolved_at: new Date().toISOString(), resolved_by: me, answer_note: (why[q.id] ?? '').trim() || null }).eq('id', q.id); load();
               };
               return (
                 <div key={q.id} className="need">
                   <span className="dotr" />
                   <div className="grow"><b>{r.s.staff?.full_name} · {dLabel(r.e.event_date)} · {r.e.title}</b>
-                    <span>Recorded {tTime(r.s.punches?.punch_in ?? null)} – {tTime(r.s.punches?.punch_out ?? null)} · says {q.kind === 'other' ? 'something else' : `${q.kind} ${q.claimed_at ? tTime(q.claimed_at) : ''}`}{q.note ? ` · “${q.note}”` : ''}</span></div>
+                    <span>Recorded {tTime(r.s.punches?.punch_in ?? null)} – {tTime(r.s.punches?.punch_out ?? null)} · says {q.kind === 'other' ? 'something else' : `${q.kind} ${q.claimed_at ? tTime(q.claimed_at) : ''}`}{q.note ? ` · “${q.note}”` : ''}</span>
+                    <input className="hq-why" value={why[q.id] ?? ''} onChange={(e) => setWhy({ ...why, [q.id]: e.target.value })} placeholder="Short reason (optional · they see it)" /></div>
                   {draft[r.s.id] ? <>{times(r)}<button className="abtn sm ok" onClick={() => resolve('fixed')}>Save as fixed</button></>
                     : <><button className="abtn sm dark" onClick={fix}>Fix</button><button className="abtn sm" onClick={() => resolve('correct')}>It’s correct</button></>}
                 </div>
