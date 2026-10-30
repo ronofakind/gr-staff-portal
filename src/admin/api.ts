@@ -90,7 +90,9 @@ export function periodOf(iso: string) {
   const last = new Date(y, m, 0).getDate(); const mm = String(m).padStart(2, '0');
   return d <= 15 ? { start: `${y}-${mm}-01`, end: `${y}-${mm}-15` } : { start: `${y}-${mm}-16`, end: `${y}-${mm}-${last}` };
 }
-export const hoursBetween = (a: string | null, b: string | null) => a && b ? Math.round((new Date(b).getTime() - new Date(a).getTime()) / 900000) * 0.25 : 0;
+/** Paid hours: real time rounded to 15 min, minimum 4 h per shift (Ronnie, Oct 29 2026: paid and billed). */
+export const MIN_HOURS = 4;
+export const hoursBetween = (a: string | null, b: string | null) => a && b ? Math.max(MIN_HOURS, Math.round((new Date(b).getTime() - new Date(a).getTime()) / 900000) * 0.25) : 0;
 export const tTime = (iso: string | null) => iso ? new Date(iso).toLocaleTimeString('en-CA', { timeZone: 'America/Toronto', hour: 'numeric', minute: '2-digit' }).replace(/\./g, '') : '';
 export const dLabel = (iso: string, o: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric' }) => new Date(iso + 'T12:00:00').toLocaleDateString('en-CA', o).replace(/\./g, '');
 
