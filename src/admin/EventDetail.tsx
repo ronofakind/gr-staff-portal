@@ -47,7 +47,7 @@ export function EventDetail() {
   const tierCount = (t: string) => all.filter((s) => tierOf(s.staff_id) === t).length;
   const floorAsk = asks.find((a) => a.department === 'floor');
   const dept = (d: string) => evs.some((x) => x.department === d);
-  const unif = (k?: string) => UNIFORMS.find(([u]) => u === k)?.[1] ?? '—';
+  const unif = (k?: string | null) => (k?.startsWith('custom:') ? k.slice(7) : UNIFORMS.find(([u]) => u === k)?.[1]) ?? '—';
   const docs = ((e as AEvent & { plan?: { documents?: { name: string; url: string }[] } }).plan?.documents) ?? [];
   const firstStart = all.map((s) => s.planned_start).sort()[0];
   const confirmed = all.filter((s) => s.status === 'confirmed').length;
@@ -102,7 +102,8 @@ export function EventDetail() {
             <div><small>Address</small><b>{e.address ?? venueAddr ?? '—'}</b></div>
             {dept('floor') && <div><small>MD</small>{md ? <b>{md.staff?.full_name}</b> : <b className="accent">Not set · pick one</b>}</div>}
             {dept('bar') && <div><small>Bar manager</small>{bm ? <b>{bm.staff?.full_name}</b> : <b className="accent">Not set</b>}</div>}
-            <div><small>Uniform</small><b>{[dept('floor') ? `Floor: ${unif(e.uniform_floor)}` : '', dept('bar') ? `Bar: ${unif(evs.find((x) => x.department === 'bar')?.uniform_bar)}` : ''].filter(Boolean).join(' · ')}</b></div>
+            <div><small>Uniform · men / women</small><b>{[dept('floor') ? `Floor: ${unif(e.uniform_floor)} / ${unif(e.uniform_floor_w ?? e.uniform_floor)}` : '', dept('bar') ? `Bar: ${unif(evs.find((x) => x.department === 'bar')?.uniform_bar)} / ${unif(evs.find((x) => x.department === 'bar')?.uniform_bar_w ?? evs.find((x) => x.department === 'bar')?.uniform_bar)}` : ''].filter(Boolean).join(' · ')}</b></div>
+            {evs.find((x) => x.drive_folder_url)?.drive_folder_url && <div className="full"><small>Event folder · managers see it</small><a className="tag" style={{ alignSelf: 'flex-start' }} href={evs.find((x) => x.drive_folder_url)!.drive_folder_url!} target="_blank" rel="noreferrer">Open the Drive folder ›</a></div>}
             {e.notes && <div className="full"><small>Note for staff</small><b>{e.notes}</b></div>}
             {docs.length > 0 && <div className="full"><small>Documents</small><div className="row wrap" style={{ gap: 6 }}>{docs.map((d) => <a key={d.url} className="tag" href={d.url} target="_blank" rel="noreferrer">{d.name}</a>)}</div></div>}
           </div>

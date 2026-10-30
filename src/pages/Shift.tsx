@@ -4,7 +4,7 @@ import { supabase, SHIFT_SELECT, type ShiftRow } from '../lib/supabase';
 import { useT, useLang } from '../lib/i18n';
 import { time, longDate, minus, mapsUrl } from '../lib/format';
 import { Avatar } from '../components/Avatar';
-import { UniformIcon, uniformFor, UNIFORM_LABEL, PantsIcon, ShoesIcon, ApronIcon, TieIcon, WineKeyIcon, isBarPos } from '../components/Uniform';
+import { UniformIcon, uniformFor, uniformLabel, PantsIcon, ShoesIcon, ApronIcon, TieIcon, WineKeyIcon, isBarPos } from '../components/Uniform';
 import { Status, isBar } from './Home';
 
 export function Shift({ backTo = '/' }: { backTo?: string }) {
@@ -39,11 +39,11 @@ export function Shift({ backTo = '/' }: { backTo?: string }) {
   const tiles: { icon: JSX.Element; name: string; no?: string }[] = [
     ...(!bar && !dress && kind !== 'black_tshirt' ? [{ icon: <TieIcon size={68} />, name: 'Black tie' }] : []),
     ...(!dress ? [{ icon: <PantsIcon size={68} />, name: 'Black dress pants', no: 'No jeans' }] : []),
-    { icon: <ShoesIcon size={dress ? 76 : 64} who={dress ? 'women' : 'both'} />, name: 'Black dress shoes', no: 'No running shoes' },
+    { icon: <ShoesIcon size={dress ? 76 : 64} who={s.me?.sex === 'f' || dress ? 'women' : s.me?.sex === 'm' ? 'men' : 'both'} />, name: 'Black dress shoes', no: 'No running shoes' },
     ...(!dress && kind !== 'black_tshirt' ? [{ icon: <ApronIcon size={68} />, name: 'Black apron' }] : []),
     ...(bar ? [{ icon: <WineKeyIcon size={68} />, name: 'Wine key' }] : []),
   ];
-  const shirtLabel = UNIFORM_LABEL[kind].replace(' + tie', '');
+  const shirtLabel = uniformLabel(kind).replace(' + tie', '');
 
   return (
     <main className="page v2 details">

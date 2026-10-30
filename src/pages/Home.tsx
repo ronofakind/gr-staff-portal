@@ -5,7 +5,7 @@ import { useLang } from '../lib/i18n';
 import { time, longDate, dayBadge, minus } from '../lib/format';
 import { Avatar } from '../components/Avatar';
 import { TabBar } from '../components/TabBar';
-import { UniformIcon, uniformFor, UNIFORM_LABEL } from '../components/Uniform';
+import { UniformIcon, uniformFor, uniformLabel } from '../components/Uniform';
 
 type Mate = { full_name: string; photo_url: string | null; position_code: string | null; position_detail: string | null; punches: { punch_in: string | null; punch_out: string | null } | null };
 type Q = { shift_id: string; status: 'open' | 'fixed' | 'correct' };
@@ -24,6 +24,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
   const [qs, setQs] = useState<Record<string, Q['status']>>({});
   const [month, setMonth] = useState<{ n: number; h: number } | null>(null);
   const [askQ, setAskQ] = useState<ShiftRow | null>(null);
+  const [alerts, setAlerts] = useState<{ id: string; kind: string; title: string; body: string | null; event_id: string | null }[]>([]);
 
   const load = async () => {
     const since = new Date(Date.now() - 12 * 3600e3).toISOString();
@@ -54,6 +55,11 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
     }
   };
   useEffect(() => { load(); }, []);
+  useEffect(() => {
+    supabase.from('staff_alerts').select('id,kind,title,body,event_id').eq('staff_id', me.id).is('seen_at', null).order('created_at')
+      .then(({ data }) => setAlerts((data ?? []) as typeof alerts));
+  }, [me.id]);
+  const gotIt = async (id: string) => { setAlerts(alerts.filter((a) => a.id !== id)); if (!preview) await supabase.rpc('alert_seen', { p_id: id }); };
   const [asked, setAsked] = useState(0);
   useEffect(() => {
     supabase.from('availability').select('id', { count: 'exact', head: true }).eq('staff_id', me.id).eq('status', 'asked')
@@ -90,6 +96,13 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
         <div className="hello"><b>Hi {first}</b><span>{longDate(today, lang)}</span></div>
         {!preview ? <Link to="/profile" aria-label="My profile"><Avatar name={me.full_name} url={me.photo_url} size={38} /></Link> : <Avatar name={me.full_name} url={me.photo_url} size={38} />}
       </header>
+
+      {alerts.map((a) => (
+        <div key={a.id} className="alert-card">
+          <div className="grow"><small>{a.kind === 'removed' ? 'SCHEDULE CHANGE' : a.kind === 'booked' ? 'NEW SHIFT' : 'SHIFT CHANGED'}</small><b>{a.title}</b>{a.body && <span>{a.body}</span>}</div>
+          <button className="pill-red" onClick={() => gotIt(a.id)}>Got it</button>
+        </div>
+      ))}
 
       {asked > 0 && (
         <Link to={preview ? '#' : '/availability'} className="todo">
@@ -166,7 +179,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
                 <div className="venue serif">{next.events.title}</div>
                 {addr && <div className="sub" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{addr.split(',').slice(0, 2).join(' ·')}</div>}
               </div>
-              <span className="wear-tile" style={{ width: 52, height: 52, borderRadius: 14 }} title={UNIFORM_LABEL[uniformFor(next)]}><UniformIcon kind={uniformFor(next)} size={38} /></span>
+              <span className="wear-tile" style={{ width: 52, height: 52, borderRadius: 14 }} title={uniformLabel(uniformFor(next))}><UniformIcon kind={uniformFor(next)} size={38} /></span>
             </div>
             <div className="pos-line"><small>Your position</small><span className="pos-pill-lg">{role(next)}</span></div>
             <div className="row2">
@@ -203,7 +216,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
                   <div className="d" style={{ width: 40, alignItems: 'center' }}><small>{b.dow}</small><b>{b.day}</b></div>
                   <div className="what" style={{ gap: 5 }}><b>{s.events.title}</b>
                     <span className="pos-row2"><span className={'pos-pill' + (isLead(s) ? ' lead' : '')}>{role(s)}</span>{teams[s.events.id] && !preview ? <span>team {teams[s.events.id].length}</span> : null}</span></div>
-                  <span className="row-wear" title={UNIFORM_LABEL[uniformFor(s)]}><UniformIcon kind={uniformFor(s)} size={30} /></span>
+                  <span className="row-wear" title={uniformLabel(uniformFor(s))}><UniformIcon kind={uniformFor(s)} size={30} /></span>
                   <div className="row-time"><small>Starts</small>{s.time_tbc ? <b className="tbc">Time TBC</b> : <b><span className="serif">{time(s.planned_start, lang).replace(/\s?[ap]\.?\s?m\.?/i, '')}</span><i>{/p\.?\s?m/i.test(time(s.planned_start, lang)) ? ' PM' : ' AM'}</i></b>}</div>
                   {s.status === 'confirmed' ? <span className="ok-dot" aria-label="Confirmed" /> : <span className="tag-ask" style={{ height: 26, fontSize: 11 }}>Confirm</span>}
                 </Link>

@@ -11,7 +11,7 @@ type Row = {
   staff: { full_name: string; photo_url: string | null; phone: string | null } | null; punches: { punch_in: string | null; punch_out: string | null; arrived_at: string | null; updated_at: string } | null;
 };
 type Ev = { id: string; title: string; event_date: string };
-type EvFull = Ev & { address: string | null; start_time: string | null; end_time: string | null; description: string | null;
+type EvFull = Ev & { drive_folder_url?: string | null; address: string | null; start_time: string | null; end_time: string | null; description: string | null;
   dress_code: string | null; hours_submitted_at: string | null; venues: { address: string | null; staff_notes: string | null } | null };
 
 const L = {
@@ -61,7 +61,7 @@ export function Manage() {
 
   const load = async () => {
     const [e, s] = await Promise.all([
-      supabase.from('events').select('id,title,event_date,address,start_time,end_time,description,dress_code,hours_submitted_at,venues(address,staff_notes)').eq('id', eventId!).single(),
+      supabase.from('events').select('id,title,event_date,address,start_time,end_time,description,dress_code,hours_submitted_at,drive_folder_url,venues(address,staff_notes)').eq('id', eventId!).single(),
       supabase.from('shifts').select('id,position_code,position_detail,planned_start,planned_end,attendance,leave_by,manager_note,staff:staff!shifts_staff_id_fkey(full_name,photo_url,phone),punches(punch_in,punch_out,arrived_at,updated_at)')
         .eq('event_id', eventId!).neq('status', 'declined').order('planned_start'),
     ]);
@@ -151,6 +151,7 @@ export function Manage() {
       <div style={{ padding: '0 6px' }}>
         <div className="serif" style={{ fontSize: 34, lineHeight: 1 }}>{ev.title}</div>
         <div className="muted sm" style={{ marginTop: 4 }}>{new Date(ev.event_date + 'T12:00:00').toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric' })}{ev.start_time ? ` · ${fmt12(ev.start_time)}${ev.end_time ? ` – ${fmt12(ev.end_time)}` : ''}` : ''}</div>
+        {ev.drive_folder_url && <a className="folder-link" href={ev.drive_folder_url} target="_blank" rel="noreferrer">Event folder · floor plan, run of show ›</a>}
       </div>
 
       <section className="mt-sum">

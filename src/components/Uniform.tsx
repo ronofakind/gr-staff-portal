@@ -9,17 +9,22 @@ export const UNIFORM_LABEL: Record<UniformKind, string> = {
 export const UNIFORM_SHORT: Record<UniformKind, string> = { white_shirt: 'White shirt', black_shirt: 'Black shirt', dress: 'Dress', black_tshirt: 'Black T-shirt' };
 
 /** Which uniform this person wears: shift override, else the event's floor/bar default. */
-export function uniformFor(s: { uniform?: string | null; position_code: string | null; position_detail: string | null;
-  events: { uniform_floor?: string | null; uniform_bar?: string | null } }): UniformKind {
+export function uniformFor(s: { uniform?: string | null; position_code: string | null; position_detail: string | null; me?: { sex?: string | null } | null;
+  events: { uniform_floor?: string | null; uniform_bar?: string | null; uniform_floor_w?: string | null; uniform_bar_w?: string | null } }): UniformKind {
   const bar = /^(BM|BT|BB)$/.test(s.position_code ?? '') || /^bar\b/i.test(s.position_detail ?? '');
-  return (s.uniform || (bar ? s.events.uniform_bar : s.events.uniform_floor) || (bar ? 'black_shirt' : 'white_shirt')) as UniformKind;
+  const w = s.me?.sex === 'f'; // women see the women's line; men and not-set see the men's line
+  const ev = s.events;
+  return (s.uniform || (bar ? (w && ev.uniform_bar_w) || ev.uniform_bar : (w && ev.uniform_floor_w) || ev.uniform_floor) || (bar ? 'black_shirt' : 'white_shirt')) as UniformKind;
 }
+/** Label for any uniform value, including "custom:<text>". */
+export const uniformLabel = (k: string) => (k.startsWith('custom:') ? k.slice(7) || 'See notes' : UNIFORM_LABEL[k as UniformKind] ?? k);
 
 const IMG: Partial<Record<UniformKind, string>> = { white_shirt: '/uniform/shirt_white.png', black_shirt: '/uniform/shirt_black.png', dress: '/uniform/dress.png', black_tshirt: '/uniform/tshirt.png' };
 const pic = (src: string, size: number) => <img src={src} alt="" width={size} height={size} style={{ objectFit: 'contain', display: 'block' }} />;
 
 export function UniformIcon({ kind, size = 32 }: { kind: UniformKind; size?: number }) {
   if (IMG[kind]) return pic(IMG[kind]!, size);
+  if (String(kind).startsWith('custom:')) return pic('/uniform/shirt_black.png', size);
   if (kind === 'dress') {
     return (
       <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden="true">

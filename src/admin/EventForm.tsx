@@ -2,15 +2,49 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import {
-  allStaff, isoDay, startIso, endIso, addDays, dLabel, parseTime, ap12, roleOfShift, ROLES, UNIFORMS, ENDS,
+  allStaff, bookingChange, isoDay, startIso, endIso, addDays, dLabel, parseTime, ap12, roleOfShift, ROLES, UNIFORMS, ENDS,
   type AStaff, type Line, type Venue, type Client,
 } from './api';
 import { tiersFor } from './Availability';
 import { AddressInput, type AddressParts } from '../components/AddressInput';
 
+const MEN: [string, string][] = [['white_shirt', 'White dress shirt'], ['black_shirt', 'Black dress shirt'], ['black_tshirt', 'Black T-shirt']];
+const WOMEN: [string, string][] = [['white_shirt', 'White dress shirt'], ['black_shirt', 'Black dress shirt'], ['dress', 'Black cocktail dress'], ['black_tshirt', 'Black T-shirt']];
+const uniName = (k: string) => (k.startsWith('custom:') ? k.slice(7) : [...MEN, ...WOMEN].find(([u]) => u === k)?.[1].replace('dress shirt', 'shirt').replace('Black cocktail dress', 'dress') ?? k).toLowerCase();
+const pieces = (k: string, bar: boolean) => k.startsWith('custom:') ? ['Custom for this event'] : k === 'dress' ? ['Long sleeve', ...(bar ? ['Wine key'] : []), 'No apron', 'Black shoes']
+  : k === 'black_tshirt' ? ['No apron', 'No tie', ...(bar ? ['Wine key'] : []), 'Black pants', 'Black shoes'] : [bar ? 'No tie' : 'Black tie', ...(bar ? ['Wine key'] : []), 'Black apron', 'Black pants', 'Black shoes'];
+
+function UniLine({ who, opts, value, set, bar }: { who: string; opts: [string, string][]; value: string; set: (v: string) => void; bar: boolean }) {
+  const custom = value.startsWith('custom:');
+  return (
+    <div className="uni-line">
+      <span className="uni-who">{who}</span>
+      <div className="stack" style={{ gap: 6 }}>
+        <div className="row wrap" style={{ gap: 6 }}>
+          {opts.map(([k, l]) => <button type="button" key={k} className={'uchip' + (value === k ? ' on' : '')} onClick={() => set(k)}>{l}</button>)}
+          {custom ? <input className="uchip-in" autoFocus value={value.slice(7)} onChange={(e) => set('custom:' + e.target.value)} placeholder="e.g. All black, no tie" />
+            : <button type="button" className="uchip" onClick={() => set('custom:')}>Custom…</button>}
+        </div>
+        <div className="row wrap" style={{ gap: 4 }}>{pieces(value, bar).map((p) => <span key={p} className="upiece">{p}</span>)}</div>
+      </div>
+    </div>
+  );
+}
+function UniDept({ label, sub, bar, men, women, setMen, setWomen }: { label: string; sub: string; bar: boolean; men: string; women: string; setMen: (v: string) => void; setWomen: (v: string) => void }) {
+  return (
+    <div className={'uni-dept' + (bar ? ' is-bar' : '')}>
+      <div><b>● {label}</b><small className="muted" style={{ display: 'block' }}>{sub}</small></div>
+      <div className="stack" style={{ gap: 10 }}>
+        <UniLine who="MEN" opts={MEN} value={men} set={setMen} bar={bar} />
+        <UniLine who="WOMEN" opts={WOMEN} value={women} set={setWomen} bar={bar} />
+      </div>
+    </div>
+  );
+}
+
 type Tier = 'A' | 'B' | 'C';
 type Ev = { id: string; department: 'floor' | 'bar' | 'kitchen'; staffing: Omit<Line, 'names'>[] | null; manager_id: string | null };
-type Sh = { id: string; event_id: string; staff_id: string; position_code: string | null; planned_start: string; attendance: string | null; punches: { punch_in: string | null } | null };
+type Sh = { id: string; event_id: string; staff_id: string; position_code: string | null; planned_start: string; attendance: string | null; notified_at?: string | null; punches: { punch_in: string | null } | null };
 type DayInfo = {
   avail: Record<string, { status: string; from: string | null; until: string | null }>;
   booked: Record<string, string>;   // staff_id → other event title
@@ -59,6 +93,8 @@ export function EventForm() {
   const [address, setAddress] = useState(''); const [ends, setEnds] = useState('~ midnight');
   const [parts, setParts] = useState<AddressParts | null>(null);
   const [uFloor, setUFloor] = useState('white_shirt'); const [uBar, setUBar] = useState('black_shirt');
+  const [uFloorW, setUFloorW] = useState('white_shirt'); const [uBarW, setUBarW] = useState('black_shirt');
+  const [unit, setUnit] = useState(''); const [folder, setFolder] = useState(''); const [showFolder, setShowFolder] = useState(false);
   const [note, setNote] = useState(''); const [staffNote, setStaffNote] = useState(''); const [showStaffNote, setShowStaffNote] = useState(false);
   const [rateSet, setRateSet] = useState<string | null>(null);
   const [lines, setLines] = useState<Line[]>([blankLine('floor', 'MD', '17:00'), blankLine('floor', 'W', '17:00')]);
@@ -72,7 +108,7 @@ export function EventForm() {
 
   // Lists
   useEffect(() => {
-    supabase.from('venues').select('id,name,address,usual_client_id,uniform_floor,uniform_bar').order('name').then(({ data }) => setVenues((data ?? []) as Venue[]));
+    supabase.from('venues').select('id,name,address,usual_client_id,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w').order('name').then(({ data }) => setVenues((data ?? []) as Venue[]));
     supabase.from('clients').select('id,name,rate_sets').order('name').then(({ data }) => setClients((data ?? []) as Client[]));
     allStaff().then((s) => setStaff(s.filter((x) => x.active)));
   }, []);
@@ -85,13 +121,15 @@ export function EventForm() {
       if (!e) return;
       const { data: sib } = await supabase.from('events').select('id,department,staffing,manager_id').eq('event_date', e.event_date).eq('title', e.title);
       const evs = (sib ?? []) as Ev[];
-      const { data: sh } = await supabase.from('shifts').select('id,event_id,staff_id,position_code,planned_start,attendance,punches(punch_in)').in('event_id', evs.map((x) => x.id)).neq('status', 'declined');
+      const { data: sh } = await supabase.from('shifts').select('id,event_id,staff_id,position_code,planned_start,attendance,notified_at,punches(punch_in)').in('event_id', evs.map((x) => x.id)).neq('status', 'declined');
       const shifts = (sh ?? []) as unknown as Sh[];
       setExisting(evs); setOldShifts(shifts);
       setDate(e.event_date); setTitle(e.title); setVenueId(e.venue_id); setAddress(e.address ?? '');
       setClientId(e.event_private?.client_id ?? ''); setRateSet(e.event_private?.rate_set ?? null);
       setEnds(e.ends_label ?? (ENDS.find(([, t]) => t && e.end_time?.startsWith(t))?.[0] ?? '~ midnight'));
       setUFloor(e.uniform_floor ?? 'white_shirt'); setUBar(e.uniform_bar ?? 'black_shirt');
+      setUFloorW(e.uniform_floor_w ?? e.uniform_floor ?? 'white_shirt'); setUBarW(e.uniform_bar_w ?? e.uniform_bar ?? 'black_shirt');
+      setFolder(e.drive_folder_url ?? ''); setShowFolder(!!e.drive_folder_url);
       setNote(e.description ?? ''); setStaffNote(e.notes ?? ''); setShowStaffNote(!!e.notes);
       const ordered = [...evs].sort((a) => (a.department === 'floor' ? -1 : 1));
       setLines(ordered.flatMap((x) => linesFor(x, shifts)));
@@ -143,6 +181,7 @@ export function EventForm() {
     setVenueId(v.id); setTitle(v.name); setAddress(v.address ?? '');
     if (v.usual_client_id) setClientId(v.usual_client_id);
     if (v.uniform_floor) setUFloor(v.uniform_floor); if (v.uniform_bar) setUBar(v.uniform_bar);
+    setUFloorW(v.uniform_floor_w ?? v.uniform_floor ?? uFloorW); setUBarW(v.uniform_bar_w ?? v.uniform_bar ?? uBarW);
   };
 
   const floorN = lines.filter((l) => l.dept === 'floor').reduce((n, l) => n + l.count, 0);
@@ -159,11 +198,11 @@ export function EventForm() {
       setClients([...clients, { id: c.id, name: newClient.trim(), rate_sets: [] }]);
     }
     if (!vId && title.trim()) {
-      const { data: v, error } = await supabase.from('venues').insert({ name: title.trim(), address: address || null, ...(parts ? { street: parts.street, unit: parts.unit || null, city: parts.city, province: parts.province, postal_code: parts.postal_code } : {}), usual_client_id: cId, uniform_floor: uFloor, uniform_bar: uBar }).select('id').single();
+      const { data: v, error } = await supabase.from('venues').insert({ name: title.trim(), address: address || null, uniform_floor_w: uFloorW, uniform_bar_w: uBarW, ...(parts ? { street: parts.street, unit: unit || parts.unit || null, city: parts.city, province: parts.province, postal_code: parts.postal_code } : {}), usual_client_id: cId, uniform_floor: uFloor, uniform_bar: uBar }).select('id').single();
       if (error && !error.message.includes('duplicate')) throw error;
       vId = v?.id ?? (await supabase.from('venues').select('id').eq('name', title.trim()).single()).data?.id ?? null; setVenueId(vId);
     } else if (vId) {
-      await supabase.from('venues').update({ uniform_floor: uFloor, uniform_bar: uBar, ...(venue && !venue.address && address ? { address } : {}), ...(venue && !venue.usual_client_id && cId ? { usual_client_id: cId } : {}) }).eq('id', vId);
+      await supabase.from('venues').update({ uniform_floor: uFloor, uniform_bar: uBar, uniform_floor_w: uFloorW, uniform_bar_w: uBarW, ...(venue && !venue.address && address ? { address } : {}), ...(venue && !venue.usual_client_id && cId ? { usual_client_id: cId } : {}) }).eq('id', vId);
     }
     const endT = ENDS.find(([l]) => l === ends)?.[1] ?? null;
     let firstId: string | null = null;
@@ -175,10 +214,10 @@ export function EventForm() {
       const lead = ls.find((l) => l.code === (dept === 'floor' ? 'MD' : 'BM'));
       const start = ls.map((l) => l.start).sort()[0] ?? '17:00';
       const row = {
-        event_date: forDate, title: title.trim(), venue_id: vId, address: address || null, department: dept,
+        event_date: forDate, title: title.trim(), venue_id: vId, address: (address + (unit.trim() ? `, ${unit.trim()}` : '')) || null, department: dept,
         start_time: start, end_time: endT, ends_label: ends, staff_needed: ls.reduce((n, l) => n + l.count, 0),
         manager_id: lead ? keep(lead)[0] ?? null : null, description: note || null, notes: staffNote || null,
-        uniform_floor: uFloor, uniform_bar: uBar, staffing: ls.map(({ dept: d, code, start: s, count }) => ({ dept: d, code, start: s, count })),
+        uniform_floor: uFloor, uniform_bar: uBar, uniform_floor_w: uFloorW, uniform_bar_w: uBarW, drive_folder_url: folder.trim() || null, staffing: ls.map(({ dept: d, code, start: s, count }) => ({ dept: d, code, start: s, count })),
       };
       const res = old ? await supabase.from('events').update(row).eq('id', old.id).select('id').single() : await supabase.from('events').insert(row).select('id').single();
       if (res.error) throw res.error;
@@ -189,7 +228,8 @@ export function EventForm() {
       // Shifts: book new names, move changed ones, remove dropped ones (never anyone who already punched in).
       const want = ls.flatMap((l) => keep(l).map((sid) => ({ sid, l })));
       const have = old ? oldShifts.filter((s) => s.event_id === old.id) : [];
-      const log: { by_staff: null; entity: string; entity_id: string; change: object }[] = [];
+      const sent = have.some((s) => s.notified_at);
+      const ev = (st: string) => ({ id: evId, event_date: forDate, title: title.trim(), sent, start: startIso(forDate, st) });
       for (const { sid, l } of want) {
         const ps = startIso(forDate, l.start); const pe = endT ? endIso(forDate, l.start, endT) : null;
         const label = ROLES.find((r) => r.code === l.code)?.label ?? l.code;
@@ -197,18 +237,17 @@ export function EventForm() {
         if (!cur) {
           const ins = await supabase.from('shifts').insert({ event_id: evId, staff_id: sid, position_code: l.code, position_detail: label, planned_start: ps, planned_end: pe, status: 'booked' }).select('id').single();
           if (ins.error) throw ins.error;
-          log.push({ by_staff: null, entity: 'shift', entity_id: ins.data.id, change: { kind: 'booked', event: evId, date: forDate, start: l.start, code: l.code } });
+          await bookingChange('booked', { staff_id: sid, shift_id: ins.data.id, to: ev(l.start) });
         } else if (hm(cur.planned_start) !== l.start || roleOfShift(cur.position_code) !== l.code || cur.attendance) {
           const up = await supabase.from('shifts').update({ planned_start: ps, planned_end: pe, position_code: /^\d+$/.test(cur.position_code ?? '') && l.code === 'W' ? cur.position_code : l.code, position_detail: label, attendance: null }).eq('id', cur.id);
           if (up.error) throw up.error;
-          log.push({ by_staff: null, entity: 'shift', entity_id: cur.id, change: { kind: 'moved', from: hm(cur.planned_start), to: l.start, code: l.code } });
+          if (hm(cur.planned_start) !== l.start) await bookingChange('moved', { staff_id: sid, shift_id: cur.id, from: ev(hm(cur.planned_start)), to: ev(l.start) });
         }
       }
       for (const s of have) if (!want.some((w) => w.sid === s.staff_id) && !s.punches?.punch_in) {
         await supabase.from('shifts').delete().eq('id', s.id);
-        log.push({ by_staff: null, entity: 'shift', entity_id: s.id, change: { kind: 'removed', staff: s.staff_id, event: evId, date: forDate } });
+        await bookingChange('removed', { staff_id: s.staff_id, shift_id: s.id, from: ev(hm(s.planned_start)) });
       }
-      if (log.length) await supabase.from('change_log').insert(log);
       if (!ls.length && old && !have.some((s) => s.punches?.punch_in)) await supabase.from('events').delete().eq('id', old.id);
 
       // Ask availability (staff only see the date)
@@ -295,13 +334,39 @@ export function EventForm() {
           {venue?.usual_client_id && venue.usual_client_id === clientId && <small className="okc">Filled from the venue · change if needed</small>}
         </label>
         <label className="ef-f"><span>ENDS · approx.</span><select value={ends} onChange={(e) => setEnds(e.target.value)}>{ENDS.map(([l]) => <option key={l}>{l}</option>)}</select></label>
-        <div className="ef-f ef-wide"><span>ADDRESS · {venue?.address ? 'auto' : 'start typing, pick from the list'}</span><AddressInput value={address} onChange={(v) => { setAddress(v); setParts(null); }} onPick={setParts} placeholder="Start typing the address…" /><small className="muted">Add the suite, floor or entrance at the end if needed.</small></div>
-        <label className="ef-f"><span>FLOOR UNIFORM</span><select value={uFloor} onChange={(e) => setUFloor(e.target.value)}>{UNIFORMS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></label>
-        <label className="ef-f"><span>BAR UNIFORM</span><select value={uBar} onChange={(e) => setUBar(e.target.value)}>{UNIFORMS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select><small className="muted">Remembered per venue</small></label>
+        <div className="ef-f ef-wide"><span>ADDRESS · {venue?.address ? 'auto' : 'start typing, pick from the list'}</span><div className="row" style={{ gap: 8, alignItems: 'flex-start' }}><div style={{ flex: '1 1 auto' }}><AddressInput value={address} onChange={(v) => { setAddress(v); setParts(null); }} onPick={(p) => { setParts(p); if (p.unit) setUnit(p.unit); }} placeholder="Start typing the address…" /></div><input aria-label="Apt / unit / floor" style={{ width: 150, flex: '0 0 auto' }} value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="Apt / unit / floor" /></div></div>
+        <div className="ef-f"><span>UNIFORM</span><button type="button" className="vp-btn" onClick={() => document.getElementById('uni-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}><span className="grow" style={{ fontWeight: 500, fontSize: 13, textAlign: 'left' }}>Floor: {uniName(uFloor)} / {uniName(uFloorW)}{lines.some((l) => l.dept === 'bar') ? ` · Bar: ${uniName(uBar)} / ${uniName(uBarW)}` : ''}</span>↓</button><small className="muted">Men / women · set below the staffing</small></div>
         <label className="ef-f ef-wide"><span>EVENT NOTE (optional)</span><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Sit-down dinner · 250 guests" /></label>
       </div>
 
       <Grid lines={lines} setLines={setLines} staff={staff} day={day} />
+
+      <div className="adm-card uni-card" id="uni-card">
+        <div className="sec" style={{ padding: 0 }}><span className="serif">Uniforms · per department, men and women</span><span className="muted sm">{venue ? 'Filled from the venue · ' : ''}each person sees only their own</span></div>
+        <UniDept label="Floor" sub="MD · waiters · busboys" bar={false} men={uFloor} women={uFloorW} setMen={setUFloor} setWomen={setUFloorW} />
+        {lines.some((l) => l.dept === 'bar') && <UniDept label="Bar" sub="Shows because there's a Bar line" bar men={uBar} women={uBarW} setMen={setUBar} setWomen={setUBarW} />}
+        <small className="muted">Pieces follow the pick: a shirt adds apron + pants (+ tie on floor, wine key on bar). Cocktail dress = long sleeve, no apron. Black T-shirt = no apron, no tie. Custom… is for this event only.</small>
+      </div>
+
+      <div className="adm-card stack drive-card" style={{ gap: 12 }}>
+        <div className="row" style={{ justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+          <span className="serif" style={{ fontSize: 22 }}>Event folder · Google Drive</span>
+          <span className="row sm" style={{ gap: 8 }}><span className="muted">Create folder on Save</span><span className="tog off" aria-disabled title="Needs Google Drive connected">○</span></span>
+        </div>
+        <div className="drive-grid">
+          <div className="stack" style={{ gap: 8 }}>
+            <span className="kick" style={{ fontSize: 11 }}>FOLDER IT WILL CREATE</span>
+            <div className="drive-path"><small>G&amp;R Events 2026 › {new Date(date + 'T12:00:00').toLocaleDateString('en-CA', { month: '2-digit' })} {new Date(date + 'T12:00:00').toLocaleDateString('en-CA', { month: 'long' })} ›</small><b>{date} · {title || 'Venue'}{client ? ` · ${client.name.split(' ').slice(-1)[0]}` : ''}</b></div>
+            <div className="drive-connect"><b>Connect Google Drive</b><span>Creating folders and showing their files needs Google Drive connected to the app (a one-time setup Ronnie does). Until then, link a folder below.</span></div>
+          </div>
+          <div className="stack" style={{ gap: 8 }}>
+            <span className="kick" style={{ fontSize: 11 }}>OR LINK AN EXISTING FOLDER</span>
+            {!showFolder ? <button type="button" className="abtn" style={{ borderStyle: 'dashed' }} onClick={() => setShowFolder(true)}>Link an existing Drive folder…</button>
+              : <input className="ef-in" value={folder} onChange={(e) => setFolder(e.target.value)} placeholder="Paste the Drive folder link" />}
+            <small className="muted">The link shows on the event page and on the manager’s check-in screen (MD + BM). Staff don’t get files for now.</small>
+          </div>
+        </div>
+      </div>
 
       <div className="ef-2">
         <div className="adm-card stack" style={{ gap: 12 }}>

@@ -14,6 +14,8 @@ export function StaffProfile({ s, onClose, onEdit }: { s: AStaff; onClose: () =>
   const [off, setOff] = useState<{ id: string; from_date: string; to_date: string; reason: string | null; every_dow: number | null; added_by_admin: boolean; created_at: string; days_off_private: { note: string | null } | null }[]>([]);
   const [toff, setToff] = useState<{ mode: 'day' | 'range' | 'week'; from: string; to: string; dow: number; note: string }>({ mode: 'day', from: today, to: today, dow: 0, note: '' });
   const [toffMsg, setToffMsg] = useState('');
+  const [sex, setSex] = useState<'m' | 'f' | null>(s.sex ?? null);
+  useEffect(() => setSex(s.sex ?? null), [s.id]);
   const [shifts, setShifts] = useState<Sh[]>([]);
   const [notes, setNotes] = useState(s.staff_private?.notes ?? ''); const [saved, setSaved] = useState(true);
 
@@ -73,6 +75,9 @@ export function StaffProfile({ s, onClose, onEdit }: { s: AStaff; onClose: () =>
             <div className="muted sm">{s.nickname ? `"${s.nickname}" · ` : ''}{s.positions.join(', ') || s.role}{s.role !== 'staff' ? ` · ${s.role}` : ''}</div>
             <div className="row sm" style={{ gap: 6, marginTop: 4 }}>{s.staff_private?.tier && <i className={'tier-dot ' + s.staff_private.tier}>{s.staff_private.tier}</i>}{s.staff_private?.ranking != null && <b>#{s.staff_private.ranking}</b>}<span className="muted">· {s.language.toUpperCase()}</span></div></div>
         </div>
+        <div className="row sm" style={{ gap: 8 }}><span className="muted">Uniform line</span>
+          <div className="seg">{([['m', 'Men'], ['f', 'Women']] as const).map(([k, l]) => <button key={k} className={sex === k ? 'on' : ''} onClick={async () => { setSex(k); await supabase.from('staff').update({ sex: k }).eq('id', s.id); }}>{l}</button>)}</div>
+          {!sex && <span className="accent">not set · they see the men's line</span>}</div>
         <div className="grid-3btn">
           {tel ? <a className="abtn ok" href={`tel:${tel}`}>Call</a> : <span className="abtn" aria-disabled>No phone</span>}
           {tel ? <a className="abtn dark" href={`sms:${tel}`}>Text</a> : <span />}

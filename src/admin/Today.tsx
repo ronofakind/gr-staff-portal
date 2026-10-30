@@ -125,34 +125,43 @@ export function Today() {
   );
 }
 
+type Box = { n: number; label: string; cls: string; rows: [string, string, string][] };
 function Live({ e }: { e: AEvent }) {
+  const [tab, setTab] = useState<string | null>(null);
   const all = e.shifts.filter((s) => s.status !== 'declined');
   const now = Date.now();
   const firstStart = all.map((s) => new Date(s.planned_start).getTime()).sort((a, b) => a - b)[0] ?? 0;
   const started = all.some((s) => s.punches?.punch_in) || (firstStart && firstStart <= now);
   const md = all.find((s) => s.position_code === 'MD' || s.position_code === 'BM');
   const name = (s: AShift) => s.staff?.full_name ?? '?';
-  let boxes: [number, string, string][]; let issues: [string, string, string][];
+  const r = (s: AShift, a: string, b = ''): [string, string, string] => [name(s), a, b];
+  let boxes: Box[];
   if (!started) {
     const cancelled = all.filter((s) => s.attendance === 'cancelled');
     const team = all.filter((s) => !s.attendance);
     const conf = team.filter((s) => s.status === 'confirmed'); const unsure = team.filter((s) => s.status !== 'confirmed');
-    boxes = [[team.length, 'booked', ''], [conf.length, 'confirmed', 'ok'], [unsure.length, 'unsure', unsure.length ? 'amber' : ''], [cancelled.length, 'cancelled', cancelled.length ? 'red' : '']];
-    issues = [...cancelled.map((s) => ['red', name(s), 'cancelled'] as [string, string, string]), ...unsure.map((s) => ['amber', name(s), 'not confirmed yet'] as [string, string, string])];
+    boxes = [
+      { n: team.length, label: 'booked', cls: '', rows: team.map((s) => r(s, s.position_code ?? '', tTime(s.planned_start))) },
+      { n: conf.length, label: 'confirmed', cls: 'ok', rows: conf.map((s) => r(s, 'confirmed', tTime(s.planned_start))) },
+      { n: unsure.length, label: 'unsure', cls: unsure.length ? 'amber' : '', rows: unsure.map((s) => r(s, 'not confirmed yet', tTime(s.planned_start))) },
+      { n: cancelled.length, label: 'cancelled', cls: cancelled.length ? 'red' : '', rows: cancelled.map((s) => r(s, 'cancelled')) },
+    ];
   } else {
     const ns = all.filter((s) => s.attendance === 'no_show');
     const missing = all.filter((s) => !s.attendance && !s.punches?.punch_in && new Date(s.planned_start).getTime() < now);
     const lateIn = all.filter((s) => !s.attendance && flagsOf(s).some((f) => f.flag === 'late'));
-    const late = [...missing, ...lateIn];
     const working = all.filter((s) => s.punches?.punch_in && !(s.punches.punch_out && new Date(s.punches.punch_out).getTime() <= now));
     const done = all.filter((s) => s.punches?.punch_out && new Date(s.punches.punch_out).getTime() <= now);
-    const leaving = working.filter((s) => s.leave_by);
-    boxes = [[working.length, 'working', 'ok'], [late.length, 'late', late.length ? 'amber' : ''], [ns.length, 'no-show', ns.length ? 'red' : ''], [done.length, 'done', '']];
-    issues = [...ns.map((s) => ['red', name(s), 'no-show'] as [string, string, string]),
-      ...missing.map((s) => ['amber', name(s), `not here · ${Math.round((now - new Date(s.planned_start).getTime()) / 60000)} min late`] as [string, string, string]),
-      ...lateIn.map((s) => ['amber', name(s), `started ${tTime(s.punches!.punch_in)} · ${flagsOf(s)[0].min} min late`] as [string, string, string]),
-      ...leaving.map((s) => ['grey', name(s), `leaves ~${tTime(s.leave_by)}`] as [string, string, string])];
+    boxes = [
+      { n: working.length, label: 'working', cls: 'ok', rows: working.map((s) => r(s, `in ${tTime(s.punches!.punch_in)}`, s.leave_by ? `leaves ~${tTime(s.leave_by)}` : '')) },
+      { n: missing.length + lateIn.length, label: 'late', cls: missing.length + lateIn.length ? 'amber' : '', rows: [
+        ...missing.map((s) => r(s, 'not in yet', `${Math.round((now - new Date(s.planned_start).getTime()) / 60000)} min late`)),
+        ...lateIn.map((s) => r(s, `${flagsOf(s)[0].min} min`, `in ${tTime(s.punches!.punch_in)}`))] },
+      { n: ns.length, label: 'no-show', cls: ns.length ? 'red' : '', rows: ns.map((s) => r(s, 'no-show', s.manager_note ?? '')) },
+      { n: done.length, label: 'done', cls: '', rows: done.map((s) => r(s, `${tTime(s.punches!.punch_in)} → ${tTime(s.punches!.punch_out)}`)) },
+    ];
   }
+  const openBox = boxes.find((b) => b.label === tab);
   const startsIn = Math.round((firstStart - now) / 60000);
   const phones = all.map((s) => s.staff?.phone?.replace(/[^\d+]/g, '')).filter(Boolean);
   return (
@@ -160,11 +169,19 @@ function Live({ e }: { e: AEvent }) {
       <div className="row wrap" style={{ gap: 10, alignItems: 'flex-start' }}>
         <div className="grow" style={{ minWidth: 180 }}><div className="serif" style={{ fontSize: 22 }}>{e.title}</div>
           <div className="muted sm">{e.event_private?.client ? e.event_private.client + ' · ' : ''}{e.department === 'bar' ? 'Bar' : 'Floor'} · {ap(e.start_time) || 'TBC'}{e.ends_label ? ` · ends ${e.ends_label}` : e.end_time ? ` · ends ~ ${ap(e.end_time)}` : ''}{md ? ` · ${md.position_code} ${md.staff?.full_name.split(' ')[0]}` : ''}</div></div>
-        {started ? <span className="tag ok">● live</span> : <span className="tag amber">in {Math.floor(startsIn / 60)} h {startsIn % 60} min</span>}
+        {started ? <span className="tag ok"><i className="pulse" />live</span> : <span className="tag amber">in {Math.floor(startsIn / 60)} h {startsIn % 60} min</span>}
       </div>
-      <div className="cnt4">{boxes.map(([n, l, c]) => <div key={l} className={c}><b>{n}</b><small>{l}</small></div>)}</div>
-      {issues.length ? <div className="iss">{issues.slice(0, 3).map(([c, n, t], k) => <div key={k}><i className={c} /><b>{n}</b> {t}</div>)}{issues.length > 3 && <div className="muted sm">+ {issues.length - 3} more on Team ›</div>}</div>
-        : <div className="okc sm strong">✓ Nothing to flag</div>}
+      <div className="cnt4" role="tablist">{boxes.map((b) => (
+        <button key={b.label} role="tab" aria-selected={tab === b.label} disabled={!b.n} className={b.cls + (tab === b.label ? ' on' : '')} onClick={() => setTab(tab === b.label ? null : b.label)}>
+          <b>{b.n}</b><small>{b.label}{tab === b.label ? ' ▴' : ''}</small>
+        </button>
+      ))}</div>
+      {openBox ? (
+        <div className={'tab-list ' + openBox.cls}>
+          <div className="row" style={{ justifyContent: 'space-between' }}><span className="kick" style={{ fontSize: 11 }}>{openBox.label.toUpperCase()} · {openBox.n}</span><button className="lnk" aria-label="Close" onClick={() => setTab(null)}>×</button></div>
+          {openBox.rows.map(([n, a, b], k) => <div key={k} className="tab-row"><b>{n}</b><span className="grow" /><span className="strong">{a}</span>{b && <span className="muted">{b}</span>}</div>)}
+        </div>
+      ) : <div className="muted sm">Tap a number to see who.</div>}
       <div className="row" style={{ justifyContent: 'flex-end', gap: 8, borderTop: '1px solid var(--line)', paddingTop: 12 }}>
         <a className="abtn sm" href={phones.length ? `sms:/open?addresses=${phones.join(',')}` : undefined}>Message</a>
         <Link className="abtn sm" to={`/admin/event/${e.id}`}>Team ›</Link>

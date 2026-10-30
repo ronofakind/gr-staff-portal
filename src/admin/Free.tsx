@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { eventsBetween, allStaff, isoDay, addDays, dLabel, ap12, startIso, type AEvent, type AStaff } from './api';
+import { eventsBetween, allStaff, isoDay, addDays, dLabel, ap12, startIso, bookingChange, confirmationsSent, type AEvent, type AStaff } from './api';
 
 type Av = { staff_id: string; status: string; from_time: string | null; until_time: string | null };
 type Tab = 'yes' | 'placed' | 'no' | 'wait';
@@ -64,7 +64,7 @@ export function Free() {
     const slot = slotFor(e, a);
     const { error } = await supabase.from('shifts').insert({ event_id: e.id, staff_id: a.staff_id, position_code: 'W', position_detail: 'Waiter', planned_start: startIso(e.event_date, slot.start), status: 'booked' });
     if (error) setErr(error.message.includes('duplicate') ? 'Already on that event.' : error.message);
-    else await supabase.from('change_log').insert({ entity: 'shift', change: { kind: 'booked', event: e.id, staff: a.staff_id, date: d, start: slot.start } });
+    else await bookingChange('booked', { staff_id: a.staff_id, to: { id: e.id, event_date: e.event_date, title: e.title, sent: confirmationsSent(e), start: startIso(e.event_date, slot.start) } });
     setBusy(null); load();
   };
   const move = async (a: Av, e: AEvent) => {
@@ -73,7 +73,7 @@ export function Free() {
     if (sh.punches?.punch_in) { setErr('Already started. Change it from the event.'); setBusy(null); return; }
     const slot = slotFor(e, a);
     const { error } = await supabase.from('shifts').update({ event_id: e.id, planned_start: startIso(e.event_date, slot.start) }).eq('id', sh.id);
-    if (error) setErr(error.message); else await supabase.from('change_log').insert({ entity: 'shift', entity_id: sh.id, change: { kind: 'moved', from: from!.id, to: e.id, date: d } });
+    if (error) setErr(error.message); else await bookingChange('moved', { staff_id: a.staff_id, shift_id: sh.id, from: { id: from!.id, event_date: from!.event_date, title: from!.title, sent: confirmationsSent(from!), start: sh.planned_start }, to: { id: e.id, event_date: e.event_date, title: e.title, sent: confirmationsSent(e), start: startIso(e.event_date, slot.start) } });
     setBusy(null); load();
   };
 
