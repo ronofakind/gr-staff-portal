@@ -485,7 +485,7 @@ export function EventForm() {
       <Fold n={4} title="Event folder" open={isOpen(4)} setOpen={(o) => setFold(4, o)} summary={folder.trim() ? 'Google Drive · folder linked' : `Google Drive · ${driveWanted ? 'create on Save' : 'off'}${drive ? '' : ' · not connected'}`}>
         <div className="stack" style={{ gap: 12, paddingTop: 14 }}>
           <div className="row wrap" style={{ justifyContent: 'space-between', gap: 8 }}>
-            <span className="row sm" style={{ gap: 8 }}>
+            <span className="sw-row sm">
               <button type="button" role="switch" aria-checked={driveWanted} className={'sw' + (driveWanted ? ' on' : '')} onClick={() => setDriveOn(!driveWanted)}>
                 <span className="sw-track"><span className="sw-knob" /></span><span className="sw-lbl">{driveWanted ? 'ON' : 'OFF'}</span>
               </button>
