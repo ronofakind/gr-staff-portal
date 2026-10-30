@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { DeleteEvent } from './DeleteEvent';
 import { eventsBetween, addDays, isoDay, hhmm, type AEvent } from './api';
 
 const monday = (iso: string) => {
@@ -49,7 +50,7 @@ export function Week() {
               <div className="grow" />
               <Link className="btn sm" to={`/admin/day?d=${d}`}>Open day view</Link>
             </div>
-            {evs.map((e) => <EventCard key={e.id} e={e} />)}
+            {evs.map((e) => <EventCard key={e.id} e={e} onDeleted={(ids) => setEvents((v) => (v ?? []).filter((x) => !ids.includes(x.id)))} />)}
           </section>
         );
       })}
@@ -58,7 +59,7 @@ export function Week() {
   );
 }
 
-function EventCard({ e }: { e: AEvent }) {
+function EventCard({ e, onDeleted }: { e: AEvent; onDeleted: (ids: string[]) => void }) {
   const n = e.shifts.filter((s) => s.status !== 'declined').length;
   const short = e.staff_needed - n;
   const pct = e.staff_needed ? Math.min(100, (n / e.staff_needed) * 100) : 0;
@@ -75,6 +76,7 @@ function EventCard({ e }: { e: AEvent }) {
       <div className="row">
         <Link className="btn sm" to={`/admin/event/${e.id}`}>Open</Link>
         <Link className="btn sm primary" to={`/admin/day?d=${e.event_date}`}>Assign</Link>
+        <DeleteEvent id={e.id} label="Delete" small onDone={onDeleted} />
       </div>
     </div>
   );

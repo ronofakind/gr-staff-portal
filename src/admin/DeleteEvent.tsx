@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 
 /** Delete an event (floor + bar parts of the same date and title). Blocked once hours are recorded. Staff are not messaged. */
-export function DeleteEvent({ id }: { id: string }) {
+export function DeleteEvent({ id, label = 'Delete event', small, onDone }: { id: string; label?: string; small?: boolean; onDone?: (ids: string[]) => void }) {
   const nav = useNavigate();
   const [step, setStep] = useState<null | { ids: string[]; title: string; date: string; people: number; hours: number }>(null);
   const [busy, setBusy] = useState(false); const [err, setErr] = useState('');
@@ -22,9 +22,9 @@ export function DeleteEvent({ id }: { id: string }) {
     const { error } = await supabase.from('events').delete().in('id', step.ids);
     setBusy(false);
     if (error) return setErr(error.message);
-    nav(`/admin/day?d=${step.date}`);
+    if (onDone) { onDone(step.ids); setStep(null); } else nav(`/admin/day?d=${step.date}`);
   };
-  if (!step) return <button type="button" className="abtn danger" onClick={ask}>Delete event</button>;
+  if (!step) return <button type="button" className={'abtn danger' + (small ? ' sm' : '')} onClick={ask}>{label}</button>;
   return (
     <div className="del-ev">
       {step.hours > 0

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { DeleteEvent } from './DeleteEvent';
 import { supabase } from '../lib/supabase';
 import { eventsBetween, addDays, isoDay, flagsOf, flagText, periodOf, dLabel, tTime, type AEvent, type AShift } from './api';
 
@@ -98,7 +99,7 @@ export function Today() {
           <div className="sec"><span className="serif">Tonight</span><Link to={`/admin/day?d=${today}`}>Open day view ›</Link></div>
           {week === null && <div className="muted">Loading…</div>}
           {week && !tonight.length && <div className="adm-card muted">No events today.</div>}
-          {tonight.map((e) => <Live key={e.id} e={e} />)}
+          {tonight.map((e) => <Live key={e.id} e={e} onDeleted={(ids) => setWeek((v) => (v ?? []).filter((x) => !ids.includes(x.id)))} />)}
         </section>
         <section className="stack">
           <div className="sec"><span className="serif">Needs you <b className="accent sm">{shown.length || ''}</b></span>{shown.length > 0 && <button className="abtn sm" onClick={() => archive(shown)}>{ARCH_ICON} Archive all</button>}</div>
@@ -134,7 +135,7 @@ export function Today() {
 }
 
 type Box = { n: number; label: string; cls: string; rows: [string, string, string][] };
-function Live({ e }: { e: AEvent }) {
+function Live({ e, onDeleted }: { e: AEvent; onDeleted: (ids: string[]) => void }) {
   const [tab, setTab] = useState<string | null>(null);
   const all = e.shifts.filter((s) => s.status !== 'declined');
   const now = Date.now();
@@ -191,6 +192,8 @@ function Live({ e }: { e: AEvent }) {
         </div>
       ) : <div className="muted sm">Tap a number to see who.</div>}
       <div className="row" style={{ justifyContent: 'flex-end', gap: 8, borderTop: '1px solid var(--line)', paddingTop: 12 }}>
+        <DeleteEvent id={e.id} label="Delete" small onDone={onDeleted} />
+        <span className="grow" />
         <a className="abtn sm" href={phones.length ? `sms:/open?addresses=${phones.join(',')}` : undefined}>Message</a>
         <Link className="abtn sm" to={`/admin/event/${e.id}`}>Team ›</Link>
         <Link className="abtn sm dark" to={`/manage/${e.id}`}>Check-in{started && <i className="live-dot" />}</Link>
