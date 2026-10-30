@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { eventsBetween, allStaff, isoDay, addDays, dLabel, ap12, startIso, bookingChange, confirmationsSent, type AEvent, type AStaff } from './api';
 
-type Av = { staff_id: string; status: string; from_time: string | null; until_time: string | null };
+type Av = { staff_id: string; status: string; from_time: string | null; until_time: string | null; note?: string | null };
 type Tab = 'yes' | 'placed' | 'no' | 'wait';
 const hm = (iso: string) => new Date(iso).toLocaleTimeString('en-GB', { timeZone: 'America/Toronto', hour: '2-digit', minute: '2-digit' });
 const short = (t: string) => t.replace(/^(Salon|Maison|Le|La)\s+/i, '');
@@ -24,7 +24,7 @@ export function Free() {
   const load = async () => {
     const [ev, st, a] = await Promise.all([
       eventsBetween(d, d), staff.length ? Promise.resolve(staff) : allStaff(),
-      supabase.from('availability').select('staff_id,status,from_time,until_time').eq('for_date', d).not('ask_id', 'is', null),
+      supabase.from('availability').select('staff_id,status,from_time,until_time,note').eq('for_date', d).not('ask_id', 'is', null),
     ]);
     setEvents(ev); setStaff(st); setAv((a.data ?? []) as Av[]);
   };
@@ -47,7 +47,7 @@ export function Free() {
     wait: rows.filter((a) => a.status === 'asked' || a.status === 'maybe'),
   };
   const list = groups[tab].sort((a, b) => rankOf(a.staff_id) - rankOf(b.staff_id));
-  const timeText = (a: Av) => a.from_time && a.until_time ? `${t12(a.from_time)} – ${t12(a.until_time)}` : a.from_time ? `From ${t12(a.from_time)}` : a.until_time ? `Until ${t12(a.until_time)}` : 'All evening';
+  const timeText = (a: Av) => (a.from_time ? `from ${ap12(a.from_time.slice(0, 5))}` : 'any time');
 
   /** The start time this person can take on an event: first waiter line at/after their "from" time. */
   const slotFor = (e: AEvent, a: Av) => {
@@ -120,7 +120,7 @@ export function Free() {
                     return (
                       <div key={a.staff_id} className={'fr-row' + (at && tab !== 'placed' ? ' placed' : '')}>
                         <span className="muted sm fr-rank">#{s?.staff_private?.ranking ?? '–'}</span>
-                        <b className="grow">{s?.full_name}</b>
+                        <span className="grow"><b>{s?.full_name}</b>{a.note && <i className="av-note-adm">“{a.note}”</i>}</span>
                         <span className={'sm strong ' + (a.status === 'yes' ? (a.from_time || a.until_time ? 'amberc' : 'okc') : 'muted')}>{a.status === 'yes' ? timeText(a) : a.status === 'no' ? "can't" : 'no answer yet'}</span>
                         <div className="fr-act">
                           {at ? <>

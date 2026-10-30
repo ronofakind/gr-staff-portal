@@ -1171,3 +1171,23 @@ div.avatar { color: var(--accent); background: var(--accent-bg); }
 }
 .lands-one { display: flex; flex-direction: column; gap: 10px; }
 .ed2-sec.lands { justify-self: start; width: fit-content; max-width: 100%; } .ed2-sec.lands .ed2-h { gap: 24px; }
+
+/* Push 21 · availability: FROM only, scroll wheel, note */
+.from-pick { display: grid; grid-template-columns: 1fr 1.3fr; gap: 12px; align-items: stretch; }
+.any-tile { border: 2px solid #E4DCD1; background: #fff; border-radius: 18px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; cursor: pointer; font: inherit; color: var(--ink); padding: 12px; }
+.any-tile b { font-size: 17px; } .any-tile small { color: var(--muted); font-size: 12px; }
+.any-tile.on { border-color: var(--ok); background: var(--ok-bg); color: var(--ok); }
+.twheel { position: relative; height: 220px; border-radius: 18px; background: #fff; border: 2px solid #E4DCD1; overflow: hidden; }
+.twheel.set { border-color: var(--ok); }
+.twheel-band { position: absolute; left: 8px; right: 8px; top: 88px; height: 44px; border-radius: 12px; background: #F1ECE4; pointer-events: none; }
+.twheel.set .twheel-band { background: var(--ok-bg); }
+.twheel-scroll { position: relative; height: 100%; overflow-y: auto; scroll-snap-type: y mandatory; scrollbar-width: none; -webkit-mask-image: linear-gradient(transparent, #000 30%, #000 70%, transparent); mask-image: linear-gradient(transparent, #000 30%, #000 70%, transparent); }
+.twheel-scroll::-webkit-scrollbar { display: none; }
+.twheel-scroll button { display: block; width: 100%; height: 44px; border: 0; background: none; scroll-snap-align: start; font: 600 18px Inter, sans-serif; color: #9A9187; cursor: pointer; }
+.twheel-scroll button.on { color: var(--ok); font-weight: 800; }
+.usual-tag { align-self: flex-start; font-size: 12px; font-weight: 700; color: var(--ok); background: var(--ok-bg); border-radius: 10px; padding: 4px 10px; }
+.av-note { width: 100%; height: 48px; border-radius: 14px; border: 1.5px solid #E4DCD1; background: #fff; padding: 0 14px; font: 500 16px Inter, sans-serif; }
+.wk-from { display: inline-flex; margin-top: 4px; font-size: 12px; font-weight: 700; color: var(--ok); background: var(--ok-bg); border: 0; border-radius: 10px; padding: 3px 9px; cursor: pointer; }
+.usual-free { border: 1.5px dashed var(--ok); border-radius: 12px; padding: 6px 10px; color: var(--ok); font-size: 13px; display: inline-flex; flex-direction: column; }
+.usual-free small { color: #5F8F79; font-size: 11px; }
+.av-note-adm { display: block; font-style: italic; color: #9A7413; font-size: 12.5px; font-weight: 500; }

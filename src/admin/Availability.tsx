@@ -5,7 +5,7 @@ import { ampm } from '../pages/Availability';
 
 type Tier = 'A' | 'B' | 'C';
 type Ask = { id: string; for_date: string; department: string; label: string; approx_start: string | null; staff_needed: number; tiers_sent: Tier[]; created_at: string };
-type Row = { id: string; staff_id: string; for_date: string; status: string; tier: string | null; from_time: string | null; until_time: string | null; ask_id: string | null };
+type Row = { id: string; staff_id: string; for_date: string; status: string; tier: string | null; from_time: string | null; until_time: string | null; ask_id: string | null; note?: string | null };
 type Weekly = { staff_id: string; dow: number; status: 'yes' | 'from' | 'no'; from_time: string | null };
 type Off = { staff_id: string; from_date: string; to_date: string; reason: string | null; every_dow: number | null };
 
@@ -37,7 +37,7 @@ export function Availability() {
       supabase.from('staff_weekly').select('staff_id,dow,status,from_time'),
       supabase.from('days_off').select('staff_id,from_date,to_date,reason,every_dow').gte('to_date', today),
       supabase.from('avail_asks').select('*').gte('for_date', today).order('for_date'),
-      supabase.from('availability').select('id,staff_id,for_date,status,tier,from_time,until_time,ask_id').not('ask_id', 'is', null).gte('for_date', today),
+      supabase.from('availability').select('id,staff_id,for_date,status,tier,from_time,until_time,ask_id,note').not('ask_id', 'is', null).gte('for_date', today),
       supabase.from('avail_exceptions').select('staff_id,for_date').gte('for_date', today),
     ]);
     setOpened(new Set(((x.data ?? []) as { staff_id: string; for_date: string }[]).map((e) => `${e.staff_id}|${e.for_date}`)));
@@ -65,7 +65,7 @@ export function Availability() {
     if (w?.status === 'no' && !opened.has(`${s.id}|${d}`)) return `Not on ${D(d).toLocaleDateString('en-CA', { weekday: 'long' })}s`;
     return null;
   };
-  const freeFrom = (s: AStaff, d: string) => { const w = weekly.find((x) => x.staff_id === s.id && x.dow === dow(d)); return w?.status === 'from' ? w.from_time : null; };
+  const freeFrom = (s: AStaff, d: string) => { const w = weekly.find((x) => x.staff_id === s.id && x.dow === dow(d)); return w && w.status !== 'no' ? w.from_time : null; };
   const alreadyAsked = (s: AStaff, d: string) => rows.some((r) => r.staff_id === s.id && r.for_date === d);
   const recipients = (d: string, tiers: Tier[]) => floor
     .filter((s) => tierOf(s) && tiers.includes(tierOf(s)!) && !alreadyAsked(s, d))
@@ -193,7 +193,7 @@ export function Availability() {
                   <i className={'tier-dot ' + (r.tier ?? '')}>{r.tier ?? '–'}</i>
                   <span className="rk">#{s ? rank(s) : '?'}</span>
                   <span className="grow strong">{s?.full_name ?? '—'}</span>
-                  <span className="sm">{r.status === 'yes' ? <>Yes · {r.from_time ? `from ${ampm(r.from_time)}` : 'any time'}{r.until_time ? ` – ${ampm(r.until_time)}` : ''}</> : r.status === 'no' ? 'No' : '—'}
+                  <span className="sm">{r.status === 'yes' ? <>Yes · {r.from_time ? `from ${ampm(r.from_time)}` : 'any time'}{r.note && <i className="av-note-adm"> “{r.note}”</i>}</> : r.status === 'no' ? 'No' : '—'}
                     {r.status === 'asked' && s && freeFrom(s, a.for_date) && <small className="muted"> (usually from {ampm(freeFrom(s, a.for_date))})</small>}</span>
                   {r.status === 'yes' && (bk.has(r.staff_id) ? <span className="pill ok">Booked</span>
                     : evs.length === 1 ? <button className="btn sm" onClick={() => book(r, evs[0])}>Add ›</button>

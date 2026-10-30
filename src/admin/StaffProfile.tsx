@@ -114,7 +114,7 @@ export function StaffProfile({ s, onClose, onEdit }: { s: AStaff; onClose: () =>
         </div>
         <div className="pcard">
           <div className="kick">USUAL WEEK</div>
-          <div className="wk7">{DOW.map((d, i) => { const w = week[i]; return <span key={i} className={w?.status ?? 'unset'} title={w?.status === 'from' ? `from ${ampm(w.from_time)}` : ''}>{d}{w?.status === 'from' ? <small>{ampm(w.from_time).replace(' ', '')}</small> : null}</span>; })}</div>
+          <div className="wk7">{DOW.map((d, i) => { const w = week[i]; return <span key={i} className={w?.status ?? 'unset'} title={w && w.status !== 'no' && w.from_time ? `from ${ampm(w.from_time)}` : ''}>{d}{w && w.status !== 'no' && w.from_time ? <small>{ampm(w.from_time).replace(' ', '')}</small> : null}</span>; })}</div>
           {!Object.keys(week).length && <div className="muted sm">Not set yet.</div>}
         </div>
         <div className="pcard">
