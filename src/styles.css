@@ -1090,3 +1090,4 @@ main.page.slide-right > :not(.tabbar):not(.save-bar):not(.sheet):not(.scrim) { a
 div.avatar { color: var(--accent); background: var(--accent-bg); }
 .photo-view-ini { color: var(--accent); background: var(--accent-bg); }
 .sheet > * { flex-shrink: 0; }
+.as-search { -webkit-appearance: none; appearance: none; }
