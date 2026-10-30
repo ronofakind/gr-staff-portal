@@ -46,7 +46,7 @@ export function IncidentSheet({ eventId, eventDate, team, onClose, onSent }: { e
   const send = async () => {
     setErr('');
     if (!kind) return setErr('Pick what happened.');
-    if (!body.trim() && !r.blob) return setErr('Type what happened or record a voice note.');
+    if (!body.trim()) return setErr('Write what happened.');
     setBusy(true);
     try {
       const id = crypto.randomUUID(); const dir = `${eventId}/${id}`;
@@ -98,15 +98,15 @@ export function IncidentSheet({ eventId, eventDate, team, onClose, onSent }: { e
           </div>
         ) : (
           <div className="inc-box">
-            <textarea rows={5} value={body} onChange={(e) => setBody(e.target.value)} placeholder="What happened, who was there, what you did…" />
-            {r.state === 'idle' && <button type="button" className="inc-voice" onClick={r.start}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 11a7 7 0 0 0 14 0M12 18v3" /></svg>Voice</button>}
+            <textarea rows={5} style={{ paddingBottom: 12 }} value={body} onChange={(e) => setBody(e.target.value)} placeholder="What happened, who was there, what you did…" />
+            {false && <button type="button" className="inc-voice" onClick={r.start}><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5 11a7 7 0 0 0 14 0M12 18v3" /></svg>Voice</button>}
           </div>
         )}
         {r.state === 'done' && url.current && (
           <div className="inc-play"><audio controls src={url.current} /><span className="muted sm">{mmss(r.sec)}</span><button type="button" onClick={r.clear} aria-label="Delete voice note">🗑</button></div>
         )}
         {r.err && <p className="error">{r.err}</p>}
-        {r.state !== 'rec' && <div className="muted sm" style={{ textAlign: 'center', marginTop: 6 }}>Type it, or tap Voice to record (up to 3 min). You can do both.</div>}
+        
       </div>
       <div className="inc-photos">
         {photos.map((f, i) => <span key={i} className="inc-ph">{f.name.slice(0, 10)}<button type="button" onClick={() => setPhotos(photos.filter((_, k) => k !== i))}>×</button></span>)}
