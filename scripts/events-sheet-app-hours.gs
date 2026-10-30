@@ -25,6 +25,7 @@ function onOpen() {
   SpreadsheetApp.getUi().createMenu('G&R app')
     .addItem('Connect the app', 'connect')
     .addItem('Update today now', 'syncToday')
+    .addItem('Redo yesterday (day tab + payroll)', 'syncYesterday')
     .addToUi();
 }
 
@@ -57,6 +58,9 @@ function refresh() {
 
 /** Rebuild today's tab now (also in the G&R app menu). */
 function syncToday() { syncDate_(new Date(), true); }
+
+/** Redo yesterday's APP tab, day tab and payroll (also in the G&R app menu). */
+function syncYesterday() { syncDate_(addDays_(new Date(), -1), true); }
 
 /** Run by hand to rebuild one date, e.g. syncOne('2026-10-28'). */
 function syncOne(ymd) { syncDate_(new Date(ymd + 'T12:00:00'), true); }
