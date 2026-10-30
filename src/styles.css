@@ -1170,3 +1170,4 @@ div.avatar { color: var(--accent); background: var(--accent-bg); }
   body { background: #fff; }
 }
 .lands-one { display: flex; flex-direction: column; gap: 10px; }
+.ed2-sec.lands { justify-self: start; width: fit-content; max-width: 100%; } .ed2-sec.lands .ed2-h { gap: 24px; }
