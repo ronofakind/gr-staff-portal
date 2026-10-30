@@ -252,7 +252,7 @@ function fillDayAndPayroll_(ss, d, rows) {
   });
   SpreadsheetApp.flush();
   const f = day.getRange(1, 6, day.getLastRow(), 1).getValues();
-  const hours = pay.map((x) => ({ name: x.name, h: f[x.row - 1][0] })).filter((x) => typeof x.h === 'number');
+  const hours = pay.filter((x) => typeof f[x.row - 1][0] === 'number').map((x) => ({ name: x.name, h: Math.round(f[x.row - 1][0] * 4) / 4 }));
   pay.filter((x) => typeof f[x.row - 1][0] !== 'number').forEach((x) => issues.push(x.name + ': the Total on the ' + label + ' tab is not a number, not added to payroll.'));
   payroll_(d, hours, issues, wrote);
   props.setProperty('wrote_' + ymd, JSON.stringify(wrote));
@@ -301,7 +301,7 @@ function payroll_(d, hours, issues, wrote) {
     const p = find_(names, x.name);
     if (!p) { issues.push('Payroll: ' + x.name + ' is not on the payroll sheet. Add them, then ' + x.h + ' h on ' + label + '.'); return; }
     const cur = vals[p.row - 1][0]; const k = 'pay|' + p.name;
-    if (cur === x.h) { wrote[k] = x.h; return; }
+    if (typeof cur === 'number' && Math.abs(cur - x.h) < 0.001) { wrote[k] = x.h; return; }
     if (cur === '' || cur === wrote[k]) { sh.getRange(p.row, col).setValue(x.h); wrote[k] = x.h; }
     else issues.push('Payroll: ' + x.name + ' already has ' + cur + ' h on ' + label + ', the day tab says ' + x.h + '. Left payroll as is.');
   });
