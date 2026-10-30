@@ -120,7 +120,7 @@ function write_(ss, name, d, rows) {
         push([code, r.full_name.toUpperCase(), !gone && !!r.punch_in,
           !gone && r.punch_in ? dayFrac(q15(r.punch_in)) : '',
           !gone && r.punch_out ? dayFrac(q15(r.punch_out)) : '',
-          '=IF(OR(D' + row + '="",E' + row + '=""),"",24*MOD(TIMEVALUE(E' + row + ')-TIMEVALUE(D' + row + '),1))'], 7);
+          '=IF(OR(D' + row + '="",E' + row + '=""),"",MAX(4,24*MOD(TIMEVALUE(E' + row + ')-TIMEVALUE(D' + row + '),1)))'], 7);
       });
       const last = out.length;
       push(['', '', '', '', kind === 'bar' ? 'BAR STAFF TOTAL' : 'FLOOR STAFF TOTAL', '=SUM(F' + first + ':F' + last + ')'], 7);
