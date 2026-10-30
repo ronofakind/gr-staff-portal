@@ -103,7 +103,7 @@ function AddStaff({ ev, onClose, onDone, lang }: { ev: EvFull; onClose: () => vo
       <SwipeSheet onClose={onClose} label="Add staff">
         {!pick ? <>
           <div className="serif" style={{ fontSize: 24 }}>Add staff</div>
-          <input className="as-search" autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Start typing a name…" />
+          <input className="as-search" type="search" name="staff-search" autoComplete="off" autoCorrect="off" spellCheck={false} enterKeyHint="search" data-form-type="other" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search staff…" />
           {!all && <div className="muted sm">Loading names…</div>}
           {list.length > 0 && <div className="as-list">{list.map((p) => (
             <button key={p.id} className={'as-opt' + (p.here ? ' off' : '')} disabled={p.here} onClick={() => choose(p)}>
