@@ -1080,3 +1080,8 @@ main.page.slide-right > :not(.tabbar):not(.save-bar):not(.sheet):not(.scrim) { a
 .photo-view-ini { width: min(70vw, 300px); height: min(70vw, 300px); border-radius: 24px; background: #3A342E; color: #F6F2EC; display: flex; align-items: center; justify-content: center; font: 600 80px Inter, sans-serif; }
 .photo-view-n { color: #fff; text-align: center; display: flex; flex-direction: column; gap: 2px; } .photo-view-n b { font-size: 26px; font-weight: 500; } .photo-view-n small { color: #B8AFA4; font-size: 13px; }
 .photo-view-x { height: 44px; padding: 0 24px; border-radius: 22px; border: 0; background: #fff; font: 700 14px Inter, sans-serif; cursor: pointer; }
+.row2 > .tbox.start:only-child { grid-column: 1 / -1; }
+/* Push 19: END ~ column in the staffing grid */
+.sg-h, .sg-r { grid-template-columns: 105px 140px 100px 100px 80px minmax(0, 1fr) 36px; }
+@media (max-width: 820px) { .sg-r { grid-template-columns: 1.4fr 1fr 64px 64px 32px; } }
+.grp-end { font: 500 13px Inter, sans-serif; font-style: normal; color: #9A9187; margin-left: 2px; }

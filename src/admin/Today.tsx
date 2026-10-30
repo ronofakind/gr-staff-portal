@@ -51,6 +51,14 @@ export function Today() {
       const { data: hq } = await supabase.from('hours_questions').select('id,kind,claimed_at,shifts!inner(staff:staff!shifts_staff_id_fkey(full_name),events(title))').eq('status', 'open');
       for (const q of (hq ?? []) as unknown as { id: string; kind: string; shifts: { staff: { full_name: string }; events: { title: string } } }[])
         n.unshift({ key: 'q' + q.id, red: true, title: `Hours question · ${q.shifts.staff.full_name}`, sub: `${q.shifts.events.title} · about ${q.kind === 'other' ? 'something else' : q.kind + ' time'}`, action: 'Check', to: '/admin/hours' });
+      // Cash paid: the QuickBooks estimate should go
+      const { data: qb } = await supabase.from('event_private').select('event_id,qb_doc_number,events!inner(title,event_date)').eq('pay_method', 'cash').eq('qb_doc_type', 'estimate')
+        .not('cash_received_at', 'is', null).is('qb_removed_at', null).not('qb_doc_number', 'is', null);
+      const qseen = new Set<string>();
+      for (const r of (qb ?? []) as unknown as { event_id: string; qb_doc_number: string; events: { title: string; event_date: string } }[]) {
+        if (qseen.has(r.qb_doc_number)) continue; qseen.add(r.qb_doc_number);
+        n.push({ key: 'qb' + r.qb_doc_number, title: `Remove Estimate #${r.qb_doc_number} in QuickBooks`, sub: `${r.events.title} · ${dLabel(r.events.event_date)} · paid cash`, action: 'Done?', to: `/admin/event/${r.event_id}` });
+      }
       setNeeds(n);
     })();
   }, []);

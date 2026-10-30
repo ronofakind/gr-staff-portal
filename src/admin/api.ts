@@ -2,7 +2,7 @@ import { supabase } from '../lib/supabase';
 
 export type AStaff = {
   id: string; full_name: string; nickname?: string | null; created_at?: string; sex?: 'm' | 'f' | null; email: string | null; phone: string | null; language: 'fr' | 'en';
-  department: 'floor' | 'bar' | 'kitchen'; role: 'staff' | 'manager' | 'admin'; positions: string[];
+  department: 'floor' | 'bar' | 'kitchen'; role: 'staff' | 'manager' | 'admin'; positions: string[]; md_rank?: number | null;
   active: boolean; photo_url: string | null; staff_private: { ranking: number | null; notes: string | null; tier: 'A' | 'B' | 'C' | null } | null;
 };
 
@@ -17,13 +17,13 @@ export type AEvent = {
   id: string; event_date: string; title: string; address: string | null; department: 'floor' | 'bar' | 'kitchen';
   description: string | null; dress_code: string | null; bring: string | null;
   start_time: string | null; end_time: string | null; staff_needed: number; manager_id: string | null; hours_submitted_at: string | null;
-  venue_id: string | null; ends_label?: string | null; staffing?: Line[]; notes?: string | null; uniform_floor?: string; uniform_bar?: string; uniform_floor_w?: string | null; uniform_bar_w?: string | null; drive_folder_url?: string | null; timeline: { time: string; label: string }[];
-  event_private: { client: string | null; punch_code: string } | null;
+  venue_id: string | null; guests?: number | null; event_type?: string | null; ends_label?: string | null; staffing?: Line[]; notes?: string | null; uniform_floor?: string; uniform_bar?: string; uniform_floor_w?: string | null; uniform_bar_w?: string | null; drive_folder_url?: string | null; timeline: { time: string; label: string }[];
+  event_private: { client: string | null; punch_code: string ; pay_method?: 'invoice' | 'cash'; qb_doc_type?: 'estimate' | 'invoice' | null; qb_doc_number?: string | null; cash_received_at?: string | null; qb_removed_at?: string | null } | null;
   shifts: AShift[];
 };
 
 export const EVENT_SELECT = `id,event_date,title,address,department,description,dress_code,bring,start_time,end_time,
-  staff_needed,manager_id,hours_submitted_at,venue_id,timeline,event_private(client,punch_code),ends_label,staffing,notes,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,drive_folder_url,
+  staff_needed,manager_id,hours_submitted_at,venue_id,timeline,event_private(client,punch_code,pay_method,qb_doc_type,qb_doc_number,cash_received_at,qb_removed_at),guests,event_type,ends_label,staffing,notes,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,drive_folder_url,
   shifts(id,event_id,staff_id,position_code,position_detail,planned_start,status,changed_at,notified_at,attendance,left_early,attendance_reason,leave_by,manager_note,note_archived_at,note_archived_by,punches(punch_in,punch_out),staff:staff!shifts_staff_id_fkey(full_name,phone))`;
 
 export async function eventsBetween(from: string, to: string) {
@@ -35,7 +35,7 @@ export async function eventsBetween(from: string, to: string) {
 
 export async function allStaff() {
   const { data, error } = await supabase.from('staff')
-    .select('id,full_name,nickname,email,phone,language,department,role,positions,active,photo_url,created_at,sex,staff_private(ranking,notes,tier)')
+    .select('id,full_name,nickname,email,phone,language,department,role,positions,md_rank,active,photo_url,created_at,sex,staff_private(ranking,notes,tier)')
     .order('full_name');
   if (error) throw error;
   return (data ?? []) as unknown as AStaff[];
@@ -98,7 +98,7 @@ export const tTime = (iso: string | null) => iso ? new Date(iso).toLocaleTimeStr
 export const dLabel = (iso: string, o: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric' }) => new Date(iso + 'T12:00:00').toLocaleDateString('en-CA', o).replace(/\./g, '');
 
 /** One line of the staffing grid: one role at one start time. */
-export type Line = { dept: 'floor' | 'bar'; code: string; start: string; count: number; names: string[] };
+export type Line = { dept: 'floor' | 'bar'; code: string; start: string; end?: string | null; count: number; names: string[] };
 export const ROLES: { dept: 'floor' | 'bar'; code: string; label: string }[] = [
   { dept: 'floor', code: 'MD', label: 'MD' }, { dept: 'floor', code: 'W', label: 'Waiter' }, { dept: 'floor', code: 'BUS', label: 'Busboy' },
   { dept: 'bar', code: 'BM', label: 'Bar manager' }, { dept: 'bar', code: 'BT', label: 'Bartender' }, { dept: 'bar', code: 'BB', label: 'Barback' },
@@ -107,7 +107,7 @@ export const roleName = (code: string | null) => ROLES.find((r) => r.code === co
 export const roleOfShift = (code: string | null) => (code && /^\d+$/.test(code) ? 'W' : code ?? 'W');
 export type Venue = { id: string; name: string; address: string | null; usual_client_id: string | null; uniform_floor: string | null; uniform_bar: string | null; uniform_floor_w?: string | null; uniform_bar_w?: string | null; uniform_items?: import('../components/Uniform').UniItemsMap | null };
 export type Client = { id: string; name: string; rate_sets: { key: string; label: string; rates: Record<string, number> }[]; kind?: 'private_home' | 'roaming' | null; address?: string | null;
-  uniform_floor?: string | null; uniform_bar?: string | null; uniform_floor_w?: string | null; uniform_bar_w?: string | null; uniform_items?: import('../components/Uniform').UniItemsMap | null };
+  uniform_floor?: string | null; uniform_bar?: string | null; uniform_floor_w?: string | null; uniform_bar_w?: string | null; uniform_items?: import('../components/Uniform').UniItemsMap | null; drive_folder_default?: boolean };
 export const UNIFORMS: [string, string][] = [['white_shirt', 'White dress shirt'], ['black_shirt', 'Black dress shirt'], ['dress', 'Black cocktail dress'], ['black_tshirt', 'Black T-shirt']];
 export const ENDS: [string, string | null][] = [['~ 10 PM', '22:00'], ['~ 11 PM', '23:00'], ['~ midnight', '00:00'], ['~ 1 AM', '01:00'], ['~ 2 AM', '02:00'], ['late', null]];
 /** "545" → "17:45", "5:45pm" → "17:45", "1130" → "11:30" (AM/PM guessed for evening events: 1–9 → PM). */

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { DriveFiles } from '../components/DriveFiles';
 import { EVENT_SELECT, allStaff, ap12, dLabel, addDays, roleName, roleOfShift, UNIFORMS, type AEvent, type AShift, type AStaff } from './api';
 
 type Avail = { staff_id: string; status: string; tier: string | null };
@@ -13,7 +14,7 @@ export function EventDetail() {
   const [staff, setStaff] = useState<Record<string, AStaff>>({});
   const [avail, setAvail] = useState<Avail[]>([]); const [asks, setAsks] = useState<{ department: string; tiers_sent: string[]; created_at: string }[]>([]);
   const [same, setSame] = useState<AEvent[]>([]);
-  const [venueAddr, setVenueAddr] = useState<string | null>(null);
+  const [venueAddr, setVenueAddr] = useState<string | null>(null); const [tick, setTick] = useState(0);
 
   useEffect(() => {
     (async () => {
@@ -31,7 +32,8 @@ export function EventDetail() {
       ]);
       setStaff(Object.fromEntries(st.map((s) => [s.id, s]))); setAvail((av.data ?? []) as Avail[]); setAsks((ak.data ?? []) as typeof asks);
     })();
-  }, [id]);
+  }, [id, tick]);
+  const load = () => setTick((t) => t + 1);
 
   if (!evs) return <div className="muted">Loading…</div>;
   if (!evs.length) return <div className="adm-card">This event doesn't exist anymore. <Link to="/admin/week">Back to the week</Link></div>;
@@ -92,6 +94,7 @@ export function EventDetail() {
             <div><small>DATE</small><b>{dLabel(e.event_date, { weekday: 'short', month: 'short', day: 'numeric' })}</b></div>
             <div><small>SHIFT STARTS</small><b>{firstStart ? ap12(hm(firstStart)) : ap12(e.start_time?.slice(0, 5)) || 'TBC'}</b></div>
             <div><small>ENDS · APPROX.</small><b>{e.ends_label ?? (e.end_time ? '~ ' + ap12(e.end_time.slice(0, 5)) : 'TBC')}</b></div>
+            {(e.guests || e.event_type) && <div><small>{e.guests ? 'GUESTS' : 'TYPE'}</small><b>{e.guests ?? e.event_type}</b>{e.guests && e.event_type && <span>{e.event_type}</span>}</div>}
             {evs.map((x) => { const ls = x.staffing ?? []; const n = x.staff_needed; return (
               <div key={x.id}><small>{x.department === 'bar' ? 'BAR' : 'FLOOR'}</small><b>{n}</b><span>{ls.map((l) => `${l.count} ${roleName(l.code)}${l.count > 1 && !['MD', 'BM'].includes(l.code) ? 's' : ''} at ${ap12(l.start).replace(':00', '')}`).join(' · ')}</span></div>
             ); })}
@@ -104,7 +107,9 @@ export function EventDetail() {
             {dept('bar') && <div><small>Bar manager</small>{bm ? <b>{bm.staff?.full_name}</b> : <b className="accent">Not set</b>}</div>}
             <div><small>Uniform · men / women</small><b>{[dept('floor') ? `Floor: ${unif(e.uniform_floor)} / ${unif(e.uniform_floor_w ?? e.uniform_floor)}` : '', dept('bar') ? `Bar: ${unif(evs.find((x) => x.department === 'bar')?.uniform_bar)} / ${unif(evs.find((x) => x.department === 'bar')?.uniform_bar_w ?? evs.find((x) => x.department === 'bar')?.uniform_bar)}` : ''].filter(Boolean).join(' · ')}</b></div>
             {evs.find((x) => x.drive_folder_url)?.drive_folder_url && <div className="full"><small>Event folder · managers see it</small><a className="tag" style={{ alignSelf: 'flex-start' }} href={evs.find((x) => x.drive_folder_url)!.drive_folder_url!} target="_blank" rel="noreferrer">Open the Drive folder ›</a></div>}
+            <Billing evs={evs} onChange={load} />
             {e.notes && <div className="full"><small>Note for staff</small><b>{e.notes}</b></div>}
+            <DriveFiles eventId={e.id} />
             {docs.length > 0 && <div className="full"><small>Documents</small><div className="row wrap" style={{ gap: 6 }}>{docs.map((d) => <a key={d.url} className="tag" href={d.url} target="_blank" rel="noreferrer">{d.name}</a>)}</div></div>}
           </div>
 
@@ -161,3 +166,22 @@ export function EventDetail() {
     </div>
   );
 }
+
+/** How the client pays + QuickBooks link + cash received (admin only). */
+function Billing({ evs, onChange }: { evs: AEvent[]; onChange: () => void }) {
+  const p = evs.find((x) => x.event_private)?.event_private; if (!p) return null;
+  const cash = p.pay_method === 'cash'; const doc = p.qb_doc_number ? `${p.qb_doc_type === 'invoice' ? 'Invoice' : 'Estimate'} #${p.qb_doc_number}` : null;
+  const markCash = async () => { for (const x of evs) await supabase.from('event_private').update({ cash_received_at: new Date().toISOString() }).eq('event_id', x.id); onChange(); };
+  const removed = async () => { for (const x of evs) await supabase.from('event_private').update({ qb_removed_at: new Date().toISOString() }).eq('event_id', x.id); onChange(); };
+  return (
+    <div className="full"><small>Billing · only you see it</small>
+      <div className="row wrap" style={{ gap: 8, alignItems: 'center' }}>
+        <b>{cash ? 'Cash · no GST / QST' : 'Invoice · QuickBooks'}{doc ? ` · ${doc}` : ''}</b>
+        {cash && !p.cash_received_at && <button className="abtn sm dark" onClick={markCash}>Mark cash received</button>}
+        {cash && p.cash_received_at && <span className="tag">✓ Cash received {new Date(p.cash_received_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })}</span>}
+        {cash && p.cash_received_at && p.qb_doc_type === 'estimate' && p.qb_doc_number && !p.qb_removed_at && <button className="abtn sm" onClick={removed}>I removed Estimate #{p.qb_doc_number} in QuickBooks</button>}
+      </div>
+    </div>
+  );
+}
+

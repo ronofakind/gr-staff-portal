@@ -44,6 +44,8 @@ export function App() {
       .then(({ data }) => setMe((data as Staff) ?? null));
   }, [session]);
 
+  const legal = window.location.pathname.replace(/\/$/, '');
+  if (legal === '/privacy' || legal === '/terms') return <Legal kind={legal.slice(1) as 'privacy' | 'terms'} />;
   if (session === undefined || (session && me === undefined)) return <div className="loading" />;
 
   let body: JSX.Element;
@@ -97,5 +99,16 @@ function NotStaff({ lang }: { lang: Lang }) {
         <button className="btn" onClick={() => supabase.auth.signOut().then(() => window.location.replace('/'))}>{lang === 'fr' ? 'Déconnexion' : 'Log out'}</button>
       </div>
     </main>
+  );
+}
+
+function Legal({ kind }: { kind: 'privacy' | 'terms' }) {
+  return (
+    <div style={{ maxWidth: 640, margin: '0 auto', padding: '48px 20px', lineHeight: 1.6 }}>
+      <h1 className="serif">{kind === 'privacy' ? 'Privacy' : 'Terms of use'}</h1>
+      {kind === 'privacy'
+        ? <p>The G&amp;R Staff App is an internal tool of G&amp;R à votre service, used only by our staff and managers to schedule events and record hours. We keep the information needed for that (name, contact details, availability, shifts and hours) and do not sell or share it. When the owner connects Google Drive, the app uses that access only to create and list event folders in the company’s own Drive. Questions or requests to delete your data: rjladores@gmail.com.</p>
+        : <p>The G&amp;R Staff App is for the staff, managers and owners of G&amp;R à votre service only. Use it to see your shifts, give your availability and record your hours accurately; do not share your access with anyone. The app is provided as is and may change at any time. Questions: rjladores@gmail.com.</p>}
+    </div>
   );
 }

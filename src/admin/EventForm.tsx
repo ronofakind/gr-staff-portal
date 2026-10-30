@@ -14,6 +14,16 @@ const WOMEN: [string, string][] = [['white_shirt', 'White dress shirt'], ['black
 const uniName = (k: string) => (k.startsWith('custom:') ? k.slice(7) : [...MEN, ...WOMEN].find(([u]) => u === k)?.[1].replace('dress shirt', 'shirt').replace('Black cocktail dress', 'dress') ?? k).toLowerCase();
 
 type Mode = 'floor' | 'bar' | 'both';
+const MONTHS = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
+const ord = (d: number) => (d % 100 >= 11 && d % 100 <= 13 ? 'TH' : ['TH', 'ST', 'ND', 'RD'][d % 10] ?? 'TH');
+const driveMonth = (date: string) => `${MONTHS[Number(date.slice(5, 7)) - 1]} ${date.slice(0, 4)}`;
+/** Ronnie's Drive naming: NOVEMBER 24TH BITTON "SALON RICHMOND" · private home / no client: OCTOBER 25TH "BESO". */
+export const driveName = (date: string, venue: string, client: string | null, privateHome: boolean) => {
+  const d = Number(date.slice(8, 10)); const base = `${MONTHS[Number(date.slice(5, 7)) - 1]} ${d}${ord(d)}`;
+  const paren = (client ?? '').match(/\(([^)]+)\)/)?.[1];
+  const short = paren ?? ((client ?? '').replace(/\b(traiteur|inc\.?|ltd\.?|the)\b/gi, ' ').trim().split(/\s+/).filter(Boolean).slice(-1)[0] ?? '');
+  return (privateHome || !short ? `${base} "${(venue || 'VENUE').toUpperCase()}"` : `${base} ${short.toUpperCase()} "${(venue || 'VENUE').toUpperCase()}"`);
+};
 /** Items for a line, falling back to the defaults for its shirt pick. */
 const itemsOf = (items: UniItemsMap, k: UniLineKey, kind: string): UniItems => items[k] ?? defaultItems(kind, k.startsWith('bar'));
 
@@ -124,7 +134,7 @@ export function EventForm() {
   const [address, setAddress] = useState(''); const [ends, setEnds] = useState('~ midnight');
   const [parts, setParts] = useState<AddressParts | null>(null);
   const [uFloor, setUFloor] = useState('white_shirt'); const [uBar, setUBar] = useState('black_shirt');
-  const [uFloorW, setUFloorW] = useState('white_shirt'); const [uBarW, setUBarW] = useState('black_shirt');
+  const [uFloorW, setUFloorW] = useState('white_shirt'); const [uBarW, setUBarW] = useState('dress');
   const [unit, setUnit] = useState(''); const [folder, setFolder] = useState(''); const [showFolder, setShowFolder] = useState(false);
   const [note, setNote] = useState(''); const [staffNote, setStaffNote] = useState(''); const [showStaffNote, setShowStaffNote] = useState(false);
   const [rateSet, setRateSet] = useState<string | null>(null);
@@ -136,6 +146,9 @@ export function EventForm() {
   const setFold = (n: number, o: boolean) => { const f = { ...fold, [n]: o }; setFoldMap(f); try { localStorage.setItem(FOLD_KEY, JSON.stringify(f)); } catch { /* private mode */ } };
   const allFold = (o: boolean) => { const f = Object.fromEntries([1, 2, 3, 4, 5, 6].map((n) => [n, o])); setFoldMap(f); try { localStorage.setItem(FOLD_KEY, JSON.stringify(f)); } catch { /* private mode */ } };
   const [privateId, setPrivateId] = useState<string | null>(null); // a private-home client used as the venue
+  const [guests, setGuests] = useState(''); const [eventType, setEventType] = useState(''); const [types, setTypes] = useState<{ name: string; main: boolean }[]>([]);
+  const [payMethod, setPayMethod] = useState<'invoice' | 'cash'>('invoice'); const [qbType, setQbType] = useState<'estimate' | 'invoice'>('estimate'); const [qbNum, setQbNum] = useState('');
+  const [driveOn, setDriveOn] = useState<boolean | null>(null); const [drive, setDrive] = useState<{ email: string } | null>(null);
   const [lines, setLines] = useState<Line[]>([blankLine('floor', 'MD', '17:00'), blankLine('floor', 'W', '17:00')]);
   const [existing, setExisting] = useState<Ev[]>([]); const [oldShifts, setOldShifts] = useState<Sh[]>([]);
   const [askTiers, setAskTiers] = useState<Tier[] | null>(null); const [askBar, setAskBar] = useState<'georges' | 'team'>('georges');
@@ -148,15 +161,17 @@ export function EventForm() {
   // Lists
   useEffect(() => {
     supabase.from('venues').select('id,name,address,usual_client_id,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,uniform_items').order('name').then(({ data }) => setVenues((data ?? []) as Venue[]));
-    supabase.from('clients').select('id,name,rate_sets,kind,address,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,uniform_items').order('name').then(({ data }) => setClients((data ?? []) as Client[]));
+    supabase.from('clients').select('id,name,rate_sets,kind,address,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,uniform_items,drive_folder_default').order('name').then(({ data }) => setClients((data ?? []) as Client[]));
     allStaff().then((s) => setStaff(s.filter((x) => x.active)));
+    supabase.from('event_types').select('name,main,sort').order('sort').then(({ data }) => setTypes((data ?? []) as { name: string; main: boolean }[]));
+    supabase.rpc('google_status').then(({ data }) => setDrive((data as { email: string } | null) ?? null));
   }, []);
 
   // Editing: load this event + its floor/bar sibling
   useEffect(() => {
     if (isNew) return;
     (async () => {
-      const { data: e } = await supabase.from('events').select('*,event_private(client,client_id,rate_set)').eq('id', id!).single();
+      const { data: e } = await supabase.from('events').select('*,event_private(client,client_id,rate_set,pay_method,qb_doc_type,qb_doc_number)').eq('id', id!).single();
       if (!e) return;
       const { data: sib } = await supabase.from('events').select('id,department,staffing,manager_id').eq('event_date', e.event_date).eq('title', e.title);
       const evs = (sib ?? []) as Ev[];
@@ -165,9 +180,11 @@ export function EventForm() {
       setExisting(evs); setOldShifts(shifts);
       setDate(e.event_date); setTitle(e.title); setVenueId(e.venue_id); setAddress(e.address ?? '');
       setClientId(e.event_private?.client_id ?? ''); setRateSet(e.event_private?.rate_set ?? null);
+      setGuests(e.guests ? String(e.guests) : ''); setEventType(e.event_type ?? ''); setPayMethod(e.event_private?.pay_method ?? 'invoice');
+      if (e.event_private?.qb_doc_type) setQbType(e.event_private.qb_doc_type); setQbNum(e.event_private?.qb_doc_number ?? ''); setDriveOn(e.drive_folder_url ? false : null);
       setEnds(e.ends_label ?? (ENDS.find(([, t]) => t && e.end_time?.startsWith(t))?.[0] ?? '~ midnight'));
       setUFloor(e.uniform_floor ?? 'white_shirt'); setUBar(e.uniform_bar ?? 'black_shirt');
-      setUFloorW(e.uniform_floor_w ?? e.uniform_floor ?? 'white_shirt'); setUBarW(e.uniform_bar_w ?? e.uniform_bar ?? 'black_shirt');
+      setUFloorW(e.uniform_floor_w ?? e.uniform_floor ?? 'white_shirt'); setUBarW(e.uniform_bar_w ?? 'dress');
       setFolder(e.drive_folder_url ?? ''); setShowFolder(!!e.drive_folder_url); setItemsMap((e.uniform_items ?? {}) as UniItemsMap);
       setNote(e.description ?? ''); setStaffNote(e.notes ?? ''); setShowStaffNote(!!e.notes);
       const ordered = [...evs].sort((a) => (a.department === 'floor' ? -1 : 1));
@@ -221,14 +238,14 @@ export function EventForm() {
     setVenueId(v.id); setTitle(v.name); setAddress(v.address ?? '');
     if (v.usual_client_id) setClientId(v.usual_client_id);
     if (v.uniform_floor) setUFloor(v.uniform_floor); if (v.uniform_bar) setUBar(v.uniform_bar);
-    setUFloorW(v.uniform_floor_w ?? v.uniform_floor ?? uFloorW); setUBarW(v.uniform_bar_w ?? v.uniform_bar ?? uBarW);
+    setUFloorW(v.uniform_floor_w ?? v.uniform_floor ?? uFloorW); setUBarW(v.uniform_bar_w ?? 'dress');
     setItemsMap(v.uniform_items ?? {}); setPrivateId(null);
   };
   /** A private-home client is also the venue: title, client, address and uniforms come from the client card. */
   const pickPrivate = (c: Client) => {
     setVenueId(null); setPrivateId(c.id); setTitle(c.name); setClientId(c.id); setRateSet(null); setAddress(c.address ?? ''); setParts(null);
     if (c.uniform_floor) setUFloor(c.uniform_floor); if (c.uniform_bar) setUBar(c.uniform_bar);
-    setUFloorW(c.uniform_floor_w ?? c.uniform_floor ?? uFloorW); setUBarW(c.uniform_bar_w ?? c.uniform_bar ?? uBarW);
+    setUFloorW(c.uniform_floor_w ?? c.uniform_floor ?? uFloorW); setUBarW(c.uniform_bar_w ?? 'dress');
     setItemsMap(c.uniform_items ?? {});
   };
   const privates = clients.filter((c) => c.kind === 'private_home');
@@ -254,6 +271,8 @@ export function EventForm() {
     ...(showBar ? { bar_m: itemsOf(items, 'bar_m', uBar), bar_w: itemsOf(items, 'bar_w', uBarW) } : {}),
   });
 
+  const driveDefault = client ? client.drive_folder_default !== false : true;
+  const driveWanted = driveOn ?? driveDefault;
   const floorN = lines.filter((l) => l.dept === 'floor').reduce((n, l) => n + l.count, 0);
   const tiers = askTiers ?? tiersFor(floorN || 1);
   const named = (l: Line) => staff.filter((s) => l.names.includes(s.id));
@@ -291,12 +310,12 @@ export function EventForm() {
         event_date: forDate, title: title.trim(), venue_id: vId, address: (address + (unit.trim() ? `, ${unit.trim()}` : '')) || null, department: dept,
         start_time: start, end_time: endT, ends_label: ends, staff_needed: ls.reduce((n, l) => n + l.count, 0),
         manager_id: lead ? keep(lead)[0] ?? null : null, description: note || null, notes: staffNote || null,
-        uniform_floor: uFloor, uniform_bar: uBar, uniform_floor_w: uFloorW, uniform_bar_w: uBarW, uniform_items: lineItems(), drive_folder_url: folder.trim() || null, staffing: ls.map(({ dept: d, code, start: s, count }) => ({ dept: d, code, start: s, count })),
+        uniform_floor: uFloor, uniform_bar: uBar, uniform_floor_w: uFloorW, uniform_bar_w: uBarW, uniform_items: lineItems(), drive_folder_url: folder.trim() || null, staffing: ls.map(({ dept: d, code, start: s, end, count }) => ({ dept: d, code, start: s, end: end || null, count })), guests: guests ? Number(guests) : null, event_type: eventType || null,
       };
       const res = old ? await supabase.from('events').update(row).eq('id', old.id).select('id').single() : await supabase.from('events').insert(row).select('id').single();
       if (res.error) throw res.error;
       const evId = res.data.id as string; firstId ??= evId;
-      const pv = await supabase.from('event_private').upsert({ event_id: evId, client: client?.name ?? (newClient || null), client_id: cId, rate_set: rateSet }, { onConflict: 'event_id' });
+      const pv = await supabase.from('event_private').upsert({ event_id: evId, client: client?.name ?? (newClient || null), client_id: cId, rate_set: rateSet, pay_method: payMethod, qb_doc_type: qbNum.trim() ? qbType : null, qb_doc_number: qbNum.trim() || null }, { onConflict: 'event_id' });
       if (pv.error) throw pv.error;
 
       // Shifts: book new names, move changed ones, remove dropped ones (never anyone who already punched in).
@@ -351,7 +370,15 @@ export function EventForm() {
     if (!title.trim()) return setErr('Pick or type a venue first.');
     if (!lines.some((l) => l.count > 0)) return setErr('Add at least one staffing line.');
     setBusy(true);
-    try { const evId = await saveAll(date, isNew, 'all'); setBusy(false); if (evId) nav(`/admin/event/${evId}`); }
+    try {
+      const evId = await saveAll(date, isNew, 'all');
+      if (evId && driveWanted && drive && !folder.trim()) {
+        const { data: ses } = await supabase.auth.getSession();
+        const r = await fetch('/api/drive/folder', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ses.session?.access_token}` }, body: JSON.stringify({ event_id: evId, month: driveMonth(date), name: driveName(date, title, client?.name ?? null, !!privateId) }) });
+        if (!r.ok) setErr('Saved, but the Drive folder was not created: ' + (await r.text()));
+      }
+      setBusy(false); if (evId) nav(`/admin/event/${evId}`);
+    }
     catch (e) { setBusy(false); setErr((e as Error).message); }
   };
 
@@ -403,7 +430,7 @@ export function EventForm() {
       </div>
 
       <Fold n={1} title="Event & client" open={isOpen(1)} setOpen={(o) => setFold(1, o)}
-        summary={[dLabel(date, { weekday: 'short', month: 'short', day: 'numeric' }), title || 'no venue yet', client && client.name !== title ? client.name : privateId ? 'private home' : ''].filter(Boolean).join(' · ')}>
+        summary={[dLabel(date, { weekday: 'short', month: 'short', day: 'numeric' }), title || 'no venue yet', client && client.name !== title ? client.name : privateId ? 'private home' : '', guests ? `${guests} guests` : '', eventType].filter(Boolean).join(' · ')}>
         <div className="ef-top">
           <label className="ef-f"><span>DATE</span><input type="date" required value={date} onChange={(e) => setDate(e.target.value)} /></label>
           <div className="ef-f ef-venue"><span>VENUE · this is the title staff see</span><VenuePicker venues={venues} privates={privates} value={title} venue={venue} privateId={privateId} onPick={pickVenue} onPrivate={pickPrivate} onNew={(name) => { setVenueId(null); setPrivateId(null); setTitle(name); }} /></div>
@@ -426,6 +453,19 @@ export function EventForm() {
           <div className="ef-f"><span>STAFFING</span>
             <div className="seg3">{(['floor', 'bar', 'both'] as Mode[]).map((m) => <button type="button" key={m} className={mode === m ? 'on' : ''} onClick={() => setMode(m)}>{m === 'floor' ? 'Floor' : m === 'bar' ? 'Bar' : 'Both'}</button>)}</div>
             <small className="muted">Sets the Dept choices in the grid and which uniforms show</small></div>
+          <label className="ef-f"><span>GUESTS</span><input type="number" min={0} value={guests} onChange={(e) => setGuests(e.target.value)} placeholder="e.g. 220" /></label>
+          <label className="ef-f"><span>EVENT TYPE</span>
+            <select value={eventType} onChange={async (e) => {
+              const v = e.target.value;
+              if (v === '__new') { const n = prompt('New event type')?.trim(); if (n) { await supabase.from('event_types').insert({ name: n, sort: 50 }); setTypes([...types, { name: n, main: false }]); setEventType(n); } return; }
+              setEventType(v);
+            }}>
+              <option value="">—</option>
+              {types.filter((t) => t.main).map((t) => <option key={t.name}>{t.name}</option>)}
+              <optgroup label="Also in your Events sheet">{types.filter((t) => !t.main).map((t) => <option key={t.name}>{t.name}</option>)}</optgroup>
+              {eventType && !types.some((t) => t.name === eventType) && <option>{eventType}</option>}
+              <option value="__new">+ New type (saved for next time)</option>
+            </select></label>
           <label className="ef-f ef-wide"><span>EVENT NOTE (optional)</span><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Sit-down dinner · 250 guests" /></label>
         </div>
       </Fold>
@@ -445,19 +485,32 @@ export function EventForm() {
         <Grid lines={lines} setLines={setLines} staff={staff} day={day} mode={mode} />
       </Fold>
 
-      <Fold n={4} title="Event folder" open={isOpen(4)} setOpen={(o) => setFold(4, o)} summary={folder.trim() ? 'Google Drive · folder linked' : 'Google Drive · not linked'}>
+      <Fold n={4} title="Event folder" open={isOpen(4)} setOpen={(o) => setFold(4, o)} summary={folder.trim() ? 'Google Drive · folder linked' : `Google Drive · ${driveWanted ? 'create on Save' : 'off'}${drive ? '' : ' · not connected'}`}>
         <div className="stack" style={{ gap: 12, paddingTop: 14 }}>
+          <div className="row wrap" style={{ justifyContent: 'space-between', gap: 8 }}>
+            <span className="row sm" style={{ gap: 8 }}>
+              <button type="button" className={'tog' + (driveWanted ? ' on' : ' off')} aria-pressed={driveWanted} onClick={() => setDriveOn(!driveWanted)}>{driveWanted ? '●' : '○'}</button>
+              <b>Create folder on Save</b>
+              {client && <small className="tag" style={{ height: 20 }}>{driveDefault ? 'ON' : 'OFF'} for {client.name.split(' (')[0]}</small>}
+            </span>
+            {drive ? <span className="muted sm">Connected as {drive.email} · <button type="button" className="link-btn" onClick={async () => { if (confirm('Disconnect Google Drive?')) { await supabase.rpc('google_disconnect'); setDrive(null); } }}>Disconnect</button></span>
+              : <button type="button" className="abtn sm dark" onClick={async () => {
+                const { data: ses } = await supabase.auth.getSession();
+                const r = await fetch('/api/google/start', { headers: { Authorization: `Bearer ${ses.session?.access_token}` } });
+                if (r.ok) window.location.href = (await r.json()).url; else setErr('Could not start the Google connection: ' + (await r.text()));
+              }}>Connect Google Drive</button>}
+          </div>
           <div className="drive-grid">
             <div className="stack" style={{ gap: 8 }}>
               <span className="kick" style={{ fontSize: 11 }}>FOLDER IT WILL CREATE</span>
-              <div className="drive-path"><small>G&amp;R Events 2026 › {new Date(date + 'T12:00:00').toLocaleDateString('en-CA', { month: '2-digit' })} {new Date(date + 'T12:00:00').toLocaleDateString('en-CA', { month: 'long' })} ›</small><b>{date} · {title || 'Venue'}{client ? ` · ${client.name.split(' ').slice(-1)[0]}` : ''}</b></div>
-              <div className="drive-connect"><b>Connect Google Drive</b><span>Creating folders and showing their files needs Google Drive connected to the app (a one-time setup Ronnie does). Until then, link a folder.</span></div>
+              <div className="drive-path"><small>EVENTS 2026 › {driveMonth(date)} ›</small><b>{driveName(date, title, client?.name ?? null, !!privateId)}</b></div>
+              {!drive && <small className="muted">Connect Google Drive once (gravotreservice@gmail.com). Until then, link a folder.</small>}
             </div>
             <div className="stack" style={{ gap: 8 }}>
               <span className="kick" style={{ fontSize: 11 }}>OR LINK AN EXISTING FOLDER</span>
               {!showFolder ? <button type="button" className="abtn" style={{ borderStyle: 'dashed' }} onClick={() => setShowFolder(true)}>Link an existing Drive folder…</button>
                 : <input className="ef-in" value={folder} onChange={(e) => setFolder(e.target.value)} placeholder="Paste the Drive folder link" />}
-              <small className="muted">The link shows on the event page and on the manager’s check-in screen (MD + BM). Staff don’t get files for now.</small>
+              <small className="muted">Files in the folder show on the event page and on the manager’s check-in screen (MD + BM). Staff don’t get files.</small>
             </div>
           </div>
         </div>
@@ -470,18 +523,26 @@ export function EventForm() {
             <span className="serif" style={{ fontSize: 20 }}>Alerts</span>
             <span className="muted sm">Booked / moved / removed people are recorded when you press Save. They get a red card on their Home only if this event’s confirmations were already sent. Nothing goes out until you press Save.</span>
           </div>
-          {client && client.rate_sets.length >= 2 ? (
-            <div className="stack" style={{ gap: 10 }}>
-              <div className="sec" style={{ padding: 0 }}><span className="serif">Billing</span><span className="muted sm">only you see it</span></div>
-              {client.rate_sets.map((r, i) => (
-                <label key={r.key} className={'bill' + ((rateSet ?? client.rate_sets[0].key) === r.key ? ' on' : '')}>
-                  <input type="radio" checked={(rateSet ?? client.rate_sets[0].key) === r.key} onChange={() => setRateSet(r.key)} />
-                  <span><b>{r.label}{i === 0 && !r.label.includes('default') ? ' (default)' : ''}</b><small>{Object.entries(r.rates).map(([k, v]) => `${k} $${v}`).join(' · ')} / h</small></span>
-                </label>
-              ))}
-              <span className="muted sm">Goes with the event to the invoice builder.</span>
+          <div className="stack" style={{ gap: 10 }}>
+            <div className="sec" style={{ padding: 0 }}><span className="serif">Billing</span><span className="muted sm">only you see it</span></div>
+            <span className="kick" style={{ fontSize: 11 }}>HOW THE CLIENT PAYS</span>
+            <div className="seg3">{(['invoice', 'cash'] as const).map((m) => <button type="button" key={m} className={payMethod === m ? 'on' : ''} onClick={() => setPayMethod(m)}>{m === 'invoice' ? 'Invoice · QuickBooks' : 'Cash'}</button>)}</div>
+            {payMethod === 'cash' && <small className="muted">No QuickBooks invoice is made or filled for this event. Amount to collect = hours × rate + admin fee, no GST / QST. “Mark cash received” is on the event page.</small>}
+            {client && client.rate_sets.length >= 2 && client.rate_sets.map((r, i) => (
+              <label key={r.key} className={'bill' + ((rateSet ?? client.rate_sets[0].key) === r.key ? ' on' : '')}>
+                <input type="radio" checked={(rateSet ?? client.rate_sets[0].key) === r.key} onChange={() => setRateSet(r.key)} />
+                <span><b>{r.label}{i === 0 && !r.label.includes('default') ? ' (default)' : ''}</b><small>{Object.entries(r.rates).map(([k, v]) => `${k} $${v}`).join(' · ')} / h</small></span>
+              </label>
+            ))}
+            <span className="kick" style={{ fontSize: 11 }}>QUICKBOOKS LINK (OPTIONAL)</span>
+            <div className="row" style={{ gap: 8 }}>
+              <select value={qbType} onChange={(e) => setQbType(e.target.value as 'estimate' | 'invoice')} style={{ height: 40, borderRadius: 10, border: '1.5px solid #DCD3C7', padding: '0 8px' }}><option value="estimate">Estimate #</option><option value="invoice">Invoice #</option></select>
+              <input value={qbNum} onChange={(e) => setQbNum(e.target.value.replace(/[^\d]/g, ''))} placeholder="e.g. 3317" style={{ height: 40, borderRadius: 10, border: '1.5px solid #DCD3C7', padding: '0 10px', width: 120 }} />
             </div>
-          ) : <span className="muted sm">Billing shows only when the client has more than one rate set (e.g. La Nesra).</span>}
+            <small className="muted">{payMethod === 'cash'
+              ? 'Cash: nothing is made or filled in QuickBooks. After “Mark cash received”, Needs-you reminds you to remove the estimate yourself.'
+              : qbNum ? (qbType === 'estimate' ? 'The invoice is made from this estimate.' : 'The invoice runs fill this invoice instead of making a new one.') : 'Empty = automatic, as today.'}</small>
+          </div>
         </div>
       </Fold>
 
@@ -594,12 +655,13 @@ function Grid({ lines, setLines, staff, day, mode }: { lines: Line[]; setLines: 
     <div className="grid-card" ref={wrap}>
       <div className="sec" style={{ padding: '4px 4px 10px' }}><span className="serif">Staffing · one line per start time</span><span className="muted sm hide-sm">Tab → next cell · Enter → new line · ⌘D duplicate line · paste rows from the sheet</span></div>
       <div className="sg">
-        <div className="sg-h"><span>DEPT</span><span>ROLE</span><span>START</span><span>HOW MANY</span><span>NAMES</span><span /></div>
+        <div className="sg-h"><span>DEPT</span><span>ROLE</span><span>START</span><span>END ~</span><span>HOW MANY</span><span>NAMES</span><span /></div>
         {lines.map((l, i) => (
           <div key={i} className={'sg-r ' + (l.dept === 'bar' ? 'is-bar' : 'is-floor')} data-row={i} onKeyDown={keys(i)} onPaste={paste(i)}>
             <select aria-label="Department" value={l.dept} onChange={(e) => { const d = e.target.value as 'floor' | 'bar'; upd(i, { dept: d, code: d === 'bar' ? 'BT' : 'W', names: [] }); }}>{(mode !== 'bar' || l.dept === 'floor') && <option value="floor">● Floor</option>}{(mode !== 'floor' || l.dept === 'bar') && <option value="bar">● Bar</option>}</select>
             <select aria-label="Role" value={l.code} onChange={(e) => upd(i, { code: e.target.value, names: [] })} className={l.code === 'MD' || l.code === 'BM' ? 'strong' : ''}>{ROLES.filter((r) => r.dept === l.dept).map((r) => <option key={r.code} value={r.code}>{r.label}</option>)}</select>
             <TimeCell value={l.start} onChange={(v) => upd(i, { start: v })} />
+            <TimeCell value={l.end ?? ''} optional onChange={(v) => upd(i, { end: v || null })} />
             <input aria-label="How many" type="number" min={0} value={l.count} onChange={(e) => upd(i, { count: Math.max(0, Number(e.target.value)) })} className={l.count >= 10 ? 'strong' : ''} />
             <NamePicker line={l} staff={staff} day={day} taken={lines.flatMap((x, k) => (k === i ? [] : x.names))} onChange={(names) => upd(i, { names, count: Math.max(l.count, names.length) })} />
             <button type="button" className="sg-x" aria-label="Remove line" onClick={() => setLines(lines.filter((_, k) => k !== i))}>×</button>
@@ -616,12 +678,17 @@ function Grid({ lines, setLines, staff, day, mode }: { lines: Line[]; setLines: 
   );
 }
 
-function TimeCell({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const [txt, setTxt] = useState(ap12(value)); const [bad, setBad] = useState(false);
-  useEffect(() => { setTxt(ap12(value)); }, [value]);
-  return <input aria-label="Start" className={bad ? 'bad' : ''} value={txt} onChange={(e) => { setTxt(e.target.value); setBad(false); }}
+function TimeCell({ value, onChange, optional = false }: { value: string; onChange: (v: string) => void; optional?: boolean }) {
+  const show = (v: string) => (v ? ap12(v) : '');
+  const [txt, setTxt] = useState(show(value)); const [bad, setBad] = useState(false);
+  useEffect(() => { setTxt(show(value)); }, [value]);
+  return <input aria-label={optional ? 'End (optional)' : 'Start'} placeholder={optional ? '—' : ''} className={bad ? 'bad' : ''} value={txt} onChange={(e) => { setTxt(e.target.value); setBad(false); }}
     onFocus={(e) => e.target.select()}
-    onBlur={() => { const t = parseTime(txt.replace(/\s*(am|pm)$/i, (m) => m.trim())); if (t) { onChange(t); setTxt(ap12(t)); } else setBad(true); }} />;
+    onBlur={() => {
+      if (optional && !txt.trim()) { onChange(''); return; }
+      const t = parseTime(txt.replace(/\s*(am|pm)$/i, (m) => m.trim()));
+      if (t) { const q = (() => { const [h, m] = t.split(':').map(Number); const mm = Math.round(m / 15) * 15; const hh = (h + (mm === 60 ? 1 : 0)) % 24; return `${String(hh).padStart(2, '0')}:${String(mm % 60).padStart(2, '0')}`; })(); onChange(q); setTxt(ap12(q)); } else setBad(true);
+    }} />;
 }
 
 /** Type-to-add names; MD and BM lines only list people who can lead. */
@@ -629,10 +696,10 @@ function NamePicker({ line, staff, day, taken, onChange }: { line: Line; staff: 
   const [q, setQ] = useState(''); const [open, setOpen] = useState(false); const [hi, setHi] = useState(0);
   const isBar = line.dept === 'bar';
   const pool = useMemo(() => staff.filter((s) => {
-    if (line.code === 'MD') return s.positions.includes('MD') || (s.role !== 'staff' && s.department !== 'bar');
+    if (line.code === 'MD') return s.md_rank != null || (q.trim().length > 1 && s.department !== 'bar'); // MD list; anyone else = "+ Add MD" by typing
     if (line.code === 'BM') return s.positions.includes('BM') || (s.role !== 'staff' && s.department === 'bar');
     return isBar ? s.department === 'bar' : s.department !== 'bar';
-  }), [staff, line.code, isBar]);
+  }), [staff, line.code, isBar, q]);
   const info = (s: AStaff) => {
     if (day.off.has(s.id)) return { t: 'off that day', cls: 'grey', block: true };
     if (day.booked[s.id]) return { t: `booked at ${day.booked[s.id]} that day`, cls: 'grey', block: true };
@@ -647,7 +714,7 @@ function NamePicker({ line, staff, day, taken, onChange }: { line: Line; staff: 
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
   const matches = pool.filter((s) => !line.names.includes(s.id) && words.every((w) => (s.full_name + ' ' + (s.nickname ?? '')).toLowerCase().includes(w)))
     .map((s) => ({ s, i: info(s) }))
-    .sort((a, b) => Number(a.i.block) - Number(b.i.block) || (q ? Number(!a.s.full_name.toLowerCase().startsWith(words[0] ?? '')) - Number(!b.s.full_name.toLowerCase().startsWith(words[0] ?? '')) : 0) || (a.i.w ?? 9) - (b.i.w ?? 9) || (tierOf(a.s) ?? 'Z').localeCompare(tierOf(b.s) ?? 'Z') || rankOf(a.s) - rankOf(b.s))
+    .sort((a, b) => (line.code === 'MD' ? (a.s.md_rank ?? 99) - (b.s.md_rank ?? 99) : 0) || Number(a.i.block) - Number(b.i.block) || (q ? Number(!a.s.full_name.toLowerCase().startsWith(words[0] ?? '')) - Number(!b.s.full_name.toLowerCase().startsWith(words[0] ?? '')) : 0) || (a.i.w ?? 9) - (b.i.w ?? 9) || (tierOf(a.s) ?? 'Z').localeCompare(tierOf(b.s) ?? 'Z') || rankOf(a.s) - rankOf(b.s))
     .slice(0, 8);
   const add = (id: string) => { onChange([...line.names, id]); setQ(''); setHi(0); };
   const lead = line.code === 'MD' || line.code === 'BM';

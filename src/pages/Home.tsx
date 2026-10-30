@@ -1,7 +1,7 @@
 import { QuarterTime } from '../components/QuarterTime';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { supabase, SHIFT_SELECT, type ShiftRow, type Staff } from '../lib/supabase';
+import { supabase, SHIFT_SELECT, isSetup, type ShiftRow, type Staff } from '../lib/supabase';
 import { useLang } from '../lib/i18n';
 import { time, longDate, dayBadge, minus } from '../lib/format';
 import { Avatar } from '../components/Avatar';
@@ -180,12 +180,12 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
                 <div className="venue serif">{next.events.title}</div>
                 {addr && <div className="sub" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{addr.split(',').slice(0, 2).join(' ·')}</div>}
               </div>
-              <span className="wear-tile" style={{ width: 52, height: 52, borderRadius: 14 }} title={uniformLabel(uniformFor(next))}><UniformIcon kind={uniformFor(next)} size={38} /></span>
+              {!isSetup(next.events) && <span className="wear-tile" style={{ width: 52, height: 52, borderRadius: 14 }} title={uniformLabel(uniformFor(next))}><UniformIcon kind={uniformFor(next)} size={38} /></span>}
             </div>
             <div className="pos-line"><small>Your position</small><span className="pos-pill-lg">{role(next)}</span></div>
             <div className="row2">
               <div className="tbox start"><small>Shift starts</small>{next.time_tbc ? <span className="big serif sm-big">TBC</span> : <BigTime iso={next.planned_start} small />}</div>
-              <div className="tbox"><small>Be there</small>{next.time_tbc ? <span className="big serif sm-big">TBC</span> : <><BigTime iso={minus(next.planned_start, next.arrive_before_min)} small /><span className="tb-note">{next.arrive_before_min} min before</span></>}</div>
+              {!isSetup(next.events) && <div className="tbox"><small>Be there</small>{next.time_tbc ? <span className="big serif sm-big">TBC</span> : <><BigTime iso={minus(next.planned_start, next.arrive_before_min)} small /><span className="tb-note">{next.arrive_before_min} min before</span></>}</div>}
             </div>
             <div className="row2">
               <Link className="light-btn" style={{ height: 46, borderRadius: 14 }} to={`${base}/shift/${next.id}`}>Details</Link>

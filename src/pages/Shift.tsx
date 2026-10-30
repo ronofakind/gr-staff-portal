@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { supabase, SHIFT_SELECT, type ShiftRow } from '../lib/supabase';
+import { supabase, SHIFT_SELECT, isSetup, type ShiftRow } from '../lib/supabase';
 import { useT, useLang } from '../lib/i18n';
 import { time, longDate, minus, mapsUrl } from '../lib/format';
 import { Avatar, PhotoViewer } from '../components/Avatar';
@@ -115,11 +115,13 @@ export function Shift({ backTo = '/' }: { backTo?: string }) {
         </Link>
       ) : null}
 
+      {!isSetup(ev) && <>
       <div className="d-sec">Uniform</div>
       <section className="uni-hero"><UniformIcon kind={kind} size={92} /><div><small>{dress ? 'Dress' : kind === 'black_tshirt' ? 'Top' : 'Shirt'}</small><div className="serif">{shirtLabel}</div></div></section>
       <section className="uni-grid">
         {tiles.map((x) => <div key={x.name} className="uni-tile"><div className="ic">{x.icon}</div><b>{x.name}</b>{x.no && <span className="no">✕ {x.no}</span>}</div>)}
       </section>
+      </>}
 
       <div className="d-sec">Notes</div>
       <section className="d-notes">{ev.notes ? ev.notes : <span className="empty">&nbsp;</span>}</section>

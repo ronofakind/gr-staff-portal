@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import { useLang } from '../lib/i18n';
 import { time } from '../lib/format';
 import { Avatar, PhotoViewer } from '../components/Avatar';
+import { DriveFiles } from '../components/DriveFiles';
 import { IncidentSheet, kindLabel, type Incident } from '../components/IncidentReport';
 
 type Row = {
@@ -13,7 +14,7 @@ type Row = {
   staff: { full_name: string; photo_url: string | null; phone: string | null } | null; punches: { punch_in: string | null; punch_out: string | null; arrived_at: string | null; updated_at: string } | null;
 };
 type Ev = { id: string; title: string; event_date: string };
-type EvFull = Ev & { drive_folder_url?: string | null; address: string | null; start_time: string | null; end_time: string | null; description: string | null;
+type EvFull = Ev & { staffing?: { start: string; end?: string | null }[] | null; drive_folder_url?: string | null; address: string | null; start_time: string | null; end_time: string | null; description: string | null;
   dress_code: string | null; hours_submitted_at: string | null; venues: { address: string | null; staff_notes: string | null } | null };
 
 const L = {
@@ -172,7 +173,7 @@ export function Manage() {
 
   const load = async () => {
     const [e, s] = await Promise.all([
-      supabase.from('events').select('id,title,event_date,address,start_time,end_time,description,dress_code,hours_submitted_at,drive_folder_url,venues(address,staff_notes)').eq('id', eventId!).single(),
+      supabase.from('events').select('id,title,event_date,address,start_time,end_time,description,dress_code,hours_submitted_at,drive_folder_url,staffing,venues(address,staff_notes)').eq('id', eventId!).single(),
       supabase.from('shifts').select('id,staff_id,position_code,position_detail,planned_start,planned_end,attendance,left_early,attendance_reason,added_note,adder:staff!shifts_added_by_fkey(full_name),leave_by,manager_note,staff:staff!shifts_staff_id_fkey(full_name,photo_url,phone),punches(punch_in,punch_out,arrived_at,updated_at)')
         .eq('event_id', eventId!).neq('status', 'declined').order('planned_start'),
     ]);
@@ -293,6 +294,7 @@ export function Manage() {
             <small>{incidents.map((x) => `${kindLabel(x.kind)}${x.involved_staff.length ? ' · ' + x.involved_staff.map((id) => first(rows.find((r) => r.staff && (r as unknown as { staff_id?: string }).staff_id === id)?.staff?.full_name) || '').filter(Boolean).join(', ') : ''}${x.audio_sec ? ` · 🎙 ${Math.floor(x.audio_sec / 60)}:${String(x.audio_sec % 60).padStart(2, '0')}` : ''} · ${time(x.created_at, lang)}`).join('  |  ')}</small></div></div>
         )}
         {ev.drive_folder_url && <a className="folder-link" href={ev.drive_folder_url} target="_blank" rel="noreferrer">Event folder · floor plan, run of show ›</a>}
+        {ev.drive_folder_url && <DriveFiles eventId={ev.id} admin={false} />}
       </div>
 
       <section className="mt-sum">
@@ -338,7 +340,7 @@ export function Manage() {
         return (
           <section key={g} className="stack" style={{ gap: 10 }}>
             <div className="grp-head">
-              <span className="grp-time">{time(g, lang)}</span>
+              <span className="grp-time">{time(g, lang)}{(() => { const e = (ev.staffing ?? []).filter((l) => l.start === hm(g) && l.end).map((l) => l.end!).sort().pop(); return e ? <i className="grp-end"> ~ {fmt12(e)}</i> : null; })()}</span>
               <span className="grp-n">{grp.length} {grp.length === 1 ? 'person' : 'people'}</span>
               <span className="grp-rule" />
               {notIn.length === 0 ? <span className="grp-st ok">✓ All started</span>
