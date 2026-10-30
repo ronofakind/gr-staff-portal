@@ -117,7 +117,7 @@ export function Availability({ me, preview = false }: { me: Staff; preview?: boo
             <div key={dow} className="wk-row">
               <div className="grow"><b>{name}</b>{w && w.status !== 'no' && <div><button className="wk-from" onClick={() => { setWkSheet(dow); setWkChoice(w.from_time ? w.from_time.slice(0, 5) : 'any'); }}>{wkText(w)} ✎</button></div>}</div>
               <div className="wk-seg">
-                <button className={w && w.status !== 'no' ? 'on yes' : ''} onClick={() => { setWkSheet(dow); setWkChoice(w && w.status !== 'no' ? (w.from_time ? w.from_time.slice(0, 5) : 'any') : null); }}>Yes</button>
+                <button className={w && w.status !== 'no' ? 'on yes' : ''} onClick={() => { setWkSheet(dow); setWkChoice(w && w.status !== 'no' ? (w.from_time ? w.from_time.slice(0, 5) : 'any') : null); }}>Yes · From</button>
                 <button className={w?.status === 'no' ? 'on no' : ''} onClick={() => setDay(dow, 'no')}>No</button>
               </div>
             </div>
@@ -149,7 +149,7 @@ export function Availability({ me, preview = false }: { me: Staff; preview?: boo
         <>
           <div className="scrim" onClick={() => setPick(null)} />
           <div className="sheet swipe" role="dialog" aria-label="From what time?">
-            <div className="grab" />
+            <button className="sheet-x" aria-label="Close" onClick={() => setPick(null)}>✕</button>
             <div><div className="kicker">{D(pick.for_date).toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric' }).toUpperCase()} · <span style={{ color: 'var(--ok)' }}>AVAILABLE ✓</span></div>
               <div className="serif" style={{ fontSize: 26 }}>From what time?</div></div>
             {usualFor(pick.for_date) && <span className="usual-tag">From your usual week · {D(pick.for_date).toLocaleDateString('en-CA', { weekday: 'short' }).replace('.', '')} {ampm15(usualFor(pick.for_date))}</span>}
@@ -166,7 +166,7 @@ export function Availability({ me, preview = false }: { me: Staff; preview?: boo
         <>
           <div className="scrim" onClick={() => setWkSheet(null)} />
           <div className="sheet swipe" role="dialog" aria-label="From what time, usually?">
-            <div className="grab" />
+            <button className="sheet-x" aria-label="Close" onClick={() => setWkSheet(null)}>✕</button>
             <div><div className="kicker">{DAYS[wkSheet].toUpperCase()}S · <span style={{ color: 'var(--ok)' }}>YES ✓</span></div>
               <div className="serif" style={{ fontSize: 26 }}>From what time, usually?</div></div>
             <FromPicker choice={wkChoice} setChoice={setWkChoice} />

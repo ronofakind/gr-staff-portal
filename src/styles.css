@@ -1191,3 +1191,7 @@ div.avatar { color: var(--accent); background: var(--accent-bg); }
 .usual-free { border: 1.5px dashed var(--ok); border-radius: 12px; padding: 6px 10px; color: var(--ok); font-size: 13px; display: inline-flex; flex-direction: column; }
 .usual-free small { color: #5F8F79; font-size: 11px; }
 .av-note-adm { display: block; font-style: italic; color: #9A7413; font-size: 12.5px; font-weight: 500; }
+.sheet { position: fixed; }
+.sheet-x { position: absolute; top: 14px; right: 14px; width: 36px; height: 36px; border-radius: 18px; border: 0; background: #E9E2D8; color: var(--ink); font-size: 15px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 2; }
+.sheet:has(.sheet-x) { padding-top: 18px; }
+.wk-seg button { white-space: nowrap; }
