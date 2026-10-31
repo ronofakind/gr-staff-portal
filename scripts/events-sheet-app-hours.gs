@@ -525,6 +525,7 @@ function extrasHeader_(sh) {
     if (cells.indexOf(norm_(XCOLS.date)) < 0) continue;
     const col = {};
     Object.keys(XCOLS).forEach((k) => { col[k] = cells.indexOf(norm_(XCOLS[k])) + 1; });
+    if (!col.details) col.details = cells.findIndex((c) => c.indexOf(norm_('EXTRAS')) === 0) + 1; // "EXTRAS / CANCELLATIONS (Ronnie's words)"
     return { row: r + 1, col: col };
   }
   return null;
@@ -547,21 +548,19 @@ function syncExtrasLog_(ss, dryRun) {
     const line = new Array(width).fill('');
     const venue = r.venue + (r.department === 'bar' ? ' · BAR' : '');
     const details = r.details + (r.source === 'proposal' ? ' · app proposal (no answer by 5 AM)' : '');
-    line[h.col.date - 1] = new Date(r.event_date + 'T12:00:00');
+    line[h.col.date - 1] = r.event_date; // text like the rows above (2026-10-10)
     if (h.col.venue) line[h.col.venue - 1] = venue;
     if (h.col.invoice) line[h.col.invoice - 1] = r.invoice_no || '';
     line[h.col.details - 1] = details;
-    if (h.col.logged) line[h.col.logged - 1] = new Date();
+    if (h.col.logged) line[h.col.logged - 1] = Utilities.formatDate(new Date(), 'America/Toronto', 'yyyy-MM-dd HH:mm');
     out.push({ r: r, line: line, details: details });
   });
   if (dryRun) { Logger.log(JSON.stringify({ header: h, rows: out.map((x) => x.line) })); return out; }
   out.forEach((x) => {
     const at = Math.max(sh.getLastRow(), h.row) + 1;
+    if (h.col.date) sh.getRange(at, h.col.date).setNumberFormat('@'); // keep dates as text, like the rows above
+    if (h.col.logged) sh.getRange(at, h.col.logged).setNumberFormat('@');
     sh.getRange(at, 1, 1, width).setValues([x.line]);
-    if (at > h.row + 1) { // dates / times look like the row above
-      if (h.col.date) sh.getRange(at, h.col.date).setNumberFormat(sh.getRange(at - 1, h.col.date).getNumberFormat());
-      if (h.col.logged) sh.getRange(at, h.col.logged).setNumberFormat(sh.getRange(at - 1, h.col.logged).getNumberFormat());
-    }
     props.setProperty('xlog_' + x.r.event_id, String(at));
     markExtras_(x.r.event_id, at, x.details);
   });
