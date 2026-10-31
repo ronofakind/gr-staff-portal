@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { DeptTag } from './DeptTag';
 import { eventsBetween, allStaff, addDays, isoDay, dLabel, ap12, startIso, roleName, bookingChange, confirmationsSent, type AEvent, type AStaff } from './api';
 
 /* Push 23 · Bookings (admin). Practice mode by default: every change lives in a draft (booking_drafts) layered
@@ -381,7 +382,7 @@ export function Bookings() {
           {dates.map((d) => dayEvs(d).map((e) => { const pl = plOf(d).filter((p) => p.event_id === e.id); const lead = pl.find((p) => ['MD', 'BM'].includes(p.code)); const need = e.staff_needed + extrasOf(d, e); return (
             <button key={e.id} className="adm-card bk-li" onClick={() => { setP('date', d); setP('view', 'board'); }}>
               <span className="bk-ld"><small>{dLabel(d, { weekday: 'short' })}</small><b>{new Date(d + 'T12:00:00').getDate()}</b></span>
-              <span className="grow" style={{ textAlign: 'left' }}><b>{e.title}</b><span className="muted sm"> · {e.event_private?.client ?? ''}</span><div className="muted sm">{lead ? `${lead.code} ${name(lead.staff_id)}` : 'MD not set'}</div></span>
+              <span className="grow" style={{ textAlign: 'left' }}><b>{e.title}</b> <DeptTag dept={e.department} /><span className="muted sm"> · {e.event_private?.client ?? ''}</span><div className="muted sm">{lead ? `${lead.code} ${name(lead.staff_id)}` : 'MD not set'}</div></span>
               <span className={'tag ' + (pl.length >= need ? 'ok' : 'amber')}>{pl.length} / {need}</span>
             </button>); }))}
           {!dates.some((d) => dayEvs(d).length) && <div className="adm-card muted">No {dept} events in the next 14 days.</div>}

@@ -8,6 +8,7 @@ import { Avatar } from '../components/Avatar';
 import { TabBar } from '../components/TabBar';
 import { UniformIcon, uniformFor, uniformLabel } from '../components/Uniform';
 import { payPeriod, paidHours, periodLabel, payDayLabel } from '../lib/hours';
+import { AnnounceCards } from '../components/Announce';
 
 type Mate = { full_name: string; photo_url: string | null; position_code: string | null; position_detail: string | null; punches: { punch_in: string | null; punch_out: string | null } | null };
 type Q = { shift_id: string; status: 'open' | 'fixed' | 'correct' };
@@ -106,6 +107,8 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
           <button className="pill-red" onClick={() => gotIt(a.id)}>Got it</button>
         </div>
       ))}
+
+      {!preview && <AnnounceCards meId={me.id} />}
 
       {asked > 0 && (
         <Link to={preview ? '#' : '/availability'} className="todo">

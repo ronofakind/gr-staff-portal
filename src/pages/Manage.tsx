@@ -6,6 +6,7 @@ import { useLang } from '../lib/i18n';
 import { time } from '../lib/format';
 import { Avatar, PhotoViewer } from '../components/Avatar';
 import { DriveFiles } from '../components/DriveFiles';
+import { AnnounceComposer, AnnounceSent } from '../components/Announce';
 import { IncidentSheet, kindLabel, type Incident } from '../components/IncidentReport';
 
 type Row = {
@@ -158,6 +159,7 @@ export function Manage() {
   const [ev, setEv] = useState<EvFull | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
   const [open, setOpen] = useState<Row | null>(null);
+  const [annOpen, setAnnOpen] = useState(false); const [annTick, setAnnTick] = useState(0);
   const [undo, setUndo] = useState<{ label: string; prev: { id: string; in: string | null; out: string | null }[] } | null>(null);
   useEffect(() => { if (!undo) return; const t = setTimeout(() => setUndo(null), 8000); return () => clearTimeout(t); }, [undo]);
   const [draft, setDraft] = useState({ in: '', out: '' });
@@ -308,6 +310,9 @@ export function Manage() {
         )}
         {ev.drive_folder_url && <a className="folder-link" href={ev.drive_folder_url} target="_blank" rel="noreferrer">Event folder · floor plan, run of show ›</a>}
         {ev.drive_folder_url && <DriveFiles eventId={ev.id} admin={false} />}
+        {(() => { const td = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' }); const prev = new Date(ev.event_date + 'T12:00:00'); prev.setDate(prev.getDate() - 1);
+          return td >= prev.toLocaleDateString('en-CA') && td <= ev.event_date ? <button className="ann-open" onClick={() => setAnnOpen(true)}>📣 Message your team</button> : null; })()}
+        <AnnounceSent eventId={ev.id} reload={annTick} />
       </div>
 
       <section className="mt-sum">
@@ -544,6 +549,17 @@ export function Manage() {
         </>
       )}
 
+      {annOpen && (() => {
+        const team = rows.filter((x) => !x.attendance && x.staff);
+        const groups = [...new Set(team.map((x) => x.planned_start))].sort();
+        const targets = [{ key: 'all', label: 'Whole team', n: team.length, audience: { kind: 'event' }, event_id: ev.id },
+          ...(groups.length > 1 ? groups.map((g) => ({ key: g, label: time(g, lang), n: team.filter((x) => x.planned_start === g).length, audience: { kind: 'group', start: g }, event_id: ev.id })) : [])];
+        return (<>
+          <div className="scrim" onClick={() => setAnnOpen(false)} />
+          <SwipeSheet onClose={() => setAnnOpen(false)} label="Message your team">
+            <AnnounceComposer targets={targets} folder={ev.id} onClose={() => setAnnOpen(false)} onSent={() => { setAnnOpen(false); setAnnTick((t) => t + 1); }} />
+          </SwipeSheet>
+        </>); })()}
       {incOpen && (
         <>
           <div className="scrim" onClick={() => setIncOpen(false)} />

@@ -6,6 +6,8 @@ import { time, longDate, minus, mapsUrl } from '../lib/format';
 import { Avatar, PhotoViewer } from '../components/Avatar';
 import { UniformIcon, uniformFor, uniformLabel, PantsIcon, ShoesIcon, ApronIcon, TieIcon, WineKeyIcon, isBarPos, lineKey, PIECE } from '../components/Uniform';
 import { Status, isBar } from './Home';
+import { GettingThere } from '../components/GettingThere';
+import { PinnedAnnouncements } from '../components/Announce';
 
 export function Shift({ backTo = '/' }: { backTo?: string }) {
   const { id } = useParams();
@@ -105,6 +107,7 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team }: { s:
         {lead_ && !preview && <Link className="d3-team" to={`/manage/${ev.id}`}>My team{team ? ` · ${team.reduce((n, g) => n + g.n, 0)}` : ''} ›</Link>}
       </section>
 
+      {ev.transport && ev.rides && <GettingThere eventId={ev.id} eventDate={ev.event_date} firstStart={s.planned_start} travelMin={ev.travel_min ?? 60} paidMin={ev.paid_travel_min ?? 0} preview={preview} />}
       <div className="d-sec">Where</div>
       <section className="d3-card d3-where">
         <div className="row" style={{ gap: 12, alignItems: 'flex-start' }}>
@@ -142,6 +145,8 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team }: { s:
           <small>Open the team to start people and see who’s late.</small>
         </section>
       </>}
+
+      {!preview && <PinnedAnnouncements eventId={ev.id} />}
 
       {ev.notes && <>
         <div className="d-sec">Notes</div>

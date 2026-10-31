@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { DeleteEvent } from './DeleteEvent';
+import { DeptTag } from './DeptTag';
 import { eventsBetween, addDays, isoDay, hhmm, type AEvent } from './api';
 
 const monday = (iso: string) => {
@@ -66,8 +67,8 @@ function EventCard({ e, onDeleted }: { e: AEvent; onDeleted: (ids: string[]) => 
   return (
     <div className={'ev-card' + (short > 0 && e.department !== 'bar' ? ' short' : '')}>
       <div className="grow">
-        <div className="strong">{e.title}</div>
-        <div className="muted sm">{e.department === 'bar' ? 'Bar' : 'Floor'} · {hhmm(e.start_time) || 'TBC'}{e.end_time ? ` – ${hhmm(e.end_time)}` : ''}{e.event_private?.client ? ` · ${e.event_private.client}` : ''}</div>
+        <div className="strong row" style={{ gap: 8, alignItems: 'center' }}>{e.title}<DeptTag dept={e.department} /></div>
+        <div className="muted sm">{hhmm(e.start_time) || 'TBC'}{e.end_time ? ` – ${hhmm(e.end_time)}` : ''}{e.event_private?.client ? ` · ${e.event_private.client}` : ''}</div>
       </div>
       <div className="meter">
         <div className="spread sm"><span className="muted">Booked</span><b>{n} / {e.staff_needed}</b></div>

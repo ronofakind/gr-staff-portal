@@ -7,7 +7,7 @@ import { payPeriod, shiftPeriod, payDay, payDayLabel, periodLabel, paidHours, wo
 
 type P = { punch_in: string | null; punch_out: string | null } | null;
 type Row = { id: string; planned_start: string; attendance: string | null; left_early: boolean | null; punches: P;
-  events: { id: string; title: string; event_date: string; hours_submitted_at: string | null; manager_id: string | null } };
+  events: { id: string; title: string; event_date: string; hours_submitted_at: string | null; manager_id: string | null; transport?: boolean; paid_travel_min?: number | null } };
 type Q = { id: string; shift_id: string; kind: 'start' | 'end' | 'other'; claimed_at: string | null; note: string | null; status: 'open' | 'fixed' | 'correct'; answer_note: string | null; created_at: string };
 type Team = { id: string; title: string; event_date: string; hours_submitted_at: string | null; shifts: { attendance: string | null; left_early: boolean | null; punches: P; staff: { full_name: string } | null }[] };
 
@@ -30,7 +30,7 @@ export function Hours({ me }: { me: Staff }) {
 
   const load = async () => {
     const from = per.start < yearStart ? per.start : yearStart;
-    const { data } = await supabase.from('shifts').select('id,planned_start,attendance,left_early,punches(punch_in,punch_out),events!inner(id,title,event_date,hours_submitted_at,manager_id)')
+    const { data } = await supabase.from('shifts').select('id,planned_start,attendance,left_early,punches(punch_in,punch_out),events!inner(id,title,event_date,hours_submitted_at,manager_id,transport,paid_travel_min)')
       .eq('staff_id', me.id).neq('status', 'declined').gte('events.event_date', from).lte('events.event_date', today);
     const list = ((data ?? []) as unknown as Row[]).map((r) => ({ ...r, punches: one(r.punches as P | P[]) }));
     setRows(list);
@@ -50,7 +50,8 @@ export function Hours({ me }: { me: Staff }) {
   }, [view, per.start, me.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const done = (r: Row) => !r.attendance && !!r.punches?.punch_in && !!r.punches.punch_out && new Date(r.punches.punch_out).getTime() <= Date.now();
-  const hoursOf = (r: Row) => paidHours(r.punches!.punch_in!, r.punches!.punch_out!, !!r.left_early);
+  const travelOf = (r: Row) => (r.events.transport ? (r.events.paid_travel_min ?? 0) / 60 : 0);
+  const hoursOf = (r: Row) => paidHours(r.punches!.punch_in!, r.punches!.punch_out!, !!r.left_early) + travelOf(r);
   const inPer = (p: { start: string; end: string }) => (rows ?? []).filter((r) => r.events.event_date >= p.start && r.events.event_date <= p.end && done(r)).sort((a, b) => b.planned_start.localeCompare(a.planned_start));
   const shifts = inPer(per);
   const total = shifts.reduce((n, r) => n + hoursOf(r), 0);
@@ -69,6 +70,7 @@ export function Hours({ me }: { me: Staff }) {
     if (q?.status === 'correct') return <span className="hz-tag grey">CHECKED</span>;
     return r.events.hours_submitted_at ? <span className="hz-tag ok">APPROVED</span> : <span className="hz-tag gold">WAITING</span>; };
   const special = (r: Row) => { const w = workedHours(r.punches!.punch_in!, r.punches!.punch_out!);
+    if (travelOf(r)) return `+${fmtH(travelOf(r))} h travel${r.left_early ? ' · left early' : w < 4 ? ' · 4-hour minimum' : ''}`;
     if (r.left_early) return 'Left early · real hours';
     if (w < 4) return `4-hour minimum (worked ${fmtH(w)} h)`;
     if (!r.events.hours_submitted_at) return 'Manager hasn’t submitted yet';
@@ -160,6 +162,7 @@ export function Hours({ me }: { me: Staff }) {
             <div><span>Started</span><b>{t12(r.punches!.punch_in!)}</b></div>
             <div><span>Ended</span><b>{t12(r.punches!.punch_out!)}</b></div>
             <div><span>Worked</span><b>{Math.floor(w)} h {Math.round((w % 1) * 60)} min</b></div>
+            {travelOf(r) > 0 && <div><span>Travel time (paid)</span><b>+{fmtH(travelOf(r))} h</b></div>}
             <div><span>Paid hours</span><b className="okc">{fmtH(hoursOf(r))} h{r.left_early ? ' · left early' : w < 4 ? ' · 4-hour minimum' : ''}</b></div>
           </div>
           {!r.events.hours_submitted_at && <div className="hz-wait">⏳ Waiting for your manager to submit the team’s hours. They lock once submitted.</div>}

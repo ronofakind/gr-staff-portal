@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { supabase, type ShiftRow } from '../lib/supabase';
 import { DriveFiles } from '../components/DriveFiles';
 import { DeleteEvent } from './DeleteEvent';
+import { RidesAdmin } from './Rides';
 import { ShiftView } from '../pages/Shift';
 import { UniformIcon, PantsIcon, ShoesIcon, ApronIcon, TieIcon, WineKeyIcon, PIECE, defaultItems, uniformLabel, type UniItemsMap, type UniLineKey, type UniformKind } from '../components/Uniform';
 import { EVENT_SELECT, ap12, dLabel, roleName, type AEvent } from './api';
@@ -56,7 +57,7 @@ export function EventDetail() {
   const uniRows = uniformRows(evs, x?.uniform_items ?? null);
   const fee = /brera/i.test(x?.client?.name ?? p?.client ?? '') ? 8 : 10;
   const rateLabel = x?.client && x.client.rate_sets.length >= 2 ? x.client.rate_sets.find((r) => r.key === (x.rate_set ?? x.client!.rate_sets[0].key))?.label : null;
-  const keys = ['event', 'staffing', 'uniforms', 'folder', 'billing', 'lands'];
+  const keys = ['event', 'staffing', 'uniforms', 'folder', 'billing', 'rides', 'lands'];
 
   return (
     <div className="stack-lg ed2">
@@ -143,6 +144,10 @@ export function EventDetail() {
             <F l="Admin fee" v={`${fee}%`} />
           </div>
           <Billing evs={evs} onChange={load} />
+        </Sec>}
+
+        {evs.some((v) => v.transport) && <Sec k="rides" title="Rides" wide open={isOpen('rides')} setOpen={setFold} summary="Transport · cars and riders">
+          <RidesAdmin evs={evs} />
         </Sec>}
 
         <Sec k="lands" title="How it lands in the app" wide open={isOpen('lands')} setOpen={setFold} summary="Staff event page">

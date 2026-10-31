@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { DeptTag } from './DeptTag';
 import { supabase } from '../lib/supabase';
 import {
   eventsBetween, allStaff, addDays, isoDay, startIso, endIso, flagsOf, flagText, ap12, bookingChange, confirmationsSent, UNIFORMS,
@@ -156,9 +157,9 @@ export function Day() {
             <section key={e.id} className={'dv-col' + (canDrop ? ' drop' : '') + (over === e.id ? ' over' : '') + (short && !isBar(e) ? ' short' : '')}
               onDragOver={(ev) => { if (canDrop) { ev.preventDefault(); setOver(e.id); } }} onDragLeave={() => setOver(null)} onDrop={() => drop(e)}>
               <div className="dv-head">
-                <div className="row" style={{ justifyContent: 'space-between', gap: 8 }}><Link to={`/admin/event/${e.id}`} className="serif dv-title">{e.title}{isBar(e) ? <small className="muted"> · bar</small> : null}</Link><span className={'tag ' + (short ? 'amber' : 'ok')}>{active.length} / {e.staff_needed}</span></div>
+                <div className="row" style={{ justifyContent: 'space-between', gap: 8 }}><span className="row" style={{ gap: 6, alignItems: 'center', minWidth: 0 }}><Link to={`/admin/event/${e.id}`} className="serif dv-title">{e.title}</Link><DeptTag dept={e.department} /></span><span className={'tag ' + (short ? 'amber' : 'ok')}>{active.length} / {e.staff_needed}</span></div>
                 <div className="dv-prog"><i style={{ width: pct + '%' }} className={short ? 'amber' : ''} /></div>
-                <small className="muted">{[e.event_private?.client, isBar(e) ? 'Bar' : 'Floor', `starts ${t12(startsOf(e)[0] ?? e.start_time)}`, e.ends_label ? `ends ${e.ends_label}` : ''].filter(Boolean).join(' · ')}</small>
+                <small className="muted">{[e.event_private?.client, `starts ${t12(startsOf(e)[0] ?? e.start_time)}`, e.ends_label ? `ends ${e.ends_label}` : ''].filter(Boolean).join(' · ')}</small>
                 {md ? <small><b>{isBar(e) ? 'BM' : 'MD'} {md.staff?.full_name}</b> · in {t12(hm(md.planned_start))}</small> : <Link to={`/admin/event/${e.id}/edit`} className="accent sm strong">{isBar(e) ? 'Bar manager' : 'MD'} not set · pick one ›</Link>}
                 <small className="muted">Uniform: {unif(isBar(e) ? e.uniform_bar : e.uniform_floor) || '—'}</small>
               </div>

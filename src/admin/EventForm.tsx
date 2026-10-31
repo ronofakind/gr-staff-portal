@@ -148,6 +148,7 @@ export function EventForm() {
   const allFold = (o: boolean) => { const f = Object.fromEntries([1, 2, 3, 4, 5, 6].map((n) => [n, o])); setFoldMap(f); try { localStorage.setItem(FOLD_KEY, JSON.stringify(f)); } catch { /* private mode */ } };
   const [privateId, setPrivateId] = useState<string | null>(null); // a private-home client used as the venue
   const [guests, setGuests] = useState(''); const [eventType, setEventType] = useState(''); const [types, setTypes] = useState<{ name: string; main: boolean }[]>([]);
+  const [tr, setTr] = useState<{ on: boolean | null; travel: number; gas: string; billing: 'client' | 'gr'; rides: boolean }>({ on: null, travel: 60, gas: '20', billing: 'client', rides: true });
   const [extras, setExtras] = useState(''); const [extrasBill, setExtrasBill] = useState<'gr' | 'client'>('gr');
   const [payMethod, setPayMethod] = useState<'invoice' | 'cash'>('invoice'); const [qbType, setQbType] = useState<'estimate' | 'invoice'>('estimate'); const [qbNum, setQbNum] = useState('');
   const [driveOn, setDriveOn] = useState<boolean | null>(null); const [drive, setDrive] = useState<{ email: string } | null>(null);
@@ -163,7 +164,7 @@ export function EventForm() {
 
   // Lists
   useEffect(() => {
-    supabase.from('venues').select('id,name,address,usual_client_id,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,uniform_items').order('name').then(({ data }) => setVenues((data ?? []) as Venue[]));
+    supabase.from('venues').select('id,name,address,usual_client_id,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,uniform_items,always_offer_rides').order('name').then(({ data }) => setVenues((data ?? []) as Venue[]));
     supabase.from('clients').select('id,name,rate_sets,kind,address,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,uniform_items,drive_folder_default').order('name').then(({ data }) => setClients((data ?? []) as Client[]));
     allStaff().then((s) => setStaff(s.filter((x) => x.active)));
     supabase.from('event_types').select('name,main,sort').order('sort').then(({ data }) => setTypes((data ?? []) as { name: string; main: boolean }[]));
@@ -183,6 +184,7 @@ export function EventForm() {
       setExisting(evs); setOldShifts(shifts);
       setDate(e.event_date); setTitle(e.title); setVenueId(e.venue_id); setAddress(e.address ?? '');
       setClientId(e.event_private?.client_id ?? ''); setRateSet(e.event_private?.rate_set ?? null);
+      setTr({ on: !!e.transport, travel: e.travel_min ?? 60, gas: String(e.gas_per_car ?? 20), billing: e.transport_billing ?? 'client', rides: e.rides ?? !!e.transport });
       setExtras(e.extras != null ? String(e.extras) : ''); setExtrasBill(e.extras_billing ?? 'gr');
       setGuests(e.guests ? String(e.guests) : ''); setEventType(e.event_type ?? ''); setPayMethod(e.event_private?.pay_method ?? 'invoice');
       if (e.event_private?.qb_doc_type) setQbType(e.event_private.qb_doc_type); setQbNum(e.event_private?.qb_doc_number ?? ''); setDriveOn(e.drive_folder_url ? false : null);
@@ -236,6 +238,9 @@ export function EventForm() {
   }, [title, date]);
 
   const venue = venues.find((v) => v.id === venueId) ?? null;
+  const trSuggested = !!(venue as (Venue & { always_offer_rides?: boolean }) | null)?.always_offer_rides;
+  const trOn = tr.on ?? trSuggested;
+  const paidTravel = Math.round((tr.travel * 2) / 15) * 15;
   useEffect(() => { if (venue?.address && !address) setAddress(venue.address); }, [venue?.id]);
   const client = clients.find((c) => c.id === clientId) ?? null;
   const pickVenue = (v: Venue) => {
@@ -315,6 +320,7 @@ export function EventForm() {
         start_time: start, end_time: endT, ends_label: ends, staff_needed: ls.reduce((n, l) => n + l.count, 0),
         manager_id: lead ? keep(lead)[0] ?? null : null, description: note || null, notes: staffNote || null,
         uniform_floor: uFloor, uniform_bar: uBar, uniform_floor_w: uFloorW, uniform_bar_w: uBarW, uniform_items: lineItems(), drive_folder_url: folder.trim() || null, staffing: ls.map(({ dept: d, code, start: s, end, count }) => ({ dept: d, code, start: s, end: end || null, count })), guests: guests ? Number(guests) : null, event_type: eventType || null, extras: extras === '' ? null : Number(extras), extras_billing: extrasBill,
+        transport: trOn, travel_min: trOn ? tr.travel : null, paid_travel_min: trOn ? paidTravel : null, gas_per_car: trOn ? Number(tr.gas) || 0 : null, transport_billing: trOn ? tr.billing : null, rides: trOn && tr.rides,
       };
       const res = old ? await supabase.from('events').update(row).eq('id', old.id).select('id').single() : await supabase.from('events').insert(row).select('id').single();
       if (res.error) throw res.error;
@@ -467,6 +473,23 @@ export function EventForm() {
               <option value="__new">+ New type (saved for next time)</option>
             </select></label>
           <label className="ef-f ef-wide"><span>EVENT NOTE (optional)</span><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Sit-down dinner · 250 guests" /></label>
+        </div>
+        <div className={'tr-card' + (trOn ? ' on' : '')}>
+          <div className="sw-row">
+            <button type="button" role="switch" aria-checked={trOn} className={'sw' + (trOn ? ' on' : '')} onClick={() => setTr({ ...tr, on: !trOn })}><span className="sw-track"><span className="sw-knob" /></span><span className="sw-lbl">{trOn ? 'ON' : 'OFF'}</span></button>
+            <b>Transport</b><span className="muted sm">far event · rides, paid travel time, gas</span>
+            {trSuggested && <span className="tag" style={{ height: 22 }}>{venue?.name} · always offer rides · suggested ON</span>}
+          </div>
+          {trOn && (() => { const first = [...lines.map((l) => l.start)].sort()[0] ?? '17:00'; const [h, m] = first.split(':').map(Number); const leave = ((h * 60 + m - tr.travel) % 1440 + 1440) % 1440; const fmt = (min: number) => `${Math.floor(min / 60)} h${min % 60 ? ` ${min % 60}` : ''}`; return (
+            <div className="tr-grid">
+              <label className="ef-f"><span>TRAVEL TIME · ONE WAY</span><select value={tr.travel} onChange={(e) => setTr({ ...tr, travel: Number(e.target.value) })}>{Array.from({ length: 16 }, (_, i) => (i + 1) * 15).map((n) => <option key={n} value={n}>{fmt(n)}</option>)}</select></label>
+              <div className="ef-f"><span>PAID TRAVEL · BOTH WAYS</span><b className="tr-v">{fmt(paidTravel)}</b><small className="muted">one way × 2, nearest 15 min</small></div>
+              <label className="ef-f"><span>GAS PER CAR</span><input inputMode="decimal" value={tr.gas} onChange={(e) => setTr({ ...tr, gas: e.target.value.replace(/[^\d.]/g, '') })} /></label>
+              <div className="ef-f"><span>SUGGESTED LEAVE</span><b className="tr-v">{ap12(`${String(Math.floor(leave / 60)).padStart(2, '0')}:${String(leave % 60).padStart(2, '0')}`)}</b><small className="muted">first start {ap12(first)} − travel</small></div>
+              <div className="ef-f"><span>CLIENT PAYS TRANSPORT?</span><div className="seg3">{(['client', 'gr'] as const).map((b) => <button type="button" key={b} className={tr.billing === b ? 'on' : ''} onClick={() => setTr({ ...tr, billing: b })}>{b === 'client' ? 'Yes · on the invoice' : 'No · on G&R'}</button>)}</div></div>
+              <div className="ef-f"><span>RIDES</span><div className="sw-row"><button type="button" role="switch" aria-checked={tr.rides} className={'sw' + (tr.rides ? ' on' : '')} onClick={() => setTr({ ...tr, rides: !tr.rides })}><span className="sw-track"><span className="sw-knob" /></span><span className="sw-lbl">{tr.rides ? 'ON' : 'OFF'}</span></button><b>Offer rides on the staff app</b></div></div>
+              <small className="muted tr-wide">Everyone on the event gets {fmt(paidTravel)} added to their paid hours; drivers get the gas per car. Staff see hours only, never dollars. Travel time from the office isn’t looked up automatically yet (needs the Google Maps key): set it here.</small>
+            </div>); })()}
         </div>
       </Fold>
 

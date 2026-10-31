@@ -26,6 +26,7 @@ import { Availability as AdminAvail } from './admin/Availability';
 import { Tiers } from './admin/Tiers';
 import { Incidents } from './admin/Incidents';
 import { Bookings } from './admin/Bookings';
+import { Messages } from './admin/Messages';
 import { Hours as HoursPage } from './pages/Hours';
 
 export function App() {
@@ -64,6 +65,7 @@ export function App() {
             <Route index element={<Today />} />
             <Route path="week" element={<Week />} />
             <Route path="bookings" element={<Bookings />} />
+            <Route path="messages" element={<Messages />} />
             <Route path="hours" element={<Hours />} />
             <Route path="reliability" element={<Reliability />} />
             <Route path="incidents" element={<Incidents />} />

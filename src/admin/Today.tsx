@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { DeleteEvent } from './DeleteEvent';
+import { DeptTag } from './DeptTag';
+import { hoursBetween } from './api';
 import { supabase } from '../lib/supabase';
 import { eventsBetween, addDays, isoDay, flagsOf, flagText, periodOf, dLabel, tTime, type AEvent, type AShift } from './api';
 
@@ -12,7 +14,7 @@ export function Today() {
   const today = isoDay(new Date());
   const [week, setWeek] = useState<AEvent[] | null>(null);
   const [needs, setNeeds] = useState<Need[]>([]);
-  const [answers, setAnswers] = useState(0);
+  const [answers, setAnswers] = useState(0); const [qBy, setQBy] = useState<Record<string, number>>({});
   const [missing, setMissing] = useState(0);
   const [arch, setArch] = useState<Arch[]>([]);
   const [showArch, setShowArch] = useState(false);
@@ -44,12 +46,13 @@ export function Today() {
       }
       for (const e of ahead.filter((x) => x.department !== 'bar')) {
         const booked = e.shifts.filter((s) => s.status !== 'declined').length;
-        if (booked < e.staff_needed) n.push({ key: e.id + 'short', title: `${e.title} · ${dLabel(e.event_date)}`, sub: `Short ${e.staff_needed - booked} · ${booked} / ${e.staff_needed} booked`, action: 'Assign', to: `/admin/day?d=${e.event_date}` });
+        if (booked < e.staff_needed) n.push({ key: e.id + 'short', title: `${e.title}${e.department === 'bar' ? ' · BAR' : ''} · ${dLabel(e.event_date)}`, sub: `Short ${e.staff_needed - booked} · ${booked} / ${e.staff_needed} booked`, action: 'Assign', to: `/admin/day?d=${e.event_date}` });
         const unsent = e.shifts.filter((s) => !s.notified_at || s.changed_at > s.notified_at).length;
         if (booked && unsent && e.event_date <= addDays(today, 7)) n.push({ key: e.id + 'send', title: `${e.title} · ${dLabel(e.event_date)}`, sub: `${unsent} not sent details yet`, action: 'Send', to: `/admin/day?d=${e.event_date}` });
       }
       if (miss.length) n.push({ key: 'miss', title: `Pay period ${dLabel(cur.start, { month: 'short', day: 'numeric' })} – ${dLabel(cur.end, { day: 'numeric' })}`, sub: `${miss.length} missing end time${miss.length > 1 ? 's' : ''}`, action: 'Fix', to: '/admin/hours' });
-      const { data: hq } = await supabase.from('hours_questions').select('id,kind,claimed_at,shifts!inner(staff:staff!shifts_staff_id_fkey(full_name),events(title))').eq('status', 'open');
+      const { data: hq } = await supabase.from('hours_questions').select('id,kind,claimed_at,shifts!inner(event_id,staff:staff!shifts_staff_id_fkey(full_name),events(title))').eq('status', 'open');
+      { const m: Record<string, number> = {}; for (const x of (hq ?? []) as unknown as { shifts?: { event_id: string } }[]) if (x.shifts?.event_id) m[x.shifts.event_id] = (m[x.shifts.event_id] ?? 0) + 1; setQBy(m); }
       for (const q of (hq ?? []) as unknown as { id: string; kind: string; shifts: { staff: { full_name: string }; events: { title: string } } }[])
         n.unshift({ key: 'q' + q.id, red: true, title: `Hours question · ${q.shifts.staff.full_name}`, sub: `${q.shifts.events.title} · about ${q.kind === 'other' ? 'something else' : q.kind + ' time'}`, action: 'Check', to: '/admin/hours' });
       // Cash paid: the QuickBooks estimate should go
@@ -88,7 +91,7 @@ export function Today() {
       </div>
 
       <div className="kpi4">
-        <div className="k dark"><small>TONIGHT</small><b>{tonight.length} <span>events · {tonight.reduce((n, e) => n + e.shifts.filter((s) => s.status !== 'declined').length, 0)} staff</span></b></div>
+        <div className="k dark"><small>TONIGHT</small><b>{new Set(tonight.map((e) => e.title)).size} <span>event{new Set(tonight.map((e) => e.title)).size === 1 ? '' : 's'} · Floor {tonight.filter((e) => e.department !== 'bar').reduce((n, e) => n + e.shifts.filter((s) => s.status !== 'declined').length, 0)} · Bar {tonight.filter((e) => e.department === 'bar').reduce((n, e) => n + e.shifts.filter((s) => s.status !== 'declined').length, 0)}</span></b></div>
         <div className={'k' + (floorShort ? ' amber' : '')}><small>STILL SHORT THIS WEEK</small><b>{floorShort} <span>shifts</span></b></div>
         <Link to="/admin/availability" className="k"><small>AVAILABILITY ANSWERS</small><b>{answers} <span>said yes</span></b></Link>
         <Link to="/admin/hours" className={'k' + (missing ? ' amber' : '')}><small>HOURS TO REVIEW</small><b>{missing} <span>missing end times</span></b></Link>
@@ -99,7 +102,21 @@ export function Today() {
           <div className="sec"><span className="serif">Tonight</span><Link to={`/admin/day?d=${today}`}>Open day view ›</Link></div>
           {week === null && <div className="muted">Loading…</div>}
           {week && !tonight.length && <div className="adm-card muted">No events today.</div>}
-          {tonight.map((e) => <Live key={e.id} e={e} onDeleted={(ids) => setWeek((v) => (v ?? []).filter((x) => !ids.includes(x.id)))} />)}
+          {(() => {
+            const gone = (ids: string[]) => setWeek((v) => (v ?? []).filter((x) => !ids.includes(x.id)));
+            const venues = [...new Set(tonight.map((e) => e.title))].map((t) => tonight.filter((e) => e.title === t).sort((a) => (a.department === 'bar' ? 1 : -1)));
+            const doneV = (evs: AEvent[]) => evs.every((e) => !!e.hours_submitted_at);
+            return venues.sort((a, b) => Number(doneV(a)) - Number(doneV(b))).map((evs) => {
+              if (evs.length === 1) return <Live key={evs[0].id} e={evs[0]} q={qBy[evs[0].id] ?? 0} onDeleted={gone} />;
+              const e0 = evs[0]; const nOf = (d: string) => evs.filter((e) => (d === 'bar') === (e.department === 'bar')).reduce((n, e) => n + e.shifts.filter((x) => x.status !== 'declined' && !x.attendance).length, 0);
+              return (
+                <div key={e0.title} className="venue-block">
+                  <div className="vb-h"><span className="serif" style={{ fontSize: 24 }}>{e0.title}</span><span className="muted sm">{[e0.event_private?.client, e0.event_type, e0.guests ? `${e0.guests} guests` : null].filter(Boolean).join(' · ')}</span>
+                    <span className="grow" /><span className="sm strong">Floor {nOf('floor')} · <span className="accent">Bar {nOf('bar')}</span> · <Link to={`/admin/event/${e0.id}`}>Event page ›</Link></span></div>
+                  {evs.map((e) => <Live key={e.id} e={e} q={qBy[e.id] ?? 0} inBlock onDeleted={gone} />)}
+                </div>);
+            });
+          })()}
         </section>
         <section className="stack">
           <div className="sec"><span className="serif">Needs you <b className="accent sm">{shown.length || ''}</b></span>{shown.length > 0 && <button className="abtn sm" onClick={() => archive(shown)}>{ARCH_ICON} Archive all</button>}</div>
@@ -118,16 +135,17 @@ export function Today() {
           <div className="strip">
             {weekDays.map((d) => {
               const evs = (week ?? []).filter((e) => e.event_date === d);
-              const staff = evs.reduce((n, e) => n + e.shifts.filter((s) => s.status !== 'declined').length, 0);
+              const staff = evs.filter((e) => e.department !== 'bar').reduce((n, e) => n + e.shifts.filter((s) => s.status !== 'declined').length, 0);
+              const barN = evs.filter((e) => e.department === 'bar').reduce((n, e) => n + e.shifts.filter((s) => s.status !== 'declined').length, 0);
               const short = evs.some((e) => e.department !== 'bar' && e.shifts.filter((s) => s.status !== 'declined').length < e.staff_needed);
               return (
                 <Link key={d} to={`/admin/day?d=${d}`} className={'sd' + (d === today ? ' on' : '') + (short && d >= today ? ' short' : '')}>
-                  <small>{dLabel(d, { weekday: 'short' }).toUpperCase()}</small><b>{Number(d.slice(8))}</b><span>{evs.length ? `${evs.length} · ${staff}` : '–'}</span>
+                  <small>{dLabel(d, { weekday: 'short' }).toUpperCase()}</small><b>{Number(d.slice(8))}</b><span>{evs.length ? `${new Set(evs.map((e) => e.title)).size} · ${staff}` : '–'}</span>{barN > 0 && <span className="accent" style={{ fontSize: 10 }}>bar {barN}</span>}
                 </Link>
               );
             })}
           </div>
-          <div className="muted sm">events · staff booked. Amber = still short.</div>
+          <div className="muted sm">events · floor staff booked, red = bar. Amber = still short.</div>
         </section>
       </div>
     </div>
@@ -135,7 +153,7 @@ export function Today() {
 }
 
 type Box = { n: number; label: string; cls: string; rows: [string, string, string][] };
-function Live({ e, onDeleted }: { e: AEvent; onDeleted: (ids: string[]) => void }) {
+function Live({ e, q = 0, inBlock = false, onDeleted }: { e: AEvent; q?: number; inBlock?: boolean; onDeleted: (ids: string[]) => void }) {
   const [tab, setTab] = useState<string | null>(null);
   const all = e.shifts.filter((s) => s.status !== 'declined');
   const now = Date.now();
@@ -145,7 +163,20 @@ function Live({ e, onDeleted }: { e: AEvent; onDeleted: (ids: string[]) => void 
   const name = (s: AShift) => s.staff?.full_name ?? '?';
   const r = (s: AShift, a: string, b = ''): [string, string, string] => [name(s), a, b];
   let boxes: Box[];
-  if (!started) {
+  const workingNow = all.filter((s) => s.punches?.punch_in && !(s.punches.punch_out && new Date(s.punches.punch_out).getTime() <= now));
+  const completed = !!e.hours_submitted_at;
+  const status: 'soon' | 'live' | 'notsent' | 'done' = completed ? 'done' : !started ? 'soon' : workingNow.length ? 'live' : 'notsent';
+  if (completed) {
+    const worked = all.filter((s) => !s.attendance && s.punches?.punch_in && s.punches.punch_out);
+    const hrs = worked.reduce((n, s) => n + hoursBetween(s.punches!.punch_in, s.punches!.punch_out, !!s.left_early), 0);
+    const ns = all.filter((s) => s.attendance === 'no_show');
+    boxes = [
+      { n: worked.length, label: 'worked', cls: 'ok', rows: worked.map((s) => r(s, `${tTime(s.punches!.punch_in)} → ${tTime(s.punches!.punch_out)}`)) },
+      { n: hrs, label: 'hours', cls: '', rows: worked.map((s) => r(s, `${hoursBetween(s.punches!.punch_in, s.punches!.punch_out, !!s.left_early)} h`)) },
+      { n: ns.length, label: 'no-show', cls: ns.length ? 'red' : '', rows: ns.map((s) => r(s, 'no-show', s.manager_note ?? '')) },
+      { n: q, label: 'questions', cls: q ? 'amber' : '', rows: [] },
+    ];
+  } else if (!started) {
     const cancelled = all.filter((s) => s.attendance === 'cancelled');
     const team = all.filter((s) => !s.attendance);
     const conf = team.filter((s) => s.status === 'confirmed'); const unsure = team.filter((s) => s.status !== 'confirmed');
@@ -174,12 +205,13 @@ function Live({ e, onDeleted }: { e: AEvent; onDeleted: (ids: string[]) => void 
   const startsIn = Math.round((firstStart - now) / 60000);
   const phones = all.map((s) => s.staff?.phone?.replace(/[^\d+]/g, '')).filter(Boolean);
   return (
-    <div className="adm-card stack" style={{ gap: 12 }}>
+    <div className={'adm-card stack live-card edge-' + (e.department === 'bar' ? 'bar' : 'floor') + (completed ? ' completed' : '')} style={{ gap: 12 }}>
       <div className="row wrap" style={{ gap: 10, alignItems: 'flex-start' }}>
-        <div className="grow" style={{ minWidth: 180 }}><div className="serif" style={{ fontSize: 22 }}>{e.title}</div>
-          <div className="muted sm">{e.event_private?.client ? e.event_private.client + ' · ' : ''}{e.department === 'bar' ? 'Bar' : 'Floor'} · {ap(e.start_time) || 'TBC'}{e.ends_label ? ` · ends ${e.ends_label}` : e.end_time ? ` · ends ~ ${ap(e.end_time)}` : ''}{md ? ` · ${md.position_code} ${md.staff?.full_name.split(' ')[0]}` : ''}</div></div>
-        {started ? <span className="tag ok"><i className="pulse" />live</span> : <span className="tag amber">in {Math.floor(startsIn / 60)} h {startsIn % 60} min</span>}
+        <div className="grow" style={{ minWidth: 180 }}><div className="row" style={{ gap: 8, alignItems: 'center' }}>{!inBlock && <span className="serif" style={{ fontSize: 22 }}>{e.title}</span>}<DeptTag dept={e.department} /></div>
+          <div className="muted sm">{!inBlock && e.event_private?.client ? e.event_private.client + ' · ' : ''}{ap(e.start_time) || 'TBC'}{e.ends_label ? ` · ends ${e.ends_label}` : e.end_time ? ` · ends ~ ${ap(e.end_time)}` : ''}{md ? ` · ${md.position_code} ${md.staff?.full_name.split(' ')[0]}` : ''}</div></div>
+        {status === 'done' ? <span className="tag done-tag">✓ Completed</span> : status === 'live' ? <span className="tag ok"><i className="pulse" />live</span> : status === 'notsent' ? <span className="tag amber">Hours not sent</span> : <span className="tag amber">in {Math.floor(startsIn / 60)} h {String(startsIn % 60).padStart(2, '0')}</span>}
       </div>
+      {completed && <div className="muted sm">Hours submitted by {e.shifts.find((s) => s.staff_id === e.hours_submitted_by)?.staff?.full_name ?? 'the manager'} at {tTime(e.hours_submitted_at)}</div>}
       <div className="cnt4" role="tablist">{boxes.map((b) => (
         <button key={b.label} role="tab" aria-selected={tab === b.label} disabled={!b.n} className={b.cls + (tab === b.label ? ' on' : '')} onClick={() => setTab(tab === b.label ? null : b.label)}>
           <b>{b.n}</b><small>{b.label}{tab === b.label ? ' ▴' : ''}</small>
@@ -195,8 +227,8 @@ function Live({ e, onDeleted }: { e: AEvent; onDeleted: (ids: string[]) => void 
         <DeleteEvent id={e.id} label="Delete" small onDone={onDeleted} />
         <span className="grow" />
         <a className="abtn sm" href={phones.length ? `sms:/open?addresses=${phones.join(',')}` : undefined}>Message</a>
-        <Link className="abtn sm" to={`/admin/event/${e.id}`}>Team ›</Link>
-        <Link className="abtn sm dark" to={`/manage/${e.id}`}>Check-in{started && <i className="live-dot" />}</Link>
+        <Link className="abtn sm" to={completed ? `/manage/${e.id}` : `/admin/event/${e.id}`}>Team ›</Link>
+        {completed ? <Link className="abtn sm dark" to={`/admin/hours?d=${e.event_date}`}>Hours ›</Link> : <Link className="abtn sm dark" to={`/manage/${e.id}`}>Check-in{started && <i className="live-dot" />}</Link>}
       </div>
     </div>
   );

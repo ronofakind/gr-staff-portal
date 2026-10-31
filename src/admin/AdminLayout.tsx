@@ -7,6 +7,7 @@ const I = (d: string) => <svg width="18" height="18" viewBox="0 0 24 24" fill="n
 export const ICONS = {
   today: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   book: '<rect x="3" y="4" width="7" height="16" rx="2"/><rect x="14" y="4" width="7" height="10" rx="2"/><path d="M14 18h7"/>',
+  msg: '<path d="M4 5h16v10H9l-5 4z"/>',
   week: '<rect x="3" y="4.5" width="18" height="16" rx="3"/><path d="M3 9.5h18M8 2.5v4M16 2.5v4"/>',
   day: '<rect x="3" y="4" width="5" height="16" rx="1.5"/><rect x="9.5" y="4" width="5" height="16" rx="1.5"/><rect x="16" y="4" width="5" height="16" rx="1.5"/>',
   staff: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c1-3.5 3.5-5.5 6.5-5.5s5.5 2 6.5 5.5"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.5c2.8 0 4.8 1.6 5.5 4.5"/>',
@@ -20,7 +21,7 @@ export const ICONS = {
 export const NAV: [string, string, keyof typeof ICONS][] = [
   ['/admin', 'Today', 'today'], ['/admin/bookings', 'Bookings', 'book'], ['/admin/week', 'Week', 'week'], ['/admin/day', 'Day', 'day'], ['/admin/staff', 'Staff', 'staff'],
   ['/admin/availability', 'Availability', 'avail'], ['/admin/tiers', 'Tiers', 'tiers'], ['/admin/hours', 'Hours', 'hours'], ['/admin/reliability', 'Reliability', 'flag'],
-  ['/admin/incidents', 'Incidents', 'alert'],
+  ['/admin/messages', 'Messages', 'msg'], ['/admin/incidents', 'Incidents', 'alert'],
 ];
 const TABS: [string, string, keyof typeof ICONS][] = [
   ['/admin', 'Today', 'today'], ['/admin/week', 'Week', 'week'], ['/admin/availability', 'Availability', 'avail'], ['/admin/staff', 'Staff', 'staff'], ['/admin/more', 'More', 'more'],
@@ -56,7 +57,7 @@ export function AdminLayout() {
 /** Phone only: everything that doesn't fit in the bottom tabs. */
 export function More() {
   const items: [string, string, keyof typeof ICONS][] = [
-    ['/admin/bookings', 'Bookings', 'book'], ['/admin/day', 'Day view', 'day'], ['/admin/hours', 'Hours & pay period', 'hours'], ['/admin/reliability', 'Reliability', 'flag'], ['/admin/incidents', 'Incidents', 'alert'],
+    ['/admin/bookings', 'Bookings', 'book'], ['/admin/day', 'Day view', 'day'], ['/admin/hours', 'Hours & pay period', 'hours'], ['/admin/reliability', 'Reliability', 'flag'], ['/admin/incidents', 'Incidents', 'alert'], ['/admin/messages', 'Messages', 'msg'],
     ['/admin/tiers', 'Tiers & ranking', 'tiers'], ['/me', 'My shifts', 'today'],
   ];
   return (
