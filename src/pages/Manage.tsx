@@ -1,5 +1,6 @@
 import { QuarterTime } from '../components/QuarterTime';
 import { useEffect, useRef, useState } from 'react';
+import { SwipeSheet } from '../components/SwipeSheet';
 import { Link, useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useLang } from '../lib/i18n';
@@ -58,19 +59,6 @@ function roleLabel(code: string | null, detail: string | null) {
 }
 const fmt12 = (t: string) => { const [h, m] = t.split(':').map(Number); return `${((h + 11) % 12) + 1}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`; };
 const hm = (iso: string | null) => iso ? new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Toronto' }) : '';
-/** Bottom sheet that closes when dragged down from its top (grab bar or header), or when its content is scrolled to the top. */
-function SwipeSheet({ onClose, label, children }: { onClose: () => void; label: string; children: React.ReactNode }) {
-  const ref = useRef<HTMLDivElement>(null); const start = useRef<number | null>(null); const [dy, setDy] = useState(0);
-  return (
-    <div ref={ref} className="sheet swipe" role="dialog" aria-label={label} style={dy ? { transform: `translateY(${dy}px)`, transition: 'none' } : undefined}
-      onTouchStart={(e) => { const el = ref.current!; const t = e.target as HTMLElement; if (el.scrollTop <= 0 && !t.closest('input,select,textarea,.qtime')) start.current = e.touches[0].clientY; }}
-      onTouchMove={(e) => { if (start.current == null) return; const d = e.touches[0].clientY - start.current; setDy(d > 0 ? d : 0); }}
-      onTouchEnd={() => { if (start.current != null && dy > 90) onClose(); start.current = null; setDy(0); }}>
-      <div className="grab" /><div className="grab-hint">Swipe down to close</div>
-      {children}
-    </div>
-  );
-}
 const REASONS: Record<'no_show' | 'cancelled' | 'left_early', string[]> = {
   no_show: ['No answer', 'Wrong day', 'Other'],
   cancelled: ['Sick', 'Family emergency', 'Sent home', 'Other'],
@@ -613,7 +601,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
           ...(groups.length > 1 ? groups.map((g) => ({ key: g, label: time(g, lang), n: team.filter((x) => x.planned_start === g).length, audience: { kind: 'group', start: g }, event_id: ev.id })) : [])];
         return (<>
           <div className="scrim" onClick={() => setAnnOpen(false)} />
-          <SwipeSheet onClose={() => setAnnOpen(false)} label="Message your team">
+          <SwipeSheet onClose={() => setAnnOpen(false)} label="Message your team" x={false}>
             <AnnounceComposer targets={targets} folder={ev.id} onClose={() => setAnnOpen(false)} onSent={() => { setAnnOpen(false); setAnnTick((t) => t + 1); }} />
           </SwipeSheet>
         </>); })()}

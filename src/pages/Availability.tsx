@@ -3,6 +3,7 @@ import { supabase, type Staff } from '../lib/supabase';
 import { TabBar } from '../components/TabBar';
 import { todayIso } from './Home';
 import { FromPicker, ampm15 } from '../components/TimeWheel';
+import { SwipeSheet } from '../components/SwipeSheet';
 
 type Ask = { id: string; for_date: string; status: 'asked' | 'yes' | 'no' | 'maybe'; from_time: string | null; note: string | null;
   avail_asks: { label: string; approx_start: string | null; reply_by: string | null } | null };
@@ -179,8 +180,7 @@ export function Availability({ me, preview = false }: { me: Staff; preview?: boo
       {adding && (
         <>
           <div className="scrim" onClick={() => setAdding(false)} />
-          <div className="sheet" role="dialog" aria-label="Add days off">
-            <div className="grab" />
+          <SwipeSheet onClose={() => setAdding(false)} label="Add days off">
             <div className="serif" style={{ fontSize: 24 }}>Add days off</div>
             <div className="times-box">
               <label>From<input type="date" min={today} value={nOff.from} onChange={(e) => setNOff({ ...nOff, from: e.target.value })} /></label>
@@ -189,7 +189,7 @@ export function Availability({ me, preview = false }: { me: Staff; preview?: boo
             </div>
             {err && <p className="error">{err}</p>}
             <button className="big-btn dark" disabled={!nOff.from} onClick={addOff}>Save days off</button>
-          </div>
+          </SwipeSheet>
         </>
       )}
       <TabBar badge={waiting.length} />
