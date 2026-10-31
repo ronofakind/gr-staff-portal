@@ -14,7 +14,24 @@ const ANNOUNCE_ON = false;
 export const FEEDBACK_MANAGERS: string[] = ['Benjamin Outre'];
 const feedbackOn = (me?: { id: string; full_name: string } | null) => !!me && FEEDBACK_MANAGERS.some((x) => x === me.id || x.toLowerCase() === me.full_name.trim().toLowerCase());
 type Rating = 'up' | 'ok' | 'down';
-type Info = { staff_id: string; tier: 'A' | 'B' | 'C' | null; done_before: number; is_new: boolean; fb_tier: 'A' | 'B' | 'C' | null; fb_ratings: Record<string, Rating> | null; fb_note: string | null };
+type Info = { staff_id: string; tier: 'A' | 'B' | 'C' | null; done_before: number; is_new: boolean; fb_tier: 'A' | 'B' | 'C' | null; fb_ratings: Record<string, Rating> | null; fb_note: string | null;
+  /** push 29 · ABOUT (from staff_private via manager_team_info) */
+  experience?: 'SENIOR' | 'MID' | 'JUNIOR' | null; experience_note?: string | null; knows_name?: string | null; knows_text?: string | null; knows_here?: boolean; knows_today?: boolean;
+  languages?: Record<string, number> | null; manager_note?: string | null };
+const LANG_LV = ['', 'Basic', 'Good', 'Fluent'];
+const cap = (x: string) => x[0] + x.slice(1).toLowerCase();
+const txt = (x: unknown) => (typeof x === 'string' && x.trim() ? x.trim() : null);
+/** ABOUT rows (empty ones hidden). Languages only once set (onboarding question comes later). */
+function aboutOf(i?: Info) {
+  if (!i) return { exp: null, knows: null, langs: [] as [string, number][], note: null };
+  const lvl = i.experience && ['SENIOR', 'MID', 'JUNIOR'].includes(i.experience) ? cap(i.experience) : null;
+  const exp = [lvl, txt(i.experience_note)].filter(Boolean).join(' · ') || null;
+  const knows = [txt(i.knows_name), txt(i.knows_text)].filter(Boolean).join(' · ') || null;
+  const langs = Object.entries(i.languages && typeof i.languages === 'object' && !Array.isArray(i.languages) ? i.languages : {})
+    .map(([k, v]) => [k.toUpperCase(), Math.round(Number(v))] as [string, number]).filter(([, v]) => v >= 1 && v <= 3)
+    .sort((a, b) => (a[0] === 'FR' ? -1 : b[0] === 'FR' ? 1 : a[0].localeCompare(b[0])));
+  return { exp, knows, langs, note: txt(i.manager_note) };
+}
 const AREAS: { key: string; label: string; sub?: string }[] = [
   { key: 'punctuality', label: 'Punctuality', sub: 'on time, ready at call' }, { key: 'attitude', label: 'Attitude' },
   { key: 'presentation', label: 'Presentation', sub: 'uniform, grooming' }, { key: 'experience', label: 'Experience', sub: 'service, wine, plating' },
@@ -273,7 +290,8 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
   const undoEnd = async (r: Row) => { const prev = [{ id: r.id, in: r.punches?.punch_in ?? null, out: r.punches?.punch_out ?? null }]; setOpen(null); await set([{ id: r.id, in: r.punches?.punch_in ?? null, out: null }]); setUndo({ label: `${(r.staff?.full_name ?? '').split(' ')[0]} · end undone`, btn: 'REDO', prev }); };
   const canUndo = (r: Row) => !r.attendance && !r.left_early && !ev?.hours_submitted_at && !!r.punches?.punch_in;
   const infoOf = (r: Row) => (r.staff_id ? info[r.staff_id] : undefined);
-  const openRow = (r: Row) => { setProb(false); setOpen(r); setDraft({ in: hm(r.punches?.punch_in ?? null) || hm(r.planned_start), out: hm(r.punches?.punch_out ?? null) }); };
+  const jump = useRef(false);
+  const openRow = (r: Row, toAbout = false) => { jump.current = toAbout; setProb(false); setOpen(r); setDraft({ in: hm(r.punches?.punch_in ?? null) || hm(r.planned_start), out: hm(r.punches?.punch_out ?? null) }); };
   const nowMs = Date.now();
   const isWorking = (r: Row) => !r.attendance && !!r.punches?.punch_in && (!r.punches.punch_out || new Date(r.punches.punch_out).getTime() > nowMs);
   const scheduled = rows.filter((r) => !r.attendance && r.punches?.punch_out && new Date(r.punches.punch_out).getTime() > nowMs);
@@ -393,13 +411,14 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
               return (
                 <SwipeRow key={r.id} on={canUndo(r)} label={pout ? 'Undo end' : 'Undo start'} onAct={() => (pout ? undoEnd(r) : undoStart(r))}>
                 <div className={'crew' + (r.attendance ? ' flagged' : '') + (r.left_early ? ' left' : '')}>
-                  <button className={'ring tap ' + ring + (isNew ? ' newp' : '')} aria-label={`Options for ${r.staff?.full_name}`} onClick={() => openRow(r)}>
+                  <button className={'ring tap ' + ring + (isNew ? ' newp' : '')} aria-label={`Options for ${r.staff?.full_name}`} onClick={() => openRow(r, isNew)}>
                     <Avatar name={r.staff?.full_name ?? '?'} url={r.staff?.photo_url} size={44} />
                   </button>
-                  <button className="who" aria-label={`Options for ${r.staff?.full_name}`} onClick={() => openRow(r)}>
+                  <button className="who" aria-label={`Options for ${r.staff?.full_name}`} onClick={() => openRow(r, isNew)}>
                     <span className="nm">{r.staff?.full_name}{r.adder && <i className="added-tag">ADDED BY {r.adder.full_name.split(' ')[0].toUpperCase()}</i>}</span>
                     <span className="rl">{roleLabel(r.position_code, r.position_detail)}{r.manager_note ? ' · 📝 note' : ''}{fbOn && inf?.fb_tier ? ' · ★ sent' : ''}</span>
                     {isNew && <span><i className="new-shift">NEW · {ORD[inf!.done_before] ?? ''} shift</i></span>}
+                    {isNew && <span><i className="see-det"><b>ⓘ</b> See details ›</i></span>}
                     {r.attendance ? <span className="st muted-st">{r.attendance === 'no_show' ? 'No-show' : 'Cancelled'}{r.attendance_reason ? ` · ${r.attendance_reason}` : ''}</span>
                       : r.left_early && pin && pout ? <span className="st gold">{time(pin, lang)} → {time(pout, lang)} · {hours(pin, pout)} {t.hours}<i className="st-tag gold">LEFT EARLY</i></span>
                       : ended ? <span className="st">{time(pin!, lang)} → {time(pout!, lang)} · {hours(pin!, pout!)} {t.hours}</span>
@@ -519,17 +538,30 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
 
       {open && !fb && (() => {
         const pin = open.punches?.punch_in ?? null; const pout = open.punches?.punch_out ?? null; const undoOk = canUndo(open);
-        const inf = infoOf(open);
+        const inf = infoOf(open); const isNewO = !!inf?.is_new && inf.done_before < 3; const ab = aboutOf(inf);
         return (
         <>
           <div className="scrim" onClick={() => setOpen(null)} />
           <SwipeSheet onClose={() => setOpen(null)} label={`Options for ${open.staff?.full_name}`}>
             <button className="pf-x" aria-label="Close" onClick={() => setOpen(null)}>✕</button>
             <div className="pf-head">
-              <button className={'pf-photo' + (inf?.is_new ? ' newp' : '')} aria-label="See the photo full size" onClick={() => setBigPhoto(true)}><Avatar name={open.staff?.full_name ?? '?'} url={open.staff?.photo_url} size={72} /></button>
+              <button className={'pf-photo' + (isNewO ? ' newp' : '')} aria-label="See the photo full size" onClick={() => setBigPhoto(true)}><Avatar name={open.staff?.full_name ?? '?'} url={open.staff?.photo_url} size={62} /></button>
               <div className="serif" style={{ fontSize: 24, lineHeight: 1.1 }}>{open.staff?.full_name}</div>
-              <div className="muted sm">{roleLabel(open.position_code, open.position_detail)} · call {time(open.planned_start, lang)}{open.punches?.arrived_at ? ` · arrived ${time(open.punches.arrived_at, lang)}` : ''}{inf?.is_new ? ` · NEW · ${ORD[inf.done_before] ?? ''} shift` : ''}</div>
+              <div className="muted sm pf-sub"><span>{roleLabel(open.position_code, open.position_detail)} · call {time(open.planned_start, lang)}{open.punches?.arrived_at ? ` · arrived ${time(open.punches.arrived_at, lang)}` : ''}</span>{isNewO && <i className="new-shift">NEW · {ORD[inf!.done_before] ?? ''} shift</i>}</div>
             </div>
+            {(ab.exp || ab.knows || ab.langs.length > 0 || ab.note) && (
+              <div className="pf-about" ref={(el) => { if (el && jump.current) { jump.current = false; requestAnimationFrame(() => el.scrollIntoView({ block: 'nearest', behavior: 'smooth' })); } }}>
+                <span className="kicker">About</span>
+                {(ab.exp || ab.knows || ab.langs.length > 0) && <div className="ab-box">
+                  {ab.exp && <div className="ab-row"><small>Experience</small><b>{ab.exp}</b></div>}
+                  {ab.knows && <div className="ab-row"><small>Knows</small><div className="ab-val"><b>{ab.knows}</b>{inf?.knows_here === true && <i className="ab-here">HERE</i>}</div></div>}
+                  {ab.langs.length > 0 && <div className="ab-row"><small>Languages</small><div className="ab-langs">{ab.langs.map(([k, v]) => (
+                    <span key={k}><b>{k}</b><span className="ab-bars" aria-label={`${LANG_LV[v]}`}>{[1, 2, 3].map((n) => <i key={n} className={n <= v ? 'on' : ''} />)}</span>{LANG_LV[v]}</span>))}</div></div>}
+                </div>}
+                {ab.note && <div className="ab-note"><span>RONNIE</span><p>{ab.note}</p></div>}
+              </div>
+            )}
+            <span className="kicker pf-tonight">Tonight</span>
             {!open.attendance && (
               <div className="starts-from">
                 <span className="kicker">{pin ? 'Started' : 'Starts from'}</span>
@@ -562,7 +594,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
               : open.left_early ? <button className="btn-ghost" onClick={() => undoLeft(open.id)}>Undo left early{open.attendance_reason ? ` · ${open.attendance_reason}` : ''}</button>
               : null}
             <div className={'pf-tiles' + (fbOn ? '' : ' one')}>
-              {fbOn && <button className="pf-tile fb" onClick={() => setFb({ row: open, back: 'sheet' })}><span className="pf-ic">★</span><span><b>Feedback</b><small>{inf?.fb_tier ? `sent · worked like ${inf.fb_tier}` : 'tier · ratings'}</small></span></button>}
+              {fbOn && <button className="pf-tile fb" onClick={() => setFb({ row: open, back: 'sheet' })}><span className="pf-ic">★</span><span><b>Rate</b><small>{inf?.fb_tier ? `sent · worked like ${inf.fb_tier}` : 'tier · ratings'}</small></span></button>}
               {!open.attendance && !open.left_early && <button className={'pf-tile pb' + (prob ? ' on' : '')} onClick={() => setProb(!prob)}><span className="pf-ic">⚠</span><span><b>Problem</b><small>no-show · left early</small></span></button>}
             </div>
             {prob && !open.attendance && !open.left_early && (

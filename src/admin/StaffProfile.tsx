@@ -151,6 +151,7 @@ export function StaffProfile({ s, onClose, onEdit, all }: { s: AStaff; onClose: 
           {!linksOf(links, s.id).length && !conds.some((c) => c.staff_id === s.id) && <div className="muted sm">No rules. + Add to set who they work well with, who to keep apart, or when to book them.</div>}
           <div className="muted sm">Bookings and Auto-fill follow these. Changes save right away.</div>
         </div>
+        <AboutCard key={s.id} s={s} people={people} />
         <div className="pcard">
           <div className="kick">ADMIN NOTES · NEVER SHOWN TO STAFF</div>
           <textarea rows={3} value={notes} onChange={(e) => { setNotes(e.target.value); setSaved(false); }} onBlur={() => !saved && saveNotes()} placeholder="Great with VIP tables…" />
@@ -240,6 +241,74 @@ function MgrFeedback({ sid, d }: { sid: string; d: ScoreData }) {
         <div key={f.id} className="fb-item"><div className="spread"><b>{f.by?.full_name?.split(' ')[0] ?? 'Manager'} · {f.events?.title ?? ''}{f.events?.event_date ? ` · ${dLabel(f.events.event_date)}` : ''}</b>{f.tier_vote && <i className={'tier-dot ' + f.tier_vote}>{f.tier_vote}</i>}</div>
           {(ups.length > 0 || downs.length > 0) && <small>{ups.map((x) => x + ' ▲').concat(downs.map((x) => x + ' ▼')).join(' · ')}</small>}
           {f.note && <span>“{f.note}”</span>}</div>); })}
+    </div>
+  );
+}
+
+type About = { experience: 'SENIOR' | 'MID' | 'JUNIOR' | null; experience_note: string | null; knows_staff_id: string | null; knows_text: string | null; languages: Record<string, number> | null; manager_note: string | null };
+const EXP: ['JUNIOR' | 'MID' | 'SENIOR', string][] = [['JUNIOR', 'Junior'], ['MID', 'Mid'], ['SENIOR', 'Senior']];
+const LV: [number, string][] = [[1, 'Basic'], [2, 'Good'], [3, 'Fluent']];
+
+/** ABOUT · managers see this (push 29): experience (1 tap) + note, knows (from application), languages (from onboarding), note for managers. */
+function AboutCard({ s, people }: { s: AStaff; people: AStaff[] }) {
+  const [a, setA] = useState<About | null>(null); const [err, setErr] = useState(''); const [ok, setOk] = useState('');
+  const [q, setQ] = useState(''); const [pickOpen, setPickOpen] = useState(false);
+  const [expNote, setExpNote] = useState(''); const [rel, setRel] = useState(''); const [mnote, setMnote] = useState('');
+  useEffect(() => {
+    supabase.from('staff_private').select('experience,experience_note,knows_staff_id,knows_text,languages,manager_note').eq('staff_id', s.id).maybeSingle().then(({ data, error }) => {
+      if (error) { setErr(/column|schema/i.test(error.message) ? 'Needs migration 032 (not applied yet).' : error.message); return; }
+      const d = (data ?? {}) as Partial<About>;
+      const v: About = { experience: d.experience ?? null, experience_note: d.experience_note ?? null, knows_staff_id: d.knows_staff_id ?? null, knows_text: d.knows_text ?? null,
+        languages: d.languages && typeof d.languages === 'object' && !Array.isArray(d.languages) ? d.languages : {}, manager_note: d.manager_note ?? null };
+      setA(v); setExpNote(v.experience_note ?? ''); setRel(v.knows_text ?? ''); setMnote(v.manager_note ?? '');
+    });
+  }, [s.id]);
+  const save = async (patch: Partial<About>) => {
+    if (!a) return; setErr(''); setOk('');
+    const prev = a; setA({ ...a, ...patch });
+    const { error } = await supabase.from('staff_private').upsert({ staff_id: s.id, ...patch });
+    if (error) { setA(prev); setErr(error.message); } else setOk('✓ Saved');
+  };
+  const norm = (x: string) => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const list = q.trim().length < 2 ? [] : people.filter((p) => p.active && p.id !== s.id && norm(p.full_name + ' ' + (p.nickname ?? '')).includes(norm(q.trim()))).slice(0, 6);
+  const who = a?.knows_staff_id ? people.find((p) => p.id === a.knows_staff_id) : null;
+  const blurSave = (k: 'experience_note' | 'knows_text' | 'manager_note', v: string) => { const t = v.trim() || null; if (a && (a[k] ?? null) !== t) save({ [k]: t }); };
+  return (
+    <div className="pcard ab-card">
+      <div className="row" style={{ justifyContent: 'space-between' }}><span className="kick">ABOUT · MANAGERS SEE THIS</span>{ok && <span className="ab-saved">{ok}</span>}</div>
+      {!a ? <div className="muted sm">{err || 'Loading…'}</div> : <>
+        <div className="ab-sec">
+          <div className="ab-h"><span>EXPERIENCE</span><i className="ab-badge you">YOU · 1 TAP</i></div>
+          <div className="seg">{EXP.map(([k, l]) => <button key={k} className={a.experience === k ? 'on' : ''} onClick={() => save({ experience: a.experience === k ? null : k })}>{l}</button>)}</div>
+          <input placeholder="Short note (optional · e.g. 2 yrs restaurant)" maxLength={60} value={expNote} onChange={(e) => setExpNote(e.target.value)} onBlur={() => blurSave('experience_note', expNote)} />
+        </div>
+        <div className="ab-sec">
+          <div className="ab-h"><span>KNOWS</span><i className="ab-badge app">FROM APPLICATION</i></div>
+          {who || (a.knows_staff_id && !who) ? <div className="ru-row"><Avatar name={who?.full_name ?? '?'} url={who?.photo_url} size={30} /><div className="grow"><b>{who?.full_name ?? 'Someone (inactive)'}</b></div>
+            <button className="ru-x" aria-label="Clear" onClick={() => { save({ knows_staff_id: null }); setPickOpen(false); }}>×</button></div>
+            : pickOpen ? <><input autoFocus placeholder="Search an active staff member…" value={q} onChange={(e) => setQ(e.target.value)} />
+              {list.map((p) => <button key={p.id} className="ru-opt" onClick={() => { save({ knows_staff_id: p.id }); setQ(''); setPickOpen(false); }}><Avatar name={p.full_name} url={p.photo_url} size={28} /><b className="grow">{p.full_name}</b><span className="muted">›</span></button>)}
+              {q.trim().length >= 2 && !list.length && <span className="muted sm">No active staff by that name. Write it below instead.</span>}</>
+            : <button className="lnk accent" style={{ alignSelf: 'flex-start', textDecoration: 'none', fontSize: 13 }} onClick={() => setPickOpen(true)}>+ Link a staff member</button>}
+          <div className="row" style={{ gap: 6 }}>
+            <input placeholder={a.knows_staff_id ? 'Relation (e.g. cousin, friend)' : 'Relation or name (e.g. referred by …)'} maxLength={60} value={rel} onChange={(e) => setRel(e.target.value)} onBlur={() => blurSave('knows_text', rel)} />
+            {rel && <button className="ru-x" aria-label="Clear relation" onClick={() => { setRel(''); save({ knows_text: null }); }}>×</button>}
+          </div>
+        </div>
+        <div className="ab-sec">
+          <div className="ab-h"><span>LANGUAGES</span><i className="ab-badge onb">FROM ONBOARDING</i></div>
+          {(['fr', 'en'] as const).map((k) => { const v = Number(a.languages?.[k] ?? 0); return (
+            <div key={k} className="ab-lang"><b>{k.toUpperCase()}</b>
+              <div className="seg">{LV.map(([n, l]) => <button key={n} className={v === n ? 'on' : ''} onClick={() => { const nx = { ...(a.languages ?? {}) }; if (v === n) delete nx[k]; else nx[k] = n; save({ languages: nx }); }}>{l}</button>)}</div></div>); })}
+          {!Object.keys(a.languages ?? {}).length && <span className="muted sm">Not set · hidden from managers until set.</span>}
+        </div>
+        <div className="ab-sec">
+          <div className="ab-h"><span>NOTE FOR MANAGERS</span></div>
+          <input placeholder="One line (optional · e.g. strong on wine service)" maxLength={120} value={mnote} onChange={(e) => setMnote(e.target.value)} onBlur={() => blurSave('manager_note', mnote)} />
+        </div>
+        {err && <p className="error">{err}</p>}
+        <div className="ab-foot">Managers never see tiers, rankings, ratings, rates or admin notes.</div>
+      </>}
     </div>
   );
 }

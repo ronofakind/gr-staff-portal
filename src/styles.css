@@ -1508,3 +1508,39 @@ div.avatar { color: var(--accent); background: var(--accent-bg); }
 .pick-bar .save { background: var(--ink); }
 .off-saved { background: var(--ok-bg); color: #1B5E46; border-radius: 14px; padding: 10px 14px; font-size: 13px; display: flex; justify-content: space-between; align-items: center; }
 .dayoff-card { text-decoration: none; }
+
+/* ───────── push 29 · ABOUT (manager profile sheet + team list bubble) ───────── */
+.see-det { font-style: normal; display: inline-flex; align-items: center; gap: 4px; margin-top: 3px; font-size: 10.5px; font-weight: 700; color: #B7791F; border: 1px solid #D9B45A; border-radius: 10px; padding: 1px 8px 1px 6px; background: #FFFBF1; }
+.see-det b { font-size: 11px; font-weight: 700; }
+.pf-sub { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px; }
+.pf-sub .new-shift { margin-top: 0; }
+.pf-about { display: flex; flex-direction: column; gap: 8px; scroll-margin-top: 12px; }
+.ab-box { border: 1px solid #E4DCD0; border-radius: 16px; background: #fff; overflow: hidden; }
+.ab-row { padding: 9px 14px; display: flex; flex-direction: column; gap: 2px; }
+.ab-row + .ab-row { border-top: 1px solid #EFE9E1; }
+.ab-row small { font-size: 11px; color: var(--muted); font-weight: 600; }
+.ab-row b { font-size: 14.5px; font-weight: 600; color: var(--ink); overflow-wrap: anywhere; }
+.ab-val { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.ab-here { font-style: normal; flex: 0 0 auto; font-size: 10.5px; font-weight: 800; letter-spacing: .05em; color: #fff; background: #3E9A6B; border-radius: 8px; padding: 2px 8px; margin-top: 1px; }
+.ab-langs { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 14px; font-weight: 600; }
+.ab-langs > span { display: inline-flex; align-items: center; gap: 6px; }
+.ab-langs b { font-size: 13px; font-weight: 800; }
+.ab-bars { display: inline-flex; gap: 2px; }
+.ab-bars i { width: 5px; height: 13px; border-radius: 1.5px; background: #E2DBD1; }
+.ab-bars i.on { background: #3E9A6B; }
+.ab-note { display: flex; gap: 10px; align-items: stretch; background: #FBF3E0; border-radius: 14px; overflow: hidden; }
+.ab-note span { background: #C9A227; color: #fff; font-size: 10px; font-weight: 800; letter-spacing: .1em; writing-mode: vertical-rl; transform: rotate(180deg); padding: 8px 4px; text-align: center; }
+.ab-note p { margin: 0; padding: 9px 12px 9px 0; font-size: 14px; color: var(--ink); overflow-wrap: anywhere; }
+.pf-tonight { margin-bottom: -4px; }
+
+/* admin · ABOUT card */
+.ab-card .ab-sec { display: flex; flex-direction: column; gap: 6px; padding-top: 4px; }
+.ab-card .ab-sec + .ab-sec { border-top: 1px solid #F0EBE3; padding-top: 10px; }
+.ab-card .ab-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 11.5px; letter-spacing: .1em; font-weight: 700; color: var(--muted); }
+.ab-badge { font-size: 9.5px; letter-spacing: .06em; font-weight: 800; border-radius: 7px; padding: 2px 7px; white-space: nowrap; }
+.ab-badge.you { color: #8A6A14; background: #FBF3E0; } .ab-badge.app { color: #2F6B4A; background: #E7F4EC; } .ab-badge.onb { color: #4B5563; background: #EEF0F3; }
+.ab-card input { height: 38px; border: 1px solid #E4DCD0; border-radius: 10px; padding: 0 10px; font: 14px Inter, sans-serif; background: #FDFBF8; width: 100%; box-sizing: border-box; }
+.ab-card .ab-lang { display: flex; align-items: center; gap: 10px; }
+.ab-card .ab-lang > b { width: 26px; font-size: 13px; }
+.ab-card .ab-foot { font-size: 11.5px; color: var(--muted); border-top: 1px solid #F0EBE3; padding-top: 8px; }
+.ab-card .ab-saved { font-size: 11.5px; color: var(--ok); font-weight: 600; }
