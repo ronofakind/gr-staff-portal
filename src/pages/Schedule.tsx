@@ -123,13 +123,13 @@ export function Schedule({ me, base = '', preview = false }: { me: Staff; base?:
     <main className="page v2">
       <div className="sched-head">
         <div>
-          <div className="kicker">{mode === 'week' ? (monday(today) === range.from ? 'This week' : 'Week') : D(range.first!).getFullYear()}</div>
-          <div className="serif" style={{ fontSize: 30, lineHeight: 1.05 }}>{title}</div>
+          <div className="kicker">{mode === 'week' ? (monday(today) === range.from ? 'This week' : 'Week') : 'Schedule'}</div>
+          <div className="serif" style={{ fontSize: 30, lineHeight: 1.05 }}>{mode === 'week' ? title : D(range.first!).getFullYear()}</div>
         </div>
-        <div className="row" style={{ gap: 6 }}>
+        {mode === 'week' && <div className="row" style={{ gap: 6 }}>
           <button className="round" aria-label="Previous" onClick={() => step(-1)}>‹</button>
           <button className="round" aria-label="Next" onClick={() => step(1)}>›</button>
-        </div>
+        </div>}
       </div>
 
       <div className="seg" role="tablist">
@@ -183,6 +183,11 @@ export function Schedule({ me, base = '', preview = false }: { me: Staff; base?:
             </div>
           )}
           <section className={'month' + (picking ? ' picking' : '')}>
+            <div className="month-nav">
+              <button className="round" aria-label="Previous month" onClick={() => step(-1)}>‹</button>
+              <div><span className="serif">{title}</span><small>{inView.length} shift{inView.length === 1 ? '' : 's'} · {total} hrs</small></div>
+              <button className="round" aria-label="Next month" onClick={() => step(1)}>›</button>
+            </div>
             <div className="heads">{['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((h, i) => <span key={i}>{h}</span>)}</div>
             <div className="grid">
               {Array.from({ length: (D(range.to).getTime() - D(range.from).getTime()) / 864e5 + 1 }, (_, i) => add(range.from, i)).map((day) => {
