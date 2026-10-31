@@ -1571,3 +1571,19 @@ div.avatar { color: var(--accent); background: var(--accent-bg); }
 .month-nav .round { width: 44px; height: 44px; border-radius: 22px; background: var(--bg, #F6F2EC); font-size: 22px; }
 .month-nav > div { display: flex; flex-direction: column; align-items: center; gap: 1px; }
 .month-nav .serif { font-size: 22px; } .month-nav small { font-size: 11px; font-weight: 700; letter-spacing: .1em; color: var(--muted); text-transform: uppercase; }
+/* Availability on theme (fixes chat, Oct 31) */
+.red-b { color: var(--accent); font-weight: 700; }
+.wk-strip { padding-bottom: 12px; }
+.wk-strip .mcell { height: 56px; width: 44px; gap: 1px; }
+.wk-strip .mcell .n { width: 44px; height: 36px; border-radius: 12px 12px 4px 4px; font-size: 14px; font-weight: 700; }
+.wk-strip .mcell.ok .n { background: var(--ok); color: #fff; }
+.wk-strip .wk-sub { font-size: 9px; font-weight: 800; letter-spacing: .04em; color: var(--muted); height: 14px; line-height: 14px; }
+.wk-strip .mcell.ok .wk-sub { color: var(--ok); }
+.wk-strip .mcell.sel .n { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--ink); }
+.wk-strip .grid { grid-template-columns: repeat(7, 44px); justify-content: space-between; }
+.wk-detail { margin-top: 12px; border-top: 1px solid var(--line); padding-top: 12px; display: flex; align-items: center; gap: 8px; }
+.wk-detail small { display: block; font-size: 10px; font-weight: 700; letter-spacing: .1em; color: var(--muted); }
+.wk-detail .serif { font-size: 18px; font-weight: 500; }
+.days-off-btn.soft { background: var(--bg); border-color: var(--bg); color: var(--muted); }
+.days-off-btn.ok { background: var(--ok); border-color: var(--ok); color: #fff; }
+.dayoff-card .link-btn { font-weight: 700; }

@@ -6,6 +6,7 @@ import { useLang } from '../lib/i18n';
 import { time, longDate, dayBadge, minus } from '../lib/format';
 import { Avatar } from '../components/Avatar';
 import { TabBar } from '../components/TabBar';
+import { AskCards, useAsks } from '../components/AskCards';
 import { UniformIcon, uniformFor, uniformLabel } from '../components/Uniform';
 import { payPeriod, paidHours, periodLabel, payDayLabel } from '../lib/hours';
 import { AnnounceCards } from '../components/Announce';
@@ -64,11 +65,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
       .then(({ data }) => setAlerts((data ?? []) as typeof alerts));
   }, [me.id]);
   const gotIt = async (id: string) => { setAlerts(alerts.filter((a) => a.id !== id)); if (!preview) await supabase.rpc('alert_seen', { p_id: id }); };
-  const [asked, setAsked] = useState(0);
-  useEffect(() => {
-    supabase.from('availability').select('id', { count: 'exact', head: true }).eq('staff_id', me.id).eq('status', 'asked')
-      .not('ask_id', 'is', null).gte('for_date', todayIso()).then(({ count }) => setAsked(count ?? 0));
-  }, [me.id]);
+  const { asks, week: usualWeek, reload: reloadAsks } = useAsks(me.id);
 
   const respond = async (id: string, r: 'confirmed' | 'declined') => {
     if (preview) return;
@@ -110,12 +107,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
 
       {!preview && <AnnounceCards meId={me.id} />}
 
-      {asked > 0 && (
-        <Link to={preview ? '#' : '/availability'} className="todo">
-          <div className="grow"><b>Are you available?</b><span>{asked} date{asked > 1 ? 's' : ''} waiting for your answer</span></div>
-          <span className="pill-red" style={{ display: 'inline-flex', alignItems: 'center' }}>Answer ›</span>
-        </Link>
-      )}
+      <AskCards asks={asks} week={usualWeek} preview={preview} onlyWaiting onAnswered={reloadAsks} />
 
       {pending.map((s) => (
         <div key={s.id} className="todo">

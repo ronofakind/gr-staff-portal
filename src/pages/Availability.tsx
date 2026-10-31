@@ -4,29 +4,24 @@ import { TabBar } from '../components/TabBar';
 import { todayIso } from './Home';
 import { FromPicker, ampm15 } from '../components/TimeWheel';
 import { SwipeSheet } from '../components/SwipeSheet';
+import { AskCards, useAsks, ampm } from '../components/AskCards';
+export { ampm };
 
-type Ask = { id: string; for_date: string; status: 'asked' | 'yes' | 'no' | 'maybe'; from_time: string | null; note: string | null;
-  avail_asks: { label: string; approx_start: string | null; reply_by: string | null } | null };
 type Week = { dow: number; status: 'yes' | 'from' | 'no'; from_time: string | null };
 type Off = { id: string; from_date: string; to_date: string; reason: string | null };
 
 const D = (iso: string) => new Date(iso + 'T12:00:00');
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-export const ampm = (t: string | null) => {
-  if (!t) return '';
-  const [h, m] = t.split(':').map(Number); const hh = h % 12 || 12;
-  return `${hh}${m ? ':' + String(m).padStart(2, '0') : ''} ${h < 12 ? 'AM' : 'PM'}`;
-};
+const SHORT = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'];
 
 /** Staff: answer availability asks, set the usual week, add days off. */
 export function Availability({ me, preview = false }: { me: Staff; preview?: boolean }) {
-  const [asks, setAsks] = useState<Ask[] | null>(null);
+  const { asks, reload: reloadAsks } = useAsks(me.id);
+  const [selDow, setSelDow] = useState<number>(() => (new Date().getDay() + 6) % 7);
   const [week, setWeek] = useState<Record<number, Week>>({});
   const [saved, setSaved] = useState<Record<number, Week>>({});
   const [savingWk, setSavingWk] = useState(false);
   const [off, setOff] = useState<Off[]>([]);
-  const [pick, setPick] = useState<Ask | null>(null);
-  const [choice, setChoice] = useState<string | null>(null); const [note, setNote] = useState('');
   const [wkSheet, setWkSheet] = useState<number | null>(null); const [wkChoice, setWkChoice] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [nOff, setNOff] = useState({ from: '', to: '', reason: '' });
@@ -34,27 +29,15 @@ export function Availability({ me, preview = false }: { me: Staff; preview?: boo
   const today = todayIso();
 
   const load = () => Promise.all([
-    supabase.from('availability').select('id,for_date,status,from_time,note,avail_asks(label,approx_start,reply_by)')
-      .eq('staff_id', me.id).not('ask_id', 'is', null).gte('for_date', today).order('for_date'),
     supabase.from('staff_weekly').select('dow,status,from_time').eq('staff_id', me.id),
     supabase.from('days_off').select('id,from_date,to_date,reason').eq('staff_id', me.id).gte('to_date', today).order('from_date'),
-  ]).then(([a, w, o]) => {
-    setAsks((a.data ?? []) as unknown as Ask[]);
+  ]).then(([w, o]) => {
     const wk = Object.fromEntries(((w.data ?? []) as Week[]).map((x) => [x.dow, x])); setWeek(wk); setSaved(wk);
     setOff((o.data ?? []) as Off[]);
   });
   useEffect(() => { load(); }, [me.id]);
 
-  const answer = async (a: Ask, status: 'yes' | 'no', f: string | null = null, n: string | null = null) => {
-    if (preview) return;
-    setErr('');
-    const { error } = await supabase.rpc('answer_availability', { p_id: a.id, p_status: status, p_from: f, p_note: n });
-    if (error) setErr(error.message); setPick(null); load();
-  };
   const setDay = (dow: number, status: Week['status'], from_time: string | null = null) => setWeek({ ...week, [dow]: { dow, status: status === 'from' ? 'yes' : status, from_time } });
-  const dowOf = (iso: string) => (D(iso).getDay() + 6) % 7;
-  const usualFor = (iso: string) => { const w = saved[dowOf(iso)]; return w && w.status !== 'no' && w.from_time ? w.from_time.slice(0, 5) : null; };
-  const openAsk = (a: Ask) => { setPick(a); setNote(a.note ?? ''); setChoice(a.status === 'yes' ? (a.from_time ? a.from_time.slice(0, 5) : 'any') : usualFor(a.for_date)); };
   const wkText = (w?: Week) => (w && w.status !== 'no' ? (w.from_time ? `from ${ampm15(w.from_time.slice(0, 5))}` : 'any time') : '');
   const changed = DAYS.map((_, d) => d).filter((d) => week[d] && (week[d].status !== saved[d]?.status || (week[d].from_time ?? '').slice(0, 5) !== (saved[d]?.from_time ?? '').slice(0, 5)));
   const saveWeek = async () => {
@@ -74,8 +57,9 @@ export function Availability({ me, preview = false }: { me: Staff; preview?: boo
   const delOff = async (id: string) => { if (preview) return; await supabase.from('days_off').delete().eq('id', id); load(); };
 
   const waiting = (asks ?? []).filter((a) => a.status === 'asked');
-  const replyBy = waiting.map((a) => a.avail_asks?.reply_by).filter(Boolean).sort()[0];
-  const range = (a: Ask) => (a.from_time ? `from ${ampm15(a.from_time.slice(0, 5))}` : 'any time');
+  const freeDays = DAYS.filter((_, d) => week[d] && week[d].status !== 'no').length;
+  const comingOff = off.filter((o) => o.to_date >= today).length;
+  const selW = week[selDow];
   const short = (iso: string) => D(iso).toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' }).replace(/\./g, '');
 
   return (
@@ -83,59 +67,49 @@ export function Availability({ me, preview = false }: { me: Staff; preview?: boo
       <div style={{ padding: '18px 6px 0' }}>
         <div className="kicker">Availability</div>
         <div className="serif" style={{ fontSize: 30, lineHeight: 1.05 }}>Are you available?</div>
-        <div className="muted sm" style={{ marginTop: 4 }}>
-          {waiting.length ? `${waiting.length} date${waiting.length > 1 ? 's' : ''} waiting for your answer${replyBy ? ` · reply by ${D(replyBy).toLocaleDateString('en-CA', { weekday: 'short' }).replace('.', '')}` : ''}` : 'Nothing waiting right now.'}
-        </div>
+      </div>
+      <div className="sumbar">
+        <div className={waiting.length ? 'red' : ''}><b>{waiting.length}</b><span>date{waiting.length === 1 ? '' : 's'} waiting</span></div>
+        <div><b>{freeDays}</b><span>usual days free</span></div>
+        <div><b>{comingOff}</b><span>day{comingOff === 1 ? '' : 's'} off coming</span></div>
       </div>
       {err && <p className="error">{err}</p>}
 
-      {asks === null ? <div className="loading" style={{ minHeight: 160 }} /> : asks.length > 0 && (
-        <section className="stack" style={{ gap: 10 }}>
-          {asks.map((a) => (
-            <div key={a.id} className={'av-row' + (a.status === 'asked' ? ' waiting' : '')}>
-              <div className="d"><small>{D(a.for_date).toLocaleDateString('en-CA', { weekday: 'short' }).replace('.', '').toUpperCase()}</small><b>{D(a.for_date).getDate()}</b></div>
-              <div className="grow" style={{ minWidth: 0 }}>
-                <b>{a.avail_asks?.label ?? 'Event'}</b>
-                <span>{a.avail_asks?.approx_start ? `Around ${ampm(a.avail_asks.approx_start)} start` : D(a.for_date).toLocaleDateString('en-CA', { month: 'long' })}</span>
-              </div>
-              <div className="av-btns">
-                <button className={a.status === 'yes' ? 'yes on' : 'yes'} onClick={() => openAsk(a)}>
-                  {a.status === 'yes' ? <>✓ Available<small>{range(a)}</small></> : 'Available'}</button>
-                <button className={a.status === 'no' ? 'no on' : 'no'} onClick={() => answer(a, 'no')}>{a.status === 'no' ? '✕ Can’t' : 'Can’t'}</button>
-              </div>
-            </div>
-          ))}
-          {asks.length > 0 && <p className="muted sm" style={{ margin: '2px 6px' }}>Saying yes doesn’t book you yet. You’ll get the shift to confirm once you’re scheduled.</p>}
-        </section>
-      )}
+      <AskCards asks={asks} week={saved} preview={preview} onAnswered={reloadAsks} />
 
-      <div className="sec-head"><span className="serif">My usual week</span></div>
-      <p className="muted sm" style={{ margin: '-6px 6px 0' }}>Set this once. Ronnie only asks you for days you’re usually free. Change it any time.</p>
-      <section className="card" style={{ padding: '4px 14px' }}>
-        {DAYS.map((name, dow) => {
-          const w = week[dow];
-          return (
-            <div key={dow} className="wk-row">
-              <div className="grow"><b>{name}</b>{w && w.status !== 'no' && <div><button className="wk-from" onClick={() => { setWkSheet(dow); setWkChoice(w.from_time ? w.from_time.slice(0, 5) : 'any'); }}>{wkText(w)} ✎</button></div>}</div>
-              <div className="wk-seg">
-                <button className={w && w.status !== 'no' ? 'on yes' : ''} onClick={() => { setWkSheet(dow); setWkChoice(w && w.status !== 'no' ? (w.from_time ? w.from_time.slice(0, 5) : 'any') : null); }}>Yes · From</button>
-                <button className={w?.status === 'no' ? 'on no' : ''} onClick={() => setDay(dow, 'no')}>No</button>
-              </div>
-            </div>
-          );
-        })}
+      <div className="sec-head"><span className="serif">My usual week</span><span className="muted sm">tap a day to change</span></div>
+      <section className="month wk-strip">
+        <div className="grid">
+          {DAYS.map((name, dow) => {
+            const w = week[dow]; const free = w && w.status !== 'no';
+            return <button key={dow} className={'mcell' + (free ? ' ok' : ' usualno') + (dow === selDow ? ' sel' : '')} aria-label={name} onClick={() => setSelDow(dow)}>
+              <span className="n">{SHORT[dow]}</span><span className="wk-sub">{free ? (w.from_time ? ampm15(w.from_time.slice(0, 5)).replace(':00', '').replace(' ', '') : 'Any') : '—'}</span></button>;
+          })}
+        </div>
+        <div className="wk-detail">
+          <div className="grow"><small>{DAYS[selDow].toUpperCase()}S</small><b className="serif">{selW && selW.status !== 'no' ? (selW.from_time ? `Free from ${ampm15(selW.from_time.slice(0, 5))}` : 'Free · any time') : 'Not free'}</b></div>
+          {selW && selW.status !== 'no' ? (
+            <>
+              <button className="days-off-btn" onClick={() => { setWkSheet(selDow); setWkChoice(selW.from_time ? selW.from_time.slice(0, 5) : 'any'); }}>Change</button>
+              <button className="days-off-btn soft" onClick={() => setDay(selDow, 'no')}>Not free</button>
+            </>
+          ) : (
+            <button className="days-off-btn ok" onClick={() => { setWkSheet(selDow); setWkChoice(null); }}>I’m free</button>
+          )}
+        </div>
       </section>
+      <p className="muted sm" style={{ margin: '-6px 6px 0' }}>Set this once. Ronnie only asks you for days you’re usually free.</p>
 
-      <div className="sec-head"><span className="serif">Days off</span><button className="link-btn" onClick={() => setAdding(true)}>+ Add dates</button></div>
+      <div className="sec-head"><span className="serif">Days off</span><button className="days-off-btn" onClick={() => setAdding(true)}>+ Add dates</button></div>
       <section className="stack" style={{ gap: 8 }}>
         {off.map((o) => (
-          <div key={o.id} className="off-row">
-            <div className="grow"><b>{o.from_date === o.to_date ? short(o.from_date) : `${short(o.from_date)} – ${short(o.to_date)}`}</b>{o.reason && <span>{o.reason}</span>}</div>
-            <button aria-label="Remove" onClick={() => delOff(o.id)}>✕</button>
+          <div key={o.id} className="dayoff-card">
+            <div className="grow"><small>DAY OFF · {(o.from_date === o.to_date ? short(o.from_date) : `${short(o.from_date)} – ${short(o.to_date)}`).toUpperCase()}</small><div className="serif">{o.reason || 'Day off'}</div></div>
+            <button className="link-btn" style={{ color: 'var(--accent)' }} onClick={() => delOff(o.id)}>Remove</button>
           </div>
         ))}
-        {!off.length && <div className="muted sm" style={{ padding: '0 6px' }}>No days off added.</div>}
-        <p className="muted sm" style={{ margin: '2px 6px' }}>Days off win over your usual week. You can’t add a day you’re already booked on. Talk to Ronnie.</p>
+        {!off.length && <div className="card muted sm">No days off added.</div>}
+        <p className="muted sm" style={{ margin: '2px 6px' }}>Days off win over your usual week. You can also add them from the Schedule calendar.</p>
       </section>
       <div style={{ height: changed.length ? 160 : 90 }} />
       {changed.length > 0 && (
@@ -144,23 +118,6 @@ export function Availability({ me, preview = false }: { me: Staff; preview?: boo
           <button className="undo" onClick={() => setWeek(saved)}>Undo</button>
           <button className="save" disabled={savingWk} onClick={saveWeek}>{savingWk ? 'Saving…' : 'Save changes'}</button>
         </div>
-      )}
-
-      {pick && (
-        <>
-          <div className="scrim" onClick={() => setPick(null)} />
-          <div className="sheet swipe" role="dialog" aria-label="From what time?">
-            <button className="sheet-x" aria-label="Close" onClick={() => setPick(null)}>✕</button>
-            <div><div className="kicker">{D(pick.for_date).toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric' }).toUpperCase()} · <span style={{ color: 'var(--ok)' }}>AVAILABLE ✓</span></div>
-              <div className="serif" style={{ fontSize: 26 }}>From what time?</div></div>
-            {usualFor(pick.for_date) && <span className="usual-tag">From your usual week · {D(pick.for_date).toLocaleDateString('en-CA', { weekday: 'short' }).replace('.', '')} {ampm15(usualFor(pick.for_date))}</span>}
-            <FromPicker choice={choice} setChoice={setChoice} rest={usualFor(pick.for_date) ?? pick.avail_asks?.approx_start?.slice(0, 5) ?? '17:00'} />
-            <div className="kicker">Note (optional)</div>
-            <input className="av-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Write a note for G&R (optional)" />
-            <button className="big-btn dark" disabled={!choice} style={{ justifyContent: 'center' }} onClick={() => answer(pick, 'yes', choice === 'any' ? null : choice, note)}>
-              {!choice ? 'Pick a time or Any time' : `Confirm · available ${choice === 'any' ? 'any time' : 'from ' + ampm15(choice)}`}</button>
-          </div>
-        </>
       )}
 
       {wkSheet !== null && (
