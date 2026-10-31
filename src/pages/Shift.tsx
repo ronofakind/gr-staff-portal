@@ -8,6 +8,7 @@ import { UniformIcon, uniformFor, uniformLabel, PantsIcon, ShoesIcon, ApronIcon,
 import { Status, isBar } from './Home';
 import { GettingThere } from '../components/GettingThere';
 import { PinnedAnnouncements } from '../components/Announce';
+import { NeedChange, CancelSheet, ChangeSheet, ChangeCard, CancelledCard, useShiftChanges } from '../components/ShiftChange';
 
 export function Shift({ backTo = '/' }: { backTo?: string }) {
   const { id } = useParams();
@@ -39,6 +40,11 @@ type TeamGroup = { start: string; label: string; n: number };
 export function ShiftView({ s, lead, backTo = '/', preview = false, team }: { s: ShiftRow; lead: Lead; backTo?: string; preview?: boolean; team?: TeamGroup[] }) {
   const t = useT(); const lang = useLang();
   const [leadPhoto, setLeadPhoto] = useState(false);
+  // push 28 · Need a change? (inside the dark top card, V2)
+  const [sheet, setSheet] = useState<'cancel' | 'change' | null>(null);
+  const [gone, setGone] = useState<{ late: boolean } | null>(s.attendance === 'cancelled' ? { late: false } : null);
+  const chg = useShiftChanges(preview ? [] : [s.id]);
+  const req = chg.reqs[s.id];
   const ev = s.events;
   const address = ev.address || ev.venues?.address || '';
   const arrive = minus(s.planned_start, s.arrive_before_min);
@@ -92,7 +98,7 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team }: { s:
       <header className="row d3-top">
         <Link to={backTo} className="back" aria-label={t('back')}>‹</Link>
         <span className="kicker grow">{longDate(ev.event_date, lang)}</span>
-        <Status s={s.status} />
+        {gone ? <span className="tag-done">Cancelled</span> : <Status s={s.status} />}
       </header>
 
       <section className="d3-hero">
@@ -105,7 +111,15 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team }: { s:
           {!setup && <><span className="d3-vl" /><div className="d3-cell wear"><small>Wear</small><div className="d3-val"><span className="d3-uni" title={shirtLabel}><UniformIcon kind={kind} size={24} /></span></div></div></>}
         </div>
         {lead_ && !preview && <Link className="d3-team" to={`/manage/${ev.id}`}>My team{team ? ` · ${team.reduce((n, g) => n + g.n, 0)}` : ''} ›</Link>}
+        {!lead_ && !gone && !s.punches?.punch_in && Date.now() < new Date(s.planned_start).getTime() && <>
+          <span className="d3-hl" />
+          <NeedChange canSchedule={!(req?.status === 'pending' || (req?.status === 'keep' && !req.keep_reply))} onSchedule={() => setSheet('change')} onCancel={() => setSheet('cancel')} />
+        </>}
       </section>
+      {gone && <CancelledCard title={ev.title} date={ev.event_date} late={gone.late} onOk={() => window.history.length > 1 ? window.history.back() : window.location.assign(backTo)} />}
+      {!gone && req && <ChangeCard r={req} s={s} preview={preview} onChanged={chg.reload} />}
+      {sheet === 'cancel' && <CancelSheet s={s} preview={preview} onClose={() => setSheet(null)} onDone={(late) => { setGone({ late }); setSheet(null); }} />}
+      {sheet === 'change' && <ChangeSheet s={s} preview={preview} onClose={() => setSheet(null)} onSent={() => { setSheet(null); chg.reload(); }} />}
 
       {ev.transport && ev.rides && <GettingThere eventId={ev.id} eventDate={ev.event_date} firstStart={s.planned_start} travelMin={ev.travel_min ?? 60} paidMin={ev.paid_travel_min ?? 0} preview={preview} />}
       <div className="d-sec">Where</div>

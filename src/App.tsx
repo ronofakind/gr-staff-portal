@@ -29,6 +29,7 @@ import { Incidents } from './admin/Incidents';
 import { Bookings } from './admin/Bookings';
 import { Messages } from './admin/Messages';
 import { Hours as HoursPage } from './pages/Hours';
+import { Extras } from './admin/Extras';
 
 export function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
@@ -80,6 +81,7 @@ export function App() {
             <Route path="availability" element={<AdminAvail />} />
             <Route path="tiers" element={<Tiers />} />
             <Route path="ranking" element={<Ranking />} />
+            <Route path="extras/:id" element={<Extras />} />
           </Route>
         )}
         {me.role === 'admin' && <Route path="/admin/view/:staffId/*" element={<ViewAs />} />}

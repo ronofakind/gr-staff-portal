@@ -14,6 +14,10 @@
  *   - the Staff Payroll 2026 sheet gets each person's Total in that date's column.
  * It never overwrites a cell someone changed by hand, and never writes an early start of 16+ min before call.
  * Anything it can't do safely is listed in red at the right of the APP tab ("NEEDS RONNIE").
+ *
+ * Push 28f · EXTRAS LOG: every refresh also appends the extras & cancellations Ronnie confirmed in the app
+ * (and, once it is past 5 AM the day after an event with no answer, the app's proposal) as rows of the EXTRAS LOG tab,
+ * matched to its header row (EVENT DATE · VENUE · INVOICE # · DETAILS · LOGGED AT). Each event is written once.
  */
 const TZ = 'America/Toronto';
 const TEMPLATE = 'BLANK TEMPLATE';
@@ -26,6 +30,7 @@ function onOpen() {
     .addItem('Connect the app', 'connect')
     .addItem('Update today now', 'syncToday')
     .addItem('Redo yesterday (day tab + payroll)', 'syncYesterday')
+    .addItem('Send extras & cancellations to EXTRAS LOG', 'syncExtrasLog')
     .addToUi();
 }
 
@@ -54,6 +59,7 @@ function refresh() {
   const now = new Date();
   syncDate_(now);
   if (Number(Utilities.formatDate(now, TZ, 'H')) < 6) syncDate_(addDays_(now, -1));
+  try { syncExtrasLog(); } catch (e) { Logger.log('EXTRAS LOG: ' + e); } // never blocks the hours sync
 }
 
 /** Rebuild today's tab now (also in the G&R app menu). */
@@ -480,4 +486,90 @@ function testTransport() {
   Logger.log(JSON.stringify({ L: L, hdr: sh.getRange(5, 1, 1, 9).getValues()[0], r7: sh.getRange(7, 1, 1, 9).getValues()[0], r8: sh.getRange(8, 1, 1, 9).getValues()[0],
     tot: sh.getRange(9, 1, 1, 9).getValues()[0], f7: sh.getRange(7, 1, 1, 9).getFormulas()[0], f9: sh.getRange(9, 1, 1, 9).getFormulas()[0] }));
   ss.deleteSheet(sh);
+}
+
+// ───────────────────────────────────────────────────────────────
+// Push 28f · EXTRAS LOG
+
+const EXTRAS_TAB = 'EXTRAS LOG';
+const XCOLS = { date: 'EVENT DATE', venue: 'VENUE', invoice: 'INVOICE #', details: 'DETAILS', logged: 'LOGGED AT' };
+
+/** Rows the app wants in EXTRAS LOG (confirmed, not logged yet + 5 AM proposals), last 7 days. */
+function fetchExtras_(sinceIso) {
+  const p = PropertiesService.getScriptProperties();
+  const res = UrlFetchApp.fetch(SUPABASE_URL + '/rest/v1/rpc/extras_log_feed', {
+    method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+    headers: { apikey: p.getProperty('SUPABASE_KEY'), Authorization: 'Bearer ' + p.getProperty('SUPABASE_KEY') },
+    payload: JSON.stringify({ p_token: p.getProperty('SHEET_TOKEN'), p_since: sinceIso }),
+  });
+  if (res.getResponseCode() === 404) return []; // migration 034 not applied yet
+  if (res.getResponseCode() !== 200) throw new Error('Extras feed failed (' + res.getResponseCode() + '): ' + res.getContentText());
+  return JSON.parse(res.getContentText());
+}
+
+function markExtras_(eventId, row, text) {
+  const p = PropertiesService.getScriptProperties();
+  const res = UrlFetchApp.fetch(SUPABASE_URL + '/rest/v1/rpc/extras_log_mark', {
+    method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+    headers: { apikey: p.getProperty('SUPABASE_KEY'), Authorization: 'Bearer ' + p.getProperty('SUPABASE_KEY') },
+    payload: JSON.stringify({ p_token: p.getProperty('SHEET_TOKEN'), p_event: eventId, p_row: row, p_text: text }),
+  });
+  if (res.getResponseCode() >= 300) throw new Error('Extras mark failed (' + res.getResponseCode() + '): ' + res.getContentText());
+}
+
+/** Header row of EXTRAS LOG (first of the top 10 rows that has EVENT DATE) → { row, col: { date, venue, … } } (1-based, 0 = missing). */
+function extrasHeader_(sh) {
+  const top = sh.getRange(1, 1, Math.min(10, Math.max(1, sh.getLastRow())), Math.max(1, sh.getLastColumn())).getValues();
+  for (let r = 0; r < top.length; r++) {
+    const cells = top[r].map((v) => norm_(v));
+    if (cells.indexOf(norm_(XCOLS.date)) < 0) continue;
+    const col = {};
+    Object.keys(XCOLS).forEach((k) => { col[k] = cells.indexOf(norm_(XCOLS[k])) + 1; });
+    return { row: r + 1, col: col };
+  }
+  return null;
+}
+
+/** Append the app's extras & cancellations to EXTRAS LOG (refresh + menu). Each event once (script property + extras_log_mark). */
+function syncExtrasLog() { return syncExtrasLog_(SpreadsheetApp.getActive(), false); }
+
+function syncExtrasLog_(ss, dryRun) {
+  const sh = ss.getSheetByName(EXTRAS_TAB);
+  if (!sh) { Logger.log('No "' + EXTRAS_TAB + '" tab: nothing written.'); return []; }
+  const h = extrasHeader_(sh);
+  if (!h || !h.col.date || !h.col.details) { Logger.log('EXTRAS LOG: header row with EVENT DATE and DETAILS not found.'); return []; }
+  const rows = fetchExtras_(new Date(Date.now() - 7 * 864e5).toISOString());
+  const props = PropertiesService.getScriptProperties();
+  const width = Math.max(sh.getLastColumn(), h.col.date, h.col.venue, h.col.invoice, h.col.details, h.col.logged);
+  const out = [];
+  rows.forEach((r) => {
+    if (props.getProperty('xlog_' + r.event_id)) { if (!dryRun) markExtras_(r.event_id, Number(props.getProperty('xlog_' + r.event_id)), r.details); return; } // written before, mark failed then
+    const line = new Array(width).fill('');
+    const venue = r.venue + (r.department === 'bar' ? ' · BAR' : '');
+    const details = r.details + (r.source === 'proposal' ? ' · app proposal (no answer by 5 AM)' : '');
+    line[h.col.date - 1] = new Date(r.event_date + 'T12:00:00');
+    if (h.col.venue) line[h.col.venue - 1] = venue;
+    if (h.col.invoice) line[h.col.invoice - 1] = r.invoice_no || '';
+    line[h.col.details - 1] = details;
+    if (h.col.logged) line[h.col.logged - 1] = new Date();
+    out.push({ r: r, line: line, details: details });
+  });
+  if (dryRun) { Logger.log(JSON.stringify({ header: h, rows: out.map((x) => x.line) })); return out; }
+  out.forEach((x) => {
+    const at = Math.max(sh.getLastRow(), h.row) + 1;
+    sh.getRange(at, 1, 1, width).setValues([x.line]);
+    if (at > h.row + 1) { // dates / times look like the row above
+      if (h.col.date) sh.getRange(at, h.col.date).setNumberFormat(sh.getRange(at - 1, h.col.date).getNumberFormat());
+      if (h.col.logged) sh.getRange(at, h.col.logged).setNumberFormat(sh.getRange(at - 1, h.col.logged).getNumberFormat());
+    }
+    props.setProperty('xlog_' + x.r.event_id, String(at));
+    markExtras_(x.r.event_id, at, x.details);
+  });
+  return out;
+}
+
+/** Run by hand from the editor: shows what would be appended to EXTRAS LOG (writes nothing, marks nothing). */
+function testExtrasLog() {
+  const out = syncExtrasLog_(SpreadsheetApp.getActive(), true);
+  Logger.log((out ? out.length : 0) + ' row(s) would be appended to ' + EXTRAS_TAB);
 }

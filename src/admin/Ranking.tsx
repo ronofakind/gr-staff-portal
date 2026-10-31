@@ -52,7 +52,7 @@ export function Ranking() {
           <div className="adm-card rk-how">
             <div className="kick">HOW THE SCORE IS MADE</div>
             <div className="spread"><span>Tier</span><b>A {WEIGHTS.tier.A} · B {WEIGHTS.tier.B} · C {WEIGHTS.tier.C}</b></div>
-            <div className="spread"><span>Reliability (app, {WEIGHTS.reliability.days} days)</span><b>starts {WEIGHTS.reliability.start} · no-show −3 · late cancel −2 · late −1 · min 0</b></div>
+            <div className="spread"><span>Reliability (app, {WEIGHTS.reliability.days} days)</span><b>starts {WEIGHTS.reliability.start} · no-show −3 · late cancel (after confirming) −2 · late −1 · late change −1 · min 0</b></div>
             <div className="spread"><span>Experience</span><b>Senior 3 · Mid 2 · Junior 1</b></div>
             <div className="spread"><span>Manager feedback (last {WEIGHTS.feedback.last})</span><b>overall 5★ +1 · 4★ +0.5 · 3★ 0 · 2★ −1 · 1★ −2 · each detail ≥4★ +0.5 · ≤2★ −0.5 · −10 to +10</b></div>
             <div className="spread"><span className="muted">Older feedback (before stars)</span><b className="muted">vote A +1 · B 0 · C −2 · ▲ +0.5 · ▼ −0.5</b></div>
@@ -79,7 +79,7 @@ export function ScoreWhy({ s, sc, onClose, onTier, compact = false }: { s: AStaf
     if (error) alert(error.message); else onTier?.();
   };
   const keep = () => { try { localStorage.setItem(keepKey(s.id, sc), '1'); } catch { /* private mode */ } setKept(true); };
-  const relWhy = [sc.rel.no_show && `${sc.rel.no_show} no-show (−3)`, sc.rel.cancelled && `${sc.rel.cancelled} late cancel (−2)`, sc.rel.late && `${sc.rel.late} late (−1)`].filter(Boolean).join(' · ') || 'nothing flagged';
+  const relWhy = [sc.rel.no_show && `${sc.rel.no_show} no-show (−3)`, sc.rel.cancelled && `${sc.rel.cancelled} late cancel (−2)`, sc.rel.late && `${sc.rel.late} late (−1)`, sc.rel.late_change && `${sc.rel.late_change} late change (−1)`, sc.rel.free && `${sc.rel.free} not counted (cancel before confirming / told ahead)`].filter(Boolean).join(' · ') || 'nothing flagged';
   const Line = ({ t, sub, n, plain }: { t: string; sub: string; n: number; plain?: boolean }) => (
     <div className="rk-line"><div className="grow"><b>{t}</b><small>{sub}</small></div><b className={plain ? '' : n > 0 ? 'okc' : n < 0 ? 'accent' : 'muted'}>{plain ? n : signed(n)}</b></div>
   );

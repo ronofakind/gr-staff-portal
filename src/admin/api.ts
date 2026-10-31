@@ -11,6 +11,9 @@ export type AShift = {
   planned_start: string; status: 'booked' | 'confirmed' | 'declined'; changed_at: string; notified_at: string | null; attendance: 'no_show' | 'cancelled' | null; left_early?: boolean; attendance_reason?: string | null; leave_by: string | null;
   punches: { punch_in: string | null; punch_out: string | null } | null; manager_note?: string | null; note_archived_at?: string | null; note_archived_by?: string | null;
   staff: { full_name: string; phone?: string | null } | null;
+  /** push 28 (migration 034; undefined until it is applied) */
+  responded_at?: string | null; cancelled_at?: string | null; cancel_reason?: string | null; cancel_note?: string | null; cancel_self?: boolean; cancel_late?: boolean;
+  cancel_sent_to_manager?: string | null; replacement_for?: string | null;
 };
 
 export type AEvent = {
@@ -22,13 +25,20 @@ export type AEvent = {
   shifts: AShift[];
 };
 
-export const EVENT_SELECT = `id,event_date,title,address,department,description,dress_code,bring,start_time,end_time,
+const EVENT_SELECT_T = `id,event_date,title,address,department,description,dress_code,bring,start_time,end_time,
   staff_needed,manager_id,hours_submitted_at,hours_submitted_by,venue_id,timeline,event_private(client,client_id,punch_code,pay_method,qb_doc_type,qb_doc_number,cash_received_at,qb_removed_at),guests,event_type,extras,extras_billing,transport,travel_min,paid_travel_min,gas_per_car,transport_billing,rides,ends_label,staffing,notes,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,drive_folder_url,
-  shifts(id,event_id,staff_id,position_code,position_detail,planned_start,status,changed_at,notified_at,attendance,left_early,attendance_reason,leave_by,manager_note,note_archived_at,note_archived_by,punches(punch_in,punch_out),staff:staff!shifts_staff_id_fkey(full_name,phone))`;
+  shifts(id,event_id,staff_id,position_code,position_detail,planned_start,status,changed_at,notified_at,attendance,left_early,attendance_reason,leave_by,manager_note,note_archived_at,note_archived_by,responded_at,punches(punch_in,punch_out),staff:staff!shifts_staff_id_fkey(full_name,phone)P28)`;
+/** push 28 shift columns (migration 034). */
+export const P28_SHIFT_COLS = ',cancelled_at,cancel_reason,cancel_note,cancel_self,cancel_late,cancel_sent_to_manager,replacement_for';
+export const EVENT_SELECT = EVENT_SELECT_T.replace('P28', '');
+export const EVENT_SELECT_28 = EVENT_SELECT_T.replace('P28', P28_SHIFT_COLS);
+/** True when an error is "column … does not exist" for a push-28 column, i.e. migration 034 isn't applied yet. */
+export const missing034 = (e: { message?: string } | null | undefined) => !!e?.message && /cancel_|replacement_for|shift_change_requests|late_notices|event_adjustments|does not exist|schema cache/i.test(e.message);
 
 export async function eventsBetween(from: string, to: string) {
-  const { data, error } = await supabase.from('events').select(EVENT_SELECT)
-    .gte('event_date', from).lte('event_date', to).order('event_date').order('start_time');
+  const q = (sel: string) => supabase.from('events').select(sel).gte('event_date', from).lte('event_date', to).order('event_date').order('start_time');
+  let { data, error } = await q(EVENT_SELECT_28);
+  if (error && missing034(error)) ({ data, error } = await q(EVENT_SELECT)); // migration 034 not applied yet
   if (error) throw error;
   return (data ?? []) as unknown as AEvent[];
 }
@@ -73,11 +83,16 @@ export const hhmm = (t: string | null) => (t ? t.slice(0, 5) : '');
 /** Flags computed from a shift: no-show / cancelled / late (>10 min after call) / early start (started before call on purpose). */
 export type Flag = 'no_show' | 'cancelled' | 'late' | 'early';
 export const FLAG_LABEL: Record<Flag, string> = { no_show: 'NO-SHOW', cancelled: 'CANCELLED', late: 'LATE', early: 'EARLY START' };
-export function flagsOf(s: { attendance: string | null; planned_start: string; punches: { punch_in: string | null } | null }): { flag: Flag; min?: number }[] {
+/**
+ * push 28: `free` = shown but not counted in Reliability — a cancel made before they confirmed (cancel_self and not
+ * cancel_late), or late but started by the ETA they gave in "I'm running late" (late_eta, within the same 10 min).
+ */
+export function flagsOf(s: { attendance: string | null; planned_start: string; punches: { punch_in: string | null } | null; cancel_self?: boolean; cancel_late?: boolean; late_eta?: string | null }): { flag: Flag; min?: number; free?: boolean; told?: boolean }[] {
   if (s.attendance === 'no_show') return [{ flag: 'no_show' }];
-  if (s.attendance === 'cancelled') return [{ flag: 'cancelled' }];
+  if (s.attendance === 'cancelled') return [s.cancel_self && !s.cancel_late ? { flag: 'cancelled', free: true } : { flag: 'cancelled' }];
   const pin = s.punches?.punch_in; if (!pin) return [];
   const diff = Math.round((new Date(pin).getTime() - new Date(s.planned_start).getTime()) / 60000);
+  if (diff > 10 && s.late_eta) { const byEta = new Date(pin).getTime() <= new Date(s.late_eta).getTime() + 10 * 60000; return [{ flag: 'late', min: diff, told: true, free: byEta }]; }
   if (diff > 10) return [{ flag: 'late', min: diff }];
   if (diff < -1) return [{ flag: 'early', min: -diff }];
   return [];

@@ -5,7 +5,9 @@ import { addDays, isoDay, flagsOf, type AStaff } from './api';
    Weights live here so they can be changed in one place (Ronnie, Oct 31: final defaults). */
 export const WEIGHTS = {
   tier: { A: 100, B: 60, C: 30 } as Record<string, number>,
-  reliability: { start: 6, no_show: -3, late_cancel: -2, late: -1, min: 0, days: 90 },
+  reliability: { start: 6, no_show: -3, late_cancel: -2, late: -1, late_change: -1, min: 0, days: 90 },
+  // push 28: late cancel = cancelled after they confirmed (plain cancels before confirming don't count); "late" doesn't count when they
+  // started by the ETA they gave in I'm running late; late_change = a time change Ronnie accepted with "Count it in reliability" on.
   experience: { SENIOR: 3, MID: 2, JUNIOR: 1 } as Record<string, number>,
   // push 30: overall stars 5 +1 · 4 +0.5 · 3 0 · 2 −1 · 1 −2; each detail star rating ≥4 +0.5, ≤2 −0.5.
   // Rows from before push 30 (overall_stars null) keep the push-27 points: vote A +1 · B 0 · C −2, ▲ +0.5 · ▼ −0.5.
@@ -31,12 +33,13 @@ export const RATING_ICON: Record<Rating, string> = { up: '▲', ok: '●', down:
 export type Feedback = { id: string; staff_id: string; event_id: string; by_staff_id: string; tier_vote: 'A' | 'B' | 'C' | null; overall_stars: number | null; ratings: Record<string, Rating>; note: string | null; created_at: string; archived_at: string | null;
   by?: { full_name: string } | null; events?: { title: string; event_date: string } | null };
 export type Priv = { staff_id: string; experience: string | null; bmo_fit: boolean | null; priority_until: string | null; veteran: boolean | null };
-type Sh = { staff_id: string; attendance: string | null; planned_start: string; status: string; punches: { punch_in: string | null; punch_out: string | null } | null; events: { event_date: string } | null };
+type Sh = { id?: string; staff_id: string; attendance: string | null; planned_start: string; status: string; punches: { punch_in: string | null; punch_out: string | null } | null; events: { event_date: string } | null;
+  cancel_self?: boolean; cancel_late?: boolean; late_eta?: string | null };
 
-export type ScoreData = { priv: Record<string, Priv>; shifts: Sh[]; feedback: Feedback[]; done: Record<string, number> };
+export type ScoreData = { priv: Record<string, Priv>; shifts: Sh[]; feedback: Feedback[]; done: Record<string, number>; lateChanges?: Record<string, number> };
 export type Score = {
   total: number; tier: number; reliability: number; experience: number; feedback: number; extras: number;
-  rel: { no_show: number; cancelled: number; late: number };
+  rel: { no_show: number; cancelled: number; late: number; late_change: number; free: number };
   /** stars = overall stars of the push-30 rows (newest first), hi / lo = detail stars ≥4 / ≤2, old = push-27 rows (A/B/C + ▲●▼ points) */
   fb: { n: number; votes: { A: number; B: number; C: number }; up: number; ok: number; down: number; stars: number[]; hi: number; lo: number; old: number };
   isNew: boolean; done: number; bmo: boolean; priority: string | null; exp: string | null;
@@ -49,19 +52,27 @@ const arr = <T,>(x: unknown, ok: (y: Record<string, unknown>) => boolean): T[] =
 /** Everything the score needs, in 4 reads. Shapes are checked (the mock harness can return junk). */
 export async function loadScoreData(): Promise<ScoreData> {
   const today = isoDay(new Date()); const since = addDays(today, -WEIGHTS.reliability.days);
-  const [p, s, f, c] = await Promise.all([
+  const shq = (extra: string) => supabase.from('shifts').select('id,staff_id,attendance,planned_start,status,punches(punch_in,punch_out),events!inner(event_date)' + extra).neq('status', 'declined').gte('events.event_date', since).lte('events.event_date', today);
+  const [p, s0, f, c, ln, cr] = await Promise.all([
     supabase.from('staff_private').select('staff_id,experience,bmo_fit,priority_until,veteran'),
-    supabase.from('shifts').select('staff_id,attendance,planned_start,status,punches(punch_in,punch_out),events!inner(event_date)').neq('status', 'declined').gte('events.event_date', since).lte('events.event_date', today),
+    shq(',cancel_self,cancel_late'),
     loadFeedback(),
     supabase.rpc('staff_shift_counts'),
+    supabase.from('late_notices').select('shift_id,eta'), // push 28 · errors (034 not applied) → no notices
+    supabase.from('shift_change_requests').select('staff_id,created_at').eq('count_reliability', true).eq('status', 'accepted').gte('created_at', since + 'T00:00:00Z'),
   ]);
+  const s = s0.error ? await shq('') : s0; // migration 034 not applied yet
+  const eta: Record<string, string> = {};
+  for (const r of arr<{ shift_id: string; eta: string }>(ln.error ? [] : ln.data, (y) => typeof y.shift_id === 'string' && typeof y.eta === 'string')) eta[r.shift_id] = r.eta;
+  const lateChanges: Record<string, number> = {};
+  for (const r of arr<{ staff_id: string }>(cr.error ? [] : cr.data, (y) => typeof y.staff_id === 'string')) lateChanges[r.staff_id] = (lateChanges[r.staff_id] ?? 0) + 1;
   const priv: Record<string, Priv> = {};
   for (const r of arr<Priv>(p.data, (y) => typeof y.staff_id === 'string')) priv[r.staff_id] = r;
   const done: Record<string, number> = {};
   for (const r of arr<{ staff_id: string; done: number }>(c.data, (y) => typeof y.staff_id === 'string' && typeof y.done === 'number')) done[r.staff_id] = r.done;
   const feedback = arr<Feedback>(f.data, (y) => typeof y.staff_id === 'string' && typeof y.created_at === 'string').map((x) => ({ ...x, overall_stars: isStar(x.overall_stars) ? x.overall_stars : null, ratings: isObj(x.ratings) ? x.ratings : {} }));
-  const shifts = arr<Sh>(s.data, (y) => typeof y.staff_id === 'string' && typeof y.planned_start === 'string');
-  return { priv, shifts, feedback, done };
+  const shifts = arr<Sh>(s.data, (y) => typeof y.staff_id === 'string' && typeof y.planned_start === 'string').map((x) => ({ ...x, late_eta: x.id ? eta[x.id] ?? null : null }));
+  return { priv, shifts, feedback, done, lateChanges };
 }
 
 const FB_COLS = 'id,staff_id,event_id,by_staff_id,tier_vote,ratings,note,created_at,archived_at,by:staff!staff_feedback_by_staff_id_fkey(full_name),events(title,event_date)';
@@ -76,10 +87,13 @@ async function loadFeedback() {
 export function scoreOf(st: AStaff, d: ScoreData, today = isoDay(new Date())): Score {
   const W = WEIGHTS; const pv = d.priv[st.id]; const tierL = st.staff_private?.tier ?? null;
   const tier = tierL ? W.tier[tierL] ?? 0 : 0;
-  const rel = { no_show: 0, cancelled: 0, late: 0 };
-  for (const s of d.shifts) if (s.staff_id === st.id) for (const f of flagsOf(s)) if (f.flag in rel) rel[f.flag as keyof typeof rel]++;
-  // Cancelled in the app = marked by the manager on the night, so it always counts as a late cancel (< 48 h).
-  const reliability = Math.max(W.reliability.min, W.reliability.start + rel.no_show * W.reliability.no_show + rel.cancelled * W.reliability.late_cancel + rel.late * W.reliability.late);
+  const rel = { no_show: 0, cancelled: 0, late: 0, late_change: d.lateChanges?.[st.id] ?? 0, free: 0 };
+  for (const s of d.shifts) if (s.staff_id === st.id) for (const f of flagsOf(s)) {
+    if (f.free) { rel.free++; continue; } // push 28: cancel before confirming / late but by the ETA they gave → not counted
+    if (f.flag === 'no_show' || f.flag === 'cancelled' || f.flag === 'late') rel[f.flag]++;
+  }
+  // Cancelled = a staff cancel after confirming (push 28), or marked by the manager on the night → late cancel.
+  const reliability = Math.max(W.reliability.min, W.reliability.start + rel.no_show * W.reliability.no_show + rel.cancelled * W.reliability.late_cancel + rel.late * W.reliability.late + rel.late_change * W.reliability.late_change);
   const exp = pv?.experience ?? null; const experience = exp ? W.experience[exp] ?? 0 : 0;
   const mine = d.feedback.filter((f) => f.staff_id === st.id).slice(0, W.feedback.last);
   const fb: Score['fb'] = { n: mine.length, votes: { A: 0, B: 0, C: 0 }, up: 0, ok: 0, down: 0, stars: [], hi: 0, lo: 0, old: 0 };

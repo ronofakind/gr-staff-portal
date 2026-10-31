@@ -46,7 +46,7 @@ export function Schedule({ me, base = '', preview = false }: { me: Staff; base?:
   useEffect(() => {
     setRows(null);
     Promise.all([
-      supabase.from('shifts').select('id,status,position_code,position_detail,planned_start,planned_end,time_tbc,events!inner(event_date,title)')
+      supabase.from('shifts').select('id,status,attendance,position_code,position_detail,planned_start,planned_end,time_tbc,events!inner(event_date,title)')
         .eq('staff_id', me.id).neq('status', 'declined').gte('events.event_date', range.from).lte('events.event_date', range.to),
       supabase.from('availability').select('for_date,status').eq('staff_id', me.id).eq('status', 'no').gte('for_date', range.from).lte('for_date', range.to),
       supabase.from('days_off').select('from_date,to_date,reason').eq('staff_id', me.id).lte('from_date', range.to).gte('to_date', range.from),
@@ -58,7 +58,7 @@ export function Schedule({ me, base = '', preview = false }: { me: Staff; base?:
       const wk = (w.data ?? []) as { dow: number; status: string; from_time: string | null }[];
       setUsualNo(new Set(wk.filter((r) => r.status === 'no').map((r) => r.dow)));
       setUsualYes(Object.fromEntries(wk.filter((r) => r.status !== 'no').map((r) => [r.dow, r.from_time ? r.from_time.slice(0, 5) : null])));
-      setRows(((s.data ?? []) as unknown as S[]).sort((x, y) => x.planned_start.localeCompare(y.planned_start)));
+      setRows(((s.data ?? []) as unknown as (S & { attendance?: string | null })[]).filter((r) => r.attendance !== 'cancelled').sort((x, y) => x.planned_start.localeCompare(y.planned_start)));
       setOff(new Set((a.data ?? []).map((r) => r.for_date as string)));
     });
   }, [range.from, range.to, me.id, tick]);

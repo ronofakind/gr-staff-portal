@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
+import { LastMinute, ChangeAnswer, CHANGE_COLS, replaceUrl, isSelfCancel, isEventDayCancel, replacementOf, hoursBefore, type ChangeRow } from './Changes';
+import { summaryOf } from './Extras';
 import { DeleteEvent } from './DeleteEvent';
 import { DeptTag } from './DeptTag';
 import { hoursBetween } from './api';
@@ -18,6 +20,12 @@ export function Today() {
   const [missing, setMissing] = useState(0);
   const [arch, setArch] = useState<Arch[]>([]);
   const [showArch, setShowArch] = useState(false);
+  // push 28
+  const [params, setParams] = useSearchParams();
+  const changeId = params.get('change');
+  const [lm, setLm] = useState<{ e: AEvent; s: AShift }[]>([]); const [mgrs, setMgrs] = useState<Record<string, string>>({});
+  const [lateBy, setLateBy] = useState<Record<string, { eta: string; reason: string | null }>>({});
+  const [tick, setTick] = useState(0);
   const loadArch = () => supabase.from('admin_archive').select('key,sig,label,archived_at').order('archived_at', { ascending: false }).then(({ data }) => setArch((data ?? []) as Arch[]));
 
   useEffect(() => {
@@ -42,7 +50,8 @@ export function Today() {
       const seen = new Set<string>();
       for (const e of recent) for (const s of e.shifts) {
         if (seen.has(s.id)) continue; seen.add(s.id);
-        for (const f of flagsOf(s).filter((x) => x.flag !== 'early')) n.push({ key: s.id + f.flag, red: true, title: `⚑ ${s.staff?.full_name ?? '?'} · ${flagText(f).toLowerCase()}`, sub: `${e.event_date === today ? 'Today' : 'Yesterday'} · ${e.title}`, action: 'View', to: '/admin/reliability' });
+        if (s.cancel_self) continue; // push 28: staff self-cancels have their own cards below
+        for (const f of flagsOf(s).filter((x) => x.flag !== 'early' && !x.free)) n.push({ key: s.id + f.flag, red: true, title: `⚑ ${s.staff?.full_name ?? '?'} · ${flagText(f).toLowerCase()}`, sub: `${e.event_date === today ? 'Today' : 'Yesterday'} · ${e.title}`, action: 'View', to: '/admin/reliability' });
       }
       for (const e of ahead.filter((x) => x.department !== 'bar')) {
         const booked = e.shifts.filter((s) => s.status !== 'declined').length;
@@ -89,9 +98,46 @@ export function Today() {
         n.push({ key: 'fb' + f.id, red: true, title: `${fn(f.by)}: ${fn(f.who)} · ${bits.filter(Boolean).join(' · ')}`,
           sub: `${f.events ? `${f.events.title} · ${dLabel(f.events.event_date)}` : 'Manager feedback'}${f.note ? ` · “${f.note}”` : ''}`, action: 'View', to: `/admin/staff?open=${f.staff_id}` });
       }
+      // ── push 28 ──
+      // b/c · staff cancels: event-day → red LAST-MINUTE card; earlier → Needs you "Find a replacement ›" (until someone replaces them)
+      const mids = [...new Set(ahead.map((e) => e.manager_id).filter(Boolean))] as string[];
+      if (mids.length) supabase.from('staff').select('id,full_name').in('id', mids).then(({ data }) => setMgrs(Object.fromEntries(((data ?? []) as { id: string; full_name: string }[]).map((x) => [x.id, x.full_name]))));
+      const lmList: { e: AEvent; s: AShift }[] = [];
+      for (const e of ahead) for (const s of e.shifts) {
+        if (!isSelfCancel(s)) continue;
+        const rep = replacementOf(e, s);
+        if (isEventDayCancel(e, s)) { if (!(rep && s.cancel_sent_to_manager)) lmList.push({ e, s }); continue; }
+        if (rep || s.attendance !== 'cancelled') continue;
+        const fn = (s.staff?.full_name ?? '?').split(' ')[0];
+        n.unshift({ key: 'cx' + s.id, red: true, title: `${fn} cancelled · ${e.title} ${e.event_date === today ? 'today' : e.event_date === addDays(today, 1) ? 'tomorrow' : dLabel(e.event_date)}`,
+          sub: [s.cancel_reason ?? 'no reason', s.cancelled_at ? hoursBefore(s.cancelled_at, s.planned_start) : '', s.cancel_late ? 'LATE (had confirmed)' : 'before confirming · not counted'].filter(Boolean).join(' · '),
+          action: 'Find a replacement', to: replaceUrl(e, { replace: s.id, at: new Date(s.planned_start).toLocaleTimeString('en-GB', { timeZone: 'America/Toronto', hour: '2-digit', minute: '2-digit' }) }) });
+      }
+      setLm(lmList);
+      // d · time-change requests waiting for Ronnie
+      const { data: cr, error: crErr } = await supabase.from('shift_change_requests').select(CHANGE_COLS).eq('status', 'pending').order('created_at');
+      if (!crErr) for (const r of (cr ?? []) as unknown as ChangeRow[]) {
+        const sh = r.shifts; const e = sh?.events; if (!sh || !e) continue;
+        const fn = (sh.staff?.full_name ?? '?').split(' ')[0];
+        n.unshift({ key: 'tc' + r.id, red: true, title: `${fn} · ${r.kind === 'later' ? 'time change' : 'leave early'}`,
+          sub: `${e.title} ${e.event_date === today ? 'today' : e.event_date === addDays(today, 1) ? 'tomorrow' : dLabel(e.event_date)} · ${r.kind === 'later' ? `${tTime(sh.planned_start)} → ${tTime(r.new_time)}` : `leaves ${tTime(r.new_time)}`}`, action: 'Answer', to: `/admin?change=${r.id}` });
+      }
+      // e · running late notices for tonight ("late · told ahead" on the Tonight cards)
+      const tonightIds = evs.filter((e) => e.event_date === today).flatMap((e) => e.shifts.map((s) => s.id));
+      if (tonightIds.length) supabase.from('late_notices').select('shift_id,eta,reason').in('shift_id', tonightIds).then(({ data, error }) => { if (!error && Array.isArray(data)) setLateBy(Object.fromEntries((data as { shift_id: string; eta: string; reason: string | null }[]).map((x) => [x.shift_id, x]))); });
+      // f · extras & cancellations: 6 PM on the event day or once hours are in, until confirmed / logged (yesterday's stay until the 5 AM log)
+      const exEvs = [...evs, ...past].filter((e, i, a) => a.findIndex((x) => x.id === e.id) === i && (e.event_date === addDays(today, -1) || (e.event_date === today && (!!e.hours_submitted_at || new Date().toLocaleTimeString('en-GB', { timeZone: 'America/Toronto', hour: '2-digit' }) >= '18'))) && e.shifts.some((s) => s.status !== 'declined'));
+      if (exEvs.length) {
+        const { data: adj, error: aErr } = await supabase.from('event_adjustments').select('event_id,confirmed_at,logged_at').in('event_id', exEvs.map((e) => e.id));
+        if (!aErr) for (const e of exEvs) {
+          const a = ((adj ?? []) as { event_id: string; confirmed_at: string | null; logged_at: string | null }[]).find((x) => x.event_id === e.id);
+          if (a?.confirmed_at || a?.logged_at) continue;
+          n.push({ key: 'ex' + e.id, title: `${e.title}${e.department === 'bar' ? ' · BAR' : ''} · extras & cancellations`, sub: `${e.event_date === today ? 'Today' : 'Yesterday'} · ${summaryOf(e)}`, action: 'Check', to: `/admin/extras/${e.id}` });
+        }
+      }
       setNeeds(n);
     })();
-  }, []);
+  }, [tick]);
 
   const tonight = (week ?? []).filter((e) => e.event_date === today);
   const hidden = (n: Need) => arch.some((a) => a.key === n.key && a.sig === sigOf(n));
@@ -133,22 +179,23 @@ export function Today() {
             const venues = [...new Set(tonight.map((e) => e.title))].map((t) => tonight.filter((e) => e.title === t).sort((a) => (a.department === 'bar' ? 1 : -1)));
             const doneV = (evs: AEvent[]) => evs.every((e) => !!e.hours_submitted_at);
             return venues.sort((a, b) => Number(doneV(a)) - Number(doneV(b))).map((evs) => {
-              if (evs.length === 1) return <Live key={evs[0].id} e={evs[0]} q={qBy[evs[0].id] ?? 0} onDeleted={gone} />;
+              if (evs.length === 1) return <Live key={evs[0].id} e={evs[0]} q={qBy[evs[0].id] ?? 0} lateBy={lateBy} onDeleted={gone} />;
               const e0 = evs[0]; const nOf = (d: string) => evs.filter((e) => (d === 'bar') === (e.department === 'bar')).reduce((n, e) => n + e.shifts.filter((x) => x.status !== 'declined' && !x.attendance).length, 0);
               return (
                 <div key={e0.title} className="venue-block">
                   <div className="vb-h"><span className="serif" style={{ fontSize: 24 }}>{e0.title}</span><span className="muted sm">{[e0.event_private?.client, e0.event_type, e0.guests ? `${e0.guests} guests` : null].filter(Boolean).join(' · ')}</span>
                     <span className="grow" /><span className="sm strong">Floor {nOf('floor')} · <span className="accent">Bar {nOf('bar')}</span> · <Link to={`/admin/event/${e0.id}`}>Event page ›</Link></span></div>
-                  {evs.map((e) => <Live key={e.id} e={e} q={qBy[e.id] ?? 0} inBlock onDeleted={gone} />)}
+                  {evs.map((e) => <Live key={e.id} e={e} q={qBy[e.id] ?? 0} lateBy={lateBy} inBlock onDeleted={gone} />)}
                 </div>);
             });
           })()}
         </section>
         <section className="stack">
+          {lm.map(({ e, s }) => <LastMinute key={s.id} e={e} s={s} mgr={e.manager_id ? mgrs[e.manager_id] ?? null : null} onSent={() => setTick((t) => t + 1)} />)}
           <div className="sec"><span className="serif">Needs you <b className="accent sm">{shown.length || ''}</b></span>{shown.length > 0 && <button className="abtn sm" onClick={() => archive(shown)}>{ARCH_ICON} Archive all</button>}</div>
           <div className="adm-card" style={{ padding: '4px 16px' }}>
             {!shown.length && <div className="muted sm" style={{ padding: '12px 0' }}>All clear.</div>}
-            {shown.slice(0, 12).map((x) => <NeedRow key={x.key} x={x} onArchive={() => archive([x])} />)}
+            {shown.slice(0, 14).map((x) => <NeedRow key={x.key} x={x} onArchive={() => archive([x])} />)}
           </div>
           {archivedToday.length > 0 && (
             <div className="arch-box">
@@ -174,12 +221,13 @@ export function Today() {
           <div className="muted sm">events · floor staff booked, red = bar. Amber = still short.</div>
         </section>
       </div>
+      {changeId && <ChangeAnswer id={changeId} onClose={() => { const p = new URLSearchParams(params); p.delete('change'); setParams(p, { replace: true }); }} onDone={() => { const p = new URLSearchParams(params); p.delete('change'); setParams(p, { replace: true }); setTick((t) => t + 1); }} />}
     </div>
   );
 }
 
 type Box = { n: number; label: string; cls: string; rows: [string, string, string][] };
-function Live({ e, q = 0, inBlock = false, onDeleted }: { e: AEvent; q?: number; inBlock?: boolean; onDeleted: (ids: string[]) => void }) {
+function Live({ e, q = 0, inBlock = false, onDeleted, lateBy = {} }: { e: AEvent; q?: number; inBlock?: boolean; onDeleted: (ids: string[]) => void; lateBy?: Record<string, { eta: string; reason: string | null }> }) {
   const [tab, setTab] = useState<string | null>(null);
   const all = e.shifts.filter((s) => s.status !== 'declined');
   const now = Date.now();
@@ -221,8 +269,8 @@ function Live({ e, q = 0, inBlock = false, onDeleted }: { e: AEvent; q?: number;
     boxes = [
       { n: working.length, label: 'working', cls: 'ok', rows: working.map((s) => r(s, `in ${tTime(s.punches!.punch_in)}`, s.leave_by ? `leaves ~${tTime(s.leave_by)}` : '')) },
       { n: missing.length + lateIn.length, label: 'late', cls: missing.length + lateIn.length ? 'amber' : '', rows: [
-        ...missing.map((s) => r(s, 'not in yet', `${Math.round((now - new Date(s.planned_start).getTime()) / 60000)} min late`)),
-        ...lateIn.map((s) => r(s, `${flagsOf(s)[0].min} min`, `in ${tTime(s.punches!.punch_in)}`))] },
+        ...missing.map((s) => lateBy[s.id] ? r(s, 'late · told ahead', `~${tTime(lateBy[s.id].eta)}${new Date(lateBy[s.id].eta).getTime() < now ? ' · passed' : ''}`) : r(s, 'not in yet', `${Math.round((now - new Date(s.planned_start).getTime()) / 60000)} min late`)),
+        ...lateIn.map((s) => r(s, lateBy[s.id] ? 'late · told ahead' : `${flagsOf(s)[0].min} min`, `in ${tTime(s.punches!.punch_in)}`))] },
       { n: ns.length, label: 'no-show', cls: ns.length ? 'red' : '', rows: ns.map((s) => r(s, 'no-show', s.manager_note ?? '')) },
       { n: done.length, label: 'done', cls: '', rows: done.map((s) => r(s, `${tTime(s.punches!.punch_in)} → ${tTime(s.punches!.punch_out)}`)) },
     ];

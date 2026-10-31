@@ -55,7 +55,12 @@ export function Bookings() {
   const [hint, setHint] = useState<string>('');
   const [pair, setPair] = useState<{ moving: Pl; partner: Pl; to: { event_id: string; start: string } } | null>(null);
   const [auto, setAuto] = useState<{ open: boolean; skipped: { name: string; why: string }[] } | null>(null);
-  const [review, setReview] = useState(false); const [askMore, setAskMore] = useState(false);
+  const [review, setReview] = useState(false); const [askMore, setAskMore] = useState(() => params.get('ask') === '1');
+  // push 28 · opened from "Find a replacement ›" / "Accept + fill the spot": Ask more for N spots, and the next person added to
+  // that event (Live save) is saved as the replacement of the cancelled shift (shifts.replacement_for).
+  const spots = params.get('spots') ? Math.max(1, Number(params.get('spots')) || 1) : undefined;
+  const replaceId = params.get('replace'); const replaceAt = params.get('at');
+  const [asksBy, setAsksBy] = useState<Record<string, { kind: string; new_time: string }>>({});
   const [phone, setPhone] = useState<Pl | null>(null);
   const [msg, setMsg] = useState(''); const [busy, setBusy] = useState(false);
   const dragRef = useRef(drag); dragRef.current = drag;
@@ -92,6 +97,10 @@ export function Bookings() {
     const b: Record<string, Pl[]> = {};
     for (const e of evs) for (const s of e.shifts) if (s.status !== 'declined' && !s.attendance) (b[e.event_date] ??= []).push({ key: s.id, staff_id: s.staff_id, event_id: e.id, start: hm(s.planned_start), code: s.position_code ?? 'W', shift_id: s.id });
     setBase(b);
+    // push 28d · gold "asks 7:00 PM" tag on the name until Ronnie answers (table is new in 034: errors → no tags)
+    const ids = evs.flatMap((e) => e.shifts.map((x) => x.id));
+    if (ids.length) supabase.from('shift_change_requests').select('shift_id,kind,new_time').eq('status', 'pending').in('shift_id', ids)
+      .then(({ data, error }) => { if (!error && Array.isArray(data)) setAsksBy(Object.fromEntries((data as { shift_id: string; kind: string; new_time: string }[]).map((x) => [x.shift_id, x]))); });
     setDraft(Object.fromEntries(((dr.data ?? []) as { for_date: string; payload: Draft }[]).map((x) => [x.for_date, x.payload])));
     setHist([]);
     setEvents(evs);
@@ -99,6 +108,7 @@ export function Bookings() {
   useEffect(() => { load(); }, [date, view, span]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const byId = useMemo(() => Object.fromEntries(staff.map((s) => [s.id, s])), [staff]);
+  const replaceOf = useMemo(() => { for (const e of events ?? []) { const x = e.shifts.find((y) => y.id === replaceId); if (x) return { ...x, event_id: e.id, title: e.title }; } return null; }, [events, replaceId]);
   const evById = useMemo(() => Object.fromEntries((events ?? []).map((e) => [e.id, e])), [events]);
   const cur = (d: string): Draft => draft[d] ?? { pl: base[d] ?? [], locks: [], extras: {} };
   const setCur = (d: string, next: Draft) => { setHist((h) => [...h.slice(-30), draft]); setDraft({ ...draft, [d]: next }); };
@@ -185,9 +195,14 @@ export function Bookings() {
           await supabase.from('shifts').update({ event_id: p.event_id, planned_start: startIso(te.event_date, p.start) }).eq('id', p.shift_id!);
           await bookingChange('moved', { staff_id: p.staff_id, shift_id: p.shift_id, from: { id: fe.id, event_date: fe.event_date, title: fe.title, sent: confirmationsSent(fe), start: startIso(fe.event_date, r.start) }, to: { id: te.id, event_date: te.event_date, title: te.title, sent: confirmationsSent(te), start: startIso(te.event_date, p.start) } }); n++;
         }
+        let repFor = replaceId && replaceOf ? replaceId : null;
         for (const p of c.added) {
           const e = evById[p.event_id];
-          const { data: ins } = await supabase.from('shifts').insert({ event_id: p.event_id, staff_id: p.staff_id, position_code: p.code, position_detail: roleName(p.code), planned_start: startIso(e.event_date, p.start), status: 'booked' }).select('id').single();
+          const row: Record<string, unknown> = { event_id: p.event_id, staff_id: p.staff_id, position_code: p.code, position_detail: roleName(p.code), planned_start: startIso(e.event_date, p.start), status: 'booked' };
+          const isRep = !!repFor && p.event_id === replaceOf?.event_id;
+          let { data: ins, error: insErr } = await supabase.from('shifts').insert(isRep ? { ...row, replacement_for: repFor } : row).select('id').single();
+          if (insErr && isRep) ({ data: ins, error: insErr } = await supabase.from('shifts').insert(row).select('id').single()); // migration 034 not applied yet
+          if (isRep && ins) repFor = null;
           await bookingChange('booked', { staff_id: p.staff_id, shift_id: ins?.id ?? null, to: { id: e.id, event_date: e.event_date, title: e.title, sent: confirmationsSent(e), start: startIso(e.event_date, p.start) } }); n++;
         }
         await supabase.from('booking_drafts').delete().eq('admin_id', me).eq('for_date', c.d);
@@ -276,7 +291,8 @@ export function Bookings() {
     return (
       <div className={'bk-chip' + (p.suggested ? ' sug' : '') + (!p.shift_id && !p.suggested ? ' added' : '')} draggable onDragStart={() => setDrag({ staff_id: p.staff_id, key: p.key })} onClick={() => setPhone(p)}>
         {n != null && <span className="bk-n">{n}</span>}<i className={'bk-t t' + (t ?? 'x')} />
-        <span className="grow">{name(p.staff_id)}{part && <small> 🔗 {name(part).split(' ')[0]}</small>}{p.extra && <small className="bk-x"> EXTRA</small>}</span>
+        <span className="grow">{name(p.staff_id)}{part && <small> 🔗 {name(part).split(' ')[0]}</small>}{p.extra && <small className="bk-x"> EXTRA</small>}
+          {p.shift_id && asksBy[p.shift_id] && <small className="bk-asks" title="Waiting for your answer (Today → Needs you)">{asksBy[p.shift_id].kind === 'later' ? 'asks' : 'leaves'} {t12(hm(asksBy[p.shift_id].new_time))}</small>}</span>
         {p.suggested ? <span className="bk-sug">suggested</span> : <>
           <button className={'bk-lock' + (locked ? ' on' : '')} title={locked ? 'Locked · auto-fill never moves them' : 'Lock'} onClick={(ev) => { ev.stopPropagation(); toggleLock(d, p.staff_id); }}>{locked ? '🔒' : '🔓'}</button>
           <button className="bk-del" aria-label="Remove" onClick={(ev) => { ev.stopPropagation(); remove(d, p.key); }}>×</button></>}
@@ -338,6 +354,8 @@ export function Bookings() {
         </div>
       </div>
 
+      {replaceOf && <div className="bk-rep"><b>Replacing {replaceOf.staff?.full_name ?? '?'}</b><span>{replaceOf.title} · {t12(replaceAt ?? hm(replaceOf.planned_start))}{replaceOf.cancel_reason ? ` · ${replaceOf.cancel_reason.toLowerCase()}` : ''} · the next person you add to {replaceOf.title} is saved as the replacement (blue tag on the manager’s list){mode === 'practice' ? ' · switch to Live to save it' : ''}.</span>
+        <button className="lnk" aria-label="Stop replacing" onClick={() => { const p = new URLSearchParams(params); ['replace', 'at', 'ask', 'spots'].forEach((k) => p.delete(k)); setParams(p, { replace: true }); }}>×</button></div>}
       <div className="bk-strip">
         <button className="round" onClick={() => setP('date', addDays(date, view === 'board' ? -1 : -7))}>‹</button>
         {view === 'board' ? strip.map((d) => { const evs = (events ?? []).length && d === date ? dayEvs(d) : []; const short = evs.reduce((n, e) => n + Math.max(0, e.staff_needed + extrasOf(d, e) - plOf(d).filter((p) => p.event_id === e.id).length), 0); return (
@@ -466,16 +484,17 @@ export function Bookings() {
         </div></div>
       )}
 
-      {askMore && <AskMore date={date} dept={dept} events={(events ?? []).filter((e) => e.event_date === date)} staff={staff} av={av} wk={wk} off={off} conds={conds} links={links}
-        booked={bookedOn(date)} shifts30={shifts30} yesRate={yesRate} extras={(e) => extrasOf(date, e)} practice={mode === 'practice'} onClose={() => setAskMore(false)} onAsked={load} />}
+      {askMore && events && staff.length > 0 && <AskMore date={date} dept={dept} events={(events ?? []).filter((e) => e.event_date === date)} staff={staff} av={av} wk={wk} off={off} conds={conds} links={links}
+        booked={bookedOn(date)} shifts30={shifts30} yesRate={yesRate} extras={(e) => extrasOf(date, e)} practice={mode === 'practice'} spots={spots} spotAt={replaceAt} onClose={() => setAskMore(false)} onAsked={load} />}
     </div>
   );
 }
 
 /** Ask more people: who to ask so the date fills, by rank, weekday fit, recent shifts and yes rate. */
-function AskMore({ date, dept, events, staff, av, wk, off, conds, links, booked, shifts30, yesRate, extras, practice, onClose, onAsked }: {
+function AskMore({ date, dept, events, staff, av, wk, off, conds, links, booked, shifts30, yesRate, extras, practice, onClose, onAsked, spots, spotAt }: {
   date: string; dept: 'floor' | 'bar'; events: AEvent[]; staff: AStaff[]; av: Av[]; wk: Wk[]; off: Set<string>; conds: Cond[]; links: [string, string][];
   booked: Set<string>; shifts30: Record<string, number>; yesRate: Record<string, number>; extras: (e: AEvent) => number; practice: boolean; onClose: () => void; onAsked: () => void;
+  /** push 28: "Find a replacement" → ask for exactly this many spots (pre-ticks enough people for it) */ spots?: number; spotAt?: string | null;
 }) {
   const evs = events.filter((e) => (dept === 'bar') === isBarEv(e));
   const order = evs.reduce((n, e) => n + e.staff_needed, 0); const ex = evs.reduce((n, e) => n + extras(e), 0); const target = order + ex;
@@ -483,7 +502,7 @@ function AskMore({ date, dept, events, staff, av, wk, off, conds, links, booked,
   const covered = [...booked].filter((sid) => staff.find((s) => s.id === sid)).length + yesFree;
   const waiting = av.filter((a) => a.status === 'asked');
   const expected = waiting.reduce((n, a) => n + (yesRate[a.staff_id] ?? 0.5), 0);
-  const need = Math.max(0, Math.ceil(target - covered - expected));
+  const need = spots != null ? spots : Math.max(0, Math.ceil(target - covered - expected));
   const dow = dowOf(date);
   const asked = new Set(av.map((a) => a.staff_id));
   const condsOf = (sid: string) => conds.filter((c) => c.staff_id === sid);
@@ -517,7 +536,8 @@ function AskMore({ date, dept, events, staff, av, wk, off, conds, links, booked,
     </label>);
   return (
     <div className="bk-modal" onClick={onClose}><div className="adm-card bk-askm" onClick={(e) => e.stopPropagation()}>
-      <div className="spread"><b className="serif" style={{ fontSize: 22 }}>Ask more people · {dLabel(date, { weekday: 'short', month: 'short', day: 'numeric' })} · {dept}</b><button className="abtn sm" onClick={onClose}>✕</button></div>
+      <div className="spread"><b className="serif" style={{ fontSize: 22 }}>Ask more people · {dLabel(date, { weekday: 'short', month: 'short', day: 'numeric' })} · {dept}{spots != null && <span className="accent"> · {spots} spot{spots > 1 ? 's' : ''}{spotAt ? ` at ${t12(spotAt)}` : ''}</span>}</b><button className="abtn sm" onClick={onClose}>✕</button></div>
+      {spots != null && yesFree > 0 && <div className="bk-warn ok"><span className="grow"><b>{yesFree} said yes</b> for this date and {yesFree === 1 ? 'isn’t' : 'aren’t'} placed yet: drag one onto the board first, it’s faster than asking.</span></div>}
       <div className="bk-stats">
         <div><small>CLIENT ORDER</small><b>{order}</b></div><div><small>+ EXTRAS</small><b>{ex}</b></div><div><small>TARGET</small><b>{target}</b></div>
         <div><small>COVERED</small><b>{covered}</b></div><div><small>STILL WAITING</small><b>{waiting.length}</b><span>≈ {expected.toFixed(1)} yes</span></div><div className="need"><small>NEED MORE YES</small><b>{need}</b></div>

@@ -61,7 +61,14 @@ type Row = {
   id: string; staff_id?: string; position_code: string | null; position_detail: string | null; planned_start: string; planned_end: string | null;
   attendance: 'no_show' | 'cancelled' | null; leave_by: string | null; manager_note: string | null; left_early?: boolean; attendance_reason?: string | null; added_note?: string | null; adder?: { full_name: string } | null;
   staff: { full_name: string; photo_url: string | null; phone: string | null } | null; punches: { punch_in: string | null; punch_out: string | null; arrived_at: string | null; updated_at: string } | null;
+  /** push 28 (migration 034) */
+  cancel_self?: boolean; cancel_sent_to_manager?: string | null; replacement_for?: string | null;
 };
+/** push 28e · "I'm running late" from the person (late_notices, read by the event's manager). */
+type Late = { id: string; shift_id: string; minutes: number; eta: string; reason: string | null; sent_at: string; seen_at: string | null };
+const ROW_COLS = 'id,staff_id,position_code,position_detail,planned_start,planned_end,attendance,left_early,attendance_reason,added_note,adder:staff!shifts_added_by_fkey(full_name),leave_by,manager_note,staff:staff!shifts_staff_id_fkey(full_name,photo_url,phone),punches(punch_in,punch_out,arrived_at,updated_at)';
+const fullT = (iso: string) => new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' });
+const shortT = (iso: string) => fullT(iso).replace(/\s?[AP]M$/, '');
 type Ev = { id: string; title: string; event_date: string };
 type EvFull = Ev & { staffing?: { start: string; end?: string | null }[] | null; drive_folder_url?: string | null; address: string | null; start_time: string | null; end_time: string | null; description: string | null;
   dress_code: string | null; hours_submitted_at: string | null; venues: { address: string | null; staff_notes: string | null } | null };
@@ -215,12 +222,16 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
   const [adding, setAdding] = useState(false); const [incOpen, setIncOpen] = useState(false); const [incidents, setIncidents] = useState<Incident[]>([]); const [notices, setNotices] = useState<{ id: string; body: string; created_at: string }[]>([]);
   const [seen, setSeen] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('gr-notice-seen') || '[]'); } catch { return []; } });
   const [reason, setReason] = useState(''); const [why, setWhy] = useState(''); const [leftAt, setLeftAt] = useState('');
+  const [lateN, setLateN] = useState<Record<string, Late>>({});
 
   const load = async () => {
     const [e, s] = await Promise.all([
       supabase.from('events').select('id,title,event_date,address,start_time,end_time,description,dress_code,hours_submitted_at,drive_folder_url,staffing,venues(address,staff_notes)').eq('id', eventId!).single(),
-      supabase.from('shifts').select('id,staff_id,position_code,position_detail,planned_start,planned_end,attendance,left_early,attendance_reason,added_note,adder:staff!shifts_added_by_fkey(full_name),leave_by,manager_note,staff:staff!shifts_staff_id_fkey(full_name,photo_url,phone),punches(punch_in,punch_out,arrived_at,updated_at)')
-        .eq('event_id', eventId!).neq('status', 'declined').order('planned_start'),
+      (async () => {
+        const q = (cols: string) => supabase.from('shifts').select(cols).eq('event_id', eventId!).neq('status', 'declined').order('planned_start');
+        const r = await q(ROW_COLS + ',cancel_self,cancel_sent_to_manager,replacement_for');
+        return r.error ? q(ROW_COLS) : r; // migration 034 not applied yet
+      })(),
     ]);
     setEv(e.data as unknown as EvFull);
     supabase.from('incidents').select('id,kind,involved_staff,involved_other,happened_at,body,audio_path,audio_sec,photos,created_at').eq('event_id', eventId!).order('created_at', { ascending: false }).then(({ data }) => setIncidents((data ?? []) as Incident[]));
@@ -232,7 +243,12 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
     supabase.from('event_notices').select('id,body,created_at').eq('event_id', eventId!).order('created_at', { ascending: false }).then(({ data }) => setNotices((data ?? []) as { id: string; body: string; created_at: string }[]));
     // Within each call time: lead (MD / bar manager) first, then everyone A–Z by first name.
     const lead = (r: Row) => (r.position_code === 'MD' || r.position_code === 'BM' ? 0 : 1);
-    setRows(((s.data ?? []) as unknown as Row[]).sort((a, b) => a.planned_start.localeCompare(b.planned_start)
+    // push 28c · a staff self-cancel goes to Ronnie only: the manager never sees that person until Ronnie taps "Send to <manager>".
+    const visible = ((s.data ?? []) as unknown as Row[]).filter((r) => !(r.cancel_self && !r.cancel_sent_to_manager));
+    const waitIds = visible.filter((r) => !r.attendance).map((r) => r.id);
+    if (waitIds.length) supabase.from('late_notices').select('id,shift_id,minutes,eta,reason,sent_at,seen_at').in('shift_id', waitIds)
+      .then(({ data, error }) => { if (error || !Array.isArray(data)) return; setLateN(Object.fromEntries((data as Late[]).filter((x) => x && typeof x.eta === 'string').map((x) => [x.shift_id, x]))); });
+    setRows(visible.sort((a, b) => a.planned_start.localeCompare(b.planned_start)
       || lead(a) - lead(b)
       || (a.staff?.full_name ?? '').localeCompare(b.staff?.full_name ?? '', 'fr', { sensitivity: 'base' })));
   };
@@ -342,6 +358,10 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
   const lateMin = late.length ? Math.round((Date.now() - Math.min(...late.map((r) => new Date(r.planned_start).getTime()))) / 60000) : 0;
   const first = (n?: string) => (n ?? '').split(' ')[0];
   const newWorked = active.filter((r) => r.punches?.punch_in && infoOf(r)?.is_new);
+  const lateOf = (r: Row) => (!r.attendance ? lateN[r.id] : undefined);
+  const runningLate = active.filter((r) => lateOf(r) && !r.punches?.punch_in);
+  const banner = runningLate.filter((r) => !lateOf(r)!.seen_at);
+  const gotIt = async (n: Late) => { setLateN((m) => ({ ...m, [n.shift_id]: { ...n, seen_at: new Date().toISOString() } })); await supabase.rpc('late_notice_seen', { p_id: n.id }); };
 
   return (
     <main className="page v2">
@@ -367,6 +387,13 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
         <AnnounceSent eventId={ev.id} reload={annTick} />
       </div>
 
+      {banner.map((r) => { const n = lateOf(r)!; const tel = r.staff?.phone?.replace(/[^\d+]/g, ''); return (
+        <div key={n.id} className="late-banner" role="alert">
+          <span className="lb-ic" aria-hidden="true">⏱</span>
+          <div className="grow"><b>{first(r.staff?.full_name)} is running late</b><small>~{time(n.eta, lang)} ({n.minutes} min){n.reason ? ` · ${n.reason.toLowerCase()}` : ''} · sent {time(n.sent_at, lang)}</small></div>
+          <button className="lb-ok" onClick={() => gotIt(n)}>Got it ✓</button>
+          {tel && <a className="lb-call" href={`tel:${tel}`} aria-label={`Call ${r.staff?.full_name}`}>📞</a>}
+        </div>); })}
       <section className="mt-sum">
         <div className="row-a">
           <div><small>Working now</small><span className="big">{workingN}<span> / {active.length}</span></span></div>
@@ -383,6 +410,10 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
         </div>
         {late.length > 0 && <div className="mt-late">{late.length} late · not started {lateMin} min after their start</div>}
       </section>
+      {(runningLate.length > 0 || late.length > 0) && <div className="late-chips">
+        {runningLate.length > 0 && <span className="lc gold">⏱ Running late · {runningLate.length}</span>}
+        {late.filter((r) => !lateOf(r)).length > 0 && <span className="lc">Not in · {late.filter((r) => !lateOf(r)).length}</span>}
+      </div>}
       {endsAt ? (() => {
         const left = Math.max(0, new Date(endsAt).getTime() - nowMs); const mm = Math.floor(left / 60000); const ss = Math.floor((left % 60000) / 1000);
         const frac = Math.min(1, left / (30 * 60000));
@@ -423,7 +454,9 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
               const callMs = new Date(r.planned_start).getTime();
               const ended = !!pout && new Date(pout).getTime() <= nowMs; const endsLater = !!pout && !ended;
               const isEarly = !!pin && new Date(pin).getTime() < callMs - 60000; const wasLate = !!pin && new Date(pin).getTime() > callMs + 10 * 60000;
-              const ring = r.attendance ? '' : ended ? 'done' : pin ? (isEarly || wasLate ? 'flag' : 'working') : isLate ? 'late' : '';
+              const ln = lateOf(r); const lnPassed = !!ln && !pin && new Date(ln.eta).getTime() < Date.now();
+              const ring = r.attendance ? '' : ended ? 'done' : pin ? (isEarly || (wasLate && !ln) ? 'flag' : 'working') : ln && !lnPassed ? 'told' : isLate ? 'late' : '';
+              const fromRonnie = !!r.cancel_self && !!r.cancel_sent_to_manager;
               const tel = r.staff?.phone?.replace(/[^\d+]/g, '');
               const inf = infoOf(r); const isNew = !!inf?.is_new && inf.done_before < 3;
               return (
@@ -434,23 +467,31 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
                   </button>
                   <button className="who" aria-label={`Options for ${r.staff?.full_name}`} onClick={() => openRow(r, isNew)}>
                     <span className="nm">{r.staff?.full_name}{r.adder && <i className="added-tag">ADDED BY {r.adder.full_name.split(' ')[0].toUpperCase()}</i>}</span>
+                    {fromRonnie && <span><i className="p28-tag red">CANCELLED{r.attendance === 'no_show' ? ' · NO-SHOW' : ''} · FROM RONNIE</i></span>}
+                    {r.replacement_for && !r.attendance && <span><i className="p28-tag blue">REPLACEMENT · {fullT(r.planned_start)}</i></span>}
+                    {ln && !pin && !lnPassed && <span><i className="p28-tag gold">LATE ~{shortT(ln.eta)}{ln.reason ? ` · ${ln.reason.toUpperCase()}` : ''}{ln.seen_at ? ' · ✓ SEEN' : ''}</i></span>}
+                    {ln && lnPassed && <span><i className="p28-tag red">~{shortT(ln.eta)} PASSED · NOT IN YET</i></span>}
+                    {ln && pin && <span><i className="p28-tag green">IN {fullT(r.punches?.arrived_at ?? pin)} · TOLD AHEAD</i></span>}
                     <span className="rl">{roleLabel(r.position_code, r.position_detail)}{r.manager_note ? ' · 📝 note' : ''}{fbOn && inf?.fb_stars ? ` · ★ ${inf.fb_stars}` : ''}</span>
                     {isNew && <span><i className="new-shift">NEW · {ORD[inf!.done_before] ?? ''} shift</i></span>}
                     {isNew && <span><i className="see-det"><b>ⓘ</b> See details ›</i></span>}
-                    {r.attendance ? <span className="st muted-st">{r.attendance === 'no_show' ? 'No-show' : 'Cancelled'}{r.attendance_reason ? ` · ${r.attendance_reason}` : ''}</span>
+                    {fromRonnie ? <span className="st muted-st">Don’t wait for {first(r.staff?.full_name)}{r.attendance_reason ? ` · ${r.attendance_reason}` : ''}</span>
+                      : r.attendance ? <span className="st muted-st">{r.attendance === 'no_show' ? 'No-show' : 'Cancelled'}{r.attendance_reason ? ` · ${r.attendance_reason}` : ''}</span>
                       : r.left_early && pin && pout ? <span className="st gold">{time(pin, lang)} → {time(pout, lang)} · {hours(pin, pout)} {t.hours}<i className="st-tag gold">LEFT EARLY</i></span>
                       : ended ? <span className="st">{time(pin!, lang)} → {time(pout!, lang)} · {hours(pin!, pout!)} {t.hours}</span>
                       : endsLater ? <span className="st gold">Working · ends {time(pout!, lang)}</span>
-                      : pin ? <span className="st ok">{new Date(pin).getTime() > nowMs ? 'Starts' : 'Started'} {time(pin, lang)}{isEarly ? <i className="st-tag">EARLY</i> : wasLate ? <i className="st-tag">LATE</i> : null}</span>
+                      : pin ? <span className="st ok">{new Date(pin).getTime() > nowMs ? 'Starts' : 'Started'} {time(pin, lang)}{isEarly ? <i className="st-tag">EARLY</i> : wasLate && !ln ? <i className="st-tag">LATE</i> : null}</span>
+                      : ln && !lnPassed ? <span className="st gold">Told ahead · starts {time(r.planned_start, lang)}</span>
                       : isLate ? <span className="st red">Not here · {Math.round((Date.now() - new Date(r.planned_start).getTime()) / 60000)} min late</span>
                       : <span className="st">Starts {time(r.planned_start, lang)}</span>}
                   </button>
-                  {tel && !r.attendance ? <>
+                  {tel && (!r.attendance || (ln && lnPassed)) ? <>
                     <a className="ic" href={`tel:${tel}`} aria-label={`Call ${r.staff!.full_name}`}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z" /></svg></a>
                     <a className="ic" href={`sms:${tel}`} aria-label={`Text ${r.staff!.full_name}`}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg></a>
                   </> : <><span className="ic ghost" aria-hidden="true" /><span className="ic ghost" aria-hidden="true" /></>}
                   <div className="act-slot">
-                    {r.attendance ? <button className="act undo" onClick={() => mark(r.id, null)}>Undo</button>
+                    {fromRonnie ? <span className="act done-mark" aria-hidden="true" />
+                      : r.attendance ? <button className="act undo" onClick={() => mark(r.id, null)}>Undo</button>
                       : !pin ? (gate(r).kind === 'locked' ? <button className="act locked" disabled title={gate(r).label}>{t.start}</button> : <button className="act start" onClick={() => startRows([r])}>{t.start}</button>)
                       : !ended ? <button className="act end" onClick={() => endRow(r, pin)}>{t.end}</button> : <span className="act done-mark">✓</span>}
                     {r.leave_by && !pout && !r.attendance && <span className="leave-tag">⏱ Leaves ~{time(r.leave_by, lang).replace(':00', '')}</span>}

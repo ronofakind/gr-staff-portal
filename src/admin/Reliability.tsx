@@ -3,24 +3,29 @@ import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { eventsBetween, isoDay, flagsOf, flagText, dLabel, type AEvent, type AShift, type Flag } from './api';
 
-type Item = { e: AEvent; s: AShift; flag: Flag; min?: number; nth: number };
+type Item = { e: AEvent; s: AShift; flag: Flag; min?: number; nth: number; free?: boolean; told?: boolean };
 const FILTERS: [string, Flag[] | null][] = [['All', null], ['No-shows', ['no_show']], ['Cancels', ['cancelled']], ['Late', ['late']], ['Early starts', ['early']]];
 
 export function Reliability() {
   const today = isoDay(new Date());
   const [events, setEvents] = useState<AEvent[] | null>(null);
   const [f, setF] = useState(0); const [q, setQ] = useState('');
-  const load = () => eventsBetween(today.slice(0, 4) + '-01-01', today).then(setEvents);
+  const [eta, setEta] = useState<Record<string, string>>({});
+  const load = () => {
+    eventsBetween(today.slice(0, 4) + '-01-01', today).then(setEvents);
+    // push 28e · "told ahead" (late_notices is new in 034: errors → none)
+    supabase.from('late_notices').select('shift_id,eta').then(({ data, error }) => { if (!error && Array.isArray(data)) setEta(Object.fromEntries((data as { shift_id: string; eta: string }[]).map((x) => [x.shift_id, x.eta]))); });
+  };
   useEffect(() => { load(); }, []);
 
   const items = useMemo(() => {
     const out: Item[] = [];
-    for (const e of events ?? []) for (const s of e.shifts) for (const x of flagsOf(s)) out.push({ e, s, ...x, nth: 0 });
+    for (const e of events ?? []) for (const s of e.shifts) for (const x of flagsOf({ ...s, late_eta: eta[s.id] ?? null })) out.push({ e, s, ...x, nth: 0 });
     out.sort((a, b) => a.e.event_date.localeCompare(b.e.event_date));
     const count = new Map<string, number>();
-    for (const it of out) { const k = it.s.staff_id + it.flag; count.set(k, (count.get(k) ?? 0) + 1); it.nth = count.get(k)!; }
+    for (const it of out) { if (it.free) continue; const k = it.s.staff_id + it.flag; count.set(k, (count.get(k) ?? 0) + 1); it.nth = count.get(k)!; }
     return out.reverse();
-  }, [events]);
+  }, [events, eta]);
   const shown = items.filter((it) => (!FILTERS[f][1] || FILTERS[f][1]!.includes(it.flag)) && (!q || (it.s.staff?.full_name ?? '').toLowerCase().includes(q.toLowerCase())));
   const clear = async (it: Item) => {
     if (!window.confirm(`Remove the ${flagText(it).toLowerCase()} for ${it.s.staff?.full_name}?`)) return;
@@ -43,16 +48,18 @@ export function Reliability() {
         {shown.map((it) => (
           <div key={it.s.id + it.flag} className="need">
             <div className="grow">
-              <div className="row" style={{ gap: 8 }}><b>{it.s.staff?.full_name}</b><span className={'ftag ' + it.flag}>{flagText(it)}</span></div>
-              <span>{dLabel(it.e.event_date)} · {it.e.title}{it.s.manager_note ? ` · “${it.s.manager_note}”` : ''}</span>
-              <span className={it.nth > 1 ? 'accent strong' : ''}>{ord(it.nth)}</span>
+              <div className="row" style={{ gap: 8 }}><b>{it.s.staff?.full_name}</b><span className={'ftag ' + it.flag}>{flagText(it)}</span>
+                {it.flag === 'cancelled' && it.s.cancel_self && <span className="ftag cancelled">{it.s.cancel_late ? 'AFTER CONFIRMING' : 'BEFORE CONFIRMING'}</span>}
+                {it.told && <span className="ftag early">TOLD AHEAD</span>}{it.free && <span className="muted sm">not counted</span>}</div>
+              <span>{dLabel(it.e.event_date)} · {it.e.title}{it.s.cancel_reason ? ` · ${it.s.cancel_reason}` : ''}{it.s.manager_note ? ` · “${it.s.manager_note}”` : ''}</span>
+              {!it.free && <span className={it.nth > 1 ? 'accent strong' : ''}>{ord(it.nth)}</span>}
             </div>
             <Link className="abtn sm" to={`/admin/day?d=${it.e.event_date}`}>Open</Link>
             {(it.flag === 'no_show' || it.flag === 'cancelled') && <button className="abtn sm" onClick={() => clear(it)}>Remove</button>}
           </div>
         ))}
       </div>
-      <p className="muted sm">No-shows and cancels come from the manager’s screen. Late = started more than 10 min after their call. Early start = a manager started them before the call time.</p>
+      <p className="muted sm">No-shows and cancels come from the manager’s screen and from staff “Can’t make it”. Late cancel = cancelled after they confirmed; a cancel before confirming is listed but not counted. Late = started more than 10 min after their call; not counted when they said “I’m running late” and started by the time they gave. Early start = a manager started them before the call time.</p>
     </div>
   );
 }

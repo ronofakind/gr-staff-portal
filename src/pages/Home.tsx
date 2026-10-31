@@ -9,6 +9,12 @@ import { TabBar } from '../components/TabBar';
 import { AskCards, useAsks } from '../components/AskCards';
 import { UniformIcon, uniformFor, uniformLabel } from '../components/Uniform';
 import { AnnounceCards } from '../components/Announce';
+import { NeedChange, CancelSheet, ChangeSheet, LateSheet, LateBlock, ChangeCard, CancelledCard, useShiftChanges, t12 as t12c, type LateNotice } from '../components/ShiftChange';
+
+type MgrLate = { id: string; shift_id: string; event_id: string; name: string; eta: string; reason: string | null };
+type Gone = { id: string; title: string; date: string; late: boolean };
+const OK_KEY = 'gr-cancel-ok';
+const readOk = (): string[] => { try { return JSON.parse(localStorage.getItem(OK_KEY) || '[]'); } catch { return []; } };
 
 type Mate = { full_name: string; photo_url: string | null; position_code: string | null; position_detail: string | null; punches: { punch_in: string | null; punch_out: string | null } | null };
 type Q = { shift_id: string; status: 'open' | 'fixed' | 'correct' };
@@ -27,27 +33,41 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
   const [qs, setQs] = useState<Record<string, Q['status']>>({});
   const [askQ, setAskQ] = useState<ShiftRow | null>(null);
   const [alerts, setAlerts] = useState<{ id: string; kind: string; title: string; body: string | null; event_id: string | null }[]>([]);
+  // push 28
+  const [sheet, setSheet] = useState<{ kind: 'cancel' | 'change' | 'late'; s: ShiftRow } | null>(null);
+  const [gone, setGone] = useState<Gone[]>([]); const [okd, setOkd] = useState<string[]>(readOk);
+  const [mgrLate, setMgrLate] = useState<MgrLate[]>([]);
 
   const load = async () => {
     const since = new Date(Date.now() - 12 * 3600e3).toISOString();
     const { data } = await supabase.from('shifts').select(SHIFT_SELECT + ',punches(punch_in,punch_out)')
       .eq('staff_id', me.id).neq('status', 'declined').gte('planned_start', since)
       .order('planned_start').limit(30);
-    const rows = (data as unknown as ShiftRow[]) ?? [];
+    const all = (data as unknown as ShiftRow[]) ?? [];
+    const rows = all.filter((r) => r.attendance !== 'cancelled'); // push 28: a cancelled shift is off Home
     setShifts(rows);
+    // push 28 · "Shift cancelled · Ronnie has been told" for 24 h (cancelled_at is new in 034: errors → none)
+    const cut = new Date(Date.now() - 24 * 3600e3).toISOString();
+    supabase.from('shifts').select('id,cancelled_at,cancel_late,events(title,event_date)').eq('staff_id', me.id).eq('cancel_self', true).gte('cancelled_at', cut)
+      .then(({ data: g, error }) => { if (!error && Array.isArray(g)) setGone((g as unknown as { id: string; cancel_late: boolean; events: { title: string; event_date: string } | null }[]).filter((x) => x?.events).map((x) => ({ id: x.id, title: x.events!.title, date: x.events!.event_date, late: !!x.cancel_late }))); });
     if (rows.length) supabase.from('hours_questions').select('shift_id,status').in('shift_id', rows.map((r) => r.id)).order('created_at')
       .then(({ data: q }) => setQs(Object.fromEntries(((q ?? []) as Q[]).map((x) => [x.shift_id, x.status]))));
     const managed = [...new Set(rows.filter((r) => r.events.manager_id === me.id || r.position_code === 'MD' || r.position_code === 'BM').map((r) => r.events.id))];
     if (managed.length) {
-      const { data: crew, error: cErr } = await supabase.from('shifts').select('event_id,position_code,position_detail,attendance,staff:staff!shifts_staff_id_fkey(full_name,photo_url),punches(punch_in,punch_out)')
+      const { data: crew, error: cErr } = await supabase.from('shifts').select('id,event_id,position_code,position_detail,attendance,staff:staff!shifts_staff_id_fkey(full_name,photo_url),punches(punch_in,punch_out)')
         .in('event_id', managed).neq('status', 'declined').order('planned_start');
       if (cErr) console.warn('[team]', cErr.message);
       const map: typeof teams = {};
-      for (const c of (crew ?? []) as unknown as { event_id: string; position_code: string | null; position_detail: string | null; attendance: string | null; staff: { full_name: string; photo_url: string | null }; punches: Mate['punches'] }[]) {
+      const crewRows = (crew ?? []) as unknown as { id: string; event_id: string; position_code: string | null; position_detail: string | null; attendance: string | null; staff: { full_name: string; photo_url: string | null }; punches: Mate['punches'] }[];
+      for (const c of crewRows) {
         if (c.attendance) continue;
         (map[c.event_id] ??= []).push({ ...c.staff, position_code: c.position_code, position_detail: c.position_detail, punches: c.punches });
       }
       setTeams(map);
+      // push 28e · running-late alerts land on the manager Home (Working now card) until Got it
+      const waiting = crewRows.filter((c) => !c.attendance && !c.punches?.punch_in);
+      if (waiting.length) supabase.from('late_notices').select('id,shift_id,eta,reason,seen_at').in('shift_id', waiting.map((c) => c.id)).is('seen_at', null)
+        .then(({ data: ln, error }) => { if (error || !Array.isArray(ln)) return; setMgrLate((ln as { id: string; shift_id: string; eta: string; reason: string | null }[]).map((n) => { const c = waiting.find((x) => x.id === n.shift_id)!; return { ...n, event_id: c.event_id, name: c.staff.full_name }; })); });
     }
   };
   useEffect(() => { load(); }, []);
@@ -57,6 +77,10 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
   }, [me.id]);
   const gotIt = async (id: string) => { setAlerts(alerts.filter((a) => a.id !== id)); if (!preview) await supabase.rpc('alert_seen', { p_id: id }); };
   const { asks, week: usualWeek, reload: reloadAsks } = useAsks(me.id);
+  const upcomingIds = (shifts ?? []).filter((s) => !(s.punches?.punch_out && new Date(s.punches.punch_out).getTime() <= Date.now())).map((s) => s.id);
+  const chg = useShiftChanges(preview ? [] : upcomingIds);
+  const mgrGotIt = async (id: string) => { setMgrLate((v) => v.filter((x) => x.id !== id)); if (!preview) await supabase.rpc('late_notice_seen', { p_id: id }); };
+  const okGone = (id: string) => { const v = [...okd, id]; setOkd(v); try { localStorage.setItem(OK_KEY, JSON.stringify(v.slice(-50))); } catch { /* private mode */ } };
 
   const respond = async (id: string, r: 'confirmed' | 'declined') => {
     if (preview) return;
@@ -95,6 +119,8 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
           <button className="pill-red" onClick={() => gotIt(a.id)}>Got it</button>
         </div>
       ))}
+
+      {gone.filter((g) => !okd.includes(g.id)).map((g) => <CancelledCard key={g.id} title={g.title} date={g.date} late={g.late} onOk={() => okGone(g.id)} />)}
 
       {!preview && <AnnounceCards meId={me.id} />}
 
@@ -159,6 +185,13 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
         const dayWord = next.events.event_date === today ? 'Today' : next.events.event_date === addDay(today, 1) ? 'Tomorrow'
           : new Date(next.events.event_date + 'T12:00:00').toLocaleDateString('en-CA', { weekday: 'long', month: 'short', day: 'numeric' });
         const working = !!next.punches?.punch_in && new Date(next.punches.punch_in).getTime() <= Date.now();
+        // push 28 · bubbles until the shift starts; running late all day on the event day until they're started
+        const started = !!next.punches?.punch_in || Date.now() >= new Date(next.planned_start).getTime();
+        const managesIt = !!team && !preview;
+        const lateOn = next.events.event_date === today && !next.punches?.punch_in && !managesIt && !next.time_tbc;
+        const req = chg.reqs[next.id];
+        const mgrName = next.events.manager?.full_name ?? null;
+        const myAlerts = mgrLate.filter((x) => x.event_id === next.events.id);
         return (
           <section className={'next' + (working ? ' working' : '')} style={{ gap: 14, padding: 18 }}>
             <div className="top-line">
@@ -177,6 +210,11 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
               <div className="tbox start"><small>Shift starts</small>{next.time_tbc ? <span className="big serif sm-big">TBC</span> : <BigTime iso={next.planned_start} small />}</div>
               {!isSetup(next.events) && <div className="tbox"><small>Be there</small>{next.time_tbc ? <span className="big serif sm-big">TBC</span> : <><BigTime iso={minus(next.planned_start, next.arrive_before_min)} small /><span className="tb-note">{next.arrive_before_min} min before</span></>}</div>}
             </div>
+            {myAlerts.map((a) => (
+              <div key={a.id} className="mgr-late"><span className="grow">⏱ <b>{a.name.split(' ')[0]} running late</b> · ~{t12c(a.eta).replace(/\s?[AP]M$/, '')}{a.reason ? ` · ${a.reason.toLowerCase()}` : ''}</span>
+                <button onClick={() => mgrGotIt(a.id)}>Got it ✓</button></div>
+            ))}
+            {lateOn && <LateBlock notice={chg.late[next.id] ?? null} mgr={mgrName} mgrPhone={next.events.manager?.phone} onOpen={() => setSheet({ kind: 'late', s: next })} />}
             <div className="row2">
               <Link className="light-btn" style={{ height: 46, borderRadius: 14 }} to={`${base}/shift/${next.id}`}>Details</Link>
               {team && !preview
@@ -184,9 +222,11 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
                 : next.status === 'confirmed' ? <span className="light-btn" style={{ height: 46, borderRadius: 14, background: '#2A2521', color: '#9FD8B8' }}>✓ Confirmed</span>
                 : <button className="team-btn" style={{ border: 'none' }} onClick={() => respond(next.id, 'confirmed')}>Confirm</button>}
             </div>
+            {!started && !managesIt && <NeedChange canSchedule={!(req?.status === 'pending' || (req?.status === 'keep' && !req.keep_reply))} onSchedule={() => setSheet({ kind: 'change', s: next })} onCancel={() => setSheet({ kind: 'cancel', s: next })} />}
           </section>
         );
       })()}
+      {[next, ...rest].filter((s) => s && chg.reqs[s.id]).map((s) => <ChangeCard key={s!.id} r={chg.reqs[s!.id]} s={s!} where={s === next ? null : `${dayBadge(s!.events.event_date, lang).dow} ${dayBadge(s!.events.event_date, lang).day} · ${s!.events.title}`} preview={preview} onChanged={() => { chg.reload(); load(); }} />)}
 
       {/* Pay-period hours card removed from Home (Oct 31) — it lives in the Hours tab. */}
 
@@ -210,6 +250,10 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
           </section>
         </>
       )}
+      {sheet?.kind === 'cancel' && <CancelSheet s={sheet.s} preview={preview} onClose={() => setSheet(null)} onDone={(late) => { setGone((g) => [...g, { id: sheet.s.id, title: sheet.s.events.title, date: sheet.s.events.event_date, late }]); setSheet(null); load(); }} />}
+      {sheet?.kind === 'change' && <ChangeSheet s={sheet.s} preview={preview} onClose={() => setSheet(null)} onSent={() => { setSheet(null); chg.reload(); }} />}
+      {sheet?.kind === 'late' && <LateSheet s={sheet.s} mgr={sheet.s.events.manager?.full_name ?? null} again={chg.late[sheet.s.id] ?? null} preview={preview} onClose={() => setSheet(null)}
+        onSent={(n: LateNotice) => { chg.setLate({ ...chg.late, [n.shift_id]: n }); setSheet(null); if (!preview) chg.reload(); }} />}
       {askQ && <AskHours s={askQ} onClose={() => setAskQ(null)} onSent={() => { setQs({ ...qs, [askQ.id]: 'open' }); setAskQ(null); }} />}
       <TabBar base={base} />
     </main>
