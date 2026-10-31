@@ -14,3 +14,17 @@ export function SwipeSheet({ onClose, label, children, x = true }: { onClose: ()
     </div>
   );
 }
+
+/** Bottom sheet without swipe-to-close (for sheets with a time wheel): ‹ Back top left, ✕ top right, Close at the bottom. */
+export function FixedSheet({ onClose, onBack, label, children, closeLabel = 'Close' }: { onClose: () => void; onBack?: () => void; label: string; children: ReactNode; closeLabel?: string | null }) {
+  return (
+    <div className="sheet fixed-sheet" role="dialog" aria-label={label}>
+      <div className="fs-top">
+        <button type="button" className="fs-back" onClick={onBack ?? onClose}>‹ Back</button>
+        <button type="button" className="fs-x" aria-label="Close" onClick={onClose}>✕</button>
+      </div>
+      {children}
+      {closeLabel && <button type="button" className="fs-close" onClick={onClose}>{closeLabel}</button>}
+    </div>
+  );
+}

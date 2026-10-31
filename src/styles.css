@@ -1728,3 +1728,10 @@ div.avatar { color: var(--accent); background: var(--accent-bg); }
   .ex-t th:nth-child(4), .ex-t td:nth-child(4) { display: none; }
 }
 .ex .dept-tag, .ca .dept-tag { position: static; transform: none; border: 0; }
+/* FixedSheet: no swipe; Back / ✕ / Close */
+.fixed-sheet { max-height: calc(100dvh - 40px); overflow-y: auto; overscroll-behavior: contain; padding-top: 12px; }
+.fs-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: -4px; }
+.fs-back { border: 0; background: none; padding: 6px 4px; font: 600 15px Inter, system-ui, sans-serif; color: var(--ink); cursor: pointer; }
+.fs-x { width: 36px; height: 36px; border-radius: 18px; border: 0; background: #E9E2D8; color: var(--ink); font-size: 15px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.fs-close { height: 46px; border-radius: 15px; border: 0; background: #fff; box-shadow: inset 0 0 0 1.5px #DCD3C7; font: 700 14px Inter, system-ui, sans-serif; color: var(--ink); cursor: pointer; }
+.p28-note-h { font-size: 13px; color: var(--muted, #7A7268); margin-top: -6px; }

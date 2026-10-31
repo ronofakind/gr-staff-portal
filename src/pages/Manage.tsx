@@ -65,7 +65,7 @@ type Row = {
   cancel_self?: boolean; cancel_sent_to_manager?: string | null; replacement_for?: string | null;
 };
 /** push 28e · "I'm running late" from the person (late_notices, read by the event's manager). */
-type Late = { id: string; shift_id: string; minutes: number; eta: string; reason: string | null; sent_at: string; seen_at: string | null };
+type Late = { id: string; shift_id: string; minutes: number; eta: string; reason: string | null; note?: string | null; sent_at: string; seen_at: string | null };
 const ROW_COLS = 'id,staff_id,position_code,position_detail,planned_start,planned_end,attendance,left_early,attendance_reason,added_note,adder:staff!shifts_added_by_fkey(full_name),leave_by,manager_note,staff:staff!shifts_staff_id_fkey(full_name,photo_url,phone),punches(punch_in,punch_out,arrived_at,updated_at)';
 const fullT = (iso: string) => new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' });
 const shortT = (iso: string) => fullT(iso).replace(/\s?[AP]M$/, '');
@@ -246,7 +246,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
     // push 28c · a staff self-cancel goes to Ronnie only: the manager never sees that person until Ronnie taps "Send to <manager>".
     const visible = ((s.data ?? []) as unknown as Row[]).filter((r) => !(r.cancel_self && !r.cancel_sent_to_manager));
     const waitIds = visible.filter((r) => !r.attendance).map((r) => r.id);
-    if (waitIds.length) supabase.from('late_notices').select('id,shift_id,minutes,eta,reason,sent_at,seen_at').in('shift_id', waitIds)
+    if (waitIds.length) supabase.from('late_notices').select('id,shift_id,minutes,eta,reason,note,sent_at,seen_at').in('shift_id', waitIds)
       .then(({ data, error }) => { if (error || !Array.isArray(data)) return; setLateN(Object.fromEntries((data as Late[]).filter((x) => x && typeof x.eta === 'string').map((x) => [x.shift_id, x]))); });
     setRows(visible.sort((a, b) => a.planned_start.localeCompare(b.planned_start)
       || lead(a) - lead(b)
@@ -390,7 +390,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
       {banner.map((r) => { const n = lateOf(r)!; const tel = r.staff?.phone?.replace(/[^\d+]/g, ''); return (
         <div key={n.id} className="late-banner" role="alert">
           <span className="lb-ic" aria-hidden="true">⏱</span>
-          <div className="grow"><b>{first(r.staff?.full_name)} is running late</b><small>~{time(n.eta, lang)} ({n.minutes} min){n.reason ? ` · ${n.reason.toLowerCase()}` : ''} · sent {time(n.sent_at, lang)}</small></div>
+          <div className="grow"><b>{first(r.staff?.full_name)} is running late</b><small>~{time(n.eta, lang)} ({n.minutes} min){n.reason ? ` · ${n.reason.toLowerCase()}` : ''}{n.note ? ` · “${n.note}”` : ''} · sent {time(n.sent_at, lang)}</small></div>
           <button className="lb-ok" onClick={() => gotIt(n)}>Got it ✓</button>
           {tel && <a className="lb-call" href={`tel:${tel}`} aria-label={`Call ${r.staff?.full_name}`}>📞</a>}
         </div>); })}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase, type ShiftRow } from '../lib/supabase';
-import { SwipeSheet } from './SwipeSheet';
+import { FixedSheet } from './SwipeSheet';
 import { TimeWheel, ampm15 } from './TimeWheel';
 
 /* Push 28 · staff side of "changes after booking": Need a change? bubbles, Can't make it, My schedule changed,
@@ -82,15 +82,15 @@ export function CancelSheet({ s, onClose, onDone, preview = false }: { s: ShiftR
   return (
     <>
       <div className="scrim" onClick={onClose} />
-      <SwipeSheet onClose={onClose} label="Can't make it">
+      <FixedSheet onClose={onClose} label="Can't make it" closeLabel={null}>
         <div><div className="kicker">{dayWordOf(s.events.event_date)} · {s.events.title}</div><div className="serif p28-h">Can’t make it?</div></div>
         <div className="p28-chips">{CANCEL_REASONS.map((r) => <button key={r} type="button" className={reason === r ? 'on' : ''} onClick={() => setReason(reason === r ? '' : r)}>{r}</button>)}</div>
         <textarea className="sheet-note" rows={2} value={note} placeholder="Note for Ronnie (optional)" onChange={(e) => setNote(e.target.value)} />
         {s.status === 'confirmed' && <div className="p28-warn"><b>You already confirmed this shift.</b><span>Please only cancel if you really have to. The team is counting on you.</span></div>}
         {err && <p className="error">{err}</p>}
         <button className="btn-red" disabled={busy} onClick={go}>{busy ? 'Cancelling…' : 'Cancel my shift'}</button>
-        <button className="link-btn p28-keep" onClick={onClose}>Keep my shift</button>
-      </SwipeSheet>
+        <button type="button" className="fs-close" onClick={onClose}>Keep my shift · close</button>
+      </FixedSheet>
     </>
   );
 }
@@ -116,7 +116,7 @@ export function ChangeSheet({ s, onClose, onSent, preview = false }: { s: ShiftR
   return (
     <>
       <div className="scrim" onClick={onClose} />
-      <SwipeSheet onClose={onClose} label="What changed">
+      <FixedSheet onClose={onClose} label="What changed">
         <div><div className="kicker">{dayWordOf(s.events.event_date)} · booked {t12(start)}</div><div className="serif p28-h">What changed?</div></div>
         <div className="seg2">
           <button type="button" className={kind === 'later' ? 'on' : ''} onClick={() => { setKind('later'); setT(null); }}>Arrive later</button>
@@ -128,7 +128,7 @@ export function ChangeSheet({ s, onClose, onSent, preview = false }: { s: ShiftR
         {err && <p className="error">{err}</p>}
         <button className="btn-ink" disabled={busy || !t} onClick={send}>{busy ? 'Sending…' : t ? `Send to Ronnie · ${kind === 'later' ? 'start' : 'leave'} ${ampm15(t)}` : 'Send to Ronnie'}</button>
         <div className="muted sm p28-foot">Your shift stays at {t12(start)} until Ronnie answers.</div>
-      </SwipeSheet>
+      </FixedSheet>
     </>
   );
 }
@@ -138,22 +138,26 @@ const LATE_LONG: [string, number][] = [['45 min', 45], ['1 h', 60], ['1 h 30', 9
 const LATE_REASONS = ['Traffic', 'Metro / bus', 'Parking', 'Other'];
 /** 28e · How late will you be? 5 · 10 · 15 · 20 · 30+ → (30+) When will you get there? Goes to the manager, not to Ronnie. */
 export function LateSheet({ s, mgr, onClose, onSent, preview = false, again }: { s: ShiftRow; mgr: string | null; onClose: () => void; onSent: (n: LateNotice) => void; preview?: boolean; again?: LateNotice | null }) {
-  const [step, setStep] = useState<'min' | 'long'>(again && again.minutes > 20 ? 'long' : 'min');
+  const [step, setStep] = useState<'min' | 'long' | 'note'>(again && again.minutes > 20 ? 'long' : 'min');
   const [min, setMin] = useState<number | null>(again && again.minutes <= 20 ? again.minutes : null);
   const [t, setT] = useState<string | null>(again && again.minutes > 20 ? hmOf(again.eta) : null);
   const [reason, setReason] = useState(again?.reason ?? ''); const [busy, setBusy] = useState(false); const [err, setErr] = useState('');
+  const [note, setNote] = useState(again?.note ?? ''); const [from, setFrom] = useState<'min' | 'long'>('min');
   const start = s.planned_start; const who = firstName(mgr);
   const base = Math.max(new Date(start).getTime(), Date.now());
   const etaOf = (m: number) => new Date(Math.round((new Date(start).getTime() + m * 60000 < Date.now() ? base + m * 60000 : new Date(start).getTime() + m * 60000) / 60000) * 60000).toISOString();
-  const eta = step === 'min' ? (min ? etaOf(min) : null) : t ? atOn(s.events.event_date, t, start) : null;
+  const timeStep = step === 'note' ? from : step;
+  const eta = timeStep === 'min' ? (min ? etaOf(min) : null) : t ? atOn(s.events.event_date, t, start) : null;
+  const pickReason = (r: string) => { if (r === 'Other') { setReason('Other'); setFrom(step === 'long' ? 'long' : 'min'); setStep('note'); return; } setReason(reason === r ? '' : r); };
+  const noteLine = reason === 'Other' && note.trim() ? <button type="button" className="link-btn p28-keep" onClick={() => { setFrom(step === 'long' ? 'long' : 'min'); setStep('note'); }}>“{note.trim()}” · edit</button> : null;
   const staffNotes = s.events.venues?.staff_notes?.trim();
   const send = async () => {
     if (!eta) return;
     const minutes = Math.max(1, Math.round((new Date(eta).getTime() - new Date(start).getTime()) / 60000));
-    const n: LateNotice = { id: again?.id ?? 'local', shift_id: s.id, minutes, eta, reason: reason || null, note: null, sent_at: new Date().toISOString(), seen_at: null };
+    const n: LateNotice = { id: again?.id ?? 'local', shift_id: s.id, minutes, eta, reason: reason || null, note: reason === 'Other' ? note.trim() || null : null, sent_at: new Date().toISOString(), seen_at: null };
     if (preview) return onSent(n);
     setBusy(true); setErr('');
-    const { data, error } = await supabase.rpc('staff_running_late', { p_shift: s.id, p_minutes: minutes, p_eta: eta, p_reason: reason || null, p_note: null });
+    const { data, error } = await supabase.rpc('staff_running_late', { p_shift: s.id, p_minutes: minutes, p_eta: eta, p_reason: reason || null, p_note: reason === 'Other' ? note.trim() || null : null });
     setBusy(false);
     if (error) return setErr(/function|does not exist|schema cache/i.test(error.message) ? `Not on yet. Call ${who}.` : error.message);
     onSent({ ...n, id: typeof data === 'string' ? data : n.id });
@@ -162,14 +166,20 @@ export function LateSheet({ s, mgr, onClose, onSent, preview = false, again }: {
   return (
     <>
       <div className="scrim" onClick={onClose} />
-      <SwipeSheet onClose={onClose} label="Running late">
-        {step === 'min' ? <>
+      <FixedSheet onClose={onClose} label="Running late" onBack={step === 'note' ? () => setStep(from) : step === 'long' ? () => { setStep('min'); setT(null); } : undefined}>
+        {step === 'note' ? <>
+          <div><div className="kicker">Running late · other reason</div><div className="serif p28-h">What’s going on?</div></div>
+          <div className="p28-note-h">{who} will see this with your time.</div>
+          <textarea className="sheet-note" rows={4} autoFocus value={note} placeholder="e.g. car broke down, taking a taxi" onChange={(e) => setNote(e.target.value)} />
+          <button type="button" className="btn-ink" onClick={() => setStep(from)}>Done</button>
+        </> : step === 'min' ? <>
           <div><div className="kicker">Today · starts {t12(start)}</div><div className="serif p28-h">How late will you be?</div></div>
           <div className="p28-mins">
             {LATE_MIN.map((m) => <button key={m} type="button" className={min === m ? 'on' : ''} onClick={() => setMin(m)}>{m}{m === 5 ? ' min' : ''}</button>)}
             <button type="button" onClick={() => { setStep('long'); setMin(null); }}>30+</button>
           </div>
-          <div className="p28-chips">{LATE_REASONS.map((r) => <button key={r} type="button" className={reason === r ? 'on' : ''} onClick={() => setReason(reason === r ? '' : r)}>{r}</button>)}</div>
+          <div className="p28-chips">{LATE_REASONS.map((r) => <button key={r} type="button" className={reason === r ? 'on' : ''} onClick={() => pickReason(r)}>{r}</button>)}</div>
+          {noteLine}
           {parking}
           {err && <p className="error">{err}</p>}
           <button className="btn-gold" disabled={busy || !eta} onClick={send}>{busy ? 'Sending…' : `Tell ${who}${eta ? ` · I’ll be there ~${short(eta)}` : ''}`}</button>
@@ -178,13 +188,13 @@ export function LateSheet({ s, mgr, onClose, onSent, preview = false, again }: {
           <div><div className="kicker">30+ min · starts {t12(start)}</div><div className="serif p28-h">When will you get there?</div></div>
           <div className="p28-mins four">{LATE_LONG.map(([l, m]) => { const v = hmOf(etaOf(m)); return <button key={l} type="button" className={t === v ? 'on' : ''} onClick={() => setT(v)}>{l}</button>; })}</div>
           <div className="p28-wheel"><TimeWheel key={t ?? 'x'} value={t} onChange={setT} rest={hmOf(etaOf(45))} /></div>
-          <div className="p28-chips">{LATE_REASONS.map((r) => <button key={r} type="button" className={reason === r ? 'on' : ''} onClick={() => setReason(reason === r ? '' : r)}>{r}</button>)}</div>
+          <div className="p28-chips">{LATE_REASONS.map((r) => <button key={r} type="button" className={reason === r ? 'on' : ''} onClick={() => pickReason(r)}>{r}</button>)}</div>
+          {noteLine}
           {parking}
           {err && <p className="error">{err}</p>}
           <button className="btn-gold" disabled={busy || !eta} onClick={send}>{busy ? 'Sending…' : `Tell ${who}${eta ? ` · there at ${short(eta)}` : ''}`}</button>
-          <button className="link-btn p28-keep" onClick={() => { setStep('min'); setT(null); }}>‹ Less than 30 min</button>
         </>}
-      </SwipeSheet>
+      </FixedSheet>
     </>
   );
 }

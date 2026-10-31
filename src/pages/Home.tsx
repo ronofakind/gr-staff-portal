@@ -11,7 +11,7 @@ import { UniformIcon, uniformFor, uniformLabel } from '../components/Uniform';
 import { AnnounceCards } from '../components/Announce';
 import { NeedChange, CancelSheet, ChangeSheet, LateSheet, LateBlock, ChangeCard, CancelledCard, useShiftChanges, t12 as t12c, type LateNotice } from '../components/ShiftChange';
 
-type MgrLate = { id: string; shift_id: string; event_id: string; name: string; eta: string; reason: string | null };
+type MgrLate = { id: string; shift_id: string; event_id: string; name: string; eta: string; reason: string | null; note?: string | null };
 type Gone = { id: string; title: string; date: string; late: boolean };
 const OK_KEY = 'gr-cancel-ok';
 const readOk = (): string[] => { try { return JSON.parse(localStorage.getItem(OK_KEY) || '[]'); } catch { return []; } };
@@ -66,8 +66,8 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
       setTeams(map);
       // push 28e · running-late alerts land on the manager Home (Working now card) until Got it
       const waiting = crewRows.filter((c) => !c.attendance && !c.punches?.punch_in);
-      if (waiting.length) supabase.from('late_notices').select('id,shift_id,eta,reason,seen_at').in('shift_id', waiting.map((c) => c.id)).is('seen_at', null)
-        .then(({ data: ln, error }) => { if (error || !Array.isArray(ln)) return; setMgrLate((ln as { id: string; shift_id: string; eta: string; reason: string | null }[]).map((n) => { const c = waiting.find((x) => x.id === n.shift_id)!; return { ...n, event_id: c.event_id, name: c.staff.full_name }; })); });
+      if (waiting.length) supabase.from('late_notices').select('id,shift_id,eta,reason,note,seen_at').in('shift_id', waiting.map((c) => c.id)).is('seen_at', null)
+        .then(({ data: ln, error }) => { if (error || !Array.isArray(ln)) return; setMgrLate((ln as { id: string; shift_id: string; eta: string; reason: string | null; note?: string | null }[]).map((n) => { const c = waiting.find((x) => x.id === n.shift_id)!; return { ...n, event_id: c.event_id, name: c.staff.full_name }; })); });
     }
   };
   useEffect(() => { load(); }, []);
@@ -211,7 +211,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
               {!isSetup(next.events) && <div className="tbox"><small>Be there</small>{next.time_tbc ? <span className="big serif sm-big">TBC</span> : <><BigTime iso={minus(next.planned_start, next.arrive_before_min)} small /><span className="tb-note">{next.arrive_before_min} min before</span></>}</div>}
             </div>
             {myAlerts.map((a) => (
-              <div key={a.id} className="mgr-late"><span className="grow">⏱ <b>{a.name.split(' ')[0]} running late</b> · ~{t12c(a.eta).replace(/\s?[AP]M$/, '')}{a.reason ? ` · ${a.reason.toLowerCase()}` : ''}</span>
+              <div key={a.id} className="mgr-late"><span className="grow">⏱ <b>{a.name.split(' ')[0]} running late</b> · ~{t12c(a.eta).replace(/\s?[AP]M$/, '')}{a.reason ? ` · ${a.reason.toLowerCase()}` : ''}{a.note ? ` · “${a.note}”` : ''}</span>
                 <button onClick={() => mgrGotIt(a.id)}>Got it ✓</button></div>
             ))}
             {lateOn && <LateBlock notice={chg.late[next.id] ?? null} mgr={mgrName} mgrPhone={next.events.manager?.phone} onOpen={() => setSheet({ kind: 'late', s: next })} />}
