@@ -57,7 +57,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
       .then(({ data: g, error }) => { if (!error && Array.isArray(g)) setGone((g as unknown as { id: string; cancel_late: boolean; events: { title: string; event_date: string } | null }[]).filter((x) => x?.events).map((x) => ({ id: x.id, title: x.events!.title, date: x.events!.event_date, late: !!x.cancel_late }))); });
     if (rows.length) supabase.from('hours_questions').select('shift_id,status').in('shift_id', rows.map((r) => r.id)).order('created_at')
       .then(({ data: q }) => setQs(Object.fromEntries(((q ?? []) as Q[]).map((x) => [x.shift_id, x.status]))));
-    const managed = [...new Set(rows.filter((r) => r.events.manager_id === me.id || r.position_code === 'MD' || r.position_code === 'BM').map((r) => r.events.id))];
+    const managed = [...new Set(rows.filter((r) => r.events.manager_id === me.id || (r.events.co_manager_ids ?? []).includes(me.id) || r.position_code === 'MD' || r.position_code === 'BM').map((r) => r.events.id))];
     if (managed.length) {
       const { data: crew, error: cErr } = await supabase.from('shifts').select('id,event_id,position_code,position_detail,attendance,staff:staff!shifts_staff_id_fkey(full_name,photo_url),punches(punch_in,punch_out)')
         .in('event_id', managed).neq('status', 'declined').order('planned_start');

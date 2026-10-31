@@ -754,7 +754,7 @@ export function ManagingToday({ meId, isAdmin }: { meId: string; isAdmin: boolea
     const week = new Date(Date.now() + 7 * 864e5).toLocaleDateString('en-CA', { timeZone: 'America/Toronto' });
     let q = supabase.from('events').select('id,title,event_date').gte('event_date', yesterday).lte('event_date', week)
       .neq('department', 'bar').order('event_date');
-    if (!isAdmin) q = q.eq('manager_id', meId);
+    if (!isAdmin) q = q.or(`manager_id.eq.${meId},co_manager_ids.cs.{${meId}}`);
     q.then(({ data }) => setEvs((data ?? []) as Ev[]));
   }, [meId]);
   if (!evs.length) return null;
