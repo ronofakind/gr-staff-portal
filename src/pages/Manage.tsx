@@ -7,6 +7,8 @@ import { time } from '../lib/format';
 import { Avatar, PhotoViewer } from '../components/Avatar';
 import { DriveFiles } from '../components/DriveFiles';
 import { AnnounceComposer, AnnounceSent } from '../components/Announce';
+/** Manager "Message your team" is off until push 24 (texts + phone buzz) is live. */
+const ANNOUNCE_ON = false;
 import { IncidentSheet, kindLabel, type Incident } from '../components/IncidentReport';
 
 type Row = {
@@ -311,7 +313,7 @@ export function Manage() {
         {ev.drive_folder_url && <a className="folder-link" href={ev.drive_folder_url} target="_blank" rel="noreferrer">Event folder · floor plan, run of show ›</a>}
         {ev.drive_folder_url && <DriveFiles eventId={ev.id} admin={false} />}
         {(() => { const td = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' }); const prev = new Date(ev.event_date + 'T12:00:00'); prev.setDate(prev.getDate() - 1);
-          return td >= prev.toLocaleDateString('en-CA') && td <= ev.event_date ? <button className="ann-open" onClick={() => setAnnOpen(true)}>📣 Message your team</button> : null; })()}
+          return ANNOUNCE_ON && td >= prev.toLocaleDateString('en-CA') && td <= ev.event_date ? <button className="ann-open" onClick={() => setAnnOpen(true)}>📣 Message your team</button> : null; })()}
         <AnnounceSent eventId={ev.id} reload={annTick} />
       </div>
 
