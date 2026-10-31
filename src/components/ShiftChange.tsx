@@ -138,18 +138,17 @@ const LATE_LONG: [string, number][] = [['45 min', 45], ['1 h', 60], ['1 h 30', 9
 const LATE_REASONS = ['Traffic', 'Metro / bus', 'Parking', 'Other'];
 /** 28e · How late will you be? 5 · 10 · 15 · 20 · 30+ → (30+) When will you get there? Goes to the manager, not to Ronnie. */
 export function LateSheet({ s, mgr, onClose, onSent, preview = false, again }: { s: ShiftRow; mgr: string | null; onClose: () => void; onSent: (n: LateNotice) => void; preview?: boolean; again?: LateNotice | null }) {
-  const [step, setStep] = useState<'min' | 'long' | 'note'>(again && again.minutes > 20 ? 'long' : 'min');
+  const [step, setStep] = useState<'min' | 'long'>(again && again.minutes > 20 ? 'long' : 'min');
   const [min, setMin] = useState<number | null>(again && again.minutes <= 20 ? again.minutes : null);
   const [t, setT] = useState<string | null>(again && again.minutes > 20 ? hmOf(again.eta) : null);
   const [reason, setReason] = useState(again?.reason ?? ''); const [busy, setBusy] = useState(false); const [err, setErr] = useState('');
-  const [note, setNote] = useState(again?.note ?? ''); const [from, setFrom] = useState<'min' | 'long'>('min');
+  const [note, setNote] = useState(again?.note ?? '');
   const start = s.planned_start; const who = firstName(mgr);
   const base = Math.max(new Date(start).getTime(), Date.now());
   const etaOf = (m: number) => new Date(Math.round((new Date(start).getTime() + m * 60000 < Date.now() ? base + m * 60000 : new Date(start).getTime() + m * 60000) / 60000) * 60000).toISOString();
-  const timeStep = step === 'note' ? from : step;
-  const eta = timeStep === 'min' ? (min ? etaOf(min) : null) : t ? atOn(s.events.event_date, t, start) : null;
-  const pickReason = (r: string) => { if (r === 'Other') { setReason('Other'); setFrom(step === 'long' ? 'long' : 'min'); setStep('note'); return; } setReason(reason === r ? '' : r); };
-  const noteLine = reason === 'Other' && note.trim() ? <button type="button" className="link-btn p28-keep" onClick={() => { setFrom(step === 'long' ? 'long' : 'min'); setStep('note'); }}>“{note.trim()}” · edit</button> : null;
+  const eta = step === 'min' ? (min ? etaOf(min) : null) : t ? atOn(s.events.event_date, t, start) : null;
+  const pickReason = (r: string) => setReason(reason === r ? '' : r);
+  const noteLine = reason === 'Other' ? <textarea className="sheet-note" rows={2} autoFocus value={note} placeholder="What’s going on? e.g. car broke down, taking a taxi" onChange={(e) => setNote(e.target.value)} /> : null;
   const staffNotes = s.events.venues?.staff_notes?.trim();
   const send = async () => {
     if (!eta) return;
@@ -166,13 +165,8 @@ export function LateSheet({ s, mgr, onClose, onSent, preview = false, again }: {
   return (
     <>
       <div className="scrim" onClick={onClose} />
-      <FixedSheet onClose={onClose} label="Running late" onBack={step === 'note' ? () => setStep(from) : step === 'long' ? () => { setStep('min'); setT(null); } : undefined}>
-        {step === 'note' ? <>
-          <div><div className="kicker">Running late · other reason</div><div className="serif p28-h">What’s going on?</div></div>
-          <div className="p28-note-h">{who} will see this with your time.</div>
-          <textarea className="sheet-note" rows={4} autoFocus value={note} placeholder="e.g. car broke down, taking a taxi" onChange={(e) => setNote(e.target.value)} />
-          <button type="button" className="btn-ink" onClick={() => setStep(from)}>Done</button>
-        </> : step === 'min' ? <>
+      <FixedSheet onClose={onClose} label="Running late" onBack={step === 'long' ? () => { setStep('min'); setT(null); } : undefined}>
+        {step === 'min' ? <>
           <div><div className="kicker">Today · starts {t12(start)}</div><div className="serif p28-h">How late will you be?</div></div>
           <div className="p28-mins">
             {LATE_MIN.map((m) => <button key={m} type="button" className={min === m ? 'on' : ''} onClick={() => setMin(m)}>{m}{m === 5 ? ' min' : ''}</button>)}
