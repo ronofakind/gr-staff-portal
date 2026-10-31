@@ -143,7 +143,7 @@ function AddStaff({ ev, onClose, onDone, lang }: { ev: EvFull; onClose: () => vo
   return (
     <>
       <div className="scrim" onClick={onClose} />
-      <SwipeSheet onClose={onClose} label="Add staff">
+      <SwipeSheet onClose={onClose} label="Add staff" back onBack={pick ? () => setPick(null) : undefined}>
         {!pick ? <>
           <div className="serif" style={{ fontSize: 24 }}>Add staff</div>
           <input className="as-search" type="search" name="staff-search" autoComplete="off" autoCorrect="off" spellCheck={false} enterKeyHint="search" data-form-type="other" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search staff…" />
@@ -518,7 +518,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
       {endSheet && (
         <>
           <div className="scrim" onClick={() => setEndSheet(null)} />
-          <SwipeSheet onClose={() => setEndSheet(null)} label="End all">
+          <SwipeSheet onClose={() => setEndSheet(null)} label="End all" back>
             <div><div className="kicker">End all · {endSheet.length} still working</div><div className="serif" style={{ fontSize: 24, lineHeight: 1.15 }}>When does the night end?</div></div>
             <button className={'opt' + (endPick === 'now' ? ' on' : '')} onClick={() => setEndPick('now')}><i /><span><b>Now · {time(now(), lang)}</b><small>Counts as {time(new Date(q15(Date.now())).toISOString(), lang)} with our 15-min rounding</small></span></button>
             <button className={'opt' + (endPick === 'next' ? ' on' : '')} onClick={() => setEndPick('next')}><i /><span><b>In a few minutes · {time(new Date(nextQ()).toISOString(), lang)}</b><small>Everyone ends then. You can still change or cancel it.</small></span></button>
@@ -601,7 +601,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
         return (
         <>
           <div className="scrim" onClick={() => setOpen(null)} />
-          <SwipeSheet onClose={() => setOpen(null)} label={`Options for ${open.staff?.full_name}`}>
+          <SwipeSheet onClose={() => setOpen(null)} label={`Options for ${open.staff?.full_name}`} back>
             <button className="pf-x" aria-label="Close" onClick={() => setOpen(null)}>✕</button>
             <div className="pf-head">
               <button className={'pf-photo' + (isNewO ? ' newp' : '')} aria-label="See the photo full size" onClick={() => setBigPhoto(true)}><Avatar name={open.staff?.full_name ?? '?'} url={open.staff?.photo_url} size={62} /></button>
@@ -701,7 +701,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
       {incOpen && (
         <>
           <div className="scrim" onClick={() => setIncOpen(false)} />
-          <SwipeSheet onClose={() => setIncOpen(false)} label="Incident report">
+          <SwipeSheet onClose={() => setIncOpen(false)} label="Incident report" back>
             <IncidentSheet eventId={ev.id} eventDate={ev.event_date} team={rows.filter((r) => r.staff).map((r) => ({ id: (r as unknown as { staff_id: string }).staff_id, name: r.staff!.full_name }))}
               onClose={() => setIncOpen(false)} onSent={() => { setIncOpen(false); load(); }} />
           </SwipeSheet>
@@ -823,7 +823,7 @@ function FeedbackWindow({ eventId, row, info, init, onBack, onClose, onSent }: {
   return (
     <div className="fbw">
       <div className="fbw-head">
-        {onBack && <button className="fbw-back" aria-label="Back" onClick={onBack}>‹</button>}
+        <button className="fbw-back" aria-label="Back" onClick={onBack ?? onClose}>‹</button>
         <div className="grow"><div className="serif" style={{ fontSize: 22 }}>Feedback · {f}</div><small className="muted">Only Ronnie sees it · never shown to {f}</small></div>
         <button className="pf-x static" aria-label="Close" onClick={onClose}>✕</button>
       </div>
@@ -877,7 +877,7 @@ function NewStaffCheck({ eventId, rows, infoOf, picks, setPicks, onOpen, onDone,
   return (
     <>
       <div className="scrim" onClick={onSkip} />
-      <SwipeSheet onClose={onSkip} label="New staff check">
+      <SwipeSheet onClose={onSkip} label="New staff check" back>
         <div className="nsc">
           <div className="serif" style={{ fontSize: 24, lineHeight: 1.1 }}>{rows.length} new {rows.length === 1 ? 'person' : 'people'} tonight</div>
           <div className="muted sm">Quick rating before you submit hours? One tap each, or skip.</div>

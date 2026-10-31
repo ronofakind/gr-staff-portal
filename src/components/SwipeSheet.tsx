@@ -1,13 +1,14 @@
 import { useRef, useState, type ReactNode } from 'react';
 
 /** Bottom sheet that closes with the ✕, when dragged down from its top (grab bar or header), or when its content is scrolled to the top. */
-export function SwipeSheet({ onClose, label, children, x = true }: { onClose: () => void; label: string; children: ReactNode; x?: boolean }) {
+export function SwipeSheet({ onClose, label, children, x = true, back, onBack }: { onClose: () => void; label: string; children: ReactNode; x?: boolean; back?: boolean; onBack?: () => void }) {
   const ref = useRef<HTMLDivElement>(null); const start = useRef<number | null>(null); const [dy, setDy] = useState(0);
   return (
     <div ref={ref} className="sheet swipe" role="dialog" aria-label={label} style={dy ? { transform: `translateY(${dy}px)`, transition: 'none' } : undefined}
       onTouchStart={(e) => { const el = ref.current!; const t = e.target as HTMLElement; if (el.scrollTop <= 0 && !t.closest('input,select,textarea,.qtime')) start.current = e.touches[0].clientY; }}
       onTouchMove={(e) => { if (start.current == null) return; const d = e.touches[0].clientY - start.current; setDy(d > 0 ? d : 0); }}
       onTouchEnd={() => { if (start.current != null && dy > 90) onClose(); start.current = null; setDy(0); }}>
+      {back && <button type="button" className="sheet-back" aria-label="Back" onClick={onBack ?? onClose}>‹</button>}
       {x && <button className="sheet-x" aria-label="Close" onClick={onClose}>✕</button>}
       <div className="grab" /><div className="grab-hint">Swipe down to close</div>
       {children}
@@ -20,7 +21,7 @@ export function FixedSheet({ onClose, onBack, label, children, closeLabel = 'Clo
   return (
     <div className="sheet fixed-sheet" role="dialog" aria-label={label}>
       <div className="fs-top">
-        <button type="button" className="fs-back" onClick={onBack ?? onClose}>‹ Back</button>
+        <button type="button" className="fs-back" aria-label="Back" onClick={onBack ?? onClose}>‹</button>
         <button type="button" className="fs-x" aria-label="Close" onClick={onClose}>✕</button>
       </div>
       {children}
