@@ -8,7 +8,8 @@ import { hoursBetween } from './api';
 import { supabase } from '../lib/supabase';
 import { eventsBetween, addDays, isoDay, flagsOf, flagText, periodOf, dLabel, tTime, type AEvent, type AShift } from './api';
 
-type Need = { key: string; title: string; sub: string; action: string; to: string; red?: boolean };
+type Need = { key: string; title: string; sub: string; action: string; to: string; red?: boolean; onAct?: () => Promise<void>; alt?: { label: string; to: string } };
+type ResetReq = { id: string; created_at: string; staff: { id: string; full_name: string; email: string | null } | null };
 type Arch = { key: string; sig: string; label: string | null; archived_at: string };
 const sigOf = (n: Need) => n.title + '|' + n.sub;
 
@@ -134,6 +135,23 @@ export function Today() {
           if (a?.confirmed_at || a?.logged_at) continue;
           n.push({ key: 'ex' + e.id, title: `${e.title}${e.department === 'bar' ? ' · BAR' : ''} · extras & cancellations`, sub: `${e.event_date === today ? 'Today' : 'Yesterday'} · ${summaryOf(e)}`, action: 'Check', to: `/admin/extras/${e.id}` });
         }
+      }
+      // push 31e · "Ask Ronnie to reset": nothing is emailed until Ronnie presses Send reset link
+      const { data: rr, error: rrErr } = await supabase.from('reset_requests').select('id,created_at,staff:staff!reset_requests_staff_id_fkey(id,full_name,email)').is('handled_at', null).order('created_at');
+      if (!rrErr) for (const r of (rr ?? []) as unknown as ResetReq[]) {
+        const st = r.staff; if (!st) continue;
+        const fn = st.full_name.split(' ')[0];
+        n.unshift({ key: 'rr' + r.id, red: true, title: `${fn} can't sign in`, sub: `Asked for a code reset ${dLabel(isoDay(new Date(r.created_at)), { month: 'short', day: 'numeric' })} ${tTime(r.created_at)} · ${st.email ?? 'no email on file'}`,
+          action: 'Send reset link', to: `/admin/staff?open=${st.id}`, alt: { label: 'Fix email', to: `/admin/staff?open=${st.id}` },
+          onAct: async () => {
+            if (!st.email) { alert(`${fn} has no email. Add it on their profile first.`); return; }
+            if (!confirm(`Email a reset code + link to ${st.email}?`)) return;
+            // Same email as "Forgot your code?" on the sign-in screen (6-digit code + link → choose a new code).
+            const { error } = await supabase.auth.signInWithOtp({ email: st.email, options: { shouldCreateUser: false, emailRedirectTo: window.location.origin } });
+            if (error) { alert(error.message); return; }
+            await supabase.from('reset_requests').update({ handled_at: new Date().toISOString(), handled_by: (await supabase.rpc('me')).data ?? null }).eq('id', r.id);
+            setTick((t) => t + 1);
+          } });
       }
       setNeeds(n);
     })();
@@ -312,7 +330,7 @@ const ARCH_ICON = <svg width="15" height="15" viewBox="0 0 24 24" fill="none" st
 
 /** A Needs-you row: archive button on desktop, swipe left on the phone. */
 function NeedRow({ x, onArchive }: { x: Need; onArchive: () => void }) {
-  const [dx, setDx] = useState(0); const [x0, setX0] = useState<number | null>(null);
+  const [dx, setDx] = useState(0); const [x0, setX0] = useState<number | null>(null); const [busy, setBusy] = useState(false);
   return (
     <div className="need-wrap">
       <div className="need-under">{ARCH_ICON}Archive</div>
@@ -322,7 +340,9 @@ function NeedRow({ x, onArchive }: { x: Need; onArchive: () => void }) {
         onTouchEnd={() => { setX0(null); if (dx < -140) onArchive(); else setDx(dx < -60 ? -96 : 0); }}>
         <span className={'dotr' + (x.red ? '' : ' amber')} />
         <div className="grow"><b className={x.red ? 'accent' : ''}>{x.title}</b><span>{x.sub}</span></div>
-        <Link to={x.to} className="need-go">{x.action} ›</Link>
+        {x.alt && <Link to={x.alt.to} className="need-go muted-go">{x.alt.label} ›</Link>}
+        {x.onAct ? <button className="need-go need-act" disabled={busy} onClick={async () => { setBusy(true); try { await x.onAct!(); } finally { setBusy(false); } }}>{busy ? 'Sending…' : x.action}</button>
+          : <Link to={x.to} className="need-go">{x.action} ›</Link>}
         {dx <= -90 ? <button className="need-arch-ph" onClick={onArchive}>Archive</button> : <button className="sq need-arch" aria-label="Archive" title="Archive" onClick={onArchive}>{ARCH_ICON}</button>}
       </div>
     </div>

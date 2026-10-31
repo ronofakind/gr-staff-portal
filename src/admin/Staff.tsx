@@ -6,6 +6,7 @@ import { allStaff, dLabel, type AStaff } from './api';
 import { uploadPhoto } from '../lib/photo';
 import { PhotoPicker, Avatar } from '../components/Avatar';
 import { StaffProfile } from './StaffProfile';
+import { CheckupTracker } from './CheckupTracker';
 
 type Off = { id: string; staff_id: string; from_date: string; to_date: string; every_dow: number | null };
 const DOWS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -81,6 +82,7 @@ export function Staff() {
         <div className="seg">{([['all', 'All'], ['floor', 'Floor'], ['bar', 'Bar'], ['md', 'MD']] as const).map(([k, l]) => <button key={k} className={dept === k ? 'on' : ''} onClick={() => setDept(k)}>{l}</button>)}</div>
         <label className="row sm" style={{ gap: 6 }}><input type="checkbox" checked={inactive} onChange={(e) => setInactive(e.target.checked)} /> Show inactive</label>
       </div>
+      {list && <CheckupTracker staff={list} onOpen={setProf} />}
       {open === 'new' && <Editor onDone={() => { setOpen(null); load(); }} />}
       <div className="adm-card" style={{ padding: 0 }}>
         <div className="st-row st-head"><span>NAME</span><span>TIER · RANK</span><span className="hide-sm">{mName}</span><span className="hide-sm">TIME OFF</span><span /></div>

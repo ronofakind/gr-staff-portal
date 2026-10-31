@@ -151,6 +151,7 @@ export function StaffProfile({ s, onClose, onEdit, all }: { s: AStaff; onClose: 
           {!linksOf(links, s.id).length && !conds.some((c) => c.staff_id === s.id) && <div className="muted sm">No rules. + Add to set who they work well with, who to keep apart, or when to book them.</div>}
           <div className="muted sm">Bookings and Auto-fill follow these. Changes save right away.</div>
         </div>
+        <EmergencyCard key={'em' + s.id} s={s} />
         <AboutCard key={s.id} s={s} people={people} />
         <div className="pcard">
           <div className="kick">ADMIN NOTES · NEVER SHOWN TO STAFF</div>
@@ -254,6 +255,36 @@ function MgrFeedback({ sid, d }: { sid: string; d: ScoreData }) {
             <span className="fb-it-r">{st ? <StarRow v={st} /> : <small className="muted">before stars</small>}{f.tier_vote && <i className={'tier-dot ' + f.tier_vote}>{f.tier_vote}</i>}</span></div>
             {det.length > 0 && <small>{det.join(' · ')}</small>}
             {f.note && <span>“{f.note}”</span>}</div>); })}
+    </div>
+  );
+}
+
+/** EMERGENCY CONTACT · admin only (push 31): from the profile check-up, + neighbourhood and when the check-up was done. */
+function EmergencyCard({ s }: { s: AStaff }) {
+  type Em = { emergency_name: string | null; emergency_relation: string | null; emergency_phone: string | null; neighbourhood: string | null; checkup_done_at: string | null; checkup_step: number | null };
+  const [e, setE] = useState<Em | null>(null); const [err, setErr] = useState('');
+  useEffect(() => {
+    supabase.from('staff_private').select('emergency_name,emergency_relation,emergency_phone,neighbourhood,checkup_done_at,checkup_step').eq('staff_id', s.id).maybeSingle().then(({ data, error }) => {
+      if (error) { setErr(/column|schema/i.test(error.message) ? 'Needs migration 036 (not applied yet).' : error.message); return; }
+      setE((data ?? { emergency_name: null, emergency_relation: null, emergency_phone: null, neighbourhood: null, checkup_done_at: null, checkup_step: null }) as Em);
+    });
+  }, [s.id]);
+  const tel = e?.emergency_phone?.replace(/[^\d+]/g, '');
+  const done = e?.checkup_done_at ? new Date(e.checkup_done_at) : null;
+  return (
+    <div className="pcard em-pcard">
+      <div className="row" style={{ justifyContent: 'space-between' }}><span className="kick">EMERGENCY CONTACT · ADMIN ONLY</span>
+        {e && <span className={'sm ' + (done ? 'okc' : 'muted')}>{done ? `Check-up done ${dLabel(isoDay(done), { month: 'short', day: 'numeric' })}, ${done.toLocaleTimeString('en-US', { timeZone: 'America/Toronto', hour: 'numeric', minute: '2-digit' })}` : `Check-up not done${(e.checkup_step ?? 1) > 1 ? ` · at step ${Math.min(6, e.checkup_step ?? 1)}` : ''}`}</span>}</div>
+      {!e ? <div className="muted sm">{err || 'Loading…'}</div> : <>
+        {e.emergency_phone ? (
+          <div className="row" style={{ gap: 10 }}>
+            <div className="grow"><b>{e.emergency_name ?? '—'}</b>{e.emergency_relation && <span className="muted"> · {e.emergency_relation}</span>}<div className="sm">{e.emergency_phone}</div></div>
+            {tel && <a className="abtn sm ok" href={`tel:${tel}`}>Call</a>}
+          </div>
+        ) : <div className="muted sm">{done ? 'Skipped in the check-up · they see a reminder on their Home.' : 'Not given yet.'}</div>}
+        <div className="sm"><span className="muted">Neighbourhood </span><b>{e.neighbourhood ?? '—'}</b></div>
+        <div className="muted sm">Never shown to managers or other staff.</div>
+      </>}
     </div>
   );
 }

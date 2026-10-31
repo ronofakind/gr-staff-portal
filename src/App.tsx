@@ -30,11 +30,17 @@ import { Bookings } from './admin/Bookings';
 import { Messages } from './admin/Messages';
 import { Hours as HoursPage } from './pages/Hours';
 import { Extras } from './admin/Extras';
+import { Checkup, HomeScreenAgain } from './pages/Checkup';
+import { CheckupContext, loadCheckup, type CheckupInfo } from './lib/checkup';
+import { homeStepDue } from './lib/install';
 
 export function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
   const [me, setMe] = useState<Staff | null | undefined>(undefined);
   const lang: Lang = 'en'; // English only for now; French is ready in i18n.ts
+  // push 31 · profile check-up gate. undefined = loading, null = unknown (RPC missing) → never blocks.
+  const [checkup, setCheckup] = useState<CheckupInfo | null | undefined>(undefined);
+  const [homeAgain, setHomeAgain] = useState(homeStepDue);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -42,21 +48,32 @@ export function App() {
     return () => data.subscription.unsubscribe();
   }, []);
 
+  const loadMe = (uid: string) => supabase.from('staff').select('id,full_name,nickname,email,phone,language,role,photo_url')
+    .eq('auth_user_id', uid).maybeSingle()
+    .then(({ data }) => setMe((data as Staff) ?? null));
+  const sessionUid = session?.user.id ?? (session === null ? null : undefined);
   useEffect(() => {
     if (!session) { setMe(session === null ? null : undefined); return; }
-    supabase.from('staff').select('id,full_name,nickname,email,phone,language,role,photo_url')
-      .eq('auth_user_id', session.user.id).maybeSingle()
-      .then(({ data }) => setMe((data as Staff) ?? null));
-  }, [session]);
+    loadMe(session.user.id);
+  }, [sessionUid]); // token refreshes don't reload the profile (or re-open the gate)
+  const meId = me?.id;
+  useEffect(() => {
+    if (!meId) { setCheckup(undefined); return; }
+    loadCheckup().then(setCheckup);
+    supabase.rpc('touch_last_seen').then(() => {}, () => {}); // "last opened" for the admin check-up tracker
+  }, [meId]);
 
   const legal = window.location.pathname.replace(/\/$/, '');
   if (legal === '/privacy' || legal === '/terms') return <Legal kind={legal.slice(1) as 'privacy' | 'terms'} />;
-  if (session === undefined || (session && me === undefined)) return <div className="loading" />;
+  if (session === undefined || (session && me === undefined) || (me && checkup === undefined)) return <div className="loading" />;
 
   let body: JSX.Element;
   if (!session) body = <Login />;
   else if (localStorage.getItem('gr_needs_pin')) body = <Login mustSetPin />;
   else if (!me) body = <NotStaff lang={lang} />;
+  // Every route goes through the check-up until it's done (Log out is on every step).
+  else if (checkup && !checkup.done_at) body = <Checkup me={me} info={checkup} onFinish={() => { loadMe(session.user.id); loadCheckup().then(setCheckup); }} />;
+  else if (homeAgain) body = <HomeScreenAgain onClose={() => setHomeAgain(false)} />;
   else body = (
     <BrowserRouter>
       <Routes>
@@ -97,7 +114,7 @@ export function App() {
     </BrowserRouter>
   );
 
-  return <LangContext.Provider value={lang}>{body}</LangContext.Provider>;
+  return <LangContext.Provider value={lang}><CheckupContext.Provider value={{ info: checkup ?? null, reload: () => loadCheckup().then(setCheckup) }}>{body}</CheckupContext.Provider></LangContext.Provider>;
 }
 
 function NotStaff({ lang }: { lang: Lang }) {

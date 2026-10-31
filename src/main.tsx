@@ -1,3 +1,5 @@
+// push 31: catch Android's beforeinstallprompt before anything renders (Home Screen step of the check-up)
+import './lib/install';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { App } from './App';

@@ -9,6 +9,9 @@ import { TabBar } from '../components/TabBar';
 import { AskCards, useAsks } from '../components/AskCards';
 import { UniformIcon, uniformFor, uniformLabel } from '../components/Uniform';
 import { AnnounceCards } from '../components/Announce';
+import { useCheckup } from '../lib/checkup';
+import { EmergencyForm } from './Checkup';
+import { SwipeSheet } from '../components/SwipeSheet';
 import { NeedChange, CancelSheet, ChangeSheet, LateSheet, LateBlock, ChangeCard, CancelledCard, useShiftChanges, t12 as t12c, type LateNotice } from '../components/ShiftChange';
 
 type MgrLate = { id: string; shift_id: string; event_id: string; name: string; eta: string; reason: string | null; note?: string | null };
@@ -37,6 +40,8 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
   const [sheet, setSheet] = useState<{ kind: 'cancel' | 'change' | 'late'; s: ShiftRow } | null>(null);
   const [gone, setGone] = useState<Gone[]>([]); const [okd, setOkd] = useState<string[]>(readOk);
   const [mgrLate, setMgrLate] = useState<MgrLate[]>([]);
+  // push 31 · emergency contact skipped in the check-up → small reminder until it's filled
+  const { info: cu, reload: reloadCu } = useCheckup(); const [emOpen, setEmOpen] = useState(false);
 
   const load = async () => {
     const since = new Date(Date.now() - 12 * 3600e3).toISOString();
@@ -129,6 +134,21 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
       {!preview && <AnnounceCards meId={me.id} />}
 
       <AskCards asks={asks} week={usualWeek} preview={preview} onlyWaiting onAnswered={reloadAsks} />
+
+      {!preview && cu?.done_at && !cu.emergency_phone && (
+        <button className="em-card" onClick={() => setEmOpen(true)}>
+          <span className="em-ic" aria-hidden="true">＋</span>
+          <span className="grow"><b>Add an emergency contact · 1 min</b><span>Only Ronnie sees it. Used only if something happens at an event.</span></span>
+          <span className="em-go">Add ›</span>
+        </button>
+      )}
+      {emOpen && cu && <>
+        <div className="scrim" onClick={() => setEmOpen(false)} />
+        <SwipeSheet onClose={() => setEmOpen(false)} label="Emergency contact">
+          <div><div className="kicker">ONLY RONNIE SEES THIS</div><div className="serif" style={{ fontSize: 26 }}>Emergency contact</div></div>
+          <EmergencyForm info={{ ...cu }} saveLabel="Save" onSaved={() => { setEmOpen(false); reloadCu(); }} />
+        </SwipeSheet>
+      </>}
 
       {pending.map((s) => (
         <div key={s.id} className="todo">
