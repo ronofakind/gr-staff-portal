@@ -148,7 +148,7 @@ export function LateSheet({ s, mgr, onClose, onSent, preview = false, again }: {
   const etaOf = (m: number) => new Date(Math.round((new Date(start).getTime() + m * 60000 < Date.now() ? base + m * 60000 : new Date(start).getTime() + m * 60000) / 60000) * 60000).toISOString();
   const eta = step === 'min' ? (min ? etaOf(min) : null) : t ? atOn(s.events.event_date, t, start) : null;
   const pickReason = (r: string) => setReason(reason === r ? '' : r);
-  const noteLine = reason === 'Other' ? <textarea className="sheet-note" rows={2} autoFocus value={note} placeholder="What’s going on? e.g. car broke down, taking a taxi" onChange={(e) => setNote(e.target.value)} /> : null;
+  const noteLine = reason === 'Other' ? <textarea className="sheet-note" rows={2} autoComplete="off" autoCorrect="on" value={note} placeholder="What’s going on? (optional)" onChange={(e) => setNote(e.target.value)} /> : null;
   const staffNotes = s.events.venues?.staff_notes?.trim();
   const send = async () => {
     if (!eta) return;
