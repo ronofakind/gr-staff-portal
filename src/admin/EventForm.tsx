@@ -131,6 +131,7 @@ export function EventForm() {
   const [venues, setVenues] = useState<Venue[]>([]); const [clients, setClients] = useState<Client[]>([]);
   const [staff, setStaff] = useState<AStaff[]>([]);
   const [venueId, setVenueId] = useState<string | null>(null); const [title, setTitle] = useState('');
+  const [pendingDetails, setPendingDetails] = useState(false); const [wasPending, setWasPending] = useState(false);
   const [clientId, setClientId] = useState<string>(''); const [newClient, setNewClient] = useState<string | null>(null);
   const [address, setAddress] = useState(''); const [ends, setEnds] = useState('~ midnight');
   const [parts, setParts] = useState<AddressParts | null>(null);
@@ -182,7 +183,8 @@ export function EventForm() {
       const { data: sh } = await supabase.from('shifts').select('id,event_id,staff_id,position_code,planned_start,attendance,notified_at,punches(punch_in)').in('event_id', evs.map((x) => x.id)).neq('status', 'declined');
       const shifts = (sh ?? []) as unknown as Sh[];
       setExisting(evs); setOldShifts(shifts);
-      setDate(e.event_date); setTitle(e.title); setVenueId(e.venue_id); setAddress(e.address ?? '');
+      setDate(e.event_date); setTitle(e.title === 'Details to come' ? '' : e.title); setVenueId(e.venue_id); setAddress(e.address ?? '');
+      setPendingDetails(!!(e as unknown as { details_pending?: boolean }).details_pending); setWasPending(!!(e as unknown as { details_pending?: boolean }).details_pending);
       setClientId(e.event_private?.client_id ?? ''); setRateSet(e.event_private?.rate_set ?? null);
       setTr({ on: !!e.transport, travel: e.travel_min ?? 60, gas: String(e.gas_per_car ?? 20), billing: e.transport_billing ?? 'client', rides: e.rides ?? !!e.transport });
       setExtras(e.extras != null ? String(e.extras) : ''); setExtrasBill(e.extras_billing ?? 'gr');
@@ -316,7 +318,7 @@ export function EventForm() {
       const lead = ls.find((l) => l.code === (dept === 'floor' ? 'MD' : 'BM'));
       const start = ls.map((l) => l.start).sort()[0] ?? '17:00';
       const row = {
-        event_date: forDate, title: title.trim(), venue_id: vId, address: (address + (unit.trim() ? `, ${unit.trim()}` : '')) || null, department: dept,
+        event_date: forDate, title: title.trim() || (pendingDetails ? 'Details to come' : ''), venue_id: vId, details_pending: pendingDetails, address: (address + (unit.trim() ? `, ${unit.trim()}` : '')) || null, department: dept,
         start_time: start, end_time: endT, ends_label: ends, staff_needed: ls.reduce((n, l) => n + l.count, 0),
         manager_id: lead ? keep(lead)[0] ?? null : null, description: note || null, notes: staffNote || null,
         uniform_floor: uFloor, uniform_bar: uBar, uniform_floor_w: uFloorW, uniform_bar_w: uBarW, uniform_items: lineItems(), drive_folder_url: folder.trim() || null, staffing: ls.map(({ dept: d, code, start: s, end, count }) => ({ dept: d, code, start: s, end: end || null, count })), guests: guests ? Number(guests) : null, event_type: eventType || null, extras: extras === '' ? null : Number(extras), extras_billing: extrasBill,
@@ -355,6 +357,7 @@ export function EventForm() {
 
       // Ask availability (staff only see the date)
       if (askWhen === 'save' && (dept === 'floor' || askBar === 'team')) await ask(forDate, dept, row.staff_needed, start);
+      if (pendingDetails || wasPending) await supabase.from('shifts').update({ time_tbc: pendingDetails }).eq('event_id', evId);
     }
     return firstId;
   };
@@ -377,7 +380,7 @@ export function EventForm() {
 
   const save = async (ev?: React.FormEvent) => {
     ev?.preventDefault(); setErr('');
-    if (!title.trim()) return setErr('Pick or type a venue first.');
+    if (!title.trim() && !pendingDetails) return setErr('Pick or type a venue first — or tick “Place and time to come”.');
     if (!lines.some((l) => l.count > 0)) return setErr('Add at least one staffing line.');
     setBusy(true);
     try {
@@ -439,6 +442,7 @@ export function EventForm() {
         summary={[dLabel(date, { weekday: 'short', month: 'short', day: 'numeric' }), title || 'no venue yet', client && client.name !== title ? client.name : privateId ? 'private home' : '', guests ? `${guests} guests` : '', eventType].filter(Boolean).join(' · ')}>
         <div className="ef-top">
           <label className="ef-f"><span>DATE</span><input type="date" required value={date} onChange={(e) => setDate(e.target.value)} /></label>
+          <label className="ef-f ef-pending" style={{ gridColumn: '1 / -1', flexDirection: 'row', alignItems: 'center', gap: 10 }}><input type="checkbox" checked={pendingDetails} onChange={(e) => setPendingDetails(e.target.checked)} /><span style={{ textTransform: 'none', letterSpacing: 0, fontSize: 13 }}><b>Place and time to come</b> · staff see “Details coming” with no Confirm button until you untick this and fill in the venue and times.</span></label>
           <div className="ef-f ef-venue"><span>VENUE · this is the title staff see</span><VenuePicker venues={venues} privates={privates} value={title} venue={venue} privateId={privateId} onPick={pickVenue} onPrivate={pickPrivate} onNew={(name) => { setVenueId(null); setPrivateId(null); setTitle(name); }} /></div>
           <label className="ef-f"><span>CLIENT · only you see it</span>
             {newClient !== null ? <div className="row"><input autoFocus value={newClient} onChange={(e) => setNewClient(e.target.value)} placeholder="New client name" /><button type="button" className="abtn sm" onClick={() => setNewClient(null)}>×</button></div>

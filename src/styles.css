@@ -1740,3 +1740,16 @@ div.avatar { color: var(--accent); background: var(--accent-bg); }
 .sheet:has(.sheet-back) { padding-top: 56px; }
 .sheet:has(.sheet-back) .grab { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); margin: 0; }
 .sheet:has(.sheet-back) .grab-hint { position: absolute; top: 24px; left: 50%; transform: translateX(-50%); margin: 0; white-space: nowrap; }
+/* Booked, details coming + said yes (fixes chat, Oct 31) */
+.next.soon { background: #fff; color: var(--ink); border: 2px dashed #C9BFB2; }
+.next.soon .top-line { color: var(--muted); } .next.soon .sub { color: var(--muted); font-size: 13px; line-height: 1.4; }
+.next.soon .tbox { background: var(--bg); } .next.soon .tbox small { color: var(--muted); } .next.soon .sm-big { color: var(--soft); font-size: 20px; }
+.soon-tag { height: 24px; padding: 0 10px; border-radius: 12px; background: var(--bg); font-size: 11px; font-weight: 700; color: var(--muted); display: inline-flex; align-items: center; letter-spacing: 0; }
+.tag-soon { height: 26px; padding: 0 10px; border-radius: 13px; background: var(--bg); color: var(--muted); font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; white-space: nowrap; }
+.said-yes { text-decoration: none; background: var(--ok-bg); color: #1B5E46; border-radius: 16px; padding: 12px 14px; display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.said-yes .grow { min-width: 0; } .said-yes b { font-weight: 700; }
+.mcell.soon .n { border: 2px dashed #C9BFB2; color: var(--muted); font-weight: 700; }
+.mcell.saidyes .n { background: var(--ok-bg); box-shadow: inset 0 0 0 2px var(--ok); color: var(--ok); font-weight: 700; }
+.off-mark.yes { color: var(--ok); }
+.yes-tag { color: var(--ok); } .agenda-row .none .yes-tag + small { display: block; }
+.yes-card small { display: block; font-size: 10px; font-weight: 700; letter-spacing: .1em; color: var(--ok); } .yes-card .serif { font-size: 20px; margin: 2px 0 4px; }

@@ -92,7 +92,11 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
   const isDone = (s: ShiftRow) => !!s.punches?.punch_in && !!s.punches.punch_out && new Date(s.punches.punch_out).getTime() <= Date.now();
   const doneToday = shifts.filter((s) => isDone(s) && s.events.event_date === todayIso());
   const [next, ...rest] = shifts.filter((s) => !isDone(s));
-  const pending = shifts.filter((s) => s.status === 'booked');
+  const pending = shifts.filter((s) => s.status === 'booked' && !s.events.details_pending);
+  const soon = (s: ShiftRow) => !!s.events.details_pending;
+  // Dates they said yes to that G&R hasn't booked (yet)
+  const bookedDates = new Set(shifts.map((s) => s.events.event_date));
+  const saidYes = (asks ?? []).filter((a) => a.status === 'yes' && a.for_date >= todayIso() && !bookedDates.has(a.for_date));
   const first = me.nickname || me.full_name.split(' ')[0];
   const today = todayIso();
 
@@ -192,6 +196,18 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
         const req = chg.reqs[next.id];
         const mgrName = next.events.manager?.full_name ?? null;
         const myAlerts = mgrLate.filter((x) => x.event_id === next.events.id);
+        if (soon(next)) return (
+          <section className="next soon" style={{ gap: 12, padding: 18 }}>
+            <div className="top-line"><span className="day-word">NEXT · {dayWord.toUpperCase()}</span><span className="soon-tag">DETAILS COMING</span></div>
+            <div><div className="venue serif" style={{ fontSize: 26 }}>You’re on for {dayWord === 'Today' || dayWord === 'Tomorrow' ? dayWord.toLowerCase() : dayWord.split(',')[0]}</div>
+              <div className="sub" style={{ whiteSpace: 'normal' }}>G&R has you that day as <b>{role(next)}</b>. The place and time are coming — you’ll get a notice to confirm once they’re set.</div></div>
+            <div className="row2">
+              <div className="tbox start"><small>Where</small><span className="big serif sm-big">To come</span></div>
+              <div className="tbox"><small>Shift starts</small><span className="big serif sm-big">To come</span></div>
+            </div>
+            <div className="sub" style={{ textAlign: 'center' }}>Keep the day free · nothing to do for now</div>
+          </section>
+        );
         return (
           <section className={'next' + (working ? ' working' : '')} style={{ gap: 14, padding: 18 }}>
             <div className="top-line">
@@ -239,11 +255,11 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
               return (
                 <Link key={s.id} to={teams[s.events.id] && !preview ? `/manage/${s.events.id}` : `${base}/shift/${s.id}`} className="agenda-row" style={{ minHeight: 64 }}>
                   <div className="d" style={{ width: 40, alignItems: 'center' }}><small>{b.dow}</small><b>{b.day}</b></div>
-                  <div className="what" style={{ gap: 5 }}><b>{s.events.title}</b>
+                  <div className="what" style={{ gap: 5 }}><b className={soon(s) ? 'muted' : ''}>{soon(s) ? 'Place to come' : s.events.title}</b>
                     <span className="pos-row2"><span className={'pos-pill' + (isLead(s) ? ' lead' : '')}>{role(s)}</span>{teams[s.events.id] && !preview ? <span>team {teams[s.events.id].length}</span> : null}</span></div>
                   <span className="row-wear" title={uniformLabel(uniformFor(s))}><UniformIcon kind={uniformFor(s)} size={30} /></span>
-                  <div className="row-time"><small>Starts</small>{s.time_tbc ? <b className="tbc">Time TBC</b> : <b><span className="serif">{time(s.planned_start, lang).replace(/\s?[ap]\.?\s?m\.?/i, '')}</span><i>{/p\.?\s?m/i.test(time(s.planned_start, lang)) ? ' PM' : ' AM'}</i></b>}</div>
-                  {s.status === 'confirmed' ? <span className="ok-dot" aria-label="Confirmed" /> : <span className="tag-ask" style={{ height: 26, fontSize: 11 }}>Confirm</span>}
+                  <div className="row-time"><small>Starts</small>{soon(s) ? <b className="tbc">To come</b> : s.time_tbc ? <b className="tbc">Time TBC</b> : <b><span className="serif">{time(s.planned_start, lang).replace(/\s?[ap]\.?\s?m\.?/i, '')}</span><i>{/p\.?\s?m/i.test(time(s.planned_start, lang)) ? ' PM' : ' AM'}</i></b>}</div>
+                  {soon(s) ? <span className="tag-soon">Details coming</span> : s.status === 'confirmed' ? <span className="ok-dot" aria-label="Confirmed" /> : <span className="tag-ask" style={{ height: 26, fontSize: 11 }}>Confirm</span>}
                 </Link>
               );
             })}
@@ -254,6 +270,13 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
       {sheet?.kind === 'change' && <ChangeSheet s={sheet.s} preview={preview} onClose={() => setSheet(null)} onSent={() => { setSheet(null); chg.reload(); }} />}
       {sheet?.kind === 'late' && <LateSheet s={sheet.s} mgr={sheet.s.events.manager?.full_name ?? null} again={chg.late[sheet.s.id] ?? null} preview={preview} onClose={() => setSheet(null)}
         onSent={(n: LateNotice) => { chg.setLate({ ...chg.late, [n.shift_id]: n }); setSheet(null); if (!preview) chg.reload(); }} />}
+      {saidYes.length > 0 && (
+        <Link to={`${base}/schedule`} className="said-yes">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="m8 12 3 3 5-6" /></svg>
+          <span className="grow"><b>You said yes to {saidYes.length} date{saidYes.length > 1 ? 's' : ''}</b> · {saidYes.slice(0, 3).map((a) => new Date(a.for_date + 'T12:00:00').toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })).join(', ')}{saidYes.length > 3 ? '…' : ''} · waiting for G&R to book</span>
+          <span>›</span>
+        </Link>
+      )}
       {askQ && <AskHours s={askQ} onClose={() => setAskQ(null)} onSent={() => { setQs({ ...qs, [askQ.id]: 'open' }); setAskQ(null); }} />}
       <TabBar base={base} />
     </main>

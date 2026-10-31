@@ -8,7 +8,7 @@ import { ampm15 } from '../components/TimeWheel';
 import { todayIso, isBar } from './Home';
 
 type S = { id: string; status: 'booked' | 'confirmed' | 'declined'; position_code: string | null; position_detail: string | null;
-  planned_start: string; planned_end: string | null; time_tbc: boolean; events: { event_date: string; title: string } };
+  planned_start: string; planned_end: string | null; time_tbc: boolean; events: { event_date: string; title: string; details_pending?: boolean } };
 
 const D = (iso: string) => new Date(iso + 'T12:00:00');
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -25,7 +25,7 @@ export function Schedule({ me, base = '', preview = false }: { me: Staff; base?:
   const [anchor, setAnchor] = useState(today);
   const [sel, setSel] = useState(today);
   const [rows, setRows] = useState<S[] | null>(null);
-  const [off, setOff] = useState<Set<string>>(new Set());
+  const [off, setOff] = useState<Set<string>>(new Set()); const [yes, setYes] = useState<Set<string>>(new Set());
   const [daysOff, setDaysOff] = useState<{ from_date: string; to_date: string; reason: string | null }[]>([]);
   const [usualNo, setUsualNo] = useState<Set<number>>(new Set()); const [usualYes, setUsualYes] = useState<Record<number, string | null>>({});
   const [opened, setOpened] = useState<Set<string>>(new Set());
@@ -46,9 +46,9 @@ export function Schedule({ me, base = '', preview = false }: { me: Staff; base?:
   useEffect(() => {
     setRows(null);
     Promise.all([
-      supabase.from('shifts').select('id,status,attendance,position_code,position_detail,planned_start,planned_end,time_tbc,events!inner(event_date,title)')
+      supabase.from('shifts').select('id,status,attendance,position_code,position_detail,planned_start,planned_end,time_tbc,events!inner(event_date,title,details_pending)')
         .eq('staff_id', me.id).neq('status', 'declined').gte('events.event_date', range.from).lte('events.event_date', range.to),
-      supabase.from('availability').select('for_date,status').eq('staff_id', me.id).eq('status', 'no').gte('for_date', range.from).lte('for_date', range.to),
+      supabase.from('availability').select('for_date,status').eq('staff_id', me.id).in('status', ['no', 'yes']).gte('for_date', range.from).lte('for_date', range.to),
       supabase.from('days_off').select('from_date,to_date,reason').eq('staff_id', me.id).lte('from_date', range.to).gte('to_date', range.from),
       supabase.from('staff_weekly').select('dow,status,from_time').eq('staff_id', me.id),
       supabase.from('avail_exceptions').select('for_date').eq('staff_id', me.id).gte('for_date', range.from).lte('for_date', range.to),
@@ -59,7 +59,8 @@ export function Schedule({ me, base = '', preview = false }: { me: Staff; base?:
       setUsualNo(new Set(wk.filter((r) => r.status === 'no').map((r) => r.dow)));
       setUsualYes(Object.fromEntries(wk.filter((r) => r.status !== 'no').map((r) => [r.dow, r.from_time ? r.from_time.slice(0, 5) : null])));
       setRows(((s.data ?? []) as unknown as (S & { attendance?: string | null })[]).filter((r) => r.attendance !== 'cancelled').sort((x, y) => x.planned_start.localeCompare(y.planned_start)));
-      setOff(new Set((a.data ?? []).map((r) => r.for_date as string)));
+      setOff(new Set((a.data ?? []).filter((r) => r.status === 'no').map((r) => r.for_date as string)));
+      setYes(new Set((a.data ?? []).filter((r) => r.status === 'yes').map((r) => r.for_date as string)));
     });
   }, [range.from, range.to, me.id, tick]);
 
@@ -117,7 +118,7 @@ export function Schedule({ me, base = '', preview = false }: { me: Staff; base?:
     : D(range.first!).toLocaleDateString('en-CA', { month: 'long' });
   const inView = (rows ?? []).filter((r) => mode === 'week' || (r.events.event_date >= range.first! && r.events.event_date <= range.last!));
   const total = Math.round(inView.reduce((n, r) => n + hrs(r), 0));
-  const asks = inView.filter((r) => r.status === 'booked').length;
+  const asks = inView.filter((r) => r.status === 'booked' && !r.events.details_pending).length;
 
   return (
     <main className="page v2">
@@ -152,11 +153,11 @@ export function Schedule({ me, base = '', preview = false }: { me: Staff; base?:
               <div key={day} className={'agenda-row' + (isToday ? ' today' : '') + (!list.length && !isToday ? ' empty' : '') + (asking ? ' ask' : '') + (!list.length && offOn(day) ? ' dayoff' : '') + (!list.length && !offOn(day) && usuallyNo(day) && day >= today ? ' usualoff' : '')}>
                 <div className="d"><small>{dw}</small><b>{D(day).getDate()}</b></div>
                 <div className="what">
-                  {list.length === 0 && <span className="none">{offOn(day) ? <><b className="off-tag">DAY OFF</b>{offOn(day)!.reason ?? ''}</> : off.has(day) ? 'Unavailable' : usuallyNo(day) ? <><b>Not free</b><small>Your usual {dowName(day)}</small></> : isOpened(day) ? <span className="opened-tag">✓ Opened up</span> : usualFree(day) ?? '—'}</span>}
+                  {list.length === 0 && <span className="none">{yes.has(day) && day >= today ? <><b className="yes-tag">You said yes</b><small>waiting for G&R to book</small></> : offOn(day) ? <><b className="off-tag">DAY OFF</b>{offOn(day)!.reason ?? ''}</> : off.has(day) ? 'Unavailable' : usuallyNo(day) ? <><b>Not free</b><small>Your usual {dowName(day)}</small></> : isOpened(day) ? <span className="opened-tag">✓ Opened up</span> : usualFree(day) ?? '—'}</span>}
                   {list.map((s) => (
                     <Link key={s.id} to={`${base}/shift/${s.id}`}>
                       <b>{s.events.title}</b>
-                      <span>{s.time_tbc ? 'Time TBC' : time(s.planned_start, lang)} · {role(s)}</span>
+                      <span>{s.events.details_pending ? 'Place and time to come' : s.time_tbc ? 'Time TBC' : time(s.planned_start, lang)} · {role(s)}</span>
                     </Link>
                   ))}
                 </div>
@@ -164,6 +165,7 @@ export function Schedule({ me, base = '', preview = false }: { me: Staff; base?:
                   {!list.length && !offOn(day) && usuallyNo(day) && day >= today && <button className="can-work" onClick={() => openDay(day, true)}>I can work</button>}
                   {isToday && <span className="tag-today">TODAY</span>}
                   {list.map((s) => day < today ? <span key={s.id} className="tag-done">Worked</span>
+                    : s.events.details_pending ? <span key={s.id} className="tag-soon">Details coming</span>
                     : s.status === 'confirmed' ? <span key={s.id} className="tag-ok">✓ Confirmed</span>
                     : <button key={s.id} className="tag-ask" onClick={() => respond(s.id)}>Confirm ›</button>)}
                 </div>
@@ -195,7 +197,8 @@ export function Schedule({ me, base = '', preview = false }: { me: Staff; base?:
                 const out = day < range.first! || day > range.last!;
                 let c = 'mcell';
                 if (out) c += ' out';
-                else if (list.length) c += day < today ? ' done' : list.some((s) => s.status === 'booked') ? ' ask' : ' ok';
+                else if (list.length) c += day < today ? ' done' : list.some((s) => s.events.details_pending) ? ' soon' : list.some((s) => s.status === 'booked') ? ' ask' : ' ok';
+                else if (yes.has(day) && day >= today) c += ' saidyes';
                 else if (offOn(day)) c += ' dayoff';
                 else if (off.has(day)) c += ' off';
                 else if (usuallyNo(day) && day >= today) c += ' usualno';
@@ -204,7 +207,7 @@ export function Schedule({ me, base = '', preview = false }: { me: Staff; base?:
                 if (day === today) c += ' today';
                 if (day === sel && !out && !picking) c += ' sel';
                 if (picking && !out) { if (picked(day)) c += ' picked' + (day === pickFrom ? ' pf' : '') + (day === pickTo ? ' pt' : ''); else if (list.length || day < today) c += ' nopick'; }
-                return <button key={day} className={c} onClick={() => !out && (picking ? tapPick(day, list.length > 0) : setSel(day))} aria-label={day}><span className="n">{D(day).getDate()}</span>{!out && !list.length && offOn(day) ? <span className="off-mark">OFF</span> : <span className="u" />}</button>;
+                return <button key={day} className={c} onClick={() => !out && (picking ? tapPick(day, list.length > 0) : setSel(day))} aria-label={day}><span className="n">{D(day).getDate()}</span>{!out && !list.length && offOn(day) ? <span className="off-mark">OFF</span> : !out && !list.length && yes.has(day) && day >= today ? <span className="off-mark yes">YES</span> : <span className="u" />}</button>;
               })}
             </div>
           </section>
@@ -231,10 +234,15 @@ export function Schedule({ me, base = '', preview = false }: { me: Staff; base?:
             <span><i className="stripe" />Day off</span>
             <span><i style={{ background: '#DDD5CA' }} />Not free (usual week)</span>
             <span><i style={{ background: '#fff', boxShadow: 'inset 0 0 0 2px var(--ok)' }} />Opened up</span>
+            <span><i style={{ background: 'var(--ok-bg)', boxShadow: 'inset 0 0 0 2px var(--ok)' }} />You said yes · waiting</span>
+            <span><i style={{ background: '#fff', border: '2px dashed #C9BFB2' }} />Booked · details coming</span>
           </div>
           )}
           <div className="sec-head"><span className="serif">{D(sel).toLocaleDateString('en-CA', { weekday: 'long', day: 'numeric' })}</span><span className="muted sm">{inView.length} shifts · {total} hrs this month</span></div>
-          {(byDay[sel] ?? []).length === 0 && (offOn(sel) ? (
+          {(byDay[sel] ?? []).length === 0 && yes.has(sel) && sel >= today && (
+            <div className="card yes-card"><small>{D(sel).toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase()} · YOU SAID YES</small><div className="serif">Available</div><p className="muted sm" style={{ margin: 0 }}>G&R hasn’t booked you yet. You’ll get a notice if they do. Change your answer in Availability.</p></div>
+          )}
+          {(byDay[sel] ?? []).length === 0 && !(yes.has(sel) && sel >= today) && (offOn(sel) ? (
             <div className="dayoff-card"><div className="grow"><small>DAY OFF · {offLabel(offOn(sel)!).toUpperCase()}</small><div className="serif">{offOn(sel)!.reason || 'Day off'}</div></div><button className="link-btn" style={{ color: 'var(--accent)' }} onClick={() => removeOff(offOn(sel)!)}>Remove</button></div>
           ) : usuallyNo(sel) && sel >= today ? (
             <div className="usual-card">
@@ -248,7 +256,7 @@ export function Schedule({ me, base = '', preview = false }: { me: Staff; base?:
           ) : usualFree(sel) ? <div className="card">{usualFree(sel)}</div> : <div className="card muted sm">{off.has(sel) ? 'Unavailable' : 'No shift'}</div>)}
           {(byDay[sel] ?? []).map((s) => (
             <Link key={s.id} to={`${base}/shift/${s.id}`} className="day-card">
-              <div className="grow"><small>{s.time_tbc ? 'Time TBC' : time(s.planned_start, lang)} · {role(s)}{s.status === 'booked' ? ' · to confirm' : ''}</small><div className="serif">{s.events.title}</div></div>
+              <div className="grow"><small>{s.events.details_pending ? 'Place and time to come' : s.time_tbc ? 'Time TBC' : time(s.planned_start, lang)} · {role(s)}{s.status === 'booked' && !s.events.details_pending ? ' · to confirm' : ''}</small><div className="serif">{s.events.details_pending ? 'Details coming' : s.events.title}</div></div>
               <span className="go">›</span>
             </Link>
           ))}
