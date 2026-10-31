@@ -90,7 +90,7 @@ export function Free() {
         </div>
         <div className="row wrap">
           <span className="sm"><b className="okc">{groups.yes.filter((a) => !placedAt(a.staff_id)).length}</b> available · <b>{floorEvs.reduce((n, e) => n + booked(e).length, 0)}</b> / {floorEvs.reduce((n, e) => n + e.staff_needed, 0)} placed · <b style={{ color: 'var(--amber)' }}>{floorEvs.reduce((n, e) => n + openOf(e), 0)}</b> open · <b>{groups.wait.length}</b> no answer</span>
-          <Link className="abtn" to="/admin/availability">Ask more people</Link>
+          <Link className="abtn" to={`/admin/bookings?date=${d}`}>Ask more people · Bookings ›</Link>
           <Link className="abtn dark" to={`/admin/day?d=${d}`}>Open day view</Link>
         </div>
       </div>

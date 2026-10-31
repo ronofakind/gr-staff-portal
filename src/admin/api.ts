@@ -17,13 +17,13 @@ export type AEvent = {
   id: string; event_date: string; title: string; address: string | null; department: 'floor' | 'bar' | 'kitchen';
   description: string | null; dress_code: string | null; bring: string | null;
   start_time: string | null; end_time: string | null; staff_needed: number; manager_id: string | null; hours_submitted_at: string | null;
-  venue_id: string | null; guests?: number | null; event_type?: string | null; ends_label?: string | null; staffing?: Line[]; notes?: string | null; uniform_floor?: string; uniform_bar?: string; uniform_floor_w?: string | null; uniform_bar_w?: string | null; drive_folder_url?: string | null; timeline: { time: string; label: string }[];
+  venue_id: string | null; guests?: number | null; event_type?: string | null; extras?: number | null; extras_billing?: 'gr' | 'client' | null; ends_label?: string | null; staffing?: Line[]; notes?: string | null; uniform_floor?: string; uniform_bar?: string; uniform_floor_w?: string | null; uniform_bar_w?: string | null; drive_folder_url?: string | null; timeline: { time: string; label: string }[];
   event_private: { client: string | null; punch_code: string ; pay_method?: 'invoice' | 'cash'; qb_doc_type?: 'estimate' | 'invoice' | null; qb_doc_number?: string | null; cash_received_at?: string | null; qb_removed_at?: string | null } | null;
   shifts: AShift[];
 };
 
 export const EVENT_SELECT = `id,event_date,title,address,department,description,dress_code,bring,start_time,end_time,
-  staff_needed,manager_id,hours_submitted_at,venue_id,timeline,event_private(client,punch_code,pay_method,qb_doc_type,qb_doc_number,cash_received_at,qb_removed_at),guests,event_type,ends_label,staffing,notes,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,drive_folder_url,
+  staff_needed,manager_id,hours_submitted_at,venue_id,timeline,event_private(client,punch_code,pay_method,qb_doc_type,qb_doc_number,cash_received_at,qb_removed_at),guests,event_type,extras,extras_billing,ends_label,staffing,notes,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,drive_folder_url,
   shifts(id,event_id,staff_id,position_code,position_detail,planned_start,status,changed_at,notified_at,attendance,left_early,attendance_reason,leave_by,manager_note,note_archived_at,note_archived_by,punches(punch_in,punch_out),staff:staff!shifts_staff_id_fkey(full_name,phone))`;
 
 export async function eventsBetween(from: string, to: string) {

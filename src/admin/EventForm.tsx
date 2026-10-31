@@ -148,6 +148,7 @@ export function EventForm() {
   const allFold = (o: boolean) => { const f = Object.fromEntries([1, 2, 3, 4, 5, 6].map((n) => [n, o])); setFoldMap(f); try { localStorage.setItem(FOLD_KEY, JSON.stringify(f)); } catch { /* private mode */ } };
   const [privateId, setPrivateId] = useState<string | null>(null); // a private-home client used as the venue
   const [guests, setGuests] = useState(''); const [eventType, setEventType] = useState(''); const [types, setTypes] = useState<{ name: string; main: boolean }[]>([]);
+  const [extras, setExtras] = useState(''); const [extrasBill, setExtrasBill] = useState<'gr' | 'client'>('gr');
   const [payMethod, setPayMethod] = useState<'invoice' | 'cash'>('invoice'); const [qbType, setQbType] = useState<'estimate' | 'invoice'>('estimate'); const [qbNum, setQbNum] = useState('');
   const [driveOn, setDriveOn] = useState<boolean | null>(null); const [drive, setDrive] = useState<{ email: string } | null>(null);
   const [lines, setLines] = useState<Line[]>([blankLine('floor', 'MD', '17:00'), blankLine('floor', 'W', '17:00')]);
@@ -182,6 +183,7 @@ export function EventForm() {
       setExisting(evs); setOldShifts(shifts);
       setDate(e.event_date); setTitle(e.title); setVenueId(e.venue_id); setAddress(e.address ?? '');
       setClientId(e.event_private?.client_id ?? ''); setRateSet(e.event_private?.rate_set ?? null);
+      setExtras(e.extras != null ? String(e.extras) : ''); setExtrasBill(e.extras_billing ?? 'gr');
       setGuests(e.guests ? String(e.guests) : ''); setEventType(e.event_type ?? ''); setPayMethod(e.event_private?.pay_method ?? 'invoice');
       if (e.event_private?.qb_doc_type) setQbType(e.event_private.qb_doc_type); setQbNum(e.event_private?.qb_doc_number ?? ''); setDriveOn(e.drive_folder_url ? false : null);
       setEnds(e.ends_label ?? (ENDS.find(([, t]) => t && e.end_time?.startsWith(t))?.[0] ?? '~ midnight'));
@@ -312,7 +314,7 @@ export function EventForm() {
         event_date: forDate, title: title.trim(), venue_id: vId, address: (address + (unit.trim() ? `, ${unit.trim()}` : '')) || null, department: dept,
         start_time: start, end_time: endT, ends_label: ends, staff_needed: ls.reduce((n, l) => n + l.count, 0),
         manager_id: lead ? keep(lead)[0] ?? null : null, description: note || null, notes: staffNote || null,
-        uniform_floor: uFloor, uniform_bar: uBar, uniform_floor_w: uFloorW, uniform_bar_w: uBarW, uniform_items: lineItems(), drive_folder_url: folder.trim() || null, staffing: ls.map(({ dept: d, code, start: s, end, count }) => ({ dept: d, code, start: s, end: end || null, count })), guests: guests ? Number(guests) : null, event_type: eventType || null,
+        uniform_floor: uFloor, uniform_bar: uBar, uniform_floor_w: uFloorW, uniform_bar_w: uBarW, uniform_items: lineItems(), drive_folder_url: folder.trim() || null, staffing: ls.map(({ dept: d, code, start: s, end, count }) => ({ dept: d, code, start: s, end: end || null, count })), guests: guests ? Number(guests) : null, event_type: eventType || null, extras: extras === '' ? null : Number(extras), extras_billing: extrasBill,
       };
       const res = old ? await supabase.from('events').update(row).eq('id', old.id).select('id').single() : await supabase.from('events').insert(row).select('id').single();
       if (res.error) throw res.error;
@@ -542,6 +544,16 @@ export function EventForm() {
             <small className="muted">{payMethod === 'cash'
               ? 'Cash: nothing is made or filled in QuickBooks. After “Mark cash received”, Needs-you reminds you to remove the estimate yourself.'
               : qbNum ? (qbType === 'estimate' ? 'The invoice is made from this estimate.' : 'The invoice runs fill this invoice instead of making a new one.') : 'Empty = automatic, as today.'}</small>
+            {(() => { const fl = lines.filter((l) => l.dept === 'floor').reduce((n, l) => n + l.count, 0); const auto = fl > 7 ? Math.ceil(fl * 0.1) : 0; return (<>
+              <span className="kick" style={{ marginTop: 10 }}>EXTRAS</span>
+              <div className="row wrap" style={{ gap: 8, alignItems: 'center' }}>
+                <select value={extras} onChange={(e) => setExtras(e.target.value)} style={{ height: 40, borderRadius: 10, border: '1.5px solid #DCD3C7', padding: '0 8px' }}>
+                  <option value="">+{auto} (10%{fl > 7 ? '' : ', 7 or fewer = none'})</option>{[0, 1, 2, 3, 4, 5, 6, 8, 10].map((n) => <option key={n} value={String(n)}>+{n}</option>)}
+                </select>
+                <div className="seg3">{(['gr', 'client'] as const).map((m) => <button type="button" key={m} className={extrasBill === m ? 'on' : ''} onClick={() => setExtrasBill(m)}>{m === 'gr' ? 'On G&R' : 'Client pays'}</button>)}</div>
+              </div>
+              <small className="muted">Events over 7 staff get 10% extras, rounded up. On G&R: extras stay off the invoice unless one replaces a no-show. Client pays: invoiced like the other waiters.</small>
+            </>); })()}
           </div>
         </div>
       </Fold>

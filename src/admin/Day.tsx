@@ -144,7 +144,7 @@ export function Day() {
             {!bench.length && <span className="muted sm">{q ? 'No match.' : 'Nobody waiting. Search to add anyone.'}</span>}
           </div>
           {drag?.kind === 'shift' && <div className="dv-hint">Drop here = back to bench</div>}
-          <div className="dv-foot"><Link className="abtn sm" to="/admin/availability">Ask more people</Link></div>
+          <div className="dv-foot"><Link className="abtn sm" to={`/admin/bookings?date=${day}`}>Ask more people ›</Link></div>
         </section>
 
         {evs.map((e) => {

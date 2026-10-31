@@ -62,7 +62,7 @@ export function EventDetail() {
     <div className="stack-lg ed2">
       <div className="toolbar">
         <div>
-          <Link to={`/admin/day?d=${e.event_date}`} className="muted sm strong">‹ Bookings · {dLabel(e.event_date, { weekday: 'long', month: 'short', day: 'numeric' })}</Link>
+          <Link to={`/admin/bookings?date=${e.event_date}`} className="muted sm strong">‹ Bookings · {dLabel(e.event_date, { weekday: 'long', month: 'short', day: 'numeric' })}</Link>
           <h1 className="serif-h">{x?.venue?.name ?? e.title}</h1>
           <div className="row wrap" style={{ gap: 6, marginTop: 8 }}>
             <span className="tag">{dLabel(e.event_date, { weekday: 'short', month: 'short', day: 'numeric' })}</span>
@@ -114,7 +114,7 @@ export function EventDetail() {
             {!lines.length && <div className="muted sm">No staffing lines yet.</div>}
           </div>
           <div className="ed2-tot"><span>{floor ? `${nFloor} floor` : ''}{floor && bar ? ' · ' : ''}{bar ? `${nBar} bar` : ''}</span><b>{nFloor + nBar} total</b></div>
-          <Link className="sm strong no-print" to={`/admin/day?d=${e.event_date}`}>Who's booked →</Link>
+          <Link className="sm strong no-print" to={`/admin/bookings?date=${e.event_date}`}>Who's booked →</Link>
         </Sec>
 
         <Sec k="uniforms" title="Uniforms" open={isOpen('uniforms')} setOpen={setFold} summary={[floor ? 'Floor' : null, bar ? 'Bar' : null].filter(Boolean).join(' + ') + ' · men / women'}>
