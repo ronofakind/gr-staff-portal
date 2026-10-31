@@ -14,6 +14,7 @@ const D = (iso: string) => new Date(iso + 'T12:00:00');
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const add = (s: string, n: number) => { const d = D(s); d.setDate(d.getDate() + n); return iso(d); };
 const monday = (s: string) => add(s, -((D(s).getDay() + 6) % 7));
+const short = (s: string) => D(s).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
 const DOW = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 const hrs = (s: S) => !s.time_tbc && s.planned_end ? (new Date(s.planned_end).getTime() - new Date(s.planned_start).getTime()) / 3600e3 : 0;
 const role = (s: S) => s.position_code === 'MD' ? 'MD' : s.position_detail ? s.position_detail.replace(/^bar\s*-\s*/i, '') : isBar(s.position_code, null) ? 'Bar' : 'Waiter';
@@ -28,6 +29,10 @@ export function Schedule({ me, base = '', preview = false }: { me: Staff; base?:
   const [daysOff, setDaysOff] = useState<{ from_date: string; to_date: string; reason: string | null }[]>([]);
   const [usualNo, setUsualNo] = useState<Set<number>>(new Set()); const [usualYes, setUsualYes] = useState<Record<number, string | null>>({});
   const [opened, setOpened] = useState<Set<string>>(new Set());
+  // Days off from the calendar: tap a day, tap a second day for a range, tap a picked day to clear.
+  const [picking, setPicking] = useState(false); const [pickA, setPickA] = useState<string | null>(null); const [pickB, setPickB] = useState<string | null>(null);
+  const [pickReason, setPickReason] = useState(''); const [pickErr, setPickErr] = useState<string | null>(null); const [savingOff, setSavingOff] = useState(false);
+  const [savedOff, setSavedOff] = useState<{ id: string; label: string } | null>(null);
 
   const range = useMemo(() => {
     if (mode === 'week') { const a = monday(anchor); return { from: a, to: add(a, 6) }; }
@@ -37,6 +42,7 @@ export function Schedule({ me, base = '', preview = false }: { me: Staff; base?:
   }, [mode, anchor]);
 
   useEffect(() => { try { localStorage.setItem('gr_sched', mode); } catch { /* ignore */ } }, [mode]);
+  const [tick, setTick] = useState(0); const reload = () => setTick((t) => t + 1);
   useEffect(() => {
     setRows(null);
     Promise.all([
@@ -55,8 +61,34 @@ export function Schedule({ me, base = '', preview = false }: { me: Staff; base?:
       setRows(((s.data ?? []) as unknown as S[]).sort((x, y) => x.planned_start.localeCompare(y.planned_start)));
       setOff(new Set((a.data ?? []).map((r) => r.for_date as string)));
     });
-  }, [range.from, range.to, me.id]);
+  }, [range.from, range.to, me.id, tick]);
 
+  const pickFrom = pickA && pickB ? (pickA < pickB ? pickA : pickB) : pickA; const pickTo = pickA && pickB ? (pickA < pickB ? pickB : pickA) : pickA;
+  const picked = (day: string) => !!pickFrom && !!pickTo && day >= pickFrom && day <= pickTo;
+  const pickDays = pickFrom && pickTo ? (D(pickTo).getTime() - D(pickFrom).getTime()) / 864e5 + 1 : 0;
+  const tapPick = (day: string, booked: boolean) => {
+    if (booked || day < today) return;
+    setPickErr(null);
+    if (picked(day) && pickB) { setPickA(day); setPickB(null); return; } // tap inside a range → restart from that day
+    if (pickA === day && !pickB) { setPickA(null); return; }
+    if (!pickA) { setPickA(day); return; }
+    if (!pickB) { const lo = pickA < day ? pickA : day, hi = pickA < day ? day : pickA;
+      for (let d = lo; d <= hi; d = add(d, 1)) if ((byDay[d] ?? []).length) { setPickErr(`You're booked on ${short(d)}. Pick around it, or talk to Ronnie.`); return; }
+      setPickB(day); return; }
+    setPickA(day); setPickB(null);
+  };
+  const startPick = () => { setPicking(true); setPickA(null); setPickB(null); setPickReason(''); setPickErr(null); setSavedOff(null); setMode('month'); };
+  const stopPick = () => { setPicking(false); setPickA(null); setPickB(null); setPickErr(null); };
+  const saveOff = async () => {
+    if (preview || !pickFrom || !pickTo || savingOff) return; setSavingOff(true);
+    const { data, error } = await supabase.from('days_off').insert({ staff_id: me.id, from_date: pickFrom, to_date: pickTo, reason: pickReason.trim() || null }).select('id').single();
+    setSavingOff(false);
+    if (error) { setPickErr(error.message.includes('booked') ? "You're booked on one of these days. Talk to Ronnie." : error.message); return; }
+    setDaysOff((o) => [...o, { from_date: pickFrom, to_date: pickTo, reason: pickReason.trim() || null }]);
+    setSavedOff({ id: data.id, label: pickFrom === pickTo ? short(pickFrom) : `${short(pickFrom)} – ${short(pickTo)}` }); setSel(pickFrom); stopPick();
+  };
+  const undoOff = async () => { if (!savedOff || preview) return; await supabase.from('days_off').delete().eq('id', savedOff.id); setSavedOff(null); reload(); };
+  const removeOff = async (o: { from_date: string; to_date: string }) => { if (preview) return; await supabase.from('days_off').delete().eq('staff_id', me.id).eq('from_date', o.from_date).eq('to_date', o.to_date); setDaysOff((d) => d.filter((x) => x !== o)); };
   const offOn = (day: string) => daysOff.find((o) => o.from_date <= day && o.to_date >= day);
   const usuallyNo = (day: string) => usualNo.has((D(day).getDay() + 6) % 7) && !opened.has(day);
   const isOpened = (day: string) => opened.has(day) && usualNo.has((D(day).getDay() + 6) % 7);
@@ -81,7 +113,6 @@ export function Schedule({ me, base = '', preview = false }: { me: Staff; base?:
     setRows((r) => (r ?? []).map((x) => (x.id === id ? { ...x, status: 'confirmed' } : x)));
   };
 
-  const short = (s: string) => D(s).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' });
   const title = mode === 'week' ? `${short(range.from)} – ${short(range.to)}`
     : D(range.first!).toLocaleDateString('en-CA', { month: 'long' });
   const inView = (rows ?? []).filter((r) => mode === 'week' || (r.events.event_date >= range.first! && r.events.event_date <= range.last!));
@@ -142,7 +173,16 @@ export function Schedule({ me, base = '', preview = false }: { me: Staff; base?:
         </section>
       ) : (
         <>
-          <section className="month">
+          {savedOff && <div className="off-saved"><span><b>Days off saved</b> · {savedOff.label}</span><button className="link-btn" onClick={undoOff}>Undo</button></div>}
+          {picking ? (
+            <div className="pick-hint"><b>Tap a day, or tap two days for a range.</b> Tap a picked day to clear it.</div>
+          ) : (
+            <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', padding: '0 4px' }}>
+              <span className="muted sm">Tap a day for details</span>
+              <button className="days-off-btn" onClick={startPick}>+ Days off</button>
+            </div>
+          )}
+          <section className={'month' + (picking ? ' picking' : '')}>
             <div className="heads">{['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((h, i) => <span key={i}>{h}</span>)}</div>
             <div className="grid">
               {Array.from({ length: (D(range.to).getTime() - D(range.from).getTime()) / 864e5 + 1 }, (_, i) => add(range.from, i)).map((day) => {
@@ -157,11 +197,28 @@ export function Schedule({ me, base = '', preview = false }: { me: Staff; base?:
                 else if (isOpened(day) && day >= today) c += ' opened';
                 else if (day < today) c += ' past';
                 if (day === today) c += ' today';
-                if (day === sel && !out) c += ' sel';
-                return <button key={day} className={c} onClick={() => !out && setSel(day)} aria-label={day}><span className="n">{D(day).getDate()}</span>{!out && !list.length && offOn(day) ? <span className="off-mark">OFF</span> : <span className="u" />}</button>;
+                if (day === sel && !out && !picking) c += ' sel';
+                if (picking && !out) { if (picked(day)) c += ' picked' + (day === pickFrom ? ' pf' : '') + (day === pickTo ? ' pt' : ''); else if (list.length || day < today) c += ' nopick'; }
+                return <button key={day} className={c} onClick={() => !out && (picking ? tapPick(day, list.length > 0) : setSel(day))} aria-label={day}><span className="n">{D(day).getDate()}</span>{!out && !list.length && offOn(day) ? <span className="off-mark">OFF</span> : <span className="u" />}</button>;
               })}
             </div>
           </section>
+          {picking && (
+            <div className="save-bar pick-bar">
+              <div className="grow">
+                <b style={{ color: 'var(--ink)', fontSize: 16 }} className="serif">{pickFrom && pickTo ? <>{pickFrom === pickTo ? short(pickFrom) : `${short(pickFrom)} – ${short(pickTo)}`} <span className="muted sm">· {pickDays} day{pickDays > 1 ? 's' : ''}</span></> : 'Pick your days off'}</b>
+                {pickErr ? <span style={{ color: 'var(--accent)' }}>{pickErr}</span> : <input className="av-note" value={pickReason} onChange={(e) => setPickReason(e.target.value)} placeholder="Reason (optional)" />}
+              </div>
+              <button className="undo" onClick={stopPick}>Cancel</button>
+              <button className="save" disabled={!pickFrom || savingOff} onClick={saveOff}>{savingOff ? 'Saving…' : 'Save days off'}</button>
+            </div>
+          )}
+          {picking ? (
+            <div className="legend">
+              <span><i style={{ background: 'var(--accent)' }} /><b>Picked</b> · day off</span>
+              <span><i style={{ background: 'var(--ok)', opacity: .35 }} />Booked · can’t pick</span>
+            </div>
+          ) : (
           <div className="legend">
             <span><i style={{ background: 'var(--ok)' }} />Confirmed</span>
             <span><i style={{ border: '2px dashed var(--accent)', background: '#fff' }} />To confirm</span>
@@ -170,9 +227,10 @@ export function Schedule({ me, base = '', preview = false }: { me: Staff; base?:
             <span><i style={{ background: '#DDD5CA' }} />Not free (usual week)</span>
             <span><i style={{ background: '#fff', boxShadow: 'inset 0 0 0 2px var(--ok)' }} />Opened up</span>
           </div>
+          )}
           <div className="sec-head"><span className="serif">{D(sel).toLocaleDateString('en-CA', { weekday: 'long', day: 'numeric' })}</span><span className="muted sm">{inView.length} shifts · {total} hrs this month</span></div>
           {(byDay[sel] ?? []).length === 0 && (offOn(sel) ? (
-            <Link to={base ? '#' : '/availability'} className="dayoff-card"><div className="grow"><small>DAY OFF · {offLabel(offOn(sel)!).toUpperCase()}</small><div className="serif">{offOn(sel)!.reason || 'Day off'}</div></div><span className="muted sm">Edit ›</span></Link>
+            <div className="dayoff-card"><div className="grow"><small>DAY OFF · {offLabel(offOn(sel)!).toUpperCase()}</small><div className="serif">{offOn(sel)!.reason || 'Day off'}</div></div><button className="link-btn" style={{ color: 'var(--accent)' }} onClick={() => removeOff(offOn(sel)!)}>Remove</button></div>
           ) : usuallyNo(sel) && sel >= today ? (
             <div className="usual-card">
               <small>{D(sel).toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric' }).toUpperCase()}</small>
@@ -191,6 +249,7 @@ export function Schedule({ me, base = '', preview = false }: { me: Staff; base?:
           ))}
         </>
       )}
+      {picking && <div style={{ height: 120 }} />}
       <TabBar base={base} />
     </main>
   );

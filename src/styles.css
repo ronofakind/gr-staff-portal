@@ -1495,3 +1495,16 @@ div.avatar { color: var(--accent); background: var(--accent-bg); }
   .rk-head { font-size: 10px; }
   .rk-wrap > * { min-width: 0; }
 }
+
+/* Days off from the Schedule calendar (fixes chat, Oct 31) */
+.days-off-btn { background: #fff; border: 1.5px solid #E4DED6; border-radius: 14px; padding: 9px 14px; font: 700 13px/1 inherit; font-family: inherit; color: var(--ink); cursor: pointer; }
+.pick-hint { background: var(--accent-bg); border: 1.5px solid #EBC2C3; border-radius: 14px; padding: 10px 14px; font-size: 13px; color: #7A1B1F; }
+.month.picking { box-shadow: 0 0 0 2px var(--accent); }
+.month.picking .mcell:not(.out):not(.nopick) .n { border: 1.5px dashed #E4DED6; }
+.mcell.nopick { opacity: .35; cursor: not-allowed; }
+.mcell.picked .n { background: var(--accent) !important; color: #fff !important; border: 0 !important; font-weight: 700; border-radius: 4px; text-decoration: none; }
+.mcell.picked.pf .n { border-radius: 12px 4px 4px 12px; } .mcell.picked.pt .n { border-radius: 4px 12px 12px 4px; } .mcell.picked.pf.pt .n { border-radius: 12px; }
+.pick-bar { flex-wrap: wrap; } .pick-bar .grow { flex-basis: 100%; display: flex; flex-direction: column; gap: 6px; } .pick-bar .av-note { margin: 0; }
+.pick-bar .save { background: var(--ink); }
+.off-saved { background: var(--ok-bg); color: #1B5E46; border-radius: 14px; padding: 10px 14px; font-size: 13px; display: flex; justify-content: space-between; align-items: center; }
+.dayoff-card { text-decoration: none; }
