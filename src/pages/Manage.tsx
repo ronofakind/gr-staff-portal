@@ -9,10 +9,21 @@ import { DriveFiles } from '../components/DriveFiles';
 import { AnnounceComposer, AnnounceSent } from '../components/Announce';
 /** Manager "Message your team" is off until push 24 (texts + phone buzz) is live. */
 const ANNOUNCE_ON = false;
+/** Push 27 rollout: manager feedback (★ tile + new-staff check) only for these managers for now (full name or staff id). */
+export const FEEDBACK_MANAGERS: string[] = ['Benjamin Outre'];
+const feedbackOn = (me?: { id: string; full_name: string } | null) => !!me && FEEDBACK_MANAGERS.some((x) => x === me.id || x.toLowerCase() === me.full_name.trim().toLowerCase());
+type Rating = 'up' | 'ok' | 'down';
+type Info = { staff_id: string; tier: 'A' | 'B' | 'C' | null; done_before: number; is_new: boolean; fb_tier: 'A' | 'B' | 'C' | null; fb_ratings: Record<string, Rating> | null; fb_note: string | null };
+const AREAS: { key: string; label: string; sub?: string }[] = [
+  { key: 'punctuality', label: 'Punctuality', sub: 'on time, ready at call' }, { key: 'attitude', label: 'Attitude' },
+  { key: 'presentation', label: 'Presentation', sub: 'uniform, grooming' }, { key: 'experience', label: 'Experience', sub: 'service, wine, plating' },
+  { key: 'teamwork', label: 'Teamwork', sub: 'helps others' }, { key: 'guest', label: 'Guest service', sub: 'polite, attentive' },
+];
+const ORD = ['1st', '2nd', '3rd'];
 import { IncidentSheet, kindLabel, type Incident } from '../components/IncidentReport';
 
 type Row = {
-  id: string; position_code: string | null; position_detail: string | null; planned_start: string; planned_end: string | null;
+  id: string; staff_id?: string; position_code: string | null; position_detail: string | null; planned_start: string; planned_end: string | null;
   attendance: 'no_show' | 'cancelled' | null; leave_by: string | null; manager_note: string | null; left_early?: boolean; attendance_reason?: string | null; added_note?: string | null; adder?: { full_name: string } | null;
   staff: { full_name: string; photo_url: string | null; phone: string | null } | null; punches: { punch_in: string | null; punch_out: string | null; arrived_at: string | null; updated_at: string } | null;
 };
@@ -156,13 +167,18 @@ function AddStaff({ ev, onClose, onDone, lang }: { ev: EvFull; onClose: () => vo
   );
 }
 
-export function Manage() {
+export function Manage({ me }: { me?: { id: string; full_name: string } | null }) {
   const { eventId } = useParams(); const lang = useLang(); const t = L[lang];
+  const fbOn = feedbackOn(me);
+  const [info, setInfo] = useState<Record<string, Info>>({});
+  const [fb, setFb] = useState<{ row: Row; back: 'sheet' | 'check' | null } | null>(null);
+  const [check, setCheck] = useState(false); const [checkDone, setCheckDone] = useState(false);
+  const [prob, setProb] = useState(false);
   const [ev, setEv] = useState<EvFull | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
   const [open, setOpen] = useState<Row | null>(null);
   const [annOpen, setAnnOpen] = useState(false); const [annTick, setAnnTick] = useState(0);
-  const [undo, setUndo] = useState<{ label: string; prev: { id: string; in: string | null; out: string | null }[] } | null>(null);
+  const [undo, setUndo] = useState<{ label: string; btn?: string; prev: { id: string; in: string | null; out: string | null }[] } | null>(null);
   useEffect(() => { if (!undo) return; const t = setTimeout(() => setUndo(null), 8000); return () => clearTimeout(t); }, [undo]);
   const [draft, setDraft] = useState({ in: '', out: '' });
   const [ask, setAsk] = useState<Ask>(null);
@@ -185,6 +201,11 @@ export function Manage() {
     ]);
     setEv(e.data as unknown as EvFull);
     supabase.from('incidents').select('id,kind,involved_staff,involved_other,happened_at,body,audio_path,audio_sec,photos,created_at').eq('event_id', eventId!).order('created_at', { ascending: false }).then(({ data }) => setIncidents((data ?? []) as Incident[]));
+    supabase.rpc('manager_team_info', { p_event: eventId! }).then(({ data }) => {
+      const m: Record<string, Info> = {};
+      if (Array.isArray(data)) for (const x of data as Info[]) if (x && typeof x === 'object' && typeof x.staff_id === 'string') m[x.staff_id] = { ...x, done_before: typeof x.done_before === 'number' ? x.done_before : 0, is_new: x.is_new === true, fb_ratings: x.fb_ratings && typeof x.fb_ratings === 'object' && !Array.isArray(x.fb_ratings) ? x.fb_ratings : null };
+      setInfo(m);
+    });
     supabase.from('event_notices').select('id,body,created_at').eq('event_id', eventId!).order('created_at', { ascending: false }).then(({ data }) => setNotices((data ?? []) as { id: string; body: string; created_at: string }[]));
     // Within each call time: lead (MD / bar manager) first, then everyone A–Z by first name.
     const lead = (r: Row) => (r.position_code === 'MD' || r.position_code === 'BM' ? 0 : 1);
@@ -259,8 +280,12 @@ export function Manage() {
     setUndo({ label: `${r.staff?.full_name ?? 'Ended'} ended · ${time(out, lang)}`, prev: [{ id: r.id, in: pin, out: r.punches?.punch_out ?? null }] });
   };
   const doUndo = async () => { if (!undo) return; const u = undo; setUndo(null); await set(u.prev.map((p) => ({ id: p.id, in: p.in, out: p.out }))); };
-  const undoStart = async (r: Row) => { await set([{ id: r.id, in: null, out: null }]); setOpen(null); };
-  const undoEnd = async (r: Row) => { await set([{ id: r.id, in: r.punches?.punch_in ?? null, out: null }]); setOpen(null); };
+  // Undo start / end (sheet box or swipe on the list) → 8-second REDO bar that puts the times back.
+  const undoStart = async (r: Row) => { const prev = [{ id: r.id, in: r.punches?.punch_in ?? null, out: r.punches?.punch_out ?? null }]; setOpen(null); await set([{ id: r.id, in: null, out: null }]); setUndo({ label: `${(r.staff?.full_name ?? '').split(' ')[0]} · start undone`, btn: 'REDO', prev }); };
+  const undoEnd = async (r: Row) => { const prev = [{ id: r.id, in: r.punches?.punch_in ?? null, out: r.punches?.punch_out ?? null }]; setOpen(null); await set([{ id: r.id, in: r.punches?.punch_in ?? null, out: null }]); setUndo({ label: `${(r.staff?.full_name ?? '').split(' ')[0]} · end undone`, btn: 'REDO', prev }); };
+  const canUndo = (r: Row) => !r.attendance && !r.left_early && !ev?.hours_submitted_at && !!r.punches?.punch_in;
+  const infoOf = (r: Row) => (r.staff_id ? info[r.staff_id] : undefined);
+  const openRow = (r: Row) => { setProb(false); setOpen(r); setDraft({ in: hm(r.punches?.punch_in ?? null) || hm(r.planned_start), out: hm(r.punches?.punch_out ?? null) }); };
   const nowMs = Date.now();
   const isWorking = (r: Row) => !r.attendance && !!r.punches?.punch_in && (!r.punches.punch_out || new Date(r.punches.punch_out).getTime() > nowMs);
   const scheduled = rows.filter((r) => !r.attendance && r.punches?.punch_out && new Date(r.punches.punch_out).getTime() > nowMs);
@@ -292,6 +317,7 @@ export function Manage() {
   const pct = (n: number) => `${rows.length ? (n / rows.length) * 100 : 0}%`;
   const lateMin = late.length ? Math.round((Date.now() - Math.min(...late.map((r) => new Date(r.planned_start).getTime()))) / 60000) : 0;
   const first = (n?: string) => (n ?? '').split(' ')[0];
+  const newWorked = active.filter((r) => r.punches?.punch_in && infoOf(r)?.is_new);
 
   return (
     <main className="page v2">
@@ -375,14 +401,17 @@ export function Manage() {
               const isEarly = !!pin && new Date(pin).getTime() < callMs - 60000; const wasLate = !!pin && new Date(pin).getTime() > callMs + 10 * 60000;
               const ring = r.attendance ? '' : ended ? 'done' : pin ? (isEarly || wasLate ? 'flag' : 'working') : isLate ? 'late' : '';
               const tel = r.staff?.phone?.replace(/[^\d+]/g, '');
+              const inf = infoOf(r); const isNew = !!inf?.is_new && inf.done_before < 3;
               return (
-                <div key={r.id} className={'crew' + (r.attendance ? ' flagged' : '') + (r.left_early ? ' left' : '')}>
-                  <button className={'ring tap ' + ring} aria-label={`Options for ${r.staff?.full_name}`} onClick={() => { setOpen(r); setDraft({ in: hm(pin) || hm(r.planned_start), out: hm(pout) }); }}>
+                <SwipeRow key={r.id} on={canUndo(r)} label={pout ? 'Undo end' : 'Undo start'} onAct={() => (pout ? undoEnd(r) : undoStart(r))}>
+                <div className={'crew' + (r.attendance ? ' flagged' : '') + (r.left_early ? ' left' : '')}>
+                  <button className={'ring tap ' + ring + (isNew ? ' newp' : '')} aria-label={`Options for ${r.staff?.full_name}`} onClick={() => openRow(r)}>
                     <Avatar name={r.staff?.full_name ?? '?'} url={r.staff?.photo_url} size={44} />
                   </button>
-                  <button className="who" aria-label={`Options for ${r.staff?.full_name}`} onClick={() => { setOpen(r); setDraft({ in: hm(pin) || hm(r.planned_start), out: hm(pout) }); }}>
+                  <button className="who" aria-label={`Options for ${r.staff?.full_name}`} onClick={() => openRow(r)}>
                     <span className="nm">{r.staff?.full_name}{r.adder && <i className="added-tag">ADDED BY {r.adder.full_name.split(' ')[0].toUpperCase()}</i>}</span>
-                    <span className="rl">{roleLabel(r.position_code, r.position_detail)}{r.manager_note ? ' · 📝 note' : ''}</span>
+                    <span className="rl">{roleLabel(r.position_code, r.position_detail)}{r.manager_note ? ' · 📝 note' : ''}{fbOn && inf?.fb_tier ? ' · ★ sent' : ''}</span>
+                    {isNew && <span><i className="new-shift">NEW · {ORD[inf!.done_before] ?? ''} shift</i></span>}
                     {r.attendance ? <span className="st muted-st">{r.attendance === 'no_show' ? 'No-show' : 'Cancelled'}{r.attendance_reason ? ` · ${r.attendance_reason}` : ''}</span>
                       : r.left_early && pin && pout ? <span className="st gold">{time(pin, lang)} → {time(pout, lang)} · {hours(pin, pout)} {t.hours}<i className="st-tag gold">LEFT EARLY</i></span>
                       : ended ? <span className="st">{time(pin!, lang)} → {time(pout!, lang)} · {hours(pin!, pout!)} {t.hours}</span>
@@ -402,13 +431,14 @@ export function Manage() {
                     {r.leave_by && !pout && !r.attendance && <span className="leave-tag">⏱ Leaves ~{time(r.leave_by, lang).replace(':00', '')}</span>}
                   </div>
                 </div>
+                </SwipeRow>
               );
             })}
           </section>
         );
       })}
       {!ev.hours_submitted_at && <button className="add-staff" onClick={() => setAdding(true)}>+ Add staff</button>}
-      <p className="hint" style={{ textAlign: 'center' }}>Tap a name or photo for times, no-show, left early or cancelled</p>
+      <p className="hint" style={{ textAlign: 'center' }}>Tap a name or photo for times, {fbOn ? 'feedback, ' : ''}note, problems · swipe left on a started person to undo</p>
       <div className="inc-entry"><button onClick={() => setIncOpen(true)}>⚠ Incident report</button><small>Emergencies only</small></div>
 
       <div className="submit-bar">
@@ -416,7 +446,7 @@ export function Manage() {
           <b className={changedSince ? 'gold' : ''}>{changedSince ? '↻ Times changed since you submitted' : ev.hours_submitted_at ? '✓ Hours submitted' : endsAt ? `Submit now with ${time(endsAt, lang)} as the end` : 'End of night'}</b>
           <span>{ev.hours_submitted_at ? `Submitted ${new Date(ev.hours_submitted_at).toLocaleString('en-CA', { weekday: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' })}${changedSince ? ' · Ronnie has the older version' : ' · you can still edit'}` : endsAt ? 'Change anything after? You can resubmit.' : "Check everyone's times, then send"}</span>
         </div>
-        <button className="btn-ink" style={{ height: 46, padding: '0 18px', borderRadius: 23 }} onClick={() => setReview(true)}>{ev.hours_submitted_at ? 'Resubmit ›' : 'Submit hours ›'}</button>
+        <button className="btn-ink" style={{ height: 46, padding: '0 18px', borderRadius: 23 }} onClick={() => (fbOn && !checkDone && newWorked.length ? setCheck(true) : setReview(true))}>{ev.hours_submitted_at ? 'Resubmit ›' : 'Submit hours ›'}</button>
       </div>
 
       {endSheet && (
@@ -474,10 +504,10 @@ export function Manage() {
                       <div className="tm">{r.attendance ? (r.attendance === 'no_show' ? 'No-show' : 'Cancelled')
                         : `${pin ? time(pin, lang) : 'no start time'} → ${pout ? time(pout, lang) : 'no end time'}${r.left_early ? ' · left early' : ''}`}</div>
                       {r.manager_note ? <div className="rv-note">📝 {r.manager_note}</div>
-                        : <button className="link-btn" onClick={() => { setReview(false); setOpen(r); setDraft({ in: hm(pin) || hm(r.planned_start), out: hm(pout) }); }}>+ Add note</button>}
+                        : <button className="link-btn" onClick={() => { setReview(false); openRow(r); }}>+ Add note</button>}
                     </div>
                     {r.attendance ? <span className="muted sm strong">0 h</span>
-                      : miss ? <button className="pill-red" style={{ height: 32 }} onClick={() => { setReview(false); setOpen(r); setDraft({ in: hm(pin) || hm(r.planned_start), out: hm(pout) }); }}>Fix ›</button>
+                      : miss ? <button className="pill-red" style={{ height: 32 }} onClick={() => { setReview(false); openRow(r); }}>Fix ›</button>
                       : <span className="serif" style={{ fontSize: 20 }}>{hours(pin!, pout!)}<span className="muted" style={{ fontSize: 12, fontFamily: 'Inter' }}> h</span></span>}
                   </div>
                 );
@@ -499,20 +529,23 @@ export function Manage() {
         );
       })()}
 
-      {open && (
+      {open && !fb && (() => {
+        const pin = open.punches?.punch_in ?? null; const pout = open.punches?.punch_out ?? null; const undoOk = canUndo(open);
+        const inf = infoOf(open);
+        return (
         <>
           <div className="scrim" onClick={() => setOpen(null)} />
           <SwipeSheet onClose={() => setOpen(null)} label={`Options for ${open.staff?.full_name}`}>
-            <div className="ns-head">
-              <button className="ns-photo" aria-label="See the photo full size" onClick={() => setBigPhoto(true)}><Avatar name={open.staff?.full_name ?? '?'} url={open.staff?.photo_url} size={112} /></button>
-              <div className="serif" style={{ fontSize: 24 }}>{open.staff?.full_name}</div>
-              <div className="muted sm">{roleLabel(open.position_code, open.position_detail)} · start {time(open.planned_start, lang)}{open.punches?.arrived_at ? ` · arrived ${time(open.punches.arrived_at, lang)}` : ''}</div>
-              {open.staff?.photo_url && <small className="muted" style={{ fontSize: 11 }}>Tap the photo to see it full size</small>}
+            <button className="pf-x" aria-label="Close" onClick={() => setOpen(null)}>✕</button>
+            <div className="pf-head">
+              <button className={'pf-photo' + (inf?.is_new ? ' newp' : '')} aria-label="See the photo full size" onClick={() => setBigPhoto(true)}><Avatar name={open.staff?.full_name ?? '?'} url={open.staff?.photo_url} size={72} /></button>
+              <div className="serif" style={{ fontSize: 24, lineHeight: 1.1 }}>{open.staff?.full_name}</div>
+              <div className="muted sm">{roleLabel(open.position_code, open.position_detail)} · call {time(open.planned_start, lang)}{open.punches?.arrived_at ? ` · arrived ${time(open.punches.arrived_at, lang)}` : ''}{inf?.is_new ? ` · NEW · ${ORD[inf.done_before] ?? ''} shift` : ''}</div>
             </div>
             {!open.attendance && (
               <div className="starts-from">
-                <span className="kicker">Starts from</span>
-                <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+                <span className="kicker">{pin ? 'Started' : 'Starts from'}</span>
+                <div className="row" style={{ gap: 8 }}>
                   <button className={draft.in === hm(open.planned_start) ? 'on' : ''} onClick={() => setDraft({ ...draft, in: hm(open.planned_start) })}>Call time · {time(open.planned_start, lang)}</button>
                   <button className={draft.in === hm(now()) ? 'on' : ''} onClick={() => setDraft({ ...draft, in: hm(now()) })}>Now · {time(now(), lang)}</button>
                 </div>
@@ -520,36 +553,58 @@ export function Manage() {
               </div>
             )}
             {!open.attendance && (
-              <div className="times-box">
-                <label>Start time<QuarterTime value={draft.in} onChange={(v) => setDraft({ ...draft, in: v })} /></label>
-                <label>End time<QuarterTime value={draft.out} onChange={(v) => setDraft({ ...draft, out: v })} /></label>
+              <div className="pf-times">
+                <div className={'pf-box' + (pin ? ' on' : '')}>
+                  <div className="pf-lab"><span>{pin ? 'Started' : 'Start'}</span>{undoOk && !pout && <button className="pf-undo" onClick={() => undoStart(open)}>↶ undo</button>}</div>
+                  <QuarterTime value={draft.in} onChange={(v) => setDraft({ ...draft, in: v })} label="Start time" />
+                </div>
+                <div className={'pf-box' + (pout ? ' on' : '')}>
+                  <div className="pf-lab"><span>{pout ? (new Date(pout).getTime() > Date.now() ? 'Ends' : 'Ended') : 'End'}</span>{undoOk && pout && <button className="pf-undo" onClick={() => undoEnd(open)}>↶ undo</button>}</div>
+                  <QuarterTime value={draft.out} onChange={(v) => setDraft({ ...draft, out: v })} label="End time" />
+                </div>
               </div>
             )}
             {!open.attendance && <button className="btn-ink" onClick={async () => {
               const i = draft.in ? toIso(ev.event_date, draft.in, open.planned_start) : null;
               const o = draft.out ? toIso(ev.event_date, draft.out, i ?? open.planned_start) : null;
               await set([{ id: open.id, in: i, out: o, arrived: open.punches?.arrived_at ? null : (i ? now() : null) }]); setOpen(null);
-            }}>{open.punches?.punch_in ? 'Save times' : draft.in ? `Start from ${fmt12(draft.in)}` : 'Save times'}</button>}
-            {!open.attendance && !open.left_early && !ev.hours_submitted_at && open.punches?.punch_in && (
-              open.punches.punch_out
-                ? <><button className="btn-undo" onClick={() => undoEnd(open)}>↶ Undo end · back to working</button><div className="muted sm" style={{ textAlign: 'center', marginTop: -6 }}>Ended the wrong person? This clears the end time.</div></>
-                : <><button className="btn-undo" onClick={() => undoStart(open)}>↶ Undo start</button><div className="muted sm" style={{ textAlign: 'center', marginTop: -6 }}>Started the wrong person? This puts them back to “not started”.</div></>)}
+            }}>{pin ? 'Save times' : draft.in ? `Start from ${fmt12(draft.in)}` : 'Save times'}</button>}
             {open.attendance
               ? <button className="btn-ghost" onClick={() => mark(open.id, null)}>Undo {open.attendance === 'no_show' ? 'no-show' : 'cancelled'}</button>
               : open.left_early ? <button className="btn-ghost" onClick={() => undoLeft(open.id)}>Undo left early{open.attendance_reason ? ` · ${open.attendance_reason}` : ''}</button>
-              : <div className="wrong">
-                  <div className="wrong-q">Something went wrong tonight?</div>
-                  <div className="wrong-row">
-                    <button className="qopt red" onClick={() => openAsk(open, 'no_show')}>No-show</button>
-                    <button className="qopt gold" disabled={!open.punches?.punch_in} title={open.punches?.punch_in ? '' : 'Start them first'} onClick={() => openAsk(open, 'left_early')}>Left early</button>
-                    <button className="qopt grey" onClick={() => openAsk(open, 'cancelled')}>Cancelled</button>
-                  </div>
-                </div>}
+              : null}
+            <div className={'pf-tiles' + (fbOn ? '' : ' one')}>
+              {fbOn && <button className="pf-tile fb" onClick={() => setFb({ row: open, back: 'sheet' })}><span className="pf-ic">★</span><span><b>Feedback</b><small>{inf?.fb_tier ? `sent · worked like ${inf.fb_tier}` : 'tier · ratings'}</small></span></button>}
+              {!open.attendance && !open.left_early && <button className={'pf-tile pb' + (prob ? ' on' : '')} onClick={() => setProb(!prob)}><span className="pf-ic">⚠</span><span><b>Problem</b><small>no-show · left early</small></span></button>}
+            </div>
+            {prob && !open.attendance && !open.left_early && (
+              <div className="wrong-row">
+                <button className="qopt red" onClick={() => openAsk(open, 'no_show')}>No-show</button>
+                <button className="qopt gold" disabled={!pin} title={pin ? '' : 'Start them first'} onClick={() => openAsk(open, 'left_early')}>Left early</button>
+                <button className="qopt grey" onClick={() => openAsk(open, 'cancelled')}>Cancelled</button>
+              </div>
+            )}
             {open.leave_by && <span className="leave-tag inline">⏱ Needs to leave ~{time(open.leave_by, lang)} · reminder only</span>}
             <NoteBox key={open.id} initial={open.manager_note ?? ''} onSave={async (v) => { setErr(''); const { error } = await supabase.rpc('manager_set_note', { p_shift: open.id, p_note: v }); if (error) setErr(error.message); await load(); }} />
+            {open.staff?.photo_url && <small className="muted" style={{ fontSize: 11, textAlign: 'center' }}>Tap the photo to see it full size</small>}
+          </SwipeSheet>
+        </>
+        );
+      })()}
+
+      {fb && (
+        <>
+          <div className="scrim" onClick={() => setFb(null)} />
+          <SwipeSheet onClose={() => setFb(null)} label={`Feedback for ${fb.row.staff?.full_name}`}>
+            <FeedbackWindow key={fb.row.id} eventId={ev.id} row={fb.row} info={infoOf(fb.row)} onBack={fb.back ? () => { if (fb.back === 'check') setCheck(true); setFb(null); } : null}
+              onClose={() => { setFb(null); setOpen(null); }} onSent={() => { const back = fb.back; setFb(null); if (back === 'check') setCheck(true); else setOpen(null); load(); }} />
           </SwipeSheet>
         </>
       )}
+
+      {check && <NewStaffCheck eventId={ev.id} rows={newWorked} infoOf={infoOf}
+        onOpen={(r) => { setCheck(false); setFb({ row: r, back: 'check' }); }}
+        onDone={() => { setCheck(false); setCheckDone(true); setReview(true); load(); }} onSkip={() => { setCheck(false); setCheckDone(true); setReview(true); }} />}
 
       {annOpen && (() => {
         const team = rows.filter((x) => !x.attendance && x.staff);
@@ -571,7 +626,7 @@ export function Manage() {
           </SwipeSheet>
         </>
       )}
-      {open && bigPhoto && <PhotoViewer name={open.staff?.full_name ?? ''} url={open.staff?.photo_url} sub={roleLabel(open.position_code, open.position_detail)} onClose={() => setBigPhoto(false)} />}
+      {open && !fb && bigPhoto && <PhotoViewer name={open.staff?.full_name ?? ''} url={open.staff?.photo_url} sub={roleLabel(open.position_code, open.position_detail)} onClose={() => setBigPhoto(false)} />}
       {adding && <AddStaff ev={ev} lang={lang} onClose={() => setAdding(false)} onDone={() => { setAdding(false); load(); }} />}
 
       {ask && (() => {
@@ -604,7 +659,7 @@ export function Manage() {
           </>
         );
       })()}
-      {undo && <div className="undo-bar" role="status"><span className="grow">{undo.label}</span><button onClick={doUndo}>UNDO</button></div>}
+      {undo && <div className="undo-bar" role="status"><span className="grow">{undo.label}</span><button onClick={doUndo}>{undo.btn ?? 'UNDO'}</button></div>}
     </main>
   );
 }
@@ -646,5 +701,95 @@ function NoteBox({ initial, onSave }: { initial: string; onSave: (v: string) => 
       {v.trim() !== initial.trim() && <button className="btn-ink" style={{ height: 40 }} onClick={async () => { await onSave(v); setSaved(true); }}>Save note</button>}
       {saved && <small className="okc">✓ Note saved</small>}
     </div>
+  );
+}
+
+/** Swipe left on a started person → red Undo start / Undo end action (push 27 · option D). */
+function SwipeRow({ on, label, onAct, children }: { on: boolean; label: string; onAct: () => void; children: React.ReactNode }) {
+  const [dx, setDx] = useState(0); const start = useRef<{ x: number; y: number } | null>(null); const horiz = useRef(false);
+  if (!on) return <>{children}</>;
+  return (
+    <div className="sw-wrap">
+      <button className="sw-under" style={{ visibility: dx ? 'visible' : 'hidden' }} tabIndex={dx ? 0 : -1} aria-hidden={!dx} onClick={() => { setDx(0); onAct(); }}><span>↶</span>{label}</button>
+      <div className="sw-row" style={{ transform: `translateX(${dx}px)`, transition: start.current ? 'none' : 'transform .2s' }}
+        onTouchStart={(e) => { start.current = { x: e.touches[0].clientX, y: e.touches[0].clientY }; horiz.current = false; }}
+        onTouchMove={(e) => { if (!start.current) return; const ddx = e.touches[0].clientX - start.current.x; const ddy = e.touches[0].clientY - start.current.y;
+          if (!horiz.current && Math.abs(ddx) > 10 && Math.abs(ddx) > Math.abs(ddy)) horiz.current = true;
+          if (horiz.current) setDx(Math.max(-120, Math.min(0, ddx + (dx < 0 ? -110 : 0)))); }}
+        onTouchEnd={() => { start.current = null; setDx(dx < -55 ? -110 : 0); }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/** ★ Feedback window: worked like A/B/C (pre-set to their tier) + ratings per area (all blank, optional) + comment. Only Ronnie sees it. */
+function FeedbackWindow({ eventId, row, info, onBack, onClose, onSent }: { eventId: string; row: Row; info?: Info; onBack: (() => void) | null; onClose: () => void; onSent: () => void }) {
+  const f = (row.staff?.full_name ?? '').split(' ')[0];
+  const [tier, setTier] = useState<'A' | 'B' | 'C' | null>(info?.fb_tier ?? info?.tier ?? null);
+  const [rt, setRt] = useState<Record<string, Rating>>(info?.fb_ratings ?? {});
+  const [note, setNote] = useState(info?.fb_note ?? ''); const [busy, setBusy] = useState(false); const [err, setErr] = useState('');
+  const send = async () => {
+    if (!row.staff_id) return; setBusy(true); setErr('');
+    const { error } = await supabase.rpc('manager_send_feedback', { p_event: eventId, p_staff: row.staff_id, p_tier: tier, p_ratings: rt, p_note: note });
+    setBusy(false); if (error) { setErr(error.message); return; } onSent();
+  };
+  return (
+    <div className="fbw">
+      <div className="fbw-head">
+        {onBack && <button className="fbw-back" aria-label="Back" onClick={onBack}>‹</button>}
+        <div className="grow"><div className="serif" style={{ fontSize: 22 }}>Feedback · {f}</div><small className="muted">Only Ronnie sees it · never shown to {f}</small></div>
+        <button className="pf-x static" aria-label="Close" onClick={onClose}>✕</button>
+      </div>
+      <div className="spread"><span className="kicker">Worked like a</span>{info?.tier && <small className="muted">tier now · {info.tier}</small>}</div>
+      <div className="fbw-tiers">{(['A', 'B', 'C'] as const).map((x) => <button key={x} className={'t' + x + (tier === x ? ' on' : '')} onClick={() => setTier(tier === x ? null : x)}>{x}</button>)}</div>
+      <div className="muted" style={{ fontSize: 11.5, marginTop: -4 }}>Change it only if {f} worked above or below. A suggestion only.</div>
+      <div className="spread"><span className="kicker">Rate what you saw</span><small className="muted">▲ great · ● ok · ▼ needs work</small></div>
+      <div className="fbw-rates">{AREAS.map((a) => (
+        <div key={a.key} className="fbw-rate"><div className="grow"><b>{a.label}</b>{a.sub && <small>{a.sub}</small>}</div>
+          {(['up', 'ok', 'down'] as Rating[]).map((v) => <button key={v} aria-label={`${a.label} ${v === 'up' ? 'great' : v === 'ok' ? 'ok' : 'needs work'}`} className={'r-' + v + (rt[a.key] === v ? ' on' : '')}
+            onClick={() => { const n = { ...rt }; if (n[a.key] === v) delete n[a.key]; else n[a.key] = v; setRt(n); }}>{v === 'up' ? '▲' : v === 'ok' ? '●' : '▼'}</button>)}
+        </div>))}</div>
+      <textarea className="fbw-note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Comment (optional)" />
+      {err && <p className="error">{err}</p>}
+      <button className="btn-ink" disabled={busy} onClick={send}>{busy ? 'Sending…' : info?.fb_tier || info?.fb_note || (info?.fb_ratings && Object.keys(info.fb_ratings).length) ? 'Update for Ronnie' : 'Send to Ronnie'}</button>
+    </div>
+  );
+}
+
+/** Before Submit hours, when NEW people worked: one tap A / B / C each (pre-set to their tier), or Skip. */
+function NewStaffCheck({ eventId, rows, infoOf, onOpen, onDone, onSkip }: { eventId: string; rows: Row[]; infoOf: (r: Row) => Info | undefined; onOpen: (r: Row) => void; onDone: () => void; onSkip: () => void }) {
+  const [pick, setPick] = useState<Record<string, 'A' | 'B' | 'C' | null>>(() => Object.fromEntries(rows.map((r) => [r.id, infoOf(r)?.fb_tier ?? infoOf(r)?.tier ?? null])));
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState('');
+  const done = async () => {
+    setBusy(true); setErr('');
+    for (const r of rows) {
+      const inf = infoOf(r); const t = pick[r.id]; if (!r.staff_id || !t) continue;
+      if (inf?.fb_tier === t) continue; // already sent with this vote
+      const { error } = await supabase.rpc('manager_send_feedback', { p_event: eventId, p_staff: r.staff_id, p_tier: t, p_ratings: inf?.fb_ratings ?? {}, p_note: inf?.fb_note ?? '' });
+      if (error) { setErr(error.message); setBusy(false); return; }
+    }
+    setBusy(false); onDone();
+  };
+  return (
+    <>
+      <div className="scrim" onClick={onSkip} />
+      <SwipeSheet onClose={onSkip} label="New staff check">
+        <div className="nsc">
+          <div className="serif" style={{ fontSize: 24, lineHeight: 1.1 }}>{rows.length} new {rows.length === 1 ? 'person' : 'people'} tonight</div>
+          <div className="muted sm">Quick rating before you submit hours? One tap each, or skip.</div>
+          {rows.map((r) => { const inf = infoOf(r); return (
+            <div key={r.id} className="nsc-row">
+              <button className="nsc-who" onClick={() => onOpen(r)}><span className="ring sm newp"><Avatar name={r.staff?.full_name ?? '?'} url={r.staff?.photo_url} size={36} /></span>
+                <span className="grow"><b>{r.staff?.full_name}</b><i className="new-shift">NEW · {ORD[inf?.done_before ?? 0] ?? ''} shift</i></span></button>
+              <div className="nsc-t">{(['A', 'B', 'C'] as const).map((x) => <button key={x} className={'t' + x + (pick[r.id] === x ? ' on' : '')} onClick={() => setPick({ ...pick, [r.id]: pick[r.id] === x ? null : x })}>{x}</button>)}</div>
+            </div>); })}
+          <small className="muted">Tap a name for ratings or a comment.</small>
+          {err && <p className="error">{err}</p>}
+          <button className="btn-ink" disabled={busy} onClick={done}>{busy ? 'Sending…' : 'Done · submit hours'}</button>
+          <button className="link-btn" style={{ color: 'var(--ink)', alignSelf: 'center' }} onClick={onSkip}>Skip</button>
+        </div>
+      </SwipeSheet>
+    </>
   );
 }

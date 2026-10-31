@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
+import { loadRules, RuleIcons, type SLink, type SCond } from './rules';
 import { allStaff, dLabel, type AStaff } from './api';
 import { uploadPhoto } from '../lib/photo';
 import { PhotoPicker, Avatar } from '../components/Avatar';
@@ -22,9 +23,12 @@ export function Staff() {
   const [prof, setProf] = useState<AStaff | null>(null);
   const [month, setMonth] = useState<Record<string, number>>({});
   const [off, setOff] = useState<Off[]>([]);
+  const [rules, setRules] = useState<{ links: SLink[]; conds: SCond[] }>({ links: [], conds: [] });
+  const [params, setParams] = useSearchParams();
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' });
   const load = () => {
-    allStaff().then(setList);
+    allStaff().then((l) => { setList(l); const o = params.get('open'); if (o) { const hit = l.find((x) => x.id === o); if (hit) setProf(hit); const p = new URLSearchParams(params); p.delete('open'); setParams(p, { replace: true }); } });
+    loadRules().then(setRules);
     supabase.from('shifts').select('staff_id,events!inner(event_date)').neq('status', 'declined').gte('events.event_date', today.slice(0, 8) + '01').lte('events.event_date', today.slice(0, 8) + '31')
       .then(({ data }) => { const m: Record<string, number> = {}; for (const r of (data ?? []) as { staff_id: string }[]) m[r.staff_id] = (m[r.staff_id] ?? 0) + 1; setMonth(m); });
     supabase.from('days_off').select('id,staff_id,from_date,to_date,every_dow').gte('to_date', today).order('from_date').then(({ data }) => setOff((data ?? []) as Off[]));
@@ -87,7 +91,7 @@ export function Staff() {
             <Fragment key={s.id}>
               {L && <div className="st-letter">{L}</div>}
               <div className={'st-row' + (s.active ? '' : ' inactive') + (prof?.id === s.id ? ' sel' : '')} onClick={() => setProf(s)}>
-                <span className="st-name"><Avatar name={s.full_name} url={s.photo_url} size={34} /><span><b>{s.full_name}{!tr && <i className="new-tag">NEW</i>}</b><small>{s.nickname ? `"${s.nickname}" · ` : ''}{s.positions.map((p) => p.toLowerCase()).join(', ') || s.role}{s.role !== 'staff' ? ` · ${s.role}` : ''}</small></span></span>
+                <span className="st-name"><Avatar name={s.full_name} url={s.photo_url} size={34} /><span><b>{s.full_name}{!tr && <i className="new-tag">NEW</i>}<RuleIcons sid={s.id} links={rules.links} conds={rules.conds} /></b><small>{s.nickname ? `"${s.nickname}" · ` : ''}{s.positions.map((p) => p.toLowerCase()).join(', ') || s.role}{s.role !== 'staff' ? ` · ${s.role}` : ''}</small></span></span>
                 <span>{tr ? <><i className={'tier-dot ' + tr}>{tr}</i> <span className="muted">#{s.staff_private?.ranking ?? '–'}</span></> : <><i className="tier-q">?</i> <Link to="/admin/tiers" className="accent strong sm" onClick={(e) => e.stopPropagation()}>Rank ›</Link></>}</span>
                 <span className="hide-sm">{month[s.id] ?? 0}</span>
                 <span className="hide-sm">{o ? <span className="tag" style={{ height: 24 }}>{o}</span> : <span className="muted">—</span>}</span>
@@ -101,7 +105,7 @@ export function Staff() {
         {!list && <div className="muted" style={{ padding: 18 }}>Loading…</div>}
       </div>
       <div className="st-who"><b>WHO SEES RANKINGS</b><span>✓ Admin accounts only · ✕ Managers and MDs: names and roles only · ✕ Staff: never their own or anyone's tier. Enforced in the database, not only hidden on screen.</span></div>
-      {prof && <StaffProfile s={prof} onClose={() => { setProf(null); load(); }} onEdit={() => { setOpen(prof.id); setProf(null); }} />}
+      {prof && <StaffProfile s={prof} all={list ?? undefined} onClose={() => { setProf(null); load(); }} onEdit={() => { setOpen(prof.id); setProf(null); }} />}
     </div>
   );
 }

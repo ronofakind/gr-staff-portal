@@ -24,6 +24,7 @@ import { Availability as StaffAvail } from './pages/Availability';
 import { EventPlan } from './pages/EventPlan';
 import { Availability as AdminAvail } from './admin/Availability';
 import { Tiers } from './admin/Tiers';
+import { Ranking } from './admin/Ranking';
 import { Incidents } from './admin/Incidents';
 import { Bookings } from './admin/Bookings';
 import { Messages } from './admin/Messages';
@@ -78,6 +79,7 @@ export function App() {
             <Route path="staff" element={<StaffAdmin />} />
             <Route path="availability" element={<AdminAvail />} />
             <Route path="tiers" element={<Tiers />} />
+            <Route path="ranking" element={<Ranking />} />
           </Route>
         )}
         {me.role === 'admin' && <Route path="/admin/view/:staffId/*" element={<ViewAs />} />}
@@ -86,7 +88,7 @@ export function App() {
         <Route path="/shift/:id/plan" element={<EventPlan />} />
         <Route path="/hours" element={<HoursPage me={me} />} />
         <Route path="/availability" element={<StaffAvail me={me} />} />
-        <Route path="/manage/:eventId" element={<Manage />} />
+        <Route path="/manage/:eventId" element={<Manage me={me} />} />
         <Route path="/profile" element={<Profile me={me} />} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>

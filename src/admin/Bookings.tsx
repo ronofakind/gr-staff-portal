@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { DeptTag } from './DeptTag';
-import { eventsBetween, allStaff, addDays, isoDay, dLabel, ap12, startIso, roleName, bookingChange, confirmationsSent, type AEvent, type AStaff } from './api';
+import { eventsBetween, allStaff, addDays, isoDay, dLabel, ap12, startIso, roleName, bookingChange, confirmationsSent, type AEvent, type AStaff, type Client, type Venue } from './api';
+import { misfits, linksOf, other, condShort, RuleIcons, type SLink, type SCond } from './rules';
+import { loadScoreData, scoreOf, type ScoreData } from './score';
 
 /* Push 23 · Bookings (admin). Practice mode by default: every change lives in a draft (booking_drafts) layered
    over the real shifts; staff see nothing until Ronnie switches to Live and saves. */
@@ -10,7 +12,8 @@ import { eventsBetween, allStaff, addDays, isoDay, dLabel, ap12, startIso, roleN
 type Pl = { key: string; staff_id: string; event_id: string; start: string; code: string; shift_id?: string | null; extra?: boolean; suggested?: boolean };
 type Av = { staff_id: string; status: string; from_time: string | null; note: string | null; tier: string | null };
 type Wk = { staff_id: string; dow: number; status: string; from_time: string | null };
-type Cond = { staff_id: string; kind: string; value: string | null };
+type Cond = SCond;
+type Warn = { key: string; cls: 'red' | 'gold' | 'ok'; text: React.ReactNode };
 type Draft = { pl: Pl[]; locks: string[]; extras: Record<string, number> };
 type View = 'board' | 'sheet' | 'list';
 
@@ -41,6 +44,8 @@ export function Bookings() {
   const [staff, setStaff] = useState<AStaff[]>([]);
   const [av, setAv] = useState<Av[]>([]); const [wk, setWk] = useState<Wk[]>([]); const [off, setOff] = useState<Set<string>>(new Set());
   const [links, setLinks] = useState<[string, string][]>([]); const [conds, setConds] = useState<Cond[]>([]);
+  const [rl, setRl] = useState<SLink[]>([]); const [clients, setClients] = useState<Client[]>([]); const [venues, setVenues] = useState<Venue[]>([]);
+  const [sd, setSd] = useState<ScoreData | null>(null); const [warns, setWarns] = useState<Warn[]>([]);
   const [shifts30, setShifts30] = useState<Record<string, number>>({}); const [yesRate, setYesRate] = useState<Record<string, number>>({});
   const [base, setBase] = useState<Record<string, Pl[]>>({});
   const [draft, setDraft] = useState<Record<string, Draft>>({});
@@ -66,7 +71,7 @@ export function Bookings() {
       supabase.from('availability').select('staff_id,status,from_time,note,tier,for_date').gte('for_date', range.from).lte('for_date', range.to).not('ask_id', 'is', null),
       supabase.from('staff_weekly').select('staff_id,dow,status,from_time'),
       supabase.from('days_off').select('staff_id,from_date,to_date').lte('from_date', range.to).gte('to_date', range.from),
-      supabase.from('staff_links').select('staff_a,staff_b'), supabase.from('staff_conditions').select('staff_id,kind,value'),
+      supabase.from('staff_links').select('staff_a,staff_b,kind,reason'), supabase.from('staff_conditions').select('id,staff_id,kind,value,reason'),
       supabase.from('shifts').select('staff_id,events!inner(event_date)').neq('status', 'declined').gte('events.event_date', since30).lt('events.event_date', date),
       supabase.from('availability').select('staff_id,status').gte('for_date', since90).in('status', ['yes', 'no']),
       supabase.from('booking_drafts').select('for_date,payload').gte('for_date', range.from).lte('for_date', range.to),
@@ -75,8 +80,12 @@ export function Bookings() {
     setAv(((a.data ?? []) as (Av & { for_date: string })[]).filter((x) => x.for_date === date || view !== 'board'));
     setWk((w.data ?? []) as Wk[]);
     const offSet = new Set<string>(); for (const r of (o.data ?? []) as { staff_id: string; from_date: string; to_date: string }[]) for (const d of dates) if (r.from_date <= d && r.to_date >= d) offSet.add(r.staff_id + d); setOff(offSet);
-    setLinks(((l.data ?? []) as { staff_a: string; staff_b: string }[]).map((x) => [x.staff_a, x.staff_b]));
-    setConds((c.data ?? []) as Cond[]);
+    const allLinks = (Array.isArray(l.data) ? l.data as SLink[] : []).filter((x) => x && typeof x.staff_a === 'string' && typeof x.staff_b === 'string').map((x) => ({ ...x, kind: x.kind === 'apart' ? 'apart' : 'together' } as SLink));
+    setRl(allLinks); setLinks(allLinks.filter((x) => x.kind === 'together').map((x) => [x.staff_a, x.staff_b]));
+    setConds((Array.isArray(c.data) ? c.data as Cond[] : []).filter((x) => x && typeof x.staff_id === 'string'));
+    if (!sd) loadScoreData().then(setSd);
+    if (!clients.length) supabase.from('clients').select('id,name,kind').then(({ data }) => setClients(Array.isArray(data) ? data as Client[] : []));
+    if (!venues.length) supabase.from('venues').select('id,name').then(({ data }) => setVenues(Array.isArray(data) ? data as Venue[] : []));
     const cnt: Record<string, number> = {}; for (const r of (s30.data ?? []) as { staff_id: string }[]) cnt[r.staff_id] = (cnt[r.staff_id] ?? 0) + 1; setShifts30(cnt);
     const yr: Record<string, [number, number]> = {}; for (const r of (hist90.data ?? []) as { staff_id: string; status: string }[]) { const x = (yr[r.staff_id] ??= [0, 0]); x[r.status === 'yes' ? 0 : 1]++; }
     setYesRate(Object.fromEntries(Object.entries(yr).map(([k, [y, n]]) => [k, y / (y + n)])));
@@ -97,6 +106,24 @@ export function Bookings() {
   const name = (sid: string) => byId[sid]?.full_name ?? '?';
   const tier = (sid: string) => byId[sid]?.staff_private?.tier ?? null;
   const rank = (sid: string) => byId[sid]?.staff_private?.ranking ?? 9999;
+  const scores = useMemo(() => (sd ? Object.fromEntries(staff.map((s) => [s.id, scoreOf(s, sd).total])) : {} as Record<string, number>), [sd, staff]);
+  /** Higher score first; the old rank breaks ties. */
+  const byScore = (a: string, b: string) => (scores[b] ?? -1e9) - (scores[a] ?? -1e9) || rank(a) - rank(b);
+  const apartOf = (sid: string) => linksOf(rl, sid, 'apart').map((l) => other(l, sid));
+  const isBig = (d: string) => floorNeed((events ?? []).filter((e) => e.event_date === d)) >= 25;
+  /** Warnings when adding someone (never blocking) + green hint when a works-well-with partner said yes. */
+  const warnFor = (d: string, sid: string, e: AEvent, pl: Pl[]): Warn[] => {
+    const f = (x: string) => name(x).split(' ')[0]; const out: Warn[] = [];
+    for (const x of apartOf(sid)) if (pl.some((p) => p.event_id === e.id && p.staff_id === x)) {
+      const why = linksOf(rl, sid, 'apart').find((l) => other(l, sid) === x)?.reason;
+      out.push({ key: 'ap' + x, cls: 'red', text: <><b>{f(sid)} + {f(x)}</b> are kept apart{why ? ` (${why})` : ''}. Book anyway?</> });
+    }
+    for (const m of misfits(sid, e, { conds, clients, venues, big: isBig(d) })) out.push({ key: m.kind, cls: 'gold', text: <><b>{f(sid)}</b> {m.text}.</> });
+    for (const x of partnerOf(sid)) if (!pl.some((p) => p.staff_id === x) && av.some((a) => a.staff_id === x && a.status === 'yes') && !off.has(x + d)) {
+      out.push({ key: 'tg' + x, cls: 'ok', text: <><b>{f(x)}</b> works well with {f(sid)} · said yes to this date. <button className="lnk" onClick={() => { place(d, x, { event_id: e.id, start: pl.find((p) => p.staff_id === sid)?.start ?? (e.start_time ?? '17:00').slice(0, 5) }); setWarns((w) => w.filter((y) => y.key !== 'tg' + x)); }}>Add {f(x)}</button></> });
+    }
+    return out;
+  };
   const partnerOf = (sid: string) => links.filter((l) => l.includes(sid)).map((l) => (l[0] === sid ? l[1] : l[0]));
   const condsOf = (sid: string) => conds.filter((c) => c.staff_id === sid);
   const avOf = (sid: string) => av.find((a) => a.staff_id === sid);
@@ -127,6 +154,7 @@ export function Bookings() {
       const e = evById[to.event_id]; pl.push({ key: uid(), staff_id: sid, event_id: to.event_id, start, code: isBarEv(e) ? (byId[sid]?.positions.includes('BT') ? 'BT' : 'BB') : 'W', extra: !!to.extra });
     }
     if (start !== to.start) setHint(`${name(sid).split(' ')[0]} can only start ${t12(start)} · new ${t12(start)} group`);
+    if (!existing || existing.event_id !== to.event_id) { const e = evById[to.event_id]; if (e) setWarns(warnFor(d, sid, e, pl)); }
     setCur(d, { ...c, pl });
   };
   const remove = (d: string, key: string) => { const c = cur(d); setCur(d, { ...c, pl: c.pl.filter((p) => p.key !== key) }); };
@@ -183,7 +211,7 @@ export function Bookings() {
       .filter((s) => !/manual booking only/i.test(s.staff_private?.notes ?? ''))
       .map((s) => { const a = av.find((x) => x.staff_id === s.id); const u = usual(s.id, d); return { s, a, u }; })
       .filter(({ a, u }) => a?.status === 'yes' || a?.status === 'asked' || (!a && u?.status !== 'no') || (a && a.status !== 'no'))
-      .sort((x, y) => rank(x.s.id) - rank(y.s.id));
+      .sort((x, y) => byScore(x.s.id, y.s.id));
   };
   const aList = availFor(date);
   const tabList = aList.filter(({ a }) => (tab === 'yes' ? a?.status === 'yes' : tab === 'wait' ? a?.status === 'asked' : !a)).filter(({ s }) => !q || s.full_name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').includes(q.toLowerCase()));
@@ -193,16 +221,16 @@ export function Bookings() {
   const runAuto = () => {
     const d = date; const c = cur(d); const evs = (events ?? []).filter((e) => e.event_date === d && evDept(e) === dept);
     const pl = c.pl.filter((p) => !p.suggested); const booked = new Set(pl.map((p) => p.staff_id));
-    const big = floorNeed((events ?? []).filter((e) => e.event_date === d)) >= 25;
+    const big = isBig(d);
     const skipped: { name: string; why: string }[] = []; const out: Pl[] = [];
-    const pool = aList.filter(({ a }) => a?.status === 'yes').map(({ s, a }) => ({ s, from: a?.from_time ?? null })).filter(({ s }) => !c.locks.includes(s.id));
+    const pool = aList.filter(({ a }) => a?.status === 'yes').map(({ s, a }) => ({ s, from: a?.from_time ?? null })).filter(({ s }) => !c.locks.includes(s.id)).sort((x, y) => byScore(x.s.id, y.s.id));
     const late: typeof pool = [];
+    /** '' = fits. Skips misfits (venue, private houses only, weekday, old min guests) and never puts "keep apart" people together. */
     const ok = (sid: string, e: AEvent) => {
-      for (const k of condsOf(sid)) {
-        if (k.kind === 'not_venue' && k.value && (e.title + ' ' + (e.event_private?.client ?? '')).toLowerCase().includes(k.value.toLowerCase())) return `never ${k.value}`;
-        if (k.kind === 'min_guests' && k.value && !((e.guests ?? 0) > Number(k.value))) return `only events over ${k.value} guests`;
-        if (k.kind === 'not_weekday' && k.value && k.value.split(',').includes(DOW[dowOf(d)])) return `not on ${DOW[dowOf(d)]}`;
-      }
+      const m = misfits(sid, e, { conds, clients, venues, big }).filter((x) => x.kind !== 'only_if_needed' && x.kind !== 'big_dates_only');
+      if (m.length) return m[0].text;
+      const ap = apartOf(sid).find((x) => [...pl, ...out].some((p) => p.event_id === e.id && p.staff_id === x));
+      if (ap) return `kept apart from ${name(ap).split(' ')[0]}`;
       return '';
     };
     const slots = () => { const r: { e: AEvent; start: string; open: number }[] = [];
@@ -319,6 +347,7 @@ export function Bookings() {
       </div>
 
       {hint && <div className="bk-hint" onClick={() => setHint('')}>{hint} ×</div>}
+      {warns.length > 0 && <div className="bk-warns">{warns.map((w) => <div key={w.key} className={'bk-warn ' + w.cls}><span className="grow">{w.text}</span><button className="lnk" aria-label="Dismiss" onClick={() => setWarns(warns.filter((x) => x.key !== w.key))}>×</button></div>)}<small className="muted">Warnings never block you; you can still book.</small></div>}
       {msg && <div className="bk-msg">{msg}</div>}
 
       {auto && !auto.open && view === 'board' && (
@@ -346,9 +375,9 @@ export function Bookings() {
                 {list.map(({ s, a, u }) => { const part = partnerOf(s.id); const c = condsOf(s.id); return (
                   <div key={s.id} className="bk-av" draggable onDragStart={() => setDrag({ staff_id: s.id })}>
                     <i className={'bk-t t' + (t ?? 'x')} />
-                    <div className="grow"><b>{s.full_name}</b>
+                    <div className="grow"><b>{s.full_name}<RuleIcons sid={s.id} links={rl} conds={conds} /></b>
                       <small>{a?.status === 'yes' ? (a.from_time ? `from ${t12(a.from_time)}` : 'any time') : a?.status === 'asked' ? 'asked · no reply' : u?.status === 'yes' ? `usual week · ${u.from_time ? 'from ' + t12(u.from_time) : 'any time'}` : 'not asked'}
-                        {part.length > 0 && ` · 🔗 ${part.map((x) => name(x).split(' ')[0]).join(', ')}`}{c.length > 0 && ` · ${c.map((x) => x.kind === 'not_venue' ? `no ${x.value}` : x.kind === 'min_guests' ? `${x.value}+ guests` : x.kind === 'big_dates_only' ? 'big dates only' : x.kind === 'only_if_needed' ? 'only if needed' : `not ${x.value}`).join(', ')}`}</small>
+                        {part.length > 0 && ` · 🔗 ${part.map((x) => name(x).split(' ')[0]).join(', ')}`}{c.length > 0 && ` · ${c.map(condShort).join(', ')}`}{apartOf(s.id).length > 0 && ` · ⊘ ${apartOf(s.id).map((x) => name(x).split(' ')[0]).join(', ')}`}</small>
                       {a?.note && <i className="av-note-adm">“{a.note}”</i>}</div>
                   </div>); })}
               </div>); })}

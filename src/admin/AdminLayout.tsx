@@ -16,11 +16,12 @@ export const ICONS = {
   hours: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5h4"/>',
   flag: '<path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/>',
   alert: '<path d="M12 3 2.5 20h19L12 3z"/><path d="M12 10v4M12 17.2v.3"/>',
+  rank: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
   more: '<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>',
 };
 export const NAV: [string, string, keyof typeof ICONS][] = [
   ['/admin', 'Today', 'today'], ['/admin/bookings', 'Bookings', 'book'], ['/admin/week', 'Week', 'week'], ['/admin/day', 'Day', 'day'], ['/admin/staff', 'Staff', 'staff'],
-  ['/admin/availability', 'Availability', 'avail'], ['/admin/tiers', 'Tiers', 'tiers'], ['/admin/hours', 'Hours', 'hours'], ['/admin/reliability', 'Reliability', 'flag'],
+  ['/admin/availability', 'Availability', 'avail'], ['/admin/tiers', 'Tiers', 'tiers'], ['/admin/ranking', 'Ranking', 'rank'], ['/admin/hours', 'Hours', 'hours'], ['/admin/reliability', 'Reliability', 'flag'],
   ['/admin/messages', 'Messages', 'msg'], ['/admin/incidents', 'Incidents', 'alert'],
 ];
 const TABS: [string, string, keyof typeof ICONS][] = [
@@ -58,7 +59,7 @@ export function AdminLayout() {
 export function More() {
   const items: [string, string, keyof typeof ICONS][] = [
     ['/admin/bookings', 'Bookings', 'book'], ['/admin/day', 'Day view', 'day'], ['/admin/hours', 'Hours & pay period', 'hours'], ['/admin/reliability', 'Reliability', 'flag'], ['/admin/incidents', 'Incidents', 'alert'], ['/admin/messages', 'Messages', 'msg'],
-    ['/admin/tiers', 'Tiers & ranking', 'tiers'], ['/me', 'My shifts', 'today'],
+    ['/admin/tiers', 'Tiers', 'tiers'], ['/admin/ranking', 'Ranking · score', 'rank'], ['/me', 'My shifts', 'today'],
   ];
   return (
     <div className="stack-lg">

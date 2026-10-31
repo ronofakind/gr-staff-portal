@@ -63,6 +63,19 @@ export function Today() {
         if (qseen.has(r.qb_doc_number)) continue; qseen.add(r.qb_doc_number);
         n.push({ key: 'qb' + r.qb_doc_number, title: `Remove Estimate #${r.qb_doc_number} in QuickBooks`, sub: `${r.events.title} · ${dLabel(r.events.event_date)} · paid cash`, action: 'Done?', to: `/admin/event/${r.event_id}` });
       }
+      // Manager feedback: any "worked like a C" or any ▼ shows right away (push 27).
+      const { data: fbs } = await supabase.from('staff_feedback').select('id,staff_id,tier_vote,ratings,note,created_at,by:staff!staff_feedback_by_staff_id_fkey(full_name),who:staff!staff_feedback_staff_id_fkey(full_name),events(title,event_date)')
+        .is('archived_at', null).gte('created_at', addDays(today, -30) + 'T00:00:00Z').order('created_at', { ascending: false });
+      type Fb = { id: string; staff_id: string; tier_vote: string | null; ratings: Record<string, string> | null; note: string | null; by: { full_name: string } | null; who: { full_name: string } | null; events: { title: string; event_date: string } | null };
+      const AREA: Record<string, string> = { punctuality: 'Punctuality', attitude: 'Attitude', presentation: 'Presentation', experience: 'Experience', teamwork: 'Teamwork', guest: 'Guest service' };
+      for (const f of (Array.isArray(fbs) ? fbs as unknown as Fb[] : []).filter((x) => x && typeof x.staff_id === 'string')) {
+        const r = f.ratings && typeof f.ratings === 'object' ? f.ratings : {};
+        const downs = Object.entries(r).filter(([, v]) => v === 'down').map(([k]) => `${AREA[k] ?? k} ▼`);
+        if (f.tier_vote !== 'C' && !downs.length) continue;
+        const fn = (x?: { full_name: string } | null) => x?.full_name?.split(' ')[0] ?? '?';
+        n.push({ key: 'fb' + f.id, red: true, title: `${fn(f.by)}: ${fn(f.who)} · ${[f.tier_vote === 'C' ? 'worked like a C' : null, ...downs].filter(Boolean).join(' · ')}`,
+          sub: `${f.events ? `${f.events.title} · ${dLabel(f.events.event_date)}` : 'Manager feedback'}${f.note ? ` · “${f.note}”` : ''}`, action: 'View', to: `/admin/staff?open=${f.staff_id}` });
+      }
       setNeeds(n);
     })();
   }, []);
