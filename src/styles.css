@@ -1232,10 +1232,10 @@ div.avatar { color: var(--accent); background: var(--accent-bg); }
 .undo-bar button { border: 0; background: none; color: #9FD8B8; font: 800 14px Inter, sans-serif; letter-spacing: .04em; cursor: pointer; padding: 6px 4px; }
 @keyframes gr-in-up { from { transform: translateY(20px); opacity: 0; } to { transform: none; opacity: 1; } }
 .btn-undo { height: 46px; border-radius: 23px; border: 1.5px solid var(--accent); background: #fff; color: var(--accent); font: 700 15px Inter, sans-serif; cursor: pointer; }
-.next.working { background: #10291D; }
+.next.working { background: var(--ink); }
 .next.working .day-word { color: #9FD8B8; }
-.next.working .countdown { background: #1E3D2D; color: #9FD8B8; }
-.next.working .tbox:not(.start) { background: #1E3D2D; }
+.next.working .countdown { background: #2A2521; color: #9FD8B8; }
+.next.working .tbox:not(.start) { background: #2A2521; }
 .done-card.mgr-pending { display: block; background: #FBF3E0; border: 2px solid #E0C27A; border-radius: 22px; padding: 16px; color: var(--ink); }
 .done-card.mgr-pending small { font-size: 11px; font-weight: 800; letter-spacing: .12em; color: #8A6A12; display: block; }
 .done-card.mgr-pending span { display: block; font-size: 13px; color: #6B5310; margin-top: 4px; }
@@ -1753,3 +1753,15 @@ div.avatar { color: var(--accent); background: var(--accent-bg); }
 .off-mark.yes { color: var(--ok); }
 .yes-tag { color: var(--ok); } .agenda-row .none .yes-tag + small { display: block; }
 .yes-card small { display: block; font-size: 10px; font-weight: 700; letter-spacing: .1em; color: var(--ok); } .yes-card .serif { font-size: 20px; margin: 2px 0 4px; }
+/* Working now: black card + breathing green glow (fixes chat, Oct 31, option B) */
+.next.working { background: var(--ink); box-shadow: 0 0 0 3px #5CC08E, 0 0 18px 4px rgba(92,192,142,.55); animation: live-glow 2.4s ease-in-out infinite; }
+@keyframes live-glow { 0%, 100% { box-shadow: 0 0 0 3px #5CC08E, 0 0 18px 4px rgba(92,192,142,.55); } 50% { box-shadow: 0 0 0 3px #5CC08E, 0 0 34px 10px rgba(92,192,142,.85); } }
+.next.working .day-word { display: inline-flex; align-items: center; gap: 8px; color: #5CC08E; }
+.live-dot { width: 8px; height: 8px; border-radius: 4px; background: #5CC08E; animation: live-pulse 2.4s ease-in-out infinite; }
+@keyframes live-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .4; } }
+@media (prefers-reduced-motion: reduce) { .live-dot, .next.working { animation: none; } }
+.next.working .countdown { background: #2A2521; color: #9FD8B8; }
+.next.working .tbox { background: #2A2521; } .next.working .tbox small { color: #B8AFA4; }
+.next.working .sm-big.mint { color: #9FD8B8; font-size: 24px; }
+.next .confirmed-chip { background: #2A2521 !important; color: #9FD8B8 !important; border: 0 !important; }
+.next.working .confirmed-chip { background: #2A2521 !important; color: #9FD8B8 !important; border: 0 !important; }

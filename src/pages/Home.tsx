@@ -211,8 +211,8 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
         return (
           <section className={'next' + (working ? ' working' : '')} style={{ gap: 14, padding: 18 }}>
             <div className="top-line">
-              <span className="day-word">{working ? '● WORKING NOW' : dayWord.toUpperCase()}</span>
-              {working ? <span className="countdown">started {time(next.punches!.punch_in!, lang)}</span> : !next.time_tbc && <Countdown iso={minus(next.planned_start, next.arrive_before_min)} start={next.planned_start} />}
+              <span className="day-word">{working ? <><i className="live-dot" aria-hidden="true" />WORKING NOW</> : dayWord.toUpperCase()}</span>
+              {working ? <span className="countdown">since {time(next.punches!.punch_in!, lang)}</span> : !next.time_tbc && <Countdown iso={minus(next.planned_start, next.arrive_before_min)} start={next.planned_start} />}
             </div>
             <div className="spread" style={{ alignItems: 'flex-end' }}>
               <div style={{ minWidth: 0 }}>
@@ -223,8 +223,13 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
             </div>
             <div className="pos-line"><small>Your position</small><span className="pos-pill-lg">{role(next)}</span></div>
             <div className="row2">
+              {working ? <>
+                <div className="tbox"><small>Started</small><BigTime iso={next.punches!.punch_in!} small /></div>
+                <div className="tbox"><small>On the clock</small><span className="big serif sm-big mint"><Elapsed iso={next.punches!.punch_in!} /></span></div>
+              </> : <>
               <div className="tbox start"><small>Shift starts</small>{next.time_tbc ? <span className="big serif sm-big">TBC</span> : <BigTime iso={next.planned_start} small />}</div>
               {!isSetup(next.events) && <div className="tbox"><small>Be there</small>{next.time_tbc ? <span className="big serif sm-big">TBC</span> : <><BigTime iso={minus(next.planned_start, next.arrive_before_min)} small /><span className="tb-note">{next.arrive_before_min} min before</span></>}</div>}
+              </>}
             </div>
             {myAlerts.map((a) => (
               <div key={a.id} className="mgr-late"><span className="grow">⏱ <b>{a.name.split(' ')[0]} running late</b> · ~{t12c(a.eta).replace(/\s?[AP]M$/, '')}{a.reason ? ` · ${a.reason.toLowerCase()}` : ''}{a.note ? ` · “${a.note}”` : ''}</span>
@@ -235,7 +240,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
               <Link className="light-btn" style={{ height: 46, borderRadius: 14 }} to={`${base}/shift/${next.id}`}>Details</Link>
               {team && !preview
                 ? <Link className="team-btn" to={`/manage/${next.events.id}`}>My team · {team.length} ›</Link>
-                : next.status === 'confirmed' ? <span className="light-btn" style={{ height: 46, borderRadius: 14, background: '#2A2521', color: '#9FD8B8' }}>✓ Confirmed</span>
+                : next.status === 'confirmed' ? <span className="light-btn confirmed-chip" style={{ height: 46, borderRadius: 14 }}>✓ Confirmed</span>
                 : <button className="team-btn" style={{ border: 'none' }} onClick={() => respond(next.id, 'confirmed')}>Confirm</button>}
             </div>
             {!started && !managesIt && <NeedChange canSchedule={!(req?.status === 'pending' || (req?.status === 'keep' && !req.keep_reply))} onSchedule={() => setSheet({ kind: 'change', s: next })} onCancel={() => setSheet({ kind: 'cancel', s: next })} />}
@@ -327,6 +332,12 @@ export function BigTime({ iso, small = false }: { iso: string; small?: boolean }
 }
 
 /** Small live countdown to "be there" time, only on the next event. */
+function Elapsed({ iso }: { iso: string }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => { const id = setInterval(() => setNow(Date.now()), 30000); return () => clearInterval(id); }, []);
+  const m = Math.max(0, Math.floor((now - new Date(iso).getTime()) / 60000));
+  return <>{Math.floor(m / 60)} h {String(m % 60).padStart(2, '0')}</>;
+}
 function Countdown({ iso, start }: { iso: string; start: string }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const id = setInterval(() => setNow(Date.now()), 30000); return () => clearInterval(id); }, []);
