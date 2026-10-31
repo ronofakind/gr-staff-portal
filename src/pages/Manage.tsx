@@ -158,6 +158,8 @@ export function Manage() {
   const [ev, setEv] = useState<EvFull | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
   const [open, setOpen] = useState<Row | null>(null);
+  const [undo, setUndo] = useState<{ label: string; prev: { id: string; in: string | null; out: string | null }[] } | null>(null);
+  useEffect(() => { if (!undo) return; const t = setTimeout(() => setUndo(null), 8000); return () => clearTimeout(t); }, [undo]);
   const [draft, setDraft] = useState({ in: '', out: '' });
   const [ask, setAsk] = useState<Ask>(null);
   const [review, setReview] = useState(false);
@@ -240,10 +242,21 @@ export function Manage() {
     const call = new Date(r.planned_start).getTime(); const t = Date.now();
     return new Date(t < call ? call : Math.max(call, Math.round(t / 900000) * 900000)).toISOString();
   };
-  const startRows = (list: Row[]) => {
+  const startRows = async (list: Row[]) => {
     const go = list.filter((r) => gate(r).kind !== 'locked');
-    if (go.length) set(go.map((r) => ({ id: r.id, in: startAt(r), out: null, arrived: now() })));
+    if (!go.length) return;
+    const at = startAt(go[0]);
+    await set(go.map((r) => ({ id: r.id, in: startAt(r), out: null, arrived: now() })));
+    setUndo({ label: go.length === 1 ? `${go[0].staff?.full_name ?? 'Started'} started · ${time(at, lang)}` : `${go.length} people started`, prev: go.map((r) => ({ id: r.id, in: r.punches?.punch_in ?? null, out: r.punches?.punch_out ?? null })) });
   };
+  const endRow = async (r: Row, pin: string) => {
+    const out = now();
+    await set([{ id: r.id, in: pin, out }]);
+    setUndo({ label: `${r.staff?.full_name ?? 'Ended'} ended · ${time(out, lang)}`, prev: [{ id: r.id, in: pin, out: r.punches?.punch_out ?? null }] });
+  };
+  const doUndo = async () => { if (!undo) return; const u = undo; setUndo(null); await set(u.prev.map((p) => ({ id: p.id, in: p.in, out: p.out }))); };
+  const undoStart = async (r: Row) => { await set([{ id: r.id, in: null, out: null }]); setOpen(null); };
+  const undoEnd = async (r: Row) => { await set([{ id: r.id, in: r.punches?.punch_in ?? null, out: null }]); setOpen(null); };
   const nowMs = Date.now();
   const isWorking = (r: Row) => !r.attendance && !!r.punches?.punch_in && (!r.punches.punch_out || new Date(r.punches.punch_out).getTime() > nowMs);
   const scheduled = rows.filter((r) => !r.attendance && r.punches?.punch_out && new Date(r.punches.punch_out).getTime() > nowMs);
@@ -378,7 +391,7 @@ export function Manage() {
                   <div className="act-slot">
                     {r.attendance ? <button className="act undo" onClick={() => mark(r.id, null)}>Undo</button>
                       : !pin ? (gate(r).kind === 'locked' ? <button className="act locked" disabled title={gate(r).label}>{t.start}</button> : <button className="act start" onClick={() => startRows([r])}>{t.start}</button>)
-                      : !ended ? <button className="act end" onClick={() => set([{ id: r.id, in: pin, out: now() }])}>{t.end}</button> : <span className="act done-mark">✓</span>}
+                      : !ended ? <button className="act end" onClick={() => endRow(r, pin)}>{t.end}</button> : <span className="act done-mark">✓</span>}
                     {r.leave_by && !pout && !r.attendance && <span className="leave-tag">⏱ Leaves ~{time(r.leave_by, lang).replace(':00', '')}</span>}
                   </div>
                 </div>
@@ -510,6 +523,10 @@ export function Manage() {
               const o = draft.out ? toIso(ev.event_date, draft.out, i ?? open.planned_start) : null;
               await set([{ id: open.id, in: i, out: o, arrived: open.punches?.arrived_at ? null : (i ? now() : null) }]); setOpen(null);
             }}>{open.punches?.punch_in ? 'Save times' : draft.in ? `Start from ${fmt12(draft.in)}` : 'Save times'}</button>}
+            {!open.attendance && !open.left_early && !ev.hours_submitted_at && open.punches?.punch_in && (
+              open.punches.punch_out
+                ? <><button className="btn-undo" onClick={() => undoEnd(open)}>↶ Undo end · back to working</button><div className="muted sm" style={{ textAlign: 'center', marginTop: -6 }}>Ended the wrong person? This clears the end time.</div></>
+                : <><button className="btn-undo" onClick={() => undoStart(open)}>↶ Undo start</button><div className="muted sm" style={{ textAlign: 'center', marginTop: -6 }}>Started the wrong person? This puts them back to “not started”.</div></>)}
             {open.attendance
               ? <button className="btn-ghost" onClick={() => mark(open.id, null)}>Undo {open.attendance === 'no_show' ? 'no-show' : 'cancelled'}</button>
               : open.left_early ? <button className="btn-ghost" onClick={() => undoLeft(open.id)}>Undo left early{open.attendance_reason ? ` · ${open.attendance_reason}` : ''}</button>
@@ -569,6 +586,7 @@ export function Manage() {
           </>
         );
       })()}
+      {undo && <div className="undo-bar" role="status"><span className="grow">{undo.label}</span><button onClick={doUndo}>UNDO</button></div>}
     </main>
   );
 }

@@ -44,7 +44,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
           .filter((x) => !x.attendance && x.punches?.punch_in && x.punches.punch_out && new Date(x.punches.punch_out).getTime() <= Date.now());
         setMonth({ n: done.length, h: done.reduce((n, x) => n + paidHours(x.punches!.punch_in!, x.punches!.punch_out!, !!x.left_early), 0), wait: done.filter((x) => !x.events.hours_submitted_at).length });
       });
-    const managed = rows.filter((r) => r.events.manager_id === me.id).map((r) => r.events.id);
+    const managed = [...new Set(rows.filter((r) => r.events.manager_id === me.id || r.position_code === 'MD' || r.position_code === 'BM').map((r) => r.events.id))];
     if (managed.length) {
       const { data: crew, error: cErr } = await supabase.from('shifts').select('event_id,position_code,position_detail,attendance,staff:staff!shifts_staff_id_fkey(full_name,photo_url),punches(punch_in,punch_out)')
         .in('event_id', managed).neq('status', 'declined').order('planned_start');
@@ -137,14 +137,14 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
             <div key={s.id} className="done-card mgr">
               <span className="ck">✓</span>
               <div className="grow"><small>YOU MANAGED · {s.events.title.toUpperCase()}</small><b>Hours submitted {t12(sub)}</b><span>{team.length} people · {total} h · you {hrs(s.punches!.punch_in!, s.punches!.punch_out!)} h</span>
-                <Link to={`/manage/${s.events.id}`} className="done-link">Open team · fix &amp; resubmit ›</Link></div>
+                <span className="row" style={{ gap: 14 }}><Link to={`/manage/${s.events.id}`} className="done-link">Open team · fix &amp; resubmit ›</Link><Link to={`${base}/shift/${s.id}`} className="done-link">Details ›</Link></span></div>
             </div>
           ) : (
-            <Link key={s.id} to={`/manage/${s.events.id}`} className="done-card warn">
-              <span className="ck">!</span>
-              <div className="grow"><b>{ended ? 'Hours not submitted yet' : 'Your team is still working'}</b><span>{s.events.title}{ended ? ` · ${team.length} people · ${total} h` : ''}</span></div>
-              <span className="pill-ink">{ended ? 'Submit ›' : 'Open ›'}</span>
-            </Link>
+            <div key={s.id} className="done-card warn mgr-pending">
+              <div className="grow"><small>TODAY · YOU MANAGE</small><b className="serif" style={{ fontSize: 24, fontWeight: 500 }}>{s.events.title}</b>
+                <span>You ended {time(s.punches!.punch_out!, lang)} · {ended ? `${team.length} people · ${total} h · hours not submitted` : `${team.filter((m) => !(m.punches?.punch_out && new Date(m.punches.punch_out).getTime() <= Date.now())).length} still working · hours not submitted`}</span>
+                <div className="row2" style={{ marginTop: 10 }}><Link className="light-btn" style={{ height: 44, borderRadius: 14, background: '#fff' }} to={`${base}/shift/${s.id}`}>Details</Link><Link className="team-btn" style={{ height: 44 }} to={`/manage/${s.events.id}`}>Team · submit ›</Link></div></div>
+            </div>
           );
         }
         const st = qs[s.id];
@@ -158,7 +158,8 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
                 {st === 'open' ? <span className="gold">Question sent ✓ · waiting</span>
                   : st === 'fixed' ? <span className="okc">Fixed ✓</span>
                   : st === 'correct' ? <span className="muted">Checked, it’s correct</span>
-                  : <button className="done-link" onClick={() => !preview && setAskQ(s)}>Something wrong? ›</button>}</div>
+                  : <button className="done-link" onClick={() => !preview && setAskQ(s)}>Something wrong? ›</button>}
+                <Link to={`${base}/shift/${s.id}`} className="done-link">Details ›</Link></div>
             </div>
           </div>
         );
@@ -171,11 +172,12 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
         const team = teams[next.events.id];
         const dayWord = next.events.event_date === today ? 'Today' : next.events.event_date === addDay(today, 1) ? 'Tomorrow'
           : new Date(next.events.event_date + 'T12:00:00').toLocaleDateString('en-CA', { weekday: 'long', month: 'short', day: 'numeric' });
+        const working = !!next.punches?.punch_in && new Date(next.punches.punch_in).getTime() <= Date.now();
         return (
-          <section className="next" style={{ gap: 14, padding: 18 }}>
+          <section className={'next' + (working ? ' working' : '')} style={{ gap: 14, padding: 18 }}>
             <div className="top-line">
-              <span className="day-word">{dayWord.toUpperCase()}</span>
-              {!next.time_tbc && <Countdown iso={minus(next.planned_start, next.arrive_before_min)} start={next.planned_start} />}
+              <span className="day-word">{working ? '● WORKING NOW' : dayWord.toUpperCase()}</span>
+              {working ? <span className="countdown">started {time(next.punches!.punch_in!, lang)}</span> : !next.time_tbc && <Countdown iso={minus(next.planned_start, next.arrive_before_min)} start={next.planned_start} />}
             </div>
             <div className="spread" style={{ alignItems: 'flex-end' }}>
               <div style={{ minWidth: 0 }}>

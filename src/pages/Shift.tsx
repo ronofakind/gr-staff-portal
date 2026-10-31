@@ -11,22 +11,30 @@ export function Shift({ backTo = '/' }: { backTo?: string }) {
   const { id } = useParams();
   const [s, setS] = useState<ShiftRow | null>(null);
   const [md, setMd] = useState<{ full_name: string; photo_url: string | null; phone: string | null } | null>(null);
+  const [team, setTeam] = useState<TeamGroup[] | undefined>(undefined);
 
   useEffect(() => {
-    supabase.from('shifts').select(SHIFT_SELECT).eq('id', id!).single().then(({ data }) => {
+    supabase.from('shifts').select(SHIFT_SELECT + ',punches(punch_in,punch_out)').eq('id', id!).single().then(({ data }) => {
       const row = data as unknown as ShiftRow; setS(row);
+      if (row && (row.position_code === 'MD' || row.position_code === 'BM'))
+        supabase.from('shifts').select('planned_start,status,attendance').eq('event_id', row.events.id).neq('status', 'declined').then(({ data: crew }) => {
+          const m = new Map<string, number>();
+          for (const c of (crew ?? []) as { planned_start: string; attendance: string | null }[]) if (!c.attendance) m.set(c.planned_start, (m.get(c.planned_start) ?? 0) + 1);
+          setTeam([...m.entries()].sort().map(([k, n]) => ({ start: k, label: new Date(k).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' }), n })));
+        });
       // "Look for" = the MD on site (falls back to the event manager).
-      if (row) supabase.rpc('event_md', { p_event: row.events.id }).then(({ data: m }) => setMd((m as typeof md[]) ?.[0] ?? null));
+      if (row) supabase.rpc('event_md', { p_event: row.events.id }).then(({ data: m }) => { const x = Array.isArray(m) ? (m as typeof md[])[0] : null; setMd(x?.full_name ? x : null); });
     });
   }, [id]);
 
   if (!s) return <div className="loading" />;
-  return <ShiftView s={s} lead={md ?? s.events.manager} backTo={backTo} />;
+  return <ShiftView s={s} lead={md ?? s.events.manager} backTo={backTo} team={team} />;
 }
 
 type Lead = { full_name: string; photo_url: string | null; phone: string | null } | null;
 /** The staff event page itself. Also rendered read-only in the admin "How it lands in the app" preview. */
-export function ShiftView({ s, lead, backTo = '/', preview = false }: { s: ShiftRow; lead: Lead; backTo?: string; preview?: boolean }) {
+type TeamGroup = { start: string; label: string; n: number };
+export function ShiftView({ s, lead, backTo = '/', preview = false, team }: { s: ShiftRow; lead: Lead; backTo?: string; preview?: boolean; team?: TeamGroup[] }) {
   const t = useT(); const lang = useLang();
   const [leadPhoto, setLeadPhoto] = useState(false);
   const ev = s.events;
@@ -66,52 +74,48 @@ export function ShiftView({ s, lead, backTo = '/', preview = false }: { s: Shift
   ];
   const shirtLabel = uniformLabel(kind).replace(' + tie', '');
 
+  const lead_ = s.position_code === 'MD' || s.position_code === 'BM';
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' });
+  const tmr = (() => { const x = new Date(today + 'T12:00:00'); x.setDate(x.getDate() + 1); return x.toLocaleDateString('en-CA'); })();
+  const dayWord = ev.event_date === today ? 'Today' : ev.event_date === tmr ? 'Tomorrow' : d.toLocaleDateString('en-CA', { weekday: 'long' });
+  const mins = Math.round((new Date(s.planned_start).getTime() - Date.now()) / 60000);
+  const cd = s.punches?.punch_in ? 'working now' : mins <= 0 ? 'started' : mins < 60 ? `in ${mins} min` : mins < 48 * 60 ? `in ${Math.round(mins / 60)} h` : '';
+  const st = s.time_tbc ? null : time(s.planned_start, lang);
+  const tNum = st ? st.replace(/\s?[ap]\.?\s?m\.?/i, '') : 'TBC'; const tAp = st ? (/p\.?\s?m/i.test(st) ? 'PM' : 'AM') : '';
+  const setup = isSetup(ev);
+  const facts = [ev.event_type, ev.guests ? `${ev.guests} guests` : null].filter(Boolean).join(' · ');
+  const [street, ...cityParts] = (address || venueName).split(',');
   return (
-    <main className={'page v2 details' + (preview ? ' preview' : '')}>
-      <header className="row" style={{ paddingTop: 12 }}>
+    <main className={'page v2 details d3' + (preview ? ' preview' : '')}>
+      <header className="row d3-top">
         <Link to={backTo} className="back" aria-label={t('back')}>‹</Link>
         <span className="kicker grow">{longDate(ev.event_date, lang)}</span>
         <Status s={s.status} />
       </header>
-      <div className="serif" style={{ fontSize: 36, lineHeight: 1, padding: '0 6px' }}>{ev.title}</div>
 
-      <section className="d-start">
-        <div className="grow"><small>Shift starts</small>
-          {s.time_tbc ? <b className="serif">TBC</b> : <b className="serif">{time(s.planned_start, lang).replace(/\s?[ap]\.?\s?m\.?/i, '')}<i>{/p\.?\s?m/i.test(time(s.planned_start, lang)) ? ' PM' : ' AM'}</i></b>}</div>
-        <div className="d-pos"><small>Your position</small><span className="pos-pill-lg">{role}</span></div>
+      <section className="d3-hero">
+        <div className="d3-kick">{dayWord.toUpperCase()}{cd ? ` · ${cd.toUpperCase()}` : ''}</div>
+        <div><div className="serif d3-venue">{venueName}</div>{(facts || ev.description) && <div className="d3-sub">{facts || ev.description}</div>}</div>
+        <div className="d3-row">
+          <div className="d3-cell"><small>Starts</small><div className="d3-val"><span className="serif">{tNum}</span>{tAp && <i>{tAp}</i>}</div></div>
+          <span className="d3-vl" />
+          <div className="d3-cell"><small>Position</small><div className="d3-val"><span className="serif">{role}</span></div></div>
+          {!setup && <><span className="d3-vl" /><div className="d3-cell wear"><small>Wear</small><div className="d3-val"><span className="d3-uni" title={shirtLabel}><UniformIcon kind={kind} size={24} /></span></div></div></>}
+        </div>
+        {lead_ && !preview && <Link className="d3-team" to={`/manage/${ev.id}`}>My team{team ? ` · ${team.reduce((n, g) => n + g.n, 0)}` : ''} ›</Link>}
       </section>
 
-      {(ev.event_type || ev.guests || ev.description) && <>
-        <div className="d-sec">The event</div>
-        <section className="card d-event">
-          {(ev.event_type || ev.guests) && <b>{[ev.event_type, ev.guests ? `${ev.guests} guests` : null].filter(Boolean).join(' · ')}</b>}
-          {ev.description && (ev.event_type || ev.guests ? <span className="muted sm" style={{ display: 'block', marginTop: 4 }}>{ev.description}</span> : <b>{ev.description}</b>)}
-        </section>
-      </>}
-
-      <section className="where">
-        <div className="map">
-          <svg viewBox="0 0 358 150" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-            <rect width="358" height="150" fill="#ECE6DC" />
-            <path d="M-10 40 L370 18" stroke="#fff" strokeWidth="12" /><path d="M-10 108 L370 86" stroke="#fff" strokeWidth="16" />
-            <path d="M70 -10 L95 160" stroke="#fff" strokeWidth="10" /><path d="M230 -10 L250 160" stroke="#fff" strokeWidth="12" />
-            <path d="M300 -10 L330 160" stroke="#fff" strokeWidth="6" />
-            <rect x="110" y="44" width="105" height="36" rx="6" fill="#DFD7CA" /><rect x="10" y="118" width="70" height="40" rx="6" fill="#DFD7CA" />
-            <rect x="262" y="34" width="34" height="46" rx="6" fill="#D6E3D3" /><rect x="110" y="118" width="110" height="40" rx="6" fill="#D6E3D3" />
-          </svg>
-          <div className="pin">
-            <span>{venueName}</span>
-            <svg width="26" height="34" viewBox="0 0 26 34" aria-hidden="true"><path d="M13 33 C13 33 25 19 25 12 A12 12 0 0 0 1 12 C1 19 13 33 13 33Z" fill="#9B2226" stroke="#fff" strokeWidth="2" /><circle cx="13" cy="12" r="4.5" fill="#fff" /></svg>
-          </div>
+      <div className="d-sec">Where</div>
+      <section className="d3-card d3-where">
+        <div className="row" style={{ gap: 12, alignItems: 'flex-start' }}>
+          <span className="d3-pin"><svg width="16" height="20" viewBox="0 0 26 34" aria-hidden="true"><path d="M13 33 C13 33 25 19 25 12 A12 12 0 0 0 1 12 C1 19 13 33 13 33Z" fill="#9B2226" /><circle cx="13" cy="12" r="4.5" fill="#fff" /></svg></span>
+          <div className="grow" style={{ minWidth: 0 }}><b>{street}</b>{cityParts.length > 0 && <span>{cityParts.join(',').trim()}</span>}{ev.venues?.staff_notes && <p>{ev.venues.staff_notes}</p>}</div>
         </div>
-        <div className="where-body">
-          <div><b>{address || venueName}</b>{ev.venues?.staff_notes && <span>{ev.venues.staff_notes}</span>}</div>
-          <div className="row2" style={{ gap: 10 }}>
-            {address ? <a className="big-btn dark" href={mapsUrl(address)} target="_blank" rel="noreferrer">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 11 21 3l-8 18-2-8z" /></svg>Directions</a> : <span />}
-            <a className="big-btn" href={cal} target="_blank" rel="noreferrer">
-              <span className="mini-cal"><i>{d.toLocaleDateString('en-CA', { month: 'short' }).toUpperCase().replace('.', '')}</i><b>{d.getDate()}</b></span>Add to calendar</a>
-          </div>
+        <div className="row2" style={{ gap: 8 }}>
+          {address ? <a className="big-btn dark" href={mapsUrl(address)} target="_blank" rel="noreferrer">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 11 21 3l-8 18-2-8z" /></svg>Directions</a> : <span />}
+          <a className="big-btn" href={cal} target="_blank" rel="noreferrer">
+            <span className="mini-cal"><i>{d.toLocaleDateString('en-CA', { month: 'short' }).toUpperCase().replace('.', '')}</i><b>{d.getDate()}</b></span>Add to calendar</a>
         </div>
       </section>
 
@@ -123,24 +127,34 @@ export function ShiftView({ s, lead, backTo = '/', preview = false }: { s: Shift
         </Link>
       ) : null}
 
-      {!isSetup(ev) && <>
-      <div className="d-sec">Uniform</div>
-      <section className="uni-hero"><UniformIcon kind={kind} size={92} /><div><small>{dress ? 'Dress' : kind === 'black_tshirt' ? 'Top' : 'Shirt'}</small><div className="serif">{shirtLabel}</div></div></section>
-      <section className="uni-grid">
-        {tiles.map((x) => <div key={x.name} className="uni-tile"><div className="ic">{x.icon}</div><b>{x.name}</b>{x.no && <span className="no">✕ {x.no}</span>}</div>)}
-      </section>
+      {!setup && <>
+        <div className="d-sec">What to wear</div>
+        <section className="d3-card d3-shirt"><UniformIcon kind={kind} size={60} /><div><small>{dress ? 'Dress' : kind === 'black_tshirt' ? 'Top' : 'Shirt'}</small><div className="serif">{shirtLabel}</div></div></section>
+        <section className="d3-tiles">
+          {tiles.map((x) => <div key={x.name} className="d3-tile"><div className="ic">{x.icon}</div><b>{x.name}</b>{x.no && <span className="no">✕ {x.no}</span>}</div>)}
+        </section>
       </>}
 
-      <div className="d-sec">Notes</div>
-      <section className="d-notes">{ev.notes ? ev.notes : <span className="empty">&nbsp;</span>}</section>
+      {lead_ && team && team.length > 0 && <>
+        <div className="d-sec">Your team</div>
+        <section className="d3-card d3-teamlist">
+          {team.map((g) => <div key={g.start}><span>{g.label}</span><b>{g.n} {g.n === 1 ? 'person' : 'people'}</b></div>)}
+          <small>Open the team to start people and see who’s late.</small>
+        </section>
+      </>}
+
+      {ev.notes && <>
+        <div className="d-sec">Notes</div>
+        <section className="d3-notes">{ev.notes}</section>
+      </>}
 
       {lead && <>
         <div className="d-sec">Manager On-Site</div>
-        <section className="look card">
+        <section className="d3-card look">
           <button className="look-photo" aria-label={`See ${lead.full_name}'s photo`} onClick={() => setLeadPhoto(true)}><Avatar name={lead.full_name} url={lead.photo_url} size={56} /></button>
           <div className="grow" style={{ minWidth: 0 }}>
             <div style={{ fontSize: 16, fontWeight: 700 }}>{lead.full_name}</div>
-            <div className="muted sm">MD on site{lead.photo_url ? ' · tap the photo' : ''}</div>
+            <div className="muted sm">MD{lead.photo_url ? ' · tap the photo' : ''}</div>
           </div>
           {tel && <>
             <a className="d-call ok" href={`tel:${tel}`} aria-label={`Call ${lead.full_name}`}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z" /></svg></a>
@@ -149,6 +163,7 @@ export function ShiftView({ s, lead, backTo = '/', preview = false }: { s: Shift
         </section>
         {leadPhoto && <PhotoViewer name={lead.full_name} url={lead.photo_url} sub="Manager On-Site · find them when you arrive" onClose={() => setLeadPhoto(false)} />}
       </>}
+      <div style={{ height: 24 }} />
     </main>
   );
 }
