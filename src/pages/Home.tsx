@@ -8,7 +8,6 @@ import { Avatar } from '../components/Avatar';
 import { TabBar } from '../components/TabBar';
 import { AskCards, useAsks } from '../components/AskCards';
 import { UniformIcon, uniformFor, uniformLabel } from '../components/Uniform';
-import { payPeriod, paidHours, periodLabel, payDayLabel } from '../lib/hours';
 import { AnnounceCards } from '../components/Announce';
 
 type Mate = { full_name: string; photo_url: string | null; position_code: string | null; position_detail: string | null; punches: { punch_in: string | null; punch_out: string | null } | null };
@@ -26,7 +25,6 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
   const [shifts, setShifts] = useState<ShiftRow[] | null>(null);
   const [teams, setTeams] = useState<Record<string, Mate[]>>({});
   const [qs, setQs] = useState<Record<string, Q['status']>>({});
-  const [month, setMonth] = useState<{ n: number; h: number; wait: number } | null>(null);
   const [askQ, setAskQ] = useState<ShiftRow | null>(null);
   const [alerts, setAlerts] = useState<{ id: string; kind: string; title: string; body: string | null; event_id: string | null }[]>([]);
 
@@ -39,13 +37,6 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
     setShifts(rows);
     if (rows.length) supabase.from('hours_questions').select('shift_id,status').in('shift_id', rows.map((r) => r.id)).order('created_at')
       .then(({ data: q }) => setQs(Object.fromEntries(((q ?? []) as Q[]).map((x) => [x.shift_id, x.status]))));
-    const per = payPeriod(todayIso());
-    supabase.from('shifts').select('attendance,left_early,punches(punch_in,punch_out),events!inner(event_date,hours_submitted_at)').eq('staff_id', me.id).neq('status', 'declined')
-      .gte('events.event_date', per.start).lte('events.event_date', per.end).then(({ data: ms }) => {
-        const done = ((ms ?? []) as unknown as { attendance: string | null; left_early: boolean | null; punches: { punch_in: string | null; punch_out: string | null } | null; events: { hours_submitted_at: string | null } }[])
-          .filter((x) => !x.attendance && x.punches?.punch_in && x.punches.punch_out && new Date(x.punches.punch_out).getTime() <= Date.now());
-        setMonth({ n: done.length, h: done.reduce((n, x) => n + paidHours(x.punches!.punch_in!, x.punches!.punch_out!, !!x.left_early), 0), wait: done.filter((x) => !x.events.hours_submitted_at).length });
-      });
     const managed = [...new Set(rows.filter((r) => r.events.manager_id === me.id || r.position_code === 'MD' || r.position_code === 'BM').map((r) => r.events.id))];
     if (managed.length) {
       const { data: crew, error: cErr } = await supabase.from('shifts').select('event_id,position_code,position_detail,attendance,staff:staff!shifts_staff_id_fkey(full_name,photo_url),punches(punch_in,punch_out)')
@@ -197,13 +188,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
         );
       })()}
 
-      {month && month.n > 0 && (() => { const per = payPeriod(todayIso()); return (
-        <Link to={base ? `${base}/schedule` : '/hours'} className="month-card hz-home">
-          <div className="grow"><small>THIS PAY PERIOD · {periodLabel(per).toUpperCase()}</small>
-            <div className="row" style={{ gap: 18 }}><span><b className="serif">{month.h}</b> h</span><span><b className="serif">{month.n}</b> shift{month.n > 1 ? 's' : ''}</span></div>
-            <span className="okc sm strong">Paid {payDayLabel(per)}{month.wait ? ` · ${month.wait} shift${month.wait > 1 ? 's' : ''} waiting` : ''}</span></div>
-          <span className="sm strong">Hours ›</span>
-        </Link>); })()}
+      {/* Pay-period hours card removed from Home (Oct 31) — it lives in the Hours tab. */}
 
       {rest.length > 0 && (
         <>
