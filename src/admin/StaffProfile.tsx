@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 import { Avatar } from '../components/Avatar';
 import { isoDay, flagsOf, hoursBetween, dLabel, allStaff, type AStaff, type Flag, type Venue } from './api';
 import { loadRules, linksOf, other, condLabel, DOW3, type SLink, type SCond, type LinkKind, type CondKind } from './rules';
-import { loadScoreData, scoreOf, AREAS, type ScoreData } from './score';
+import { loadScoreData, scoreOf, AREAS, avgStars, isStar, type ScoreData } from './score';
 import { ScoreWhy } from './Ranking';
 
 const DOW = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
@@ -225,22 +225,35 @@ function AddRule({ s, people, venues, links, onClose, onSaved }: { s: AStaff; pe
   );
 }
 
-/** MANAGER FEEDBACK card: tier votes, average per area, recent items with manager + comment. */
+/** Read-only 5 stars (admin). */
+const StarRow = ({ v, size = 'sm' }: { v: number; size?: 'xs' | 'sm' }) => <span className={'stars ' + size} role="img" aria-label={`${v} of 5 stars`}>{[1, 2, 3, 4, 5].map((n) => <i key={n} className={n <= Math.round(v) ? 'on' : ''}>★</i>)}</span>;
+
+/** MANAGER FEEDBACK card (push 30): average overall stars + count, average stars per area, tier votes, recent items with stars, manager + comment.
+ *  Older rows (before stars) show their A/B/C and ▲ ▼ as before. */
 function MgrFeedback({ sid, d }: { sid: string; d: ScoreData }) {
   const mine = d.feedback.filter((f) => f.staff_id === sid);
   if (!mine.length) return <div className="pcard"><div className="kick">MANAGER FEEDBACK</div><div className="muted sm">No feedback yet.</div></div>;
   const votes = { A: 0, B: 0, C: 0 }; for (const f of mine) if (f.tier_vote) votes[f.tier_vote]++;
-  const avg = AREAS.map((a) => { const v = mine.map((f) => f.ratings?.[a.key]).filter(Boolean) as string[]; if (!v.length) return { a, n: 0, m: 0 };
-    return { a, n: v.length, m: v.reduce((x, y) => x + (y === 'up' ? 1 : y === 'down' ? -1 : 0), 0) / v.length }; });
+  const rated = mine.filter((f) => f.overall_stars).map((f) => f.overall_stars as number); const avg = avgStars(rated);
+  const area = AREAS.map((a) => { const v = mine.filter((f) => f.overall_stars).map((f) => f.ratings?.[a.key]).filter(isStar); return { a, n: v.length, m: avgStars(v) }; });
   return (
     <div className="pcard">
       <div className="kick">MANAGER FEEDBACK · {mine.length}</div>
-      <div className="fb-votes">{(['A', 'B', 'C'] as const).map((t) => <div key={t} className={'fbv ' + t}><b>{votes[t]}</b><small>worked like {t}</small></div>)}</div>
-      <div className="fb-avg">{avg.map(({ a, n, m }) => <div key={a.key}><span>{a.label}</span><b className={n ? (m >= 0.34 ? 'okc' : m <= -0.34 ? 'accent' : '') : 'muted'}>{n ? (m >= 0.34 ? '▲' : m <= -0.34 ? '▼' : '●') : '–'}</b><small className="muted">{n ? `${n}` : ''}</small></div>)}</div>
-      {mine.slice(0, 5).map((f) => { const downs = AREAS.filter((a) => f.ratings?.[a.key] === 'down').map((a) => a.label); const ups = AREAS.filter((a) => f.ratings?.[a.key] === 'up').map((a) => a.label); return (
-        <div key={f.id} className="fb-item"><div className="spread"><b>{f.by?.full_name?.split(' ')[0] ?? 'Manager'} · {f.events?.title ?? ''}{f.events?.event_date ? ` · ${dLabel(f.events.event_date)}` : ''}</b>{f.tier_vote && <i className={'tier-dot ' + f.tier_vote}>{f.tier_vote}</i>}</div>
-          {(ups.length > 0 || downs.length > 0) && <small>{ups.map((x) => x + ' ▲').concat(downs.map((x) => x + ' ▼')).join(' · ')}</small>}
-          {f.note && <span>“{f.note}”</span>}</div>); })}
+      <div className="fb-overall">
+        {rated.length ? <><b className="serif">{avg.toFixed(1)}</b><div><StarRow v={avg} /><small className="muted">overall · {rated.length} rating{rated.length > 1 ? 's' : ''}</small></div></>
+          : <small className="muted">No star ratings yet (older feedback below).</small>}
+        <div className="fb-votes-sm">{(['A', 'B', 'C'] as const).map((t) => <span key={t} className={'fbv-sm ' + t}>{t} <b>{votes[t]}</b></span>)}<small className="muted">worked like</small></div>
+      </div>
+      <div className="fb-avg">{area.map(({ a, n, m }) => <div key={a.key}><span>{a.label}</span>{n ? <><StarRow v={m} size="xs" /><b className={m >= 4 ? 'okc' : m <= 2 ? 'accent' : ''}>{m.toFixed(1)}</b></> : <b className="muted">–</b>}<small className="muted">{n ? `${n}` : ''}</small></div>)}</div>
+      {mine.slice(0, 5).map((f) => {
+        const st = f.overall_stars;
+        const det = st ? AREAS.filter((a) => isStar(f.ratings?.[a.key])).map((a) => `${a.label} ${f.ratings[a.key]}★`)
+          : AREAS.filter((a) => f.ratings?.[a.key] === 'up').map((a) => a.label + ' ▲').concat(AREAS.filter((a) => f.ratings?.[a.key] === 'down').map((a) => a.label + ' ▼'));
+        return (
+          <div key={f.id} className="fb-item"><div className="spread"><b>{f.by?.full_name?.split(' ')[0] ?? 'Manager'} · {f.events?.title ?? ''}{f.events?.event_date ? ` · ${dLabel(f.events.event_date)}` : ''}</b>
+            <span className="fb-it-r">{st ? <StarRow v={st} /> : <small className="muted">before stars</small>}{f.tier_vote && <i className={'tier-dot ' + f.tier_vote}>{f.tier_vote}</i>}</span></div>
+            {det.length > 0 && <small>{det.join(' · ')}</small>}
+            {f.note && <span>“{f.note}”</span>}</div>); })}
     </div>
   );
 }

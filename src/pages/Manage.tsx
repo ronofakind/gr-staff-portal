@@ -13,8 +13,10 @@ const ANNOUNCE_ON = false;
 /** Push 27 rollout: manager feedback (★ tile + new-staff check) only for these managers for now (full name or staff id). */
 export const FEEDBACK_MANAGERS: string[] = ['Benjamin Outre'];
 const feedbackOn = (me?: { id: string; full_name: string } | null) => !!me && FEEDBACK_MANAGERS.some((x) => x === me.id || x.toLowerCase() === me.full_name.trim().toLowerCase());
-type Rating = 'up' | 'ok' | 'down';
-type Info = { staff_id: string; tier: 'A' | 'B' | 'C' | null; done_before: number; is_new: boolean; fb_tier: 'A' | 'B' | 'C' | null; fb_ratings: Record<string, Rating> | null; fb_note: string | null;
+/** push 30 · detail ratings are 1–5 stars (push-27 rows had "up" / "ok" / "down": ignored here, never re-sent). */
+type Info = { staff_id: string; tier: 'A' | 'B' | 'C' | null; done_before: number; is_new: boolean; fb_tier: 'A' | 'B' | 'C' | null; fb_ratings: Record<string, unknown> | null; fb_note: string | null;
+  /** push 30 · tonight's overall stars this manager sent (null = not rated tonight) */
+  fb_stars?: number | null;
   /** push 29 · ABOUT (from staff_private via manager_team_info) */
   experience?: 'SENIOR' | 'MID' | 'JUNIOR' | null; experience_note?: string | null; knows_name?: string | null; knows_text?: string | null; knows_here?: boolean; knows_today?: boolean;
   languages?: Record<string, number> | null; manager_note?: string | null };
@@ -35,9 +37,24 @@ function aboutOf(i?: Info) {
 const AREAS: { key: string; label: string; sub?: string }[] = [
   { key: 'punctuality', label: 'Punctuality', sub: 'on time, ready at call' }, { key: 'attitude', label: 'Attitude' },
   { key: 'presentation', label: 'Presentation', sub: 'uniform, grooming' }, { key: 'experience', label: 'Experience', sub: 'service, wine, plating' },
-  { key: 'teamwork', label: 'Teamwork', sub: 'helps others' }, { key: 'guest', label: 'Guest service', sub: 'polite, attentive' },
+  { key: 'teamwork', label: 'Teamwork' }, { key: 'guest', label: 'Guest service' },
 ];
 const ORD = ['1st', '2nd', '3rd'];
+const STAR_LABEL = ['', 'Poor', 'Below average', 'OK', 'Very good', 'Excellent'];
+const starOk = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 5;
+/** Only the 1–5 star detail ratings (drops push-27 "up/ok/down" values). */
+const starRatings = (r: Record<string, unknown> | null | undefined): Record<string, number> =>
+  Object.fromEntries(Object.entries(r ?? {}).filter(([k, v]) => AREAS.some((a) => a.key === k) && starOk(v))) as Record<string, number>;
+/** 5 stars. Tap a star to set; tap the same star again to clear (onChange(0)). Read-only without onChange. */
+function Stars({ value, onChange, size = 'md', label }: { value: number; onChange?: (v: number) => void; size?: 'sm' | 'md' | 'lg' | 'xs'; label: string }) {
+  if (!onChange) return <span className={'stars ' + size} role="img" aria-label={value ? `${label}: ${value} of 5 stars` : `${label}: not rated`}>{[1, 2, 3, 4, 5].map((n) => <i key={n} className={n <= value ? 'on' : ''}>★</i>)}</span>;
+  return (
+    <span className={'stars ' + size} role="radiogroup" aria-label={label}>
+      {[1, 2, 3, 4, 5].map((n) => <button key={n} type="button" role="radio" aria-checked={value === n} aria-label={`${label} ${n} star${n > 1 ? 's' : ''}`} className={n <= value ? 'on' : ''}
+        onClick={() => onChange(value === n ? 0 : n)}>★</button>)}
+    </span>
+  );
+}
 import { IncidentSheet, kindLabel, type Incident } from '../components/IncidentReport';
 
 type Row = {
@@ -178,6 +195,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
   const [info, setInfo] = useState<Record<string, Info>>({});
   const [fb, setFb] = useState<{ row: Row; back: 'sheet' | 'check' | null } | null>(null);
   const [check, setCheck] = useState(false); const [checkDone, setCheckDone] = useState(false);
+  const [checkPicks, setCheckPicks] = useState<Record<string, CheckPick>>({}); // new-staff check taps survive opening someone's Rate window
   const [prob, setProb] = useState(false);
   const [ev, setEv] = useState<EvFull | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
@@ -208,7 +226,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
     supabase.from('incidents').select('id,kind,involved_staff,involved_other,happened_at,body,audio_path,audio_sec,photos,created_at').eq('event_id', eventId!).order('created_at', { ascending: false }).then(({ data }) => setIncidents((data ?? []) as Incident[]));
     supabase.rpc('manager_team_info', { p_event: eventId! }).then(({ data }) => {
       const m: Record<string, Info> = {};
-      if (Array.isArray(data)) for (const x of data as Info[]) if (x && typeof x === 'object' && typeof x.staff_id === 'string') m[x.staff_id] = { ...x, done_before: typeof x.done_before === 'number' ? x.done_before : 0, is_new: x.is_new === true, fb_ratings: x.fb_ratings && typeof x.fb_ratings === 'object' && !Array.isArray(x.fb_ratings) ? x.fb_ratings : null };
+      if (Array.isArray(data)) for (const x of data as Info[]) if (x && typeof x === 'object' && typeof x.staff_id === 'string') m[x.staff_id] = { ...x, done_before: typeof x.done_before === 'number' ? x.done_before : 0, is_new: x.is_new === true, fb_ratings: x.fb_ratings && typeof x.fb_ratings === 'object' && !Array.isArray(x.fb_ratings) ? x.fb_ratings : null, fb_stars: starOk(x.fb_stars) ? x.fb_stars : null };
       setInfo(m);
     });
     supabase.from('event_notices').select('id,body,created_at').eq('event_id', eventId!).order('created_at', { ascending: false }).then(({ data }) => setNotices((data ?? []) as { id: string; body: string; created_at: string }[]));
@@ -416,7 +434,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
                   </button>
                   <button className="who" aria-label={`Options for ${r.staff?.full_name}`} onClick={() => openRow(r, isNew)}>
                     <span className="nm">{r.staff?.full_name}{r.adder && <i className="added-tag">ADDED BY {r.adder.full_name.split(' ')[0].toUpperCase()}</i>}</span>
-                    <span className="rl">{roleLabel(r.position_code, r.position_detail)}{r.manager_note ? ' · 📝 note' : ''}{fbOn && inf?.fb_tier ? ' · ★ sent' : ''}</span>
+                    <span className="rl">{roleLabel(r.position_code, r.position_detail)}{r.manager_note ? ' · 📝 note' : ''}{fbOn && inf?.fb_stars ? ` · ★ ${inf.fb_stars}` : ''}</span>
                     {isNew && <span><i className="new-shift">NEW · {ORD[inf!.done_before] ?? ''} shift</i></span>}
                     {isNew && <span><i className="see-det"><b>ⓘ</b> See details ›</i></span>}
                     {r.attendance ? <span className="st muted-st">{r.attendance === 'no_show' ? 'No-show' : 'Cancelled'}{r.attendance_reason ? ` · ${r.attendance_reason}` : ''}</span>
@@ -549,7 +567,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
               <div className="serif" style={{ fontSize: 24, lineHeight: 1.1 }}>{open.staff?.full_name}</div>
               <div className="muted sm pf-sub"><span>{roleLabel(open.position_code, open.position_detail)} · call {time(open.planned_start, lang)}{open.punches?.arrived_at ? ` · arrived ${time(open.punches.arrived_at, lang)}` : ''}</span>{isNewO && <i className="new-shift">NEW · {ORD[inf!.done_before] ?? ''} shift</i>}</div>
             </div>
-            {(ab.exp || ab.knows || ab.langs.length > 0 || ab.note) && (
+            {isNewO && (ab.exp || ab.knows || ab.langs.length > 0 || ab.note) && (
               <div className="pf-about" ref={(el) => { if (el && jump.current) { jump.current = false; requestAnimationFrame(() => el.scrollIntoView({ block: 'nearest', behavior: 'smooth' })); } }}>
                 <span className="kicker">About</span>
                 {(ab.exp || ab.knows || ab.langs.length > 0) && <div className="ab-box">
@@ -594,8 +612,10 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
               : open.left_early ? <button className="btn-ghost" onClick={() => undoLeft(open.id)}>Undo left early{open.attendance_reason ? ` · ${open.attendance_reason}` : ''}</button>
               : null}
             <div className={'pf-tiles' + (fbOn ? '' : ' one')}>
-              {fbOn && <button className="pf-tile fb" onClick={() => setFb({ row: open, back: 'sheet' })}><span className="pf-ic">★</span><span><b>Rate</b><small>{inf?.fb_tier ? `sent · worked like ${inf.fb_tier}` : 'tier · ratings'}</small></span></button>}
-              {!open.attendance && !open.left_early && <button className={'pf-tile pb' + (prob ? ' on' : '')} onClick={() => setProb(!prob)}><span className="pf-ic">⚠</span><span><b>Problem</b><small>no-show · left early</small></span></button>}
+              {fbOn && <button className="pf-tile fb col" aria-label={inf?.fb_stars ? `Rate · sent ${inf.fb_stars} of 5 stars` : 'Rate · not rated tonight'} onClick={() => setFb({ row: open, back: 'sheet' })}>
+                <b><span className="pf-ic">★</span> Rate</b><Stars value={inf?.fb_stars ?? 0} size="xs" label="Tonight" />
+                <small>{inf?.fb_stars ? `sent · ${STAR_LABEL[inf.fb_stars]}` : 'not rated tonight'}</small></button>}
+              {!open.attendance && !open.left_early && <button className={'pf-tile pb col' + (prob ? ' on' : '')} onClick={() => setProb(!prob)}><b><span className="pf-ic">⚠</span> Problem</b><small>no-show · left early</small></button>}
             </div>
             {prob && !open.attendance && !open.left_early && (
               <div className="wrong-row">
@@ -615,16 +635,16 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
       {fb && (
         <>
           <div className="scrim" onClick={() => setFb(null)} />
-          <SwipeSheet onClose={() => setFb(null)} label={`Feedback for ${fb.row.staff?.full_name}`}>
-            <FeedbackWindow key={fb.row.id} eventId={ev.id} row={fb.row} info={infoOf(fb.row)} onBack={fb.back ? () => { if (fb.back === 'check') setCheck(true); setFb(null); } : null}
-              onClose={() => { setFb(null); setOpen(null); }} onSent={() => { const back = fb.back; setFb(null); if (back === 'check') setCheck(true); else setOpen(null); load(); }} />
+          <SwipeSheet onClose={() => setFb(null)} label={`Feedback for ${fb.row.staff?.full_name}`} x={false}>
+            <FeedbackWindow key={fb.row.id} eventId={ev.id} row={fb.row} info={infoOf(fb.row)} init={fb.back === 'check' ? checkPicks[fb.row.id] : undefined} onBack={fb.back ? () => { if (fb.back === 'check') setCheck(true); setFb(null); } : null}
+              onClose={() => { setFb(null); setOpen(null); }} onSent={() => { const back = fb.back; const rid = fb.row.id; setFb(null); if (back === 'check') { const n = { ...checkPicks }; delete n[rid]; setCheckPicks(n); setCheck(true); } else setOpen(null); load(); }} />
           </SwipeSheet>
         </>
       )}
 
-      {check && <NewStaffCheck eventId={ev.id} rows={newWorked} infoOf={infoOf}
+      {check && <NewStaffCheck eventId={ev.id} rows={newWorked} infoOf={infoOf} picks={checkPicks} setPicks={setCheckPicks}
         onOpen={(r) => { setCheck(false); setFb({ row: r, back: 'check' }); }}
-        onDone={() => { setCheck(false); setCheckDone(true); setReview(true); load(); }} onSkip={() => { setCheck(false); setCheckDone(true); setReview(true); }} />}
+        onDone={() => { setCheck(false); setCheckDone(true); setCheckPicks({}); setReview(true); load(); }} onSkip={() => { setCheck(false); setCheckDone(true); setCheckPicks({}); setReview(true); }} />}
 
       {annOpen && (() => {
         const team = rows.filter((x) => !x.attendance && x.staff);
@@ -743,15 +763,20 @@ function SwipeRow({ on, label, onAct, children }: { on: boolean; label: string; 
   );
 }
 
-/** ★ Feedback window: worked like A/B/C (pre-set to their tier) + ratings per area (all blank, optional) + comment. Only Ronnie sees it. */
-function FeedbackWindow({ eventId, row, info, onBack, onClose, onSent }: { eventId: string; row: Row; info?: Info; onBack: (() => void) | null; onClose: () => void; onSent: () => void }) {
+/** ★ Rate window (push 30): tonight overall 1–5 stars (required) + worked like A/B/C (pre-set to their tier) + detail stars (optional) + comment. Only Ronnie sees it. */
+function FeedbackWindow({ eventId, row, info, init, onBack, onClose, onSent }: { eventId: string; row: Row; info?: Info; init?: CheckPick; onBack: (() => void) | null; onClose: () => void; onSent: () => void }) {
   const f = (row.staff?.full_name ?? '').split(' ')[0];
-  const [tier, setTier] = useState<'A' | 'B' | 'C' | null>(info?.fb_tier ?? info?.tier ?? null);
-  const [rt, setRt] = useState<Record<string, Rating>>(info?.fb_ratings ?? {});
+  // from the new-staff check: start from what was tapped there
+  const [stars, setStars] = useState<number>(init?.touched ? init.stars : info?.fb_stars ?? 0);
+  const [tier, setTier] = useState<'A' | 'B' | 'C' | null>(init?.touched ? init.tier : info?.fb_tier ?? info?.tier ?? null);
+  const [rt, setRt] = useState<Record<string, number>>(() => (info?.fb_stars ? starRatings(info.fb_ratings) : {}));
   const [note, setNote] = useState(info?.fb_note ?? ''); const [busy, setBusy] = useState(false); const [err, setErr] = useState('');
+  const sent = !!info?.fb_stars;
   const send = async () => {
-    if (!row.staff_id) return; setBusy(true); setErr('');
-    const { error } = await supabase.rpc('manager_send_feedback', { p_event: eventId, p_staff: row.staff_id, p_tier: tier, p_ratings: rt, p_note: note });
+    if (!row.staff_id) return;
+    if (!stars) { setErr(`Tap 1 to 5 stars for ${f} tonight.`); return; }
+    setBusy(true); setErr('');
+    const { error } = await supabase.rpc('manager_send_feedback', { p_event: eventId, p_staff: row.staff_id, p_stars: stars, p_tier: tier, p_ratings: rt, p_note: note });
     setBusy(false); if (error) { setErr(error.message); return; } onSent();
   };
   return (
@@ -761,32 +786,49 @@ function FeedbackWindow({ eventId, row, info, onBack, onClose, onSent }: { event
         <div className="grow"><div className="serif" style={{ fontSize: 22 }}>Feedback · {f}</div><small className="muted">Only Ronnie sees it · never shown to {f}</small></div>
         <button className="pf-x static" aria-label="Close" onClick={onClose}>✕</button>
       </div>
+      <div className="fbw-overall">
+        <span className="kicker">Tonight, overall</span>
+        <Stars value={stars} size="lg" label="Tonight overall" onChange={(v) => { setStars(v); setErr(''); }} />
+        <span className={'fbw-lab' + (stars ? '' : ' none')}>{stars ? STAR_LABEL[stars] : 'Tap to rate · required'}</span>
+      </div>
       <div className="spread"><span className="kicker">Worked like a</span>{info?.tier && <small className="muted">tier now · {info.tier}</small>}</div>
       <div className="fbw-tiers">{(['A', 'B', 'C'] as const).map((x) => <button key={x} className={'t' + x + (tier === x ? ' on' : '')} onClick={() => setTier(tier === x ? null : x)}>{x}</button>)}</div>
       <div className="muted" style={{ fontSize: 11.5, marginTop: -4 }}>Change it only if {f} worked above or below. A suggestion only.</div>
-      <div className="spread"><span className="kicker">Rate what you saw</span><small className="muted">▲ great · ● ok · ▼ needs work</small></div>
+      <div className="spread"><span className="kicker">Details · optional</span><small className="muted">tap again to clear</small></div>
       <div className="fbw-rates">{AREAS.map((a) => (
         <div key={a.key} className="fbw-rate"><div className="grow"><b>{a.label}</b>{a.sub && <small>{a.sub}</small>}</div>
-          {(['up', 'ok', 'down'] as Rating[]).map((v) => <button key={v} aria-label={`${a.label} ${v === 'up' ? 'great' : v === 'ok' ? 'ok' : 'needs work'}`} className={'r-' + v + (rt[a.key] === v ? ' on' : '')}
-            onClick={() => { const n = { ...rt }; if (n[a.key] === v) delete n[a.key]; else n[a.key] = v; setRt(n); }}>{v === 'up' ? '▲' : v === 'ok' ? '●' : '▼'}</button>)}
+          <Stars value={rt[a.key] ?? 0} size="md" label={a.label} onChange={(v) => { const n = { ...rt }; if (v) n[a.key] = v; else delete n[a.key]; setRt(n); }} />
         </div>))}</div>
       <textarea className="fbw-note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Comment (optional)" />
       {err && <p className="error">{err}</p>}
-      <button className="btn-ink" disabled={busy} onClick={send}>{busy ? 'Sending…' : info?.fb_tier || info?.fb_note || (info?.fb_ratings && Object.keys(info.fb_ratings).length) ? 'Update for Ronnie' : 'Send to Ronnie'}</button>
+      <button className="btn-ink" disabled={busy || !stars} onClick={send}>{busy ? 'Sending…' : sent ? 'Update for Ronnie' : 'Send to Ronnie'}</button>
     </div>
   );
 }
 
-/** Before Submit hours, when NEW people worked: one tap A / B / C each (pre-set to their tier), or Skip. */
-function NewStaffCheck({ eventId, rows, infoOf, onOpen, onDone, onSkip }: { eventId: string; rows: Row[]; infoOf: (r: Row) => Info | undefined; onOpen: (r: Row) => void; onDone: () => void; onSkip: () => void }) {
-  const [pick, setPick] = useState<Record<string, 'A' | 'B' | 'C' | null>>(() => Object.fromEntries(rows.map((r) => [r.id, infoOf(r)?.fb_tier ?? infoOf(r)?.tier ?? null])));
-  const [busy, setBusy] = useState(false); const [err, setErr] = useState('');
+/** One row of the new-staff check: overall stars + tier (pre-set). touched = the manager tapped something for this person. */
+type CheckPick = { stars: number; tier: 'A' | 'B' | 'C' | null; touched: boolean };
+
+/** Before Submit hours, when NEW people worked (push 30): overall stars (one tap) + small A / B / C (pre-set to their tier) each, or Skip.
+ *  Stars are required only for people the manager touched; untouched people are skipped. */
+function NewStaffCheck({ eventId, rows, infoOf, picks, setPicks, onOpen, onDone, onSkip }: { eventId: string; rows: Row[]; infoOf: (r: Row) => Info | undefined;
+  picks: Record<string, CheckPick>; setPicks: (p: Record<string, CheckPick>) => void; onOpen: (r: Row) => void; onDone: () => void; onSkip: () => void }) {
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState(''); const [miss, setMiss] = useState<string[]>([]);
+  const pickOf = (r: Row): CheckPick => picks[r.id] ?? { stars: infoOf(r)?.fb_stars ?? 0, tier: infoOf(r)?.fb_tier ?? infoOf(r)?.tier ?? null, touched: false };
+  const change = (r: Row, p: Partial<CheckPick>) => { setPicks({ ...picks, [r.id]: { ...pickOf(r), ...p, touched: true } }); setMiss(miss.filter((x) => x !== r.id)); setErr(''); };
   const done = async () => {
+    const todo = rows.filter((r) => pickOf(r).touched);
+    const noStars = todo.filter((r) => !pickOf(r).stars);
+    if (noStars.length) {
+      setMiss(noStars.map((r) => r.id));
+      setErr(`Add stars for ${noStars.map((r) => (r.staff?.full_name ?? '').split(' ')[0]).join(', ')}, or Skip.`); return;
+    }
     setBusy(true); setErr('');
-    for (const r of rows) {
-      const inf = infoOf(r); const t = pick[r.id]; if (!r.staff_id || !t) continue;
-      if (inf?.fb_tier === t) continue; // already sent with this vote
-      const { error } = await supabase.rpc('manager_send_feedback', { p_event: eventId, p_staff: r.staff_id, p_tier: t, p_ratings: inf?.fb_ratings ?? {}, p_note: inf?.fb_note ?? '' });
+    for (const r of todo) {
+      const inf = infoOf(r); const p = pickOf(r); if (!r.staff_id) continue;
+      if (inf?.fb_stars === p.stars && (inf?.fb_tier ?? null) === p.tier) continue; // already sent like this
+      const { error } = await supabase.rpc('manager_send_feedback', { p_event: eventId, p_staff: r.staff_id, p_stars: p.stars, p_tier: p.tier,
+        p_ratings: inf?.fb_stars ? starRatings(inf.fb_ratings) : {}, p_note: inf?.fb_note ?? '' });
       if (error) { setErr(error.message); setBusy(false); return; }
     }
     setBusy(false); onDone();
@@ -798,13 +840,15 @@ function NewStaffCheck({ eventId, rows, infoOf, onOpen, onDone, onSkip }: { even
         <div className="nsc">
           <div className="serif" style={{ fontSize: 24, lineHeight: 1.1 }}>{rows.length} new {rows.length === 1 ? 'person' : 'people'} tonight</div>
           <div className="muted sm">Quick rating before you submit hours? One tap each, or skip.</div>
-          {rows.map((r) => { const inf = infoOf(r); return (
-            <div key={r.id} className="nsc-row">
+          {rows.map((r) => { const inf = infoOf(r); const p = pickOf(r); const first = (r.staff?.full_name ?? '').split(' ')[0]; return (
+            <div key={r.id} className={'nsc-row' + (miss.includes(r.id) ? ' miss' : '')}>
               <button className="nsc-who" onClick={() => onOpen(r)}><span className="ring sm newp"><Avatar name={r.staff?.full_name ?? '?'} url={r.staff?.photo_url} size={36} /></span>
-                <span className="grow"><b>{r.staff?.full_name}</b><i className="new-shift">NEW · {ORD[inf?.done_before ?? 0] ?? ''} shift</i></span></button>
-              <div className="nsc-t">{(['A', 'B', 'C'] as const).map((x) => <button key={x} className={'t' + x + (pick[r.id] === x ? ' on' : '')} onClick={() => setPick({ ...pick, [r.id]: pick[r.id] === x ? null : x })}>{x}</button>)}</div>
+                <span className="grow"><b>{r.staff?.full_name}</b><i className="new-shift">NEW · {ORD[inf?.done_before ?? 0] ?? ''} shift</i></span>
+                {inf?.fb_stars ? <small className="nsc-sent">sent</small> : null}<span className="nsc-more" aria-hidden>›</span></button>
+              <div className="nsc-stars"><Stars value={p.stars} size="lg" label={`${first} tonight`} onChange={(v) => change(r, { stars: v })} /></div>
+              <div className="nsc-t">{(['A', 'B', 'C'] as const).map((x) => <button key={x} aria-label={`${first} worked like a ${x}`} className={'t' + x + (p.tier === x ? ' on' : '')} onClick={() => change(r, { tier: p.tier === x ? null : x })}>{x}</button>)}</div>
             </div>); })}
-          <small className="muted">Tap a name for ratings or a comment.</small>
+          <small className="muted">Tap a name for details or a comment.</small>
           {err && <p className="error">{err}</p>}
           <button className="btn-ink" disabled={busy} onClick={done}>{busy ? 'Sending…' : 'Done · submit hours'}</button>
           <button className="link-btn" style={{ color: 'var(--ink)', alignSelf: 'center' }} onClick={onSkip}>Skip</button>

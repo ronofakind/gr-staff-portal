@@ -1414,6 +1414,7 @@ div.avatar { color: var(--accent); background: var(--accent-bg); }
 .sw-under { position: absolute; top: 0; right: 0; bottom: 0; width: 110px; border: none; background: var(--accent); color: #fff; font: 700 13px Inter, system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; cursor: pointer; border-radius: 0 20px 20px 0; }
 .sw-under span { font-size: 16px; }
 .sw-row { position: relative; touch-action: pan-y; }
+.sw-wrap > .sw-row { display: block; } /* push 30 fix: the older .sw-row (flex, wrap) rule shrank short team cards */
 .fbw { display: flex; flex-direction: column; gap: 10px; }
 .fbw-head { display: flex; align-items: flex-start; gap: 8px; }
 .fbw-back { width: 34px; height: 34px; border-radius: 17px; border: none; background: #EDE6DC; font-size: 20px; cursor: pointer; flex: 0 0 auto; color: var(--ink); }
@@ -1426,16 +1427,31 @@ div.avatar { color: var(--accent); background: var(--accent-bg); }
 .fbw-rates { display: flex; flex-direction: column; gap: 6px; }
 .fbw-rate { display: flex; align-items: center; gap: 6px; }
 .fbw-rate b { display: block; font-size: 13.5px; } .fbw-rate small { display: block; font-size: 11px; color: var(--muted); }
-.fbw-rate button { width: 34px; height: 32px; border-radius: 9px; border: 1.5px solid #DCD3C7; background: #fff; color: #B8AFA4; font-size: 12px; cursor: pointer; flex: 0 0 auto; }
-.fbw-rate .r-up.on { background: var(--ok); border-color: var(--ok); color: #fff; }
-.fbw-rate .r-ok.on { background: #6B625A; border-color: #6B625A; color: #fff; }
-.fbw-rate .r-down.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 .fbw-note { border: 1.5px solid #DCD3C7; border-radius: 14px; padding: 10px 12px; font: 500 15px Inter, system-ui, sans-serif; resize: vertical; background: #fff; color: var(--ink); }
 .nsc { display: flex; flex-direction: column; gap: 10px; }
-.nsc-row { background: #fff; border-radius: 16px; padding: 8px 10px; display: flex; align-items: center; gap: 8px; }
-.nsc-who { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; border: none; background: none; padding: 0; text-align: left; cursor: pointer; color: var(--ink); font: inherit; }
+.nsc-row { background: #fff; border-radius: 16px; padding: 10px; display: flex; flex-direction: column; gap: 8px; box-shadow: inset 0 0 0 1.5px transparent; }
+.nsc-row.miss { box-shadow: inset 0 0 0 1.5px var(--accent); }
+.nsc-who { width: 100%; min-width: 0; display: flex; align-items: center; gap: 10px; border: none; background: none; padding: 0; text-align: left; cursor: pointer; color: var(--ink); font: inherit; }
 .nsc-who b { display: block; font-size: 14px; }
-.nsc-t { width: 140px; flex: 0 0 auto; gap: 5px; } .nsc-t button { height: 38px; border-radius: 19px; font-size: 14px; }
+.nsc-sent { font-size: 11px; font-weight: 700; color: var(--ok); } .nsc-more { color: #B8AFA4; font-size: 20px; line-height: 1; }
+.nsc-stars { display: flex; justify-content: center; }
+.nsc-t { display: flex; justify-content: center; gap: 6px; }
+.nsc-t button { width: 44px; height: 32px; border-radius: 9px; font-size: 13px; border-width: 1.5px; }
+
+/* ───────── Push 30 · stars ───────── */
+.stars { display: inline-flex; align-items: center; flex: 0 0 auto; }
+.stars i, .stars button { font-style: normal; line-height: 1; color: #E4DCD1; }
+.stars button { border: none; background: none; padding: 0; cursor: pointer; font-family: system-ui, sans-serif; -webkit-tap-highlight-color: transparent; }
+.stars .on { color: #E0A458; }
+.stars.xs { gap: 2px; } .stars.xs i { font-size: 14px; }
+.stars.sm { gap: 1px; } .stars.sm i { font-size: 13px; }
+.stars.md { gap: 0; } .stars.md button { font-size: 21px; width: 30px; height: 34px; }
+.stars.lg { gap: 2px; } .stars.lg button { font-size: 30px; width: 46px; height: 44px; }
+.nsc .stars.lg button { font-size: 26px; width: 42px; height: 38px; }
+.fbw-overall { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 0 8px; border-bottom: 1px solid #F0EAE2; }
+.fbw-lab { font-size: 12.5px; font-weight: 700; color: #B7791F; min-height: 16px; } .fbw-lab.none { color: var(--muted); font-weight: 500; }
+.pf-tile.col { flex-direction: column; gap: 3px; text-align: center; padding: 9px 8px; }
+.pf-tile.col b { display: flex; align-items: center; gap: 4px; } .pf-tile.col .pf-ic { font-size: 14px; }
 
 /* ───────── Push 27 · admin booking rules, warnings, ranking, feedback card ───────── */
 .ru-icons { display: inline-flex; gap: 4px; margin-left: 6px; vertical-align: middle; }
@@ -1484,6 +1500,13 @@ div.avatar { color: var(--accent); background: var(--accent-bg); }
 .fb-avg > div { display: flex; gap: 6px; align-items: center; } .fb-avg span { flex: 1; }
 .fb-item { border-top: 1px solid var(--line); padding-top: 6px; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
 .fb-item small { color: var(--muted); font-size: 11.5px; }
+.fb-overall { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.fb-overall > b { font-size: 34px; line-height: 1; } .fb-overall > div:not(.fb-votes-sm) { display: flex; flex-direction: column; gap: 2px; } .fb-overall small { font-size: 11.5px; }
+.fb-votes-sm { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.fbv-sm { border-radius: 8px; padding: 2px 7px; background: #F6F2EC; font-weight: 700; } .fbv-sm.A b { color: var(--ok); } .fbv-sm.B b { color: #A0671A; } .fbv-sm.C b { color: var(--accent); }
+.fb-it-r { display: inline-flex; align-items: center; gap: 6px; }
+.fb-avg .stars { margin-right: 2px; }
+.pcard .fb-avg { grid-template-columns: 1fr; } .fb-avg b { min-width: 26px; text-align: right; } .fb-avg > div > small { min-width: 10px; text-align: right; }
 @media (max-width: 900px) {
   .rk-wrap { grid-template-columns: 1fr; }
   .rk-row { grid-template-columns: 22px minmax(110px, 1fr) 46px 38px 34px 40px 40px 42px; font-size: 12.5px; gap: 3px; padding: 0 2px; }

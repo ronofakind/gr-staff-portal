@@ -63,17 +63,30 @@ export function Today() {
         if (qseen.has(r.qb_doc_number)) continue; qseen.add(r.qb_doc_number);
         n.push({ key: 'qb' + r.qb_doc_number, title: `Remove Estimate #${r.qb_doc_number} in QuickBooks`, sub: `${r.events.title} · ${dLabel(r.events.event_date)} · paid cash`, action: 'Done?', to: `/admin/event/${r.event_id}` });
       }
-      // Manager feedback: any "worked like a C" or any ▼ shows right away (push 27).
-      const { data: fbs } = await supabase.from('staff_feedback').select('id,staff_id,tier_vote,ratings,note,created_at,by:staff!staff_feedback_by_staff_id_fkey(full_name),who:staff!staff_feedback_staff_id_fkey(full_name),events(title,event_date)')
-        .is('archived_at', null).gte('created_at', addDays(today, -30) + 'T00:00:00Z').order('created_at', { ascending: false });
-      type Fb = { id: string; staff_id: string; tier_vote: string | null; ratings: Record<string, string> | null; note: string | null; by: { full_name: string } | null; who: { full_name: string } | null; events: { title: string; event_date: string } | null };
+      // Manager feedback (push 30): overall 1–2★ or "worked like a C" shows right away. Older rows (no stars): C or any ▼, as in push 27.
+      const fbCols = 'id,staff_id,tier_vote,ratings,note,created_at,by:staff!staff_feedback_by_staff_id_fkey(full_name),who:staff!staff_feedback_staff_id_fkey(full_name),events(title,event_date)';
+      const fbq = (cols: string) => supabase.from('staff_feedback').select(cols).is('archived_at', null).gte('created_at', addDays(today, -30) + 'T00:00:00Z').order('created_at', { ascending: false });
+      let fbr = await fbq(fbCols + ',overall_stars');
+      if (fbr.error && /overall_stars/.test(fbr.error.message)) fbr = await fbq(fbCols); // migration 033 not applied yet
+      const fbs = fbr.data;
+      type Fb = { id: string; staff_id: string; tier_vote: string | null; overall_stars?: number | null; ratings: Record<string, unknown> | null; note: string | null; by: { full_name: string } | null; who: { full_name: string } | null; events: { title: string; event_date: string } | null };
       const AREA: Record<string, string> = { punctuality: 'Punctuality', attitude: 'Attitude', presentation: 'Presentation', experience: 'Experience', teamwork: 'Teamwork', guest: 'Guest service' };
+      const star = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 5;
       for (const f of (Array.isArray(fbs) ? fbs as unknown as Fb[] : []).filter((x) => x && typeof x.staff_id === 'string')) {
         const r = f.ratings && typeof f.ratings === 'object' ? f.ratings : {};
-        const downs = Object.entries(r).filter(([, v]) => v === 'down').map(([k]) => `${AREA[k] ?? k} ▼`);
-        if (f.tier_vote !== 'C' && !downs.length) continue;
+        const stars = star(f.overall_stars) ? f.overall_stars : null;
+        let bits: string[];
+        if (stars) {
+          if (stars > 2 && f.tier_vote !== 'C') continue;
+          const lows = Object.entries(r).filter(([, v]) => star(v) && v <= 2).map(([k, v]) => `${AREA[k] ?? k} ${v}★`);
+          bits = [`${stars}★`, f.tier_vote === 'C' ? 'worked like a C' : '', ...lows];
+        } else {
+          const downs = Object.entries(r).filter(([, v]) => v === 'down').map(([k]) => `${AREA[k] ?? k} ▼`);
+          if (f.tier_vote !== 'C' && !downs.length) continue;
+          bits = [f.tier_vote === 'C' ? 'worked like a C' : '', ...downs];
+        }
         const fn = (x?: { full_name: string } | null) => x?.full_name?.split(' ')[0] ?? '?';
-        n.push({ key: 'fb' + f.id, red: true, title: `${fn(f.by)}: ${fn(f.who)} · ${[f.tier_vote === 'C' ? 'worked like a C' : null, ...downs].filter(Boolean).join(' · ')}`,
+        n.push({ key: 'fb' + f.id, red: true, title: `${fn(f.by)}: ${fn(f.who)} · ${bits.filter(Boolean).join(' · ')}`,
           sub: `${f.events ? `${f.events.title} · ${dLabel(f.events.event_date)}` : 'Manager feedback'}${f.note ? ` · “${f.note}”` : ''}`, action: 'View', to: `/admin/staff?open=${f.staff_id}` });
       }
       setNeeds(n);

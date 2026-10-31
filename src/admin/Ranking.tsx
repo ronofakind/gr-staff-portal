@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { allStaff, type AStaff } from './api';
-import { loadScoreData, scoreOf, signed, WEIGHTS, type Score, type ScoreData } from './score';
+import { loadScoreData, scoreOf, signed, fbWhy, WEIGHTS, type Score, type ScoreData } from './score';
 
 type Tab = 'floor' | 'bar' | 'md';
 const isMd = (s: AStaff) => s.positions.some((p) => p.toUpperCase() === 'MD');
@@ -54,7 +54,8 @@ export function Ranking() {
             <div className="spread"><span>Tier</span><b>A {WEIGHTS.tier.A} · B {WEIGHTS.tier.B} · C {WEIGHTS.tier.C}</b></div>
             <div className="spread"><span>Reliability (app, {WEIGHTS.reliability.days} days)</span><b>starts {WEIGHTS.reliability.start} · no-show −3 · late cancel −2 · late −1 · min 0</b></div>
             <div className="spread"><span>Experience</span><b>Senior 3 · Mid 2 · Junior 1</b></div>
-            <div className="spread"><span>Manager feedback (last {WEIGHTS.feedback.last})</span><b>vote A +1 · B 0 · C −2 · each ▲ +0.5 · ▼ −0.5 · −10 to +10</b></div>
+            <div className="spread"><span>Manager feedback (last {WEIGHTS.feedback.last})</span><b>overall 5★ +1 · 4★ +0.5 · 3★ 0 · 2★ −1 · 1★ −2 · each detail ≥4★ +0.5 · ≤2★ −0.5 · −10 to +10</b></div>
+            <div className="spread"><span className="muted">Older feedback (before stars)</span><b className="muted">vote A +1 · B 0 · C −2 · ▲ +0.5 · ▼ −0.5</b></div>
             <div className="spread"><span>BMO fit</span><b>+{WEIGHTS.extras.bmo}</b></div>
             <div className="spread"><span>New (first {WEIGHTS.newUnder} shifts)</span><b>{signed(WEIGHTS.extras.newStaff)}</b></div>
             <div className="spread"><span>Priority until a date</span><b>+{WEIGHTS.extras.priority}</b></div>
@@ -89,7 +90,7 @@ export function ScoreWhy({ s, sc, onClose, onTier, compact = false }: { s: AStaf
       <Line t={tier ? `Tier ${tier}` : 'No tier'} sub="set by you" n={sc.tier} plain />
       <Line t="Reliability" sub={`app · last ${WEIGHTS.reliability.days} days: ${relWhy}. Starts at ${WEIGHTS.reliability.start}.`} n={sc.reliability} />
       <Line t="Experience" sub={sc.exp ? sc.exp[0] + sc.exp.slice(1).toLowerCase() : 'not set'} n={sc.experience} />
-      <Line t="Manager feedback" sub={sc.fb.n ? `last ${sc.fb.n}: votes A ${sc.fb.votes.A} · B ${sc.fb.votes.B} · C ${sc.fb.votes.C} · ▲${sc.fb.up} ●${sc.fb.ok} ▼${sc.fb.down}` : 'no feedback yet'} n={sc.feedback} />
+      <Line t="Manager feedback" sub={fbWhy(sc.fb)} n={sc.feedback} />
       <Line t="Extras" sub={[sc.bmo && 'BMO fit +2', sc.isNew && `new · ${sc.done} finished shift${sc.done === 1 ? '' : 's'} −3`, sc.priority && `priority until ${sc.priority} +20`].filter(Boolean).join(' · ') || 'priority until / BMO / new staff'} n={sc.extras} />
       {sc.suggest && tier && !kept && (
         <div className="rk-suggest"><b>Suggestion:</b> {sc.suggest.why}. Keep tier {tier}?{' '}
