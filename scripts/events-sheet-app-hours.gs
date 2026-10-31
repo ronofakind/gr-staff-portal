@@ -465,3 +465,19 @@ function testV2(ymd) {
   Logger.log(JSON.stringify({ L: L, people: people.length, rows: rows.length, travel: rows.map((r) => r.travel_h), gas: rows.map((r) => r.gas) }));
   ss.deleteSheet(sh);
 }
+
+/** Test adding Travel / Gas to a v2 tab on a scratch copy (run by hand). Logs the result and deletes the scratch tab. */
+function testTransport() {
+  const ss = SpreadsheetApp.getActive(); const label = 'TEST TRANSPORT';
+  const old = ss.getSheetByName(label); if (old) ss.deleteSheet(old);
+  const sh = ss.getSheetByName(TEMPLATE).copyTo(ss).setName(label).showSheet();
+  sh.getRange(2, 2).setValue('Friday, October 30, 2026'); sh.getRange(3, 2).setValue('TEST - LE ANDOVER'); sh.getRange(6, 2).setValue('START TIME: 4:00PM');
+  sh.getRange(7, 1, 2, 4).setValues([[1, 'KANE TEST', 0.6666667, 0.96875], [2, 'EMILY TEST', 0.6666667, 0.7916667]]);
+  sh.getRange(9, 4).setValue('FLOOR TOTAL'); sh.getRange(9, 5).setFormula('=SUM(E7:E8)'); sh.getRange(9, 6).setFormula('=SUM(F7:F8)');
+  const L = addTransportCols_(sh);
+  sh.getRange(7, L.travel, 2, 1).setValues([[2.5], [2.5]]); sh.getRange(7, L.gas).setValue(20);
+  SpreadsheetApp.flush();
+  Logger.log(JSON.stringify({ L: L, hdr: sh.getRange(5, 1, 1, 9).getValues()[0], r7: sh.getRange(7, 1, 1, 9).getValues()[0], r8: sh.getRange(8, 1, 1, 9).getValues()[0],
+    tot: sh.getRange(9, 1, 1, 9).getValues()[0], f7: sh.getRange(7, 1, 1, 9).getFormulas()[0], f9: sh.getRange(9, 1, 1, 9).getFormulas()[0] }));
+  ss.deleteSheet(sh);
+}
