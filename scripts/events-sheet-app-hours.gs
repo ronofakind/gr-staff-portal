@@ -371,7 +371,7 @@ function fillDayAndPayroll_(ss, d, rows) {
   return issues;
 }
 
-/** No day tab for the date (Nov 1, 2026): payroll is filled straight from the APP tab's Total hours (same hours you see there). */
+/** Default from Nov 1, 2026 (Ronnie: no more date tabs, the APP tab is the hours tab): payroll is filled straight from the APP tab's Total hours. */
 function payrollFromApp_(ss, d, label, done, byEvent, issues, wrote) {
   const app = ss.getSheetByName('APP · ' + label);
   if (!app) { issues.push('No ' + label + ' tab and no APP tab, nothing added to payroll.'); return; }
@@ -388,7 +388,6 @@ function payrollFromApp_(ss, d, label, done, byEvent, issues, wrote) {
     hours.push({ name: name, h: Math.round((t + (AL.travel ? 0 : Number(r.travel_h) || 0)) * 4) / 4 });
     if (Number(r.gas) > 0) gas.push({ name: name, amt: Number(r.gas) });
   }));
-  issues.push('No ' + label + ' tab: payroll was filled from this APP tab (' + hours.length + ' people).');
   payroll_(d, hours, issues, wrote, gas);
 }
 
