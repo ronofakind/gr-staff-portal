@@ -2,6 +2,7 @@ import { QuarterTime } from '../components/QuarterTime';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase, SHIFT_SELECT, isSetup, type ShiftRow, type Staff } from '../lib/supabase';
+import { setting, useSettings } from '../lib/settings';
 import { useLang } from '../lib/i18n';
 import { time, longDate, dayBadge, minus } from '../lib/format';
 import { Avatar } from '../components/Avatar';
@@ -30,7 +31,7 @@ export const todayIso = () => new Date().toLocaleDateString('en-CA', { timeZone:
 const addDay = (iso: string, n: number) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
 
 export function Home({ me, base = '', preview = false }: { me: Staff; base?: string; preview?: boolean }) {
-  const lang = useLang(); const nav = useNavigate();
+  const lang = useLang(); const nav = useNavigate(); useSettings();
   const [shifts, setShifts] = useState<ShiftRow[] | null>(null);
   const [teams, setTeams] = useState<Record<string, Mate[]>>({});
   const [qs, setQs] = useState<Record<string, Q['status']>>({});
@@ -212,7 +213,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
         // push 28 · bubbles until the shift starts; running late all day on the event day until they're started
         const started = !!next.punches?.punch_in || Date.now() >= new Date(next.planned_start).getTime();
         const managesIt = !!team && !preview;
-        const lateOn = next.events.event_date === today && !next.punches?.punch_in && !managesIt && !next.time_tbc;
+        const lateOn = setting('bookings.running_late') !== 'off' && next.events.event_date === today && !next.punches?.punch_in && !managesIt && !next.time_tbc; // Settings (push 32)
         const req = chg.reqs[next.id];
         const mgrName = next.events.manager?.full_name ?? null;
         const myAlerts = mgrLate.filter((x) => x.event_id === next.events.id);

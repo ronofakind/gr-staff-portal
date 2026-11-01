@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { setting, roundTo } from '../lib/settings';
 
 export type AStaff = {
   id: string; full_name: string; nickname?: string | null; created_at?: string; sex?: 'm' | 'f' | null; email: string | null; phone: string | null; language: 'fr' | 'en';
@@ -92,7 +93,8 @@ export function flagsOf(s: { attendance: string | null; planned_start: string; p
   if (s.attendance === 'cancelled') return [s.cancel_self && !s.cancel_late ? { flag: 'cancelled', free: true } : { flag: 'cancelled' }];
   const pin = s.punches?.punch_in; if (!pin) return [];
   const diff = Math.round((new Date(pin).getTime() - new Date(s.planned_start).getTime()) / 60000);
-  if (diff > 10 && s.late_eta) { const byEta = new Date(pin).getTime() <= new Date(s.late_eta).getTime() + 10 * 60000; return [{ flag: 'late', min: diff, told: true, free: byEta }]; }
+  // push 32: Settings → "Count told ahead as late" (off by default) counts them even when they came by their ETA.
+  if (diff > 10 && s.late_eta) { const byEta = new Date(pin).getTime() <= new Date(s.late_eta).getTime() + 10 * 60000; return [{ flag: 'late', min: diff, told: true, free: byEta && !setting('bookings.count_told_ahead') }]; }
   if (diff > 10) return [{ flag: 'late', min: diff }];
   if (diff < -1) return [{ flag: 'early', min: -diff }];
   return [];
@@ -105,10 +107,10 @@ export function periodOf(iso: string) {
   const last = new Date(y, m, 0).getDate(); const mm = String(m).padStart(2, '0');
   return d <= 15 ? { start: `${y}-${mm}-01`, end: `${y}-${mm}-15` } : { start: `${y}-${mm}-16`, end: `${y}-${mm}-${last}` };
 }
-/** Paid hours: real time rounded to 15 min, minimum 4 h per shift (Ronnie, Oct 29 2026: paid and billed). */
+/** Paid hours: real time rounded to 15 min, minimum 4 h per shift (Ronnie, Oct 29 2026: paid and billed). Default; Settings → Hours & pay (push 32). */
 export const MIN_HOURS = 4;
-/** Paid/billed hours: 15-min rounding, minimum 4 h, except left early (emergency) = real hours. */
-export const hoursBetween = (a: string | null, b: string | null, exact = false) => { if (!a || !b) return 0; const h = Math.round((new Date(b).getTime() - new Date(a).getTime()) / 900000) * 0.25; return exact ? h : Math.max(MIN_HOURS, h); };
+/** Paid/billed hours: rounding + minimum from Settings (15 min · 4 h), except left early (emergency) = real hours. */
+export const hoursBetween = (a: string | null, b: string | null, exact = false) => { if (!a || !b) return 0; const h = roundTo(new Date(b).getTime() - new Date(a).getTime()); return exact ? h : Math.max(setting('hours.min'), h); };
 export const tTime = (iso: string | null) => iso ? new Date(iso).toLocaleTimeString('en-CA', { timeZone: 'America/Toronto', hour: 'numeric', minute: '2-digit' }).replace(/\./g, '') : '';
 export const dLabel = (iso: string, o: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric' }) => new Date(iso + 'T12:00:00').toLocaleDateString('en-CA', o).replace(/\./g, '');
 
@@ -120,9 +122,13 @@ export const ROLES: { dept: 'floor' | 'bar'; code: string; label: string }[] = [
 ];
 export const roleName = (code: string | null) => ROLES.find((r) => r.code === code)?.label ?? (code && /^\d+$/.test(code) ? 'Waiter' : code ?? '');
 export const roleOfShift = (code: string | null) => (code && /^\d+$/.test(code) ? 'W' : code ?? 'W');
-export type Venue = { id: string; name: string; address: string | null; usual_client_id: string | null; uniform_floor: string | null; uniform_bar: string | null; uniform_floor_w?: string | null; uniform_bar_w?: string | null; uniform_items?: import('../components/Uniform').UniItemsMap | null };
+export type Venue = { id: string; name: string; address: string | null; usual_client_id: string | null; staff_notes?: string | null; always_offer_rides?: boolean;
+  /** push 32 (migration 038) */ venue_notes?: string | null; photos?: string[] | null; street?: string | null; unit?: string | null; city?: string | null; province?: string | null; postal_code?: string | null;
+  uniform_floor: string | null; uniform_bar: string | null; uniform_floor_w?: string | null; uniform_bar_w?: string | null; uniform_items?: import('../components/Uniform').UniItemsMap | null };
 export type Client = { id: string; name: string; rate_sets: { key: string; label: string; rates: Record<string, number> }[]; kind?: 'private_home' | 'roaming' | null; address?: string | null;
-  uniform_floor?: string | null; uniform_bar?: string | null; uniform_floor_w?: string | null; uniform_bar_w?: string | null; uniform_items?: import('../components/Uniform').UniItemsMap | null; drive_folder_default?: boolean };
+  uniform_floor?: string | null; uniform_bar?: string | null; uniform_floor_w?: string | null; uniform_bar_w?: string | null; uniform_items?: import('../components/Uniform').UniItemsMap | null; drive_folder_default?: boolean;
+  /** push 32 (migration 038 adds admin_fee_pct, transport_billing) */
+  qb_customer?: string | null; extras_billing?: 'gr' | 'client'; transport_billing?: 'client' | 'gr'; admin_fee_pct?: number | null };
 export const UNIFORMS: [string, string][] = [['white_shirt', 'White dress shirt'], ['black_shirt', 'Black dress shirt'], ['dress', 'Black cocktail dress'], ['black_tshirt', 'Black T-shirt']];
 export const ENDS: [string, string | null][] = [['~ 10 PM', '22:00'], ['~ 11 PM', '23:00'], ['~ midnight', '00:00'], ['~ 1 AM', '01:00'], ['~ 2 AM', '02:00'], ['late', null]];
 /** "545" → "17:45", "5:45pm" → "17:45", "1130" → "11:30" (AM/PM guessed for evening events: 1–9 → PM). */

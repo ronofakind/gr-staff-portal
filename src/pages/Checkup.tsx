@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { supabase, type Staff } from '../lib/supabase';
+import { setting } from '../lib/settings';
 import { uploadPhoto } from '../lib/photo';
 import { RELATIONS, saveMyProfile, setCheckupStep, type CheckupInfo } from '../lib/checkup';
 import { useUsualWeek, UsualWeekList } from '../components/UsualWeek';
@@ -52,10 +53,10 @@ export function Checkup({ me, info, onFinish }: { me: Staff; info: CheckupInfo; 
     <main className="v2 cu">
       {step === 1 && <PhotoStep me={me} photo={photo} setPhoto={setPhoto} head={head('Add your photo', 'required · managers use it to find you at check-in')} onNext={() => go(nextOf(1))} />}
       {step === 2 && <YouStep me={me} info={info} head={head('Is this still right?', 'we filled in what we have')} onNext={() => go(nextOf(2))} />}
-      {step === 3 && <EmergencyStep info={info} head={head('Emergency contact', 'only used if something happens at an event', true)} onNext={() => go(nextOf(3))} />}
+      {step === 3 && <EmergencyStep info={info} head={head('Emergency contact', 'only used if something happens at an event', setting('checkup.emergency') !== 'required')} onNext={() => go(nextOf(3))} />}
       {step === 4 && <LangStep info={info} head={head('Languages', 'how well do you speak with guests?')} onNext={() => go(nextOf(4))} />}
       {step === 5 && <WeekStep me={me} head={head('Your usual week', 'flip on the days you can usually work')} onNext={() => go(nextOf(5))} />}
-      {step === 6 && <HomeScreenStep head={head('Add G&R to your Home Screen', 'opens faster · lets your phone buzz for shifts', true)} onDone={() => go(7)} />}
+      {step === 6 && <HomeScreenStep head={head('Add G&R to your Home Screen', 'opens faster · lets your phone buzz for shifts', setting('checkup.home_screen') !== 'required')} onDone={() => go(7)} />}
       <button className="cu-out" onClick={() => supabase.auth.signOut().then(() => window.location.replace('/'))}>Log out</button>
     </main>
   );
@@ -177,7 +178,8 @@ export function EmergencyForm({ info, onSaved, onSkip, saveLabel = 'Next' }: { i
   );
 }
 function EmergencyStep({ info, head, onNext }: { info: CheckupInfo; head: ReactNode; onNext: () => void }) {
-  return <>{head}<EmergencyForm info={info} onSaved={onNext} onSkip={onNext} /></>;
+  // Settings → Profile check-up: "Required" hides Skip for now (push 32)
+  return <>{head}<EmergencyForm info={info} onSaved={onNext} onSkip={setting('checkup.emergency') === 'required' ? undefined : onNext} /></>;
 }
 
 // ───────── 4 · Languages (FR + EN only) ─────────
@@ -272,7 +274,7 @@ function HomeScreenStep({ head, onDone }: { head: ReactNode; onDone: () => void 
       </div>
       <Foot>
         <button className="cu-btn green" onClick={() => { clearHomeSkip(); onDone(); }}>Done · I added it</button>
-        <button className="cu-skip" onClick={() => { setHomeSkip(); onDone(); }}><span>Skip for now</span></button>
+        {setting('checkup.home_screen') !== 'required' && <button className="cu-skip" onClick={() => { setHomeSkip(); onDone(); }}><span>Skip for now</span></button>}
       </Foot>
     </>
   );

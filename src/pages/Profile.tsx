@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase, type Staff } from '../lib/supabase';
+import { setting } from '../lib/settings';
 import { uploadPhoto } from '../lib/photo';
 import { PhotoPicker } from '../components/Avatar';
 import { TabBar } from '../components/TabBar';
@@ -119,7 +120,8 @@ function EditSheet({ kind, me, phone, pinLen, onPinLen, onClose, onPhone }: { ki
   const [v, setV] = useState(kind === 'phone' ? phone : '');
   const [cur, setCur] = useState(''); const [n1, setN1] = useState(''); const [n2, setN2] = useState('');
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false); const [done, setDone] = useState(false);
-  const [len, setLen] = useState<PinLen>(pinLen ?? 6); // push 31d: new code can be 4 or 6 digits
+  const force6 = setting('signin.code') === 'force6'; // push 32: Settings → Sign-in code
+  const [len, setLen] = useState<PinLen>(force6 ? 6 : pinLen ?? 6); // push 31d: new code can be 4 or 6 digits
   const digits = (t: string, max = 6) => t.replace(/\D/g, '').slice(0, max);
   const savePhone = async () => {
     setBusy(true); setErr('');
@@ -152,7 +154,7 @@ function EditSheet({ kind, me, phone, pinLen, onPinLen, onClose, onPhone }: { ki
           <button className="btn-ink" onClick={onClose}>Done</button>
         </> : <>
           <label className="pin-field">Current code<input inputMode="numeric" type="password" autoComplete="current-password" maxLength={6} placeholder={pinLen === 4 ? '4 digits' : pinLen === 6 ? '6 digits' : '4 or 6 digits'} value={cur} onChange={(e) => setCur(digits(e.target.value))} /></label>
-          <div className="pin-field">LENGTH<LenSeg len={len} onLen={(l) => { setLen(l); setN1(''); setN2(''); }} /><span className="pin-hint left">Switch between 4 and 6 anytime. 6 digits is safer.</span></div>
+          {force6 ? <span className="pin-hint left">New codes are 6 digits.</span> : <div className="pin-field">LENGTH<LenSeg len={len} onLen={(l) => { setLen(l); setN1(''); setN2(''); }} /><span className="pin-hint left">Switch between 4 and 6 anytime. 6 digits is safer.</span></div>}
           <label className="pin-field">New code<input inputMode="numeric" type="password" autoComplete="new-password" maxLength={len} value={n1} onChange={(e) => setN1(digits(e.target.value, len))} /></label>
           <label className="pin-field">Confirm<input inputMode="numeric" type="password" autoComplete="new-password" maxLength={len} value={n2} onChange={(e) => setN2(digits(e.target.value, len))} /></label>
           {n1.length === len && easy && <p className="error">Too easy to guess. Avoid 1234, 0000 or your birthday.</p>}

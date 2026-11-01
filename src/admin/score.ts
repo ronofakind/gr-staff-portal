@@ -1,21 +1,25 @@
 import { supabase } from '../lib/supabase';
 import { addDays, isoDay, flagsOf, type AStaff } from './api';
+import { setting, loadSettings } from '../lib/settings';
 
 /* Push 27c · one score per person (admin only). Computed on load from the app data.
-   Weights live here so they can be changed in one place (Ronnie, Oct 31: final defaults). */
-export const WEIGHTS = {
-  tier: { A: 100, B: 60, C: 30 } as Record<string, number>,
-  reliability: { start: 6, no_show: -3, late_cancel: -2, late: -1, late_change: -1, min: 0, days: 90 },
-  // push 28: late cancel = cancelled after they confirmed (plain cancels before confirming don't count); "late" doesn't count when they
-  // started by the ETA they gave in I'm running late; late_change = a time change Ronnie accepted with "Count it in reliability" on.
-  experience: { SENIOR: 3, MID: 2, JUNIOR: 1 } as Record<string, number>,
-  // push 30: overall stars 5 +1 · 4 +0.5 · 3 0 · 2 −1 · 1 −2; each detail star rating ≥4 +0.5, ≤2 −0.5.
-  // Rows from before push 30 (overall_stars null) keep the push-27 points: vote A +1 · B 0 · C −2, ▲ +0.5 · ▼ −0.5.
-  feedback: { last: 10, stars: { 5: 1, 4: 0.5, 3: 0, 2: -1, 1: -2 } as Record<number, number>, hi: 0.5, lo: -0.5,
-    vote: { A: 1, B: 0, C: -2 } as Record<string, number>, up: 0.5, down: -0.5, cap: 10 },
-  extras: { bmo: 2, newStaff: -3, priority: 20 },
-  newUnder: 3, // fewer than 3 finished shifts = new
-};
+   Push 32: the weights come from Settings → Ranking weights (app_settings); the defaults are Ronnie's Oct 31 values. */
+export function weights() {
+  const t = setting('rank.tier'); const r = setting('rank.reliability'); const e = setting('rank.experience'); const f = setting('rank.feedback'); const x = setting('rank.extras');
+  return {
+    tier: { A: t.A, B: t.B, C: t.C } as Record<string, number>,
+    reliability: { start: r.start, no_show: r.no_show, late_cancel: r.late_cancel, late: r.late, late_change: r.late_change, min: 0, days: r.days },
+    // push 28: late cancel = cancelled after they confirmed (plain cancels before confirming don't count); "late" doesn't count when they
+    // started by the ETA they gave in I'm running late; late_change = a time change Ronnie accepted with "Count it in reliability" on.
+    experience: { SENIOR: e.SENIOR, MID: e.MID, JUNIOR: e.JUNIOR } as Record<string, number>,
+    // push 30: overall stars 5 +1 · 4 +0.5 · 3 0 · 2 −1 · 1 −2; each detail star rating ≥4 +0.5, ≤2 −0.5.
+    // Rows from before push 30 (overall_stars null) keep the push-27 points: vote A +1 · B 0 · C −2, ▲ +0.5 · ▼ −0.5.
+    feedback: { last: 10, stars: { 5: f.s5, 4: f.s4, 3: f.s3, 2: f.s2, 1: f.s1 } as Record<number, number>, hi: 0.5, lo: -0.5,
+      vote: { A: 1, B: 0, C: -2 } as Record<string, number>, up: 0.5, down: -0.5, cap: f.cap },
+    extras: { bmo: x.bmo, newStaff: x.newStaff, priority: x.priority },
+    newUnder: setting('bookings.new_tag_shifts'), // fewer than 3 finished shifts = new
+  };
+}
 
 export const AREAS: { key: string; label: string; sub?: string }[] = [
   { key: 'punctuality', label: 'Punctuality', sub: 'on time, ready at call' },
@@ -51,7 +55,8 @@ const arr = <T,>(x: unknown, ok: (y: Record<string, unknown>) => boolean): T[] =
 
 /** Everything the score needs, in 4 reads. Shapes are checked (the mock harness can return junk). */
 export async function loadScoreData(): Promise<ScoreData> {
-  const today = isoDay(new Date()); const since = addDays(today, -WEIGHTS.reliability.days);
+  await loadSettings();
+  const today = isoDay(new Date()); const since = addDays(today, -weights().reliability.days);
   const shq = (extra: string) => supabase.from('shifts').select('id,staff_id,attendance,planned_start,status,punches(punch_in,punch_out),events!inner(event_date)' + extra).neq('status', 'declined').gte('events.event_date', since).lte('events.event_date', today);
   const [p, s0, f, c, ln, cr] = await Promise.all([
     supabase.from('staff_private').select('staff_id,experience,bmo_fit,priority_until,veteran'),
@@ -85,7 +90,7 @@ async function loadFeedback() {
 
 /** Score for one person. Tier comes from staff_private (set by Ronnie), the rest from the app. */
 export function scoreOf(st: AStaff, d: ScoreData, today = isoDay(new Date())): Score {
-  const W = WEIGHTS; const pv = d.priv[st.id]; const tierL = st.staff_private?.tier ?? null;
+  const W = weights(); const pv = d.priv[st.id]; const tierL = st.staff_private?.tier ?? null;
   const tier = tierL ? W.tier[tierL] ?? 0 : 0;
   const rel = { no_show: 0, cancelled: 0, late: 0, late_change: d.lateChanges?.[st.id] ?? 0, free: 0 };
   for (const s of d.shifts) if (s.staff_id === st.id) for (const f of flagsOf(s)) {

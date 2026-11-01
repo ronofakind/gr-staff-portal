@@ -1,3 +1,4 @@
+import { setting, roundTo } from './settings';
 /** Pay periods and paid hours, same rules as the admin side (src/admin/api.ts). */
 export function payPeriod(iso: string) {
   const [y, m, d] = iso.split('-').map(Number);
@@ -16,6 +17,7 @@ const D = (iso: string) => new Date(iso + 'T12:00:00');
 export const payDayLabel = (p: { start: string }) => D(payDay(p)).toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' }).replace(/\./g, '');
 export const periodLabel = (p: { start: string; end: string }) => `${D(p.start).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }).replace('.', '')} – ${Number(p.end.slice(8))}`;
 export const MIN_HOURS = 4;
-export const workedHours = (a: string, b: string) => Math.round((new Date(b).getTime() - new Date(a).getTime()) / 900000) * 0.25;
-/** 15-min rounding, minimum 4 h per shift, except left early (real hours). */
-export const paidHours = (a: string, b: string, leftEarly = false) => { const h = workedHours(a, b); return leftEarly ? h : Math.max(MIN_HOURS, h); };
+/** Rounding from Settings (15 min by default, push 32). */
+export const workedHours = (a: string, b: string) => roundTo(new Date(b).getTime() - new Date(a).getTime());
+/** Rounding + minimum (4 h) from Settings, except left early (real hours). */
+export const paidHours = (a: string, b: string, leftEarly = false) => { const h = workedHours(a, b); return leftEarly ? h : Math.max(setting('hours.min'), h); };

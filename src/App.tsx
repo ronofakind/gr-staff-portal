@@ -33,6 +33,9 @@ import { Extras } from './admin/Extras';
 import { Checkup, HomeScreenAgain } from './pages/Checkup';
 import { CheckupContext, loadCheckup, type CheckupInfo } from './lib/checkup';
 import { homeStepDue } from './lib/install';
+import { loadSettings, onSettings } from './lib/settings';
+import { Venues } from './admin/Venues';
+import { Settings } from './admin/Settings';
 
 export function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
@@ -41,6 +44,9 @@ export function App() {
   // push 31 · profile check-up gate. undefined = loading, null = unknown (RPC missing) → never blocks.
   const [checkup, setCheckup] = useState<CheckupInfo | null | undefined>(undefined);
   const [homeAgain, setHomeAgain] = useState(homeStepDue);
+  // push 32 · app settings: re-render the tree when they arrive / change (plain functions read the cache).
+  const [, setSettingsV] = useState(0);
+  useEffect(() => onSettings(() => setSettingsV((n) => n + 1)), []);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -56,6 +62,7 @@ export function App() {
     if (!session) { setMe(session === null ? null : undefined); return; }
     loadMe(session.user.id);
   }, [sessionUid]); // token refreshes don't reload the profile (or re-open the gate)
+  useEffect(() => { if (sessionUid !== undefined) loadSettings(true); }, [sessionUid]); // RLS decides which keys come back
   const meId = me?.id;
   useEffect(() => {
     if (!meId) { setCheckup(undefined); return; }
@@ -99,6 +106,8 @@ export function App() {
             <Route path="tiers" element={<Tiers />} />
             <Route path="ranking" element={<Ranking />} />
             <Route path="extras/:id" element={<Extras />} />
+            <Route path="venues" element={<Venues />} />
+            <Route path="settings" element={<Settings />} />
           </Route>
         )}
         {me.role === 'admin' && <Route path="/admin/view/:staffId/*" element={<ViewAs />} />}

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { allStaff, type AStaff } from './api';
-import { loadScoreData, scoreOf, signed, fbWhy, WEIGHTS, type Score, type ScoreData } from './score';
+import { Link } from 'react-router-dom';
+import { loadScoreData, scoreOf, signed, fbWhy, weights, type Score, type ScoreData } from './score';
 
 type Tab = 'floor' | 'bar' | 'md';
 const isMd = (s: AStaff) => s.positions.some((p) => p.toUpperCase() === 'MD');
@@ -21,6 +22,7 @@ export function Ranking() {
     .sort((a, b) => b.sc.total - a.sc.total || (a.s.staff_private?.ranking ?? 9999) - (b.s.staff_private?.ranking ?? 9999)), [staff, data, tab]);
   const cur = rows.find((r) => r.s.id === sel);
   const cls = (n: number) => (n > 0 ? 'okc' : n < 0 ? 'accent' : 'muted');
+  const W = weights();
 
   return (
     <div className="stack-lg">
@@ -51,15 +53,15 @@ export function Ranking() {
           {cur && data && <div className="adm-card"><ScoreWhy s={cur.s} sc={cur.sc} onClose={() => setSel(null)} onTier={load} /></div>}
           <div className="adm-card rk-how">
             <div className="kick">HOW THE SCORE IS MADE</div>
-            <div className="spread"><span>Tier</span><b>A {WEIGHTS.tier.A} · B {WEIGHTS.tier.B} · C {WEIGHTS.tier.C}</b></div>
-            <div className="spread"><span>Reliability (app, {WEIGHTS.reliability.days} days)</span><b>starts {WEIGHTS.reliability.start} · no-show −3 · late cancel (after confirming) −2 · late −1 · late change −1 · min 0</b></div>
-            <div className="spread"><span>Experience</span><b>Senior 3 · Mid 2 · Junior 1</b></div>
-            <div className="spread"><span>Manager feedback (last {WEIGHTS.feedback.last})</span><b>overall 5★ +1 · 4★ +0.5 · 3★ 0 · 2★ −1 · 1★ −2 · each detail ≥4★ +0.5 · ≤2★ −0.5 · −10 to +10</b></div>
+            <div className="spread"><span>Tier</span><b>A {W.tier.A} · B {W.tier.B} · C {W.tier.C}</b></div>
+            <div className="spread"><span>Reliability (app, {W.reliability.days} days)</span><b>starts {W.reliability.start} · no-show {signed(W.reliability.no_show)} · late cancel (after confirming) {signed(W.reliability.late_cancel)} · late {signed(W.reliability.late)} · late change {signed(W.reliability.late_change)} · min 0</b></div>
+            <div className="spread"><span>Experience</span><b>Senior {W.experience.SENIOR} · Mid {W.experience.MID} · Junior {W.experience.JUNIOR}</b></div>
+            <div className="spread"><span>Manager feedback (last {W.feedback.last})</span><b>overall {[5, 4, 3, 2, 1].map((n) => `${n}★ ${signed(W.feedback.stars[n])}`).join(' · ')} · each detail ≥4★ +0.5 · ≤2★ −0.5 · −{W.feedback.cap} to +{W.feedback.cap}</b></div>
             <div className="spread"><span className="muted">Older feedback (before stars)</span><b className="muted">vote A +1 · B 0 · C −2 · ▲ +0.5 · ▼ −0.5</b></div>
-            <div className="spread"><span>BMO fit</span><b>+{WEIGHTS.extras.bmo}</b></div>
-            <div className="spread"><span>New (first {WEIGHTS.newUnder} shifts)</span><b>{signed(WEIGHTS.extras.newStaff)}</b></div>
-            <div className="spread"><span>Priority until a date</span><b>+{WEIGHTS.extras.priority}</b></div>
-            <div className="muted sm">Weights are fixed for now (ask Claude to change them). Tiers never change on their own; the app only suggests.</div>
+            <div className="spread"><span>BMO fit</span><b>{signed(W.extras.bmo)}</b></div>
+            <div className="spread"><span>New (first {W.newUnder} shifts)</span><b>{signed(W.extras.newStaff)}</b></div>
+            <div className="spread"><span>Priority until a date</span><b>{signed(W.extras.priority)}</b></div>
+            <div className="muted sm">Change the weights in <Link to="/admin/settings">Settings › Ranking weights</Link>. Tiers never change on their own; the app only suggests.</div>
           </div>
         </div>
       </div>
@@ -72,14 +74,14 @@ export function ScoreWhy({ s, sc, onClose, onTier, compact = false }: { s: AStaf
   const [kept, setKept] = useState(() => readKeep(keepKey(s.id, sc)));
   const kk = keepKey(s.id, sc);
   useEffect(() => setKept(readKeep(kk)), [kk]);
-  const tier = s.staff_private?.tier ?? null;
+  const tier = s.staff_private?.tier ?? null; const W = weights();
   const move = async (to: 'A' | 'B' | 'C') => {
     if (!confirm(`Move ${s.full_name} from tier ${tier} to ${to}?`)) return;
     const { error } = await supabase.from('staff_private').update({ tier: to }).eq('staff_id', s.id);
     if (error) alert(error.message); else onTier?.();
   };
   const keep = () => { try { localStorage.setItem(keepKey(s.id, sc), '1'); } catch { /* private mode */ } setKept(true); };
-  const relWhy = [sc.rel.no_show && `${sc.rel.no_show} no-show (−3)`, sc.rel.cancelled && `${sc.rel.cancelled} late cancel (−2)`, sc.rel.late && `${sc.rel.late} late (−1)`, sc.rel.late_change && `${sc.rel.late_change} late change (−1)`, sc.rel.free && `${sc.rel.free} not counted (cancel before confirming / told ahead)`].filter(Boolean).join(' · ') || 'nothing flagged';
+  const relWhy = [sc.rel.no_show && `${sc.rel.no_show} no-show (${signed(W.reliability.no_show)})`, sc.rel.cancelled && `${sc.rel.cancelled} late cancel (${signed(W.reliability.late_cancel)})`, sc.rel.late && `${sc.rel.late} late (${signed(W.reliability.late)})`, sc.rel.late_change && `${sc.rel.late_change} late change (${signed(W.reliability.late_change)})`, sc.rel.free && `${sc.rel.free} not counted (cancel before confirming / told ahead)`].filter(Boolean).join(' · ') || 'nothing flagged';
   const Line = ({ t, sub, n, plain }: { t: string; sub: string; n: number; plain?: boolean }) => (
     <div className="rk-line"><div className="grow"><b>{t}</b><small>{sub}</small></div><b className={plain ? '' : n > 0 ? 'okc' : n < 0 ? 'accent' : 'muted'}>{plain ? n : signed(n)}</b></div>
   );
@@ -88,10 +90,10 @@ export function ScoreWhy({ s, sc, onClose, onTier, compact = false }: { s: AStaf
       {!compact && <div className="spread"><span className="kick">WHY THIS SCORE · {s.full_name.toUpperCase()}</span>{onClose && <button className="sq" aria-label="Close" onClick={onClose}>×</button>}</div>}
       <div className="rk-big serif">{sc.total}</div>
       <Line t={tier ? `Tier ${tier}` : 'No tier'} sub="set by you" n={sc.tier} plain />
-      <Line t="Reliability" sub={`app · last ${WEIGHTS.reliability.days} days: ${relWhy}. Starts at ${WEIGHTS.reliability.start}.`} n={sc.reliability} />
+      <Line t="Reliability" sub={`app · last ${W.reliability.days} days: ${relWhy}. Starts at ${W.reliability.start}.`} n={sc.reliability} />
       <Line t="Experience" sub={sc.exp ? sc.exp[0] + sc.exp.slice(1).toLowerCase() : 'not set'} n={sc.experience} />
       <Line t="Manager feedback" sub={fbWhy(sc.fb)} n={sc.feedback} />
-      <Line t="Extras" sub={[sc.bmo && 'BMO fit +2', sc.isNew && `new · ${sc.done} finished shift${sc.done === 1 ? '' : 's'} −3`, sc.priority && `priority until ${sc.priority} +20`].filter(Boolean).join(' · ') || 'priority until / BMO / new staff'} n={sc.extras} />
+      <Line t="Extras" sub={[sc.bmo && `BMO fit ${signed(W.extras.bmo)}`, sc.isNew && `new · ${sc.done} finished shift${sc.done === 1 ? '' : 's'} ${signed(W.extras.newStaff)}`, sc.priority && `priority until ${sc.priority} ${signed(W.extras.priority)}`].filter(Boolean).join(' · ') || 'priority until / BMO / new staff'} n={sc.extras} />
       {sc.suggest && tier && !kept && (
         <div className="rk-suggest"><b>Suggestion:</b> {sc.suggest.why}. Keep tier {tier}?{' '}
           <button className="lnk" onClick={() => move(sc.suggest!.to)}>Move to {sc.suggest.to}</button> · <button className="lnk" onClick={keep}>Keep {tier}</button></div>

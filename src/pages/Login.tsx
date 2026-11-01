@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { setting, useSettings } from '../lib/settings';
 import { useT } from '../lib/i18n';
 import { pinPassword, resolvePinLen, rememberPinLen, saveMyPinLen, type PinLen } from '../lib/pin';
 import { PinDots, NumPad, ChooseCode } from '../components/PinPad';
@@ -11,7 +12,7 @@ type Step = 'email' | 'pin' | 'forgot' | 'code' | 'setpin' | 'asked';
  * "No access to that email?" → request_pin_reset → a Needs you card for Ronnie (nothing is emailed until he presses Send).
  */
 export function Login({ mustSetPin }: { mustSetPin?: boolean }) {
-  const t = useT();
+  const t = useT(); useSettings(); // push 32: "Ask Ronnie to reset" on/off (readable signed out)
   const saved = localStorage.getItem('gr_email') ?? '';
   const [step, setStep] = useState<Step>(mustSetPin ? 'setpin' : saved ? 'pin' : 'email');
   const [email, setEmail] = useState(saved);
@@ -108,11 +109,11 @@ export function Login({ mustSetPin }: { mustSetPin?: boolean }) {
           <button className="cu-btn" disabled={busy} onClick={sendCode}>{busy ? 'Sending…' : 'Email me a reset code'}</button>
           <p className="pin-hint left">First time here? Same thing: we email you a code, then you choose yours.</p>
           {err && <p className="error">{err}</p>}
-          <div className="login2-ask">
+          {setting('signin.ask_reset') && <div className="login2-ask">
             <b>No access to that email?</b>
             <span>Ronnie can send a reset link (or fix your email first).</span>
             <button className="cu-btn line" disabled={busy} onClick={askRonnie}>Ask Ronnie to reset</button>
-          </div>
+          </div>}
           <button type="button" className="pin-link" onClick={() => { setStep('pin'); setErr(''); }}>‹ Back to sign in</button>
         </div>
       )}

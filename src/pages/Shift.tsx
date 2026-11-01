@@ -40,6 +40,7 @@ type TeamGroup = { start: string; label: string; n: number };
 export function ShiftView({ s, lead, backTo = '/', preview = false, team }: { s: ShiftRow; lead: Lead; backTo?: string; preview?: boolean; team?: TeamGroup[] }) {
   const t = useT(); const lang = useLang();
   const [leadPhoto, setLeadPhoto] = useState(false);
+  const vx = useVenueExtras(s.events.id); const [vPhoto, setVPhoto] = useState<number | null>(null); // push 32 · venue notes + photos
   // push 28 · Need a change? (inside the dark top card, V2)
   const [sheet, setSheet] = useState<'cancel' | 'change' | null>(null);
   const [gone, setGone] = useState<{ late: boolean } | null>(s.attendance === 'cancelled' ? { late: false } : null);
@@ -128,6 +129,7 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team }: { s:
           <span className="d3-pin"><svg width="16" height="20" viewBox="0 0 26 34" aria-hidden="true"><path d="M13 33 C13 33 25 19 25 12 A12 12 0 0 0 1 12 C1 19 13 33 13 33Z" fill="#9B2226" /><circle cx="13" cy="12" r="4.5" fill="#fff" /></svg></span>
           <div className="grow" style={{ minWidth: 0 }}><b>{street}</b>{cityParts.length > 0 && <span>{cityParts.join(',').trim()}</span>}{ev.venues?.staff_notes && <p>{ev.venues.staff_notes}</p>}</div>
         </div>
+        {vx.photos.length > 0 && <div className="d3-vphotos">{vx.photos.map((u, i) => <button key={u} type="button" aria-label={`Venue photo ${i + 1} of ${vx.photos.length}`} onClick={() => setVPhoto(i)}><img src={u} alt="" loading="lazy" /></button>)}</div>}
         <div className="row2" style={{ gap: 8 }}>
           {address ? <a className="big-btn dark" href={mapsUrl(address)} target="_blank" rel="noreferrer">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 11 21 3l-8 18-2-8z" /></svg>Directions</a> : <span />}
@@ -162,10 +164,12 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team }: { s:
 
       {!preview && <PinnedAnnouncements eventId={ev.id} />}
 
-      {ev.notes && <>
+      {(ev.notes || vx.notes) && <>
         <div className="d-sec">Notes</div>
-        <section className="d3-notes">{ev.notes}</section>
+        {ev.notes && <section className="d3-notes">{ev.notes}</section>}
+        {vx.notes && <section className="d3-notes d3-vnotes"><small>AT {venueName.toUpperCase()}</small>{vx.notes}</section>}
       </>}
+      {vPhoto !== null && vx.photos[vPhoto] && <PhotoViewer wide name={venueName} url={vx.photos[vPhoto]} sub={vx.photos.length > 1 ? `Photo ${vPhoto + 1} of ${vx.photos.length} · tap to close` : 'Tap to close'} onClose={() => setVPhoto(null)} />}
 
       {lead && <>
         <div className="d-sec">Manager On-Site</div>
@@ -185,6 +189,27 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team }: { s:
       <div style={{ height: 24 }} />
     </main>
   );
+}
+
+/**
+ * push 32 · venue notes + photos (Venues & clients). Read on their own so the page still loads while migration 038
+ * (venues.venue_notes / venues.photos, Storage "venue-photos") isn't applied. Photos are private: 1-hour signed links.
+ */
+function useVenueExtras(eventId: string) {
+  const [x, setX] = useState<{ notes: string | null; photos: string[] }>({ notes: null, photos: [] });
+  useEffect(() => {
+    let live = true;
+    supabase.from('events').select('venues(venue_notes,photos)').eq('id', eventId).maybeSingle().then(async ({ data, error }) => {
+      if (error || !data || !live) return;
+      const v = (data as unknown as { venues: { venue_notes: string | null; photos: unknown } | null }).venues;
+      const paths = Array.isArray(v?.photos) ? (v!.photos as unknown[]).filter((p): p is string => typeof p === 'string') : [];
+      let urls: string[] = [];
+      if (paths.length) { const r = await supabase.storage.from('venue-photos').createSignedUrls(paths, 3600); urls = (r.data ?? []).map((d) => d.signedUrl).filter(Boolean) as string[]; }
+      if (live) setX({ notes: v?.venue_notes?.trim() || null, photos: urls });
+    }, () => {});
+    return () => { live = false; };
+  }, [eventId]);
+  return x;
 }
 
 function calendarUrl(title: string, startIso: string, endIso: string | null, address: string) {

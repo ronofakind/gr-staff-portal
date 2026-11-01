@@ -9,10 +9,11 @@ import {
 import { tiersFor } from './Availability';
 import { AddressInput, type AddressParts } from '../components/AddressInput';
 import { defaultPieces, defaultItems, type UniItems, type UniItemsMap, type UniLineKey } from '../components/Uniform';
+import { setting, autoExtras } from '../lib/settings';
 
-const MEN: [string, string][] = [['white_shirt', 'White dress shirt'], ['black_shirt', 'Black dress shirt'], ['black_tshirt', 'Black T-shirt']];
-const WOMEN: [string, string][] = [['white_shirt', 'White dress shirt'], ['black_shirt', 'Black dress shirt'], ['dress', 'Black cocktail dress'], ['black_tshirt', 'Black T-shirt']];
-const uniName = (k: string) => (k.startsWith('custom:') ? k.slice(7) : [...MEN, ...WOMEN].find(([u]) => u === k)?.[1].replace('dress shirt', 'shirt').replace('Black cocktail dress', 'dress') ?? k).toLowerCase();
+export const MEN: [string, string][] = [['white_shirt', 'White dress shirt'], ['black_shirt', 'Black dress shirt'], ['black_tshirt', 'Black T-shirt']];
+export const WOMEN: [string, string][] = [['white_shirt', 'White dress shirt'], ['black_shirt', 'Black dress shirt'], ['dress', 'Black cocktail dress'], ['black_tshirt', 'Black T-shirt']];
+export const uniName = (k: string) => (k.startsWith('custom:') ? k.slice(7) : [...MEN, ...WOMEN].find(([u]) => u === k)?.[1].replace('dress shirt', 'shirt').replace('Black cocktail dress', 'dress') ?? k).toLowerCase();
 
 type Mode = 'floor' | 'bar' | 'both';
 const MONTHS = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
@@ -26,7 +27,7 @@ export const driveName = (date: string, venue: string, client: string | null, pr
   return (privateHome || !short ? `${base} "${(venue || 'VENUE').toUpperCase()}"` : `${base} ${short.toUpperCase()} "${(venue || 'VENUE').toUpperCase()}"`);
 };
 /** Items for a line, falling back to the defaults for its shirt pick. */
-const itemsOf = (items: UniItemsMap, k: UniLineKey, kind: string): UniItems => items[k] ?? defaultItems(kind, k.startsWith('bar'));
+export const itemsOf = (items: UniItemsMap, k: UniLineKey, kind: string): UniItems => items[k] ?? defaultItems(kind, k.startsWith('bar'));
 
 function UniLine({ who, opts, value, set, bar, items, setItems }: { who: string; opts: [string, string][]; value: string; set: (v: string) => void; bar: boolean; items: UniItems; setItems: (i: UniItems) => void }) {
   const custom = value.startsWith('custom:');
@@ -56,7 +57,7 @@ function UniLine({ who, opts, value, set, bar, items, setItems }: { who: string;
     </div>
   );
 }
-function UniDept({ label, sub, bar, men, women, setMen, setWomen, items, setItems }: { label: string; sub: string; bar: boolean; men: string; women: string; setMen: (v: string) => void; setWomen: (v: string) => void; items: UniItemsMap; setItems: (k: UniLineKey, i: UniItems) => void }) {
+export function UniDept({ label, sub, bar, men, women, setMen, setWomen, items, setItems }: { label: string; sub: string; bar: boolean; men: string; women: string; setMen: (v: string) => void; setWomen: (v: string) => void; items: UniItemsMap; setItems: (k: UniLineKey, i: UniItems) => void }) {
   const km: UniLineKey = bar ? 'bar_m' : 'floor_m'; const kw: UniLineKey = bar ? 'bar_w' : 'floor_w';
   return (
     <div className={'uni-dept' + (bar ? ' is-bar' : '')}>
@@ -149,8 +150,8 @@ export function EventForm() {
   const allFold = (o: boolean) => { const f = Object.fromEntries([1, 2, 3, 4, 5, 6].map((n) => [n, o])); setFoldMap(f); try { localStorage.setItem(FOLD_KEY, JSON.stringify(f)); } catch { /* private mode */ } };
   const [privateId, setPrivateId] = useState<string | null>(null); // a private-home client used as the venue
   const [guests, setGuests] = useState(''); const [eventType, setEventType] = useState(''); const [types, setTypes] = useState<{ name: string; main: boolean }[]>([]);
-  const [tr, setTr] = useState<{ on: boolean | null; travel: number; gas: string; billing: 'client' | 'gr'; rides: boolean }>({ on: null, travel: 60, gas: '20', billing: 'client', rides: true });
-  const [extras, setExtras] = useState(''); const [extrasBill, setExtrasBill] = useState<'gr' | 'client'>('gr');
+  const [tr, setTr] = useState<{ on: boolean | null; travel: number; gas: string; billing: 'client' | 'gr'; rides: boolean }>(() => ({ on: null, travel: 60, gas: '20', billing: setting('transport.client_pays') ? 'client' : 'gr', rides: true }));
+  const [extras, setExtras] = useState(''); const [extrasBill, setExtrasBill] = useState<'gr' | 'client'>(() => setting('extras.default_billing'));
   const [payMethod, setPayMethod] = useState<'invoice' | 'cash'>('invoice'); const [qbType, setQbType] = useState<'estimate' | 'invoice'>('estimate'); const [qbNum, setQbNum] = useState('');
   const [driveOn, setDriveOn] = useState<boolean | null>(null); const [drive, setDrive] = useState<{ email: string } | null>(null);
   const [lines, setLines] = useState<Line[]>([blankLine('floor', 'MD', '17:00'), blankLine('floor', 'W', '17:00')]);
@@ -166,7 +167,9 @@ export function EventForm() {
   // Lists
   useEffect(() => {
     supabase.from('venues').select('id,name,address,usual_client_id,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,uniform_items,always_offer_rides').order('name').then(({ data }) => setVenues((data ?? []) as Venue[]));
-    supabase.from('clients').select('id,name,rate_sets,kind,address,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,uniform_items,drive_folder_default').order('name').then(({ data }) => setClients((data ?? []) as Client[]));
+    // push 32: + extras_billing / transport_billing (a picked client sets the billing on new events; 038 not applied → old columns)
+    const cq = (extra: string) => supabase.from('clients').select('id,name,rate_sets,kind,address,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,uniform_items,drive_folder_default' + extra).order('name');
+    cq(',extras_billing,transport_billing').then(async (r) => { const res = r.error ? await cq('') : r; setClients((res.data ?? []) as unknown as Client[]); });
     allStaff().then((s) => setStaff(s.filter((x) => x.active)));
     supabase.from('event_types').select('name,main,sort').order('sort').then(({ data }) => setTypes((data ?? []) as { name: string; main: boolean }[]));
     supabase.rpc('google_status').then(({ data }) => setDrive((data as { email: string } | null) ?? null));
@@ -245,6 +248,12 @@ export function EventForm() {
   const paidTravel = Math.round((tr.travel * 2) / 15) * 15;
   useEffect(() => { if (venue?.address && !address) setAddress(venue.address); }, [venue?.id]);
   const client = clients.find((c) => c.id === clientId) ?? null;
+  // push 32: new events take the client's extras / transport billing (Venues & clients). Saved events keep theirs.
+  useEffect(() => {
+    if (!isNew || !client) return;
+    if (client.extras_billing) setExtrasBill(client.extras_billing);
+    if (client.transport_billing) setTr((t) => ({ ...t, billing: client.transport_billing! }));
+  }, [client?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const pickVenue = (v: Venue) => {
     setVenueId(v.id); setTitle(v.name); setAddress(v.address ?? '');
     if (v.usual_client_id) setClientId(v.usual_client_id);
@@ -571,15 +580,15 @@ export function EventForm() {
             <small className="muted">{payMethod === 'cash'
               ? 'Cash: nothing is made or filled in QuickBooks. After “Mark cash received”, Needs-you reminds you to remove the estimate yourself.'
               : qbNum ? (qbType === 'estimate' ? 'The invoice is made from this estimate.' : 'The invoice runs fill this invoice instead of making a new one.') : 'Empty = automatic, as today.'}</small>
-            {(() => { const fl = lines.filter((l) => l.dept === 'floor').reduce((n, l) => n + l.count, 0); const auto = fl > 7 ? Math.ceil(fl * 0.1) : 0; return (<>
+            {(() => { const fl = lines.filter((l) => l.dept === 'floor').reduce((n, l) => n + l.count, 0); const rule = setting('extras.rule'); const auto = autoExtras(fl); return (<>
               <span className="kick" style={{ marginTop: 10 }}>EXTRAS</span>
               <div className="row wrap" style={{ gap: 8, alignItems: 'center' }}>
                 <select value={extras} onChange={(e) => setExtras(e.target.value)} style={{ height: 40, borderRadius: 10, border: '1.5px solid #DCD3C7', padding: '0 8px' }}>
-                  <option value="">+{auto} (10%{fl > 7 ? '' : ', 7 or fewer = none'})</option>{[0, 1, 2, 3, 4, 5, 6, 8, 10].map((n) => <option key={n} value={String(n)}>+{n}</option>)}
+                  <option value="">+{auto} ({rule.pct}%{fl > rule.over ? '' : `, ${rule.over} or fewer = none`})</option>{[0, 1, 2, 3, 4, 5, 6, 8, 10].map((n) => <option key={n} value={String(n)}>+{n}</option>)}
                 </select>
                 <div className="seg3">{(['gr', 'client'] as const).map((m) => <button type="button" key={m} className={extrasBill === m ? 'on' : ''} onClick={() => setExtrasBill(m)}>{m === 'gr' ? 'On G&R' : 'Client pays'}</button>)}</div>
               </div>
-              <small className="muted">Events over 7 staff get 10% extras, rounded up. On G&R: extras stay off the invoice unless one replaces a no-show. Client pays: invoiced like the other waiters.</small>
+              <small className="muted">Events over {rule.over} staff get {rule.pct}% extras, rounded up (Settings). On G&R: extras stay off the invoice unless one replaces a no-show. Client pays: invoiced like the other waiters.</small>
             </>); })()}
           </div>
         </div>

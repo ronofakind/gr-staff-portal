@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { tiersForCount } from '../lib/settings';
 import { allStaff, eventsBetween, isoDay, startIso, type AEvent, type AStaff } from './api';
 import { ampm } from '../pages/Availability';
 
@@ -10,7 +11,8 @@ type Weekly = { staff_id: string; dow: number; status: 'yes' | 'from' | 'no'; fr
 type Off = { staff_id: string; from_date: string; to_date: string; reason: string | null; every_dow: number | null };
 
 const TIERS: Tier[] = ['A', 'B', 'C'];
-export const tiersFor = (n: number): Tier[] => (n <= 8 ? ['A'] : n <= 20 ? ['A', 'B'] : ['A', 'B', 'C']);
+/** Headcount → tiers asked (Settings → Asking staff; 1–8 A · 9–20 A+B · 21+ A+B+C by default). */
+export const tiersFor = (n: number): Tier[] => tiersForCount(n);
 const D = (iso: string) => new Date(iso + 'T12:00:00');
 const dow = (iso: string) => (D(iso).getDay() + 6) % 7;
 const fmt = (iso: string) => D(iso).toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' }).replace(/\./g, '');

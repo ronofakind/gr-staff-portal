@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { setting, autoExtras } from '../lib/settings';
 import { DeptTag } from './DeptTag';
 import { eventsBetween, allStaff, addDays, isoDay, dLabel, ap12, startIso, roleName, bookingChange, confirmationsSent, type AEvent, type AStaff, type Client, type Venue } from './api';
 import { misfits, linksOf, other, condShort, RuleIcons, type SLink, type SCond } from './rules';
@@ -27,7 +28,8 @@ const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const uid = () => Math.random().toString(36).slice(2, 10);
 const isBarEv = (e: AEvent) => e.department === 'bar';
 const floorNeed = (evs: AEvent[]) => evs.filter((e) => !isBarEv(e)).reduce((n, e) => n + e.staff_needed, 0);
-const defaultExtras = (e: AEvent) => (!isBarEv(e) && e.staff_needed > 7 ? Math.ceil(e.staff_needed * 0.1) : 0);
+/** Settings → Extras (over 7 staff → 10 % rounded up by default). */
+const defaultExtras = (e: AEvent) => (!isBarEv(e) ? autoExtras(e.staff_needed) : 0);
 const readLS = (k: string, d: string) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } };
 const writeLS = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } };
 
@@ -70,7 +72,7 @@ export function Bookings() {
 
   const load = async () => {
     setEvents(null);
-    const since30 = addDays(date, -30); const since90 = addDays(date, -90);
+    const since30 = addDays(date, -setting('ask.hold_back').days); const since90 = addDays(date, -90);
     const [evs, st, a, w, o, l, c, s30, hist90, dr] = await Promise.all([
       eventsBetween(range.from, range.to), staff.length ? Promise.resolve(staff) : allStaff(),
       supabase.from('availability').select('staff_id,status,from_time,note,tier,for_date').gte('for_date', range.from).lte('for_date', range.to).not('ask_id', 'is', null),
@@ -120,7 +122,7 @@ export function Bookings() {
   /** Higher score first; the old rank breaks ties. */
   const byScore = (a: string, b: string) => (scores[b] ?? -1e9) - (scores[a] ?? -1e9) || rank(a) - rank(b);
   const apartOf = (sid: string) => linksOf(rl, sid, 'apart').map((l) => other(l, sid));
-  const isBig = (d: string) => floorNeed((events ?? []).filter((e) => e.event_date === d)) >= 25;
+  const isBig = (d: string) => floorNeed((events ?? []).filter((e) => e.event_date === d)) >= setting('ask.big_date');
   /** Warnings when adding someone (never blocking) + green hint when a works-well-with partner said yes. */
   const warnFor = (d: string, sid: string, e: AEvent, pl: Pl[]): Warn[] => {
     const f = (x: string) => name(x).split(' ')[0]; const out: Warn[] = [];
@@ -321,7 +323,7 @@ export function Bookings() {
         ))}
         {extras > 0 && (
           <div className="bk-grp extras" onDragOver={(ev) => ev.preventDefault()} onDrop={(ev) => { ev.stopPropagation(); onDrop(d, { event_id: e.id, start: groups[0]?.start ?? '17:00', extra: true }); }}>
-            <div className="bk-gh"><span className="bk-time gold">Extras +10%</span><span className="muted sm">{pl.filter((p) => p.extra).length} / {extras} · {(e.extras_billing ?? 'gr') === 'client' ? 'client pays' : 'on G&R'}</span>
+            <div className="bk-gh"><span className="bk-time gold">Extras +{setting('extras.rule').pct}%</span><span className="muted sm">{pl.filter((p) => p.extra).length} / {extras} · {(e.extras_billing ?? 'gr') === 'client' ? 'client pays' : 'on G&R'}</span>
               <input className="bk-xn" type="number" min={0} value={extras} onChange={(ev) => { const c = cur(d); setCur(d, { ...c, extras: { ...c.extras, [e.id]: Math.max(0, Number(ev.target.value) || 0) } }); }} /></div>
             {pl.filter((p) => p.extra).map((p) => <Chip key={p.key} p={p} d={d} />)}
             {extras > pl.filter((p) => p.extra).length && <div className="bk-open">{extras - pl.filter((p) => p.extra).length} extra · drop here</div>}
@@ -416,7 +418,7 @@ export function Bookings() {
                       <tr key={i}><td><i className={'dot ' + l.dept} /> {l.count} {roleName(l.code)}</td><td>{t12(l.start)}{l.end && <span className="muted"> ~ {t12(l.end)}</span>}</td>
                         <td><div className="row wrap" style={{ gap: 4 }}>{people.map((p) => <span key={p.key} className="bk-schip"><i className={'bk-t t' + (tier(p.staff_id) ?? 'x')} />{name(p.staff_id)}<button onClick={() => remove(d, p.key)}>×</button></span>)}
                           {people.length < l.count && <input className="bk-sadd" list={`bk-dl-${d}`} placeholder="+ type a name" onChange={(ev) => { const s = staff.find((x) => x.full_name === ev.target.value); if (s) { place(d, s.id, { event_id: e.id, start: l.start }); ev.target.value = ''; } }} />}</div></td></tr>); })}
-                    {defaultExtras(e) > 0 && <tr><td colSpan={3} className="gold sm"><b>{extrasOf(d, e)} Extras +10%</b> · {(e.extras_billing ?? 'gr') === 'client' ? 'client pays' : 'on G&R'}</td></tr>}
+                    {defaultExtras(e) > 0 && <tr><td colSpan={3} className="gold sm"><b>{extrasOf(d, e)} Extras +{setting('extras.rule').pct}%</b> · {(e.extras_billing ?? 'gr') === 'client' ? 'client pays' : 'on G&R'}</td></tr>}
                   </tbody></table>
                 </div>
               ))}
@@ -510,7 +512,7 @@ function AskMore({ date, dept, events, staff, av, wk, off, conds, links, booked,
     && wk.find((w) => w.staff_id === s.id && w.dow === dow)?.status !== 'no' && !/manual booking only|leaving|do not book/i.test(s.staff_private?.notes ?? ''))
     .map((s) => { const u = wk.find((w) => w.staff_id === s.id && w.dow === dow); const k = condsOf(s.id).map((c) => c.kind);
       const linkedBooked = links.some((l) => l.includes(s.id) && [...booked, ...av.filter((a) => a.status === 'yes').map((a) => a.staff_id)].includes(l[0] === s.id ? l[1] : l[0]));
-      const held = (shifts30[s.id] ?? 0) >= 7 ? '7+ shifts in 30 days' : k.includes('big_dates_only') ? 'only for very big dates' : k.includes('only_if_needed') ? 'only when we really need them' : '';
+      const hb = setting('ask.hold_back'); const held = (shifts30[s.id] ?? 0) >= hb.shifts ? `${hb.shifts}+ shifts in ${hb.days} days` : k.includes('big_dates_only') ? 'only for very big dates' : k.includes('only_if_needed') ? 'only when we really need them' : '';
       return { s, u, rate: yesRate[s.id] ?? 0.5, n30: shifts30[s.id] ?? 0, held, linkedBooked }; })
     .sort((a, b) => Number(b.linkedBooked) - Number(a.linkedBooked) || (a.s.staff_private?.ranking ?? 9999) - (b.s.staff_private?.ranking ?? 9999) || Number(!!b.u) - Number(!!a.u) || a.n30 - b.n30 || b.rate - a.rate);
   const main = cands.filter((c) => !c.held); const held = cands.filter((c) => c.held);

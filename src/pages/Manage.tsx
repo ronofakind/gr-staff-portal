@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { SwipeSheet } from '../components/SwipeSheet';
 import { Link, useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { setting, useSettings } from '../lib/settings';
 import { useLang } from '../lib/i18n';
 import { time } from '../lib/format';
 import { Avatar, PhotoViewer } from '../components/Avatar';
@@ -10,9 +11,10 @@ import { DriveFiles } from '../components/DriveFiles';
 import { AnnounceComposer, AnnounceSent } from '../components/Announce';
 /** Manager "Message your team" is off until push 24 (texts + phone buzz) is live. */
 const ANNOUNCE_ON = false;
-/** Push 27 rollout: manager feedback (★ tile + new-staff check) only for these managers for now (full name or staff id). */
+/** Push 27 rollout: manager feedback (★ tile + new-staff check) only for these managers (full name or staff id) while Settings → Managers
+ *  says "Benjamin only" (default); "All managers" turns it on for everyone who manages an event (push 32). */
 export const FEEDBACK_MANAGERS: string[] = ['Benjamin Outre'];
-const feedbackOn = (me?: { id: string; full_name: string } | null) => !!me && FEEDBACK_MANAGERS.some((x) => x === me.id || x.toLowerCase() === me.full_name.trim().toLowerCase());
+const feedbackOn = (me?: { id: string; full_name: string } | null) => !!me && (setting('mgr.feedback') === 'all' || FEEDBACK_MANAGERS.some((x) => x === me.id || x.toLowerCase() === me.full_name.trim().toLowerCase()));
 /** push 30 · detail ratings are 1–5 stars (push-27 rows had "up" / "ok" / "down": ignored here, never re-sent). */
 type Info = { staff_id: string; tier: 'A' | 'B' | 'C' | null; done_before: number; is_new: boolean; fb_tier: 'A' | 'B' | 'C' | null; fb_ratings: Record<string, unknown> | null; fb_note: string | null;
   /** push 30 · tonight's overall stars this manager sent (null = not rated tonight) */
@@ -198,7 +200,8 @@ function AddStaff({ ev, onClose, onDone, lang }: { ev: EvFull; onClose: () => vo
 
 export function Manage({ me }: { me?: { id: string; full_name: string } | null }) {
   const { eventId } = useParams(); const lang = useLang(); const t = L[lang];
-  const fbOn = feedbackOn(me);
+  useSettings(); // push 32: feedback / new tag / undo / start window come from Settings
+  const fbOn = feedbackOn(me); const newUnder = setting('bookings.new_tag_shifts'); const startH = setting('mgr.start_from_h');
   const [info, setInfo] = useState<Record<string, Info>>({});
   const [fb, setFb] = useState<{ row: Row; back: 'sheet' | 'check' | null } | null>(null);
   const [check, setCheck] = useState(false); const [checkDone, setCheckDone] = useState(false);
@@ -290,15 +293,15 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
   };
   const now = () => new Date().toISOString();
   const todayMtl = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' });
-  /** ok: from 3 h before call · locked: earlier, or not the event day (early starts go through the name sheet) */
+  /** ok: from 3 h before call (Settings → Managers) · locked: earlier, or not the event day (early starts go through the name sheet) */
   const gate = (r: Row): { kind: 'ok' | 'locked'; label?: string } => {
     const call = new Date(r.planned_start).getTime(); const mins = (call - Date.now()) / 60000;
     const at = (ms: number) => new Date(ms).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' });
     if (ev && todayMtl < ev.event_date) {
       const d = new Date(ev.event_date + 'T12:00:00').toLocaleDateString('en-CA', { weekday: 'short' });
-      return { kind: 'locked', label: `Opens ${d} ${at(call - 3 * 3600e3)}` };
+      return { kind: 'locked', label: `Opens ${d} ${at(call - startH * 3600e3)}` };
     }
-    if (mins > 180) return { kind: 'locked', label: `Opens ${at(call - 3 * 3600e3)}` };
+    if (mins > startH * 60) return { kind: 'locked', label: `Opens ${at(call - startH * 3600e3)}` };
     return { kind: 'ok' };
   };
   /** Start = attendance. Before call: starts at call. After call: starts at arrival, nearest 15 min (never before call). */
@@ -322,7 +325,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
   // Undo start / end (sheet box or swipe on the list) → 8-second REDO bar that puts the times back.
   const undoStart = async (r: Row) => { const prev = [{ id: r.id, in: r.punches?.punch_in ?? null, out: r.punches?.punch_out ?? null }]; setOpen(null); await set([{ id: r.id, in: null, out: null }]); setUndo({ label: `${(r.staff?.full_name ?? '').split(' ')[0]} · start undone`, btn: 'REDO', prev }); };
   const undoEnd = async (r: Row) => { const prev = [{ id: r.id, in: r.punches?.punch_in ?? null, out: r.punches?.punch_out ?? null }]; setOpen(null); await set([{ id: r.id, in: r.punches?.punch_in ?? null, out: null }]); setUndo({ label: `${(r.staff?.full_name ?? '').split(' ')[0]} · end undone`, btn: 'REDO', prev }); };
-  const canUndo = (r: Row) => !r.attendance && !r.left_early && !ev?.hours_submitted_at && !!r.punches?.punch_in;
+  const canUndo = (r: Row) => setting('mgr.undo') !== 'off' && !r.attendance && !r.left_early && !ev?.hours_submitted_at && !!r.punches?.punch_in;
   const infoOf = (r: Row) => (r.staff_id ? info[r.staff_id] : undefined);
   const jump = useRef(false);
   const openRow = (r: Row, toAbout = false) => { jump.current = toAbout; setProb(false); setOpen(r); setDraft({ in: hm(r.punches?.punch_in ?? null) || hm(r.planned_start), out: hm(r.punches?.punch_out ?? null) }); };
@@ -458,7 +461,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
               const ring = r.attendance ? '' : ended ? 'done' : pin ? (isEarly || (wasLate && !ln) ? 'flag' : 'working') : ln && !lnPassed ? 'told' : isLate ? 'late' : '';
               const fromRonnie = !!r.cancel_self && !!r.cancel_sent_to_manager;
               const tel = r.staff?.phone?.replace(/[^\d+]/g, '');
-              const inf = infoOf(r); const isNew = !!inf?.is_new && inf.done_before < 3;
+              const inf = infoOf(r); const isNew = !!inf?.is_new && inf.done_before < newUnder;
               return (
                 <SwipeRow key={r.id} on={canUndo(r)} label={pout ? 'Undo end' : 'Undo start'} onAct={() => (pout ? undoEnd(r) : undoStart(r))}>
                 <div className={'crew' + (r.attendance ? ' flagged' : '') + (r.left_early ? ' left' : '')}>
@@ -597,7 +600,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
 
       {open && !fb && (() => {
         const pin = open.punches?.punch_in ?? null; const pout = open.punches?.punch_out ?? null; const undoOk = canUndo(open);
-        const inf = infoOf(open); const isNewO = !!inf?.is_new && inf.done_before < 3; const ab = aboutOf(inf);
+        const inf = infoOf(open); const isNewO = !!inf?.is_new && inf.done_before < newUnder; const ab = aboutOf(inf);
         return (
         <>
           <div className="scrim" onClick={() => setOpen(null)} />
