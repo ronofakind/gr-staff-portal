@@ -297,7 +297,7 @@ function fillDayAndPayroll_(ss, d, rows) {
   const done = Object.keys(byEvent).filter((id) => byEvent[id].every((r) => gone_(r) || (r.punch_in && r.punch_out)));
   if (!done.length) return issues;
   const day = ss.getSheetByName(label);
-  if (!day) { issues.push('No ' + label + ' tab, so hours were not copied to it or to payroll.'); return issues; }
+  if (!day) { payrollFromApp_(ss, d, label, done, byEvent, issues, wrote); props.setProperty('wrote_' + ymd, JSON.stringify(wrote)); return issues; }
 
   let L = layoutOf_(day);
   const transport = done.some((id) => byEvent[id].some((r) => Number(r.travel_h) > 0 || Number(r.gas) > 0));
@@ -369,6 +369,27 @@ function fillDayAndPayroll_(ss, d, rows) {
   payroll_(d, hours, issues, wrote, gas);
   props.setProperty('wrote_' + ymd, JSON.stringify(wrote));
   return issues;
+}
+
+/** No day tab for the date (Nov 1, 2026): payroll is filled straight from the APP tab's Total hours (same hours you see there). */
+function payrollFromApp_(ss, d, label, done, byEvent, issues, wrote) {
+  const app = ss.getSheetByName('APP · ' + label);
+  if (!app) { issues.push('No ' + label + ' tab and no APP tab, nothing added to payroll.'); return; }
+  SpreadsheetApp.flush();
+  const AL = layoutOf_(app);
+  const v = app.getRange(1, 1, app.getLastRow(), AL.cols).getValues();
+  const rowOf = (fullName) => { const n = norm_(fullName); return v.findIndex((r) => norm_(r[AL.name - 1]) === n); };
+  const hours = []; const gas = [];
+  done.forEach((id) => byEvent[id].forEach((r) => {
+    if (gone_(r) || !r.punch_in || !r.punch_out) return;
+    const name = r.full_name.toUpperCase(); const i = rowOf(r.full_name);
+    const t = i >= 0 ? v[i][AL.total - 1] : '';
+    if (typeof t !== 'number') { issues.push(name + ': no Total hours on the APP tab, not added to payroll.'); return; }
+    hours.push({ name: name, h: Math.round((t + (AL.travel ? 0 : Number(r.travel_h) || 0)) * 4) / 4 });
+    if (Number(r.gas) > 0) gas.push({ name: name, amt: Number(r.gas) });
+  }));
+  issues.push('No ' + label + ' tab: payroll was filled from this APP tab (' + hours.length + ' people).');
+  payroll_(d, hours, issues, wrote, gas);
 }
 
 /** Person rows on a day tab: { row, name, block } where block = the FLOOR STAFF / BAR STAFF row above them. */
