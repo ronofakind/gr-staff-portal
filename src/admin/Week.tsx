@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { DeleteEvent } from './DeleteEvent';
 import { DeptTag } from './DeptTag';
 import { eventsBetween, addDays, isoDay, hhmm, type AEvent } from './api';
+import { meetingsBetween, MeetingLine, type AMeeting } from './Meetings';
+import { dayOfMtl } from '../lib/meetings';
 
 const monday = (iso: string) => {
   const d = new Date(iso + 'T12:00:00'); const dow = (d.getDay() + 6) % 7; return addDays(iso, -dow);
@@ -11,7 +13,8 @@ const monday = (iso: string) => {
 export function Week() {
   const [start, setStart] = useState(monday(isoDay(new Date())));
   const [events, setEvents] = useState<AEvent[] | null>(null);
-  useEffect(() => { setEvents(null); eventsBetween(start, addDays(start, 6)).then(setEvents); }, [start]);
+  const [meetings, setMeetings] = useState<AMeeting[]>([]); // push 38
+  useEffect(() => { setEvents(null); eventsBetween(start, addDays(start, 6)).then(setEvents); meetingsBetween(start, addDays(start, 6)).then(setMeetings); }, [start]);
 
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
   const all = events ?? [];
@@ -29,7 +32,7 @@ export function Week() {
           <h1>Week of {label(start, { month: 'short', day: 'numeric' })} – {label(addDays(start, 6), { month: 'short', day: 'numeric' })}</h1>
           <button className="sq" aria-label="Next week" onClick={() => setStart(addDays(start, 7))}>›</button>
         </div>
-        <Link className="btn primary" to="/admin/event/new">+ New event</Link>
+        <div className="row" style={{ gap: 8 }}><Link className="btn" to="/admin/meeting/new">+ New meeting</Link><Link className="btn primary" to="/admin/event/new">+ New event</Link></div>
       </div>
 
       <div className="kpis">
@@ -42,20 +45,22 @@ export function Week() {
       {!events && <div className="muted">Loading…</div>}
       {events && days.map((d) => {
         const evs = all.filter((e) => e.event_date === d);
-        if (!evs.length) return null;
+        const mts = meetings.filter((m) => dayOfMtl(m.starts_at) === d);
+        if (!evs.length && !mts.length) return null;
         return (
           <section key={d} className="stack">
             <div className="row">
               <h2 className="h2">{label(d, { weekday: 'long', month: 'short', day: 'numeric' })}</h2>
-              <span className="muted sm">{evs.length} event{evs.length > 1 ? 's' : ''}</span>
+              <span className="muted sm">{evs.length} event{evs.length === 1 ? '' : 's'}{mts.length ? ` · ${mts.length} meeting${mts.length > 1 ? 's' : ''}` : ''}</span>
               <div className="grow" />
               <Link className="btn sm" to={`/admin/day?d=${d}`}>Open day view</Link>
             </div>
+            {mts.length > 0 && <div className="adm-card" style={{ padding: '2px 14px' }}>{mts.map((m) => <MeetingLine key={m.id} m={m} showDay={false} />)}</div>}
             {evs.map((e) => <EventCard key={e.id} e={e} onDeleted={(ids) => setEvents((v) => (v ?? []).filter((x) => !ids.includes(x.id)))} />)}
           </section>
         );
       })}
-      {events && !all.length && <p className="muted">No events this week yet. Add one with “New event”.</p>}
+      {events && !all.length && !meetings.length && <p className="muted">No events this week yet. Add one with “New event”.</p>}
     </div>
   );
 }

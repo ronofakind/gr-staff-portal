@@ -11,6 +11,7 @@ import { PinnedAnnouncements } from '../components/Announce';
 import { MessageRonnieLink } from '../components/MessageCard';
 import { useMyCalendar, addCalendar, defaultCalOs } from '../lib/calendar';
 import { NeedChange, CancelSheet, ChangeSheet, ChangeCard, CancelledCard, useShiftChanges } from '../components/ShiftChange';
+import { FromTheMeeting } from '../components/Meeting';
 
 export function Shift({ backTo = '/' }: { backTo?: string }) {
   const { id } = useParams();
@@ -157,6 +158,7 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team }: { s:
       {sheet === 'cancel' && <CancelSheet s={s} preview={preview} onClose={() => setSheet(null)} onDone={(late) => { setGone({ late }); setSheet(null); }} />}
       {sheet === 'change' && <ChangeSheet s={s} preview={preview} onClose={() => setSheet(null)} onSent={() => { setSheet(null); chg.reload(); }} />}
 
+      {!gone && <FromTheMeeting eventId={ev.id} meetingBase={preview ? '/admin' : ''} />}{/* push 38 · pinned meeting notes */}
       {ev.transport && ev.rides && <GettingThere eventId={ev.id} eventDate={ev.event_date} firstStart={s.planned_start} travelMin={ev.travel_min ?? 60} paidMin={ev.paid_travel_min ?? 0} preview={preview} />}
       <SecTitle icon="pin">Where</SecTitle>
       <section className="d3-card d3-where d37-wcard">
@@ -244,7 +246,7 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team }: { s:
 }
 
 /** push 37 · section title: thin line icon + serif title + thin rule (no emojis). */
-function SecTitle({ icon, children }: { icon?: 'pin' | 'hanger' | 'people' | 'phone'; children: string }) {
+export function SecTitle({ icon, children }: { icon?: 'pin' | 'hanger' | 'people' | 'phone'; children: string }) {
   const p = { width: 17, height: 17, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, 'aria-hidden': true };
   return (
     <div className="d37-sec">

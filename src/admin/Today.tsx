@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { LastMinute, ChangeAnswer, CHANGE_COLS, replaceUrl, isSelfCancel, isEventDayCancel, replacementOf, hoursBefore, type ChangeRow } from './Changes';
 import { summaryOf } from './Extras';
 import { lateConfirmations, NicknameCards } from './Confirmations';
+import { MeetingsStrip } from './Meetings';
 import { DeleteEvent } from './DeleteEvent';
 import { DeptTag } from './DeptTag';
 import { hoursBetween } from './api';
@@ -221,6 +222,7 @@ export function Today() {
                 </div>);
             });
           })()}
+          <MeetingsStrip from={today} to={addDays(today, 7)} title="Meetings · next 7 days" />
         </section>
         <section className="stack">
           <NicknameCards />

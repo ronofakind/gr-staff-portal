@@ -17,6 +17,8 @@ import { MessageCard, MessageRonnieLink, MgrRepliesLine } from '../components/Me
 import { useCheckup } from '../lib/checkup';
 import { EmergencyForm, UsualWeekScreen } from './Checkup';
 import { SwipeSheet } from '../components/SwipeSheet';
+import { useMyMeetings, dayOfMtl, todayMtl } from '../lib/meetings';
+import { MeetingCard } from '../components/Meeting';
 import { NeedChange, CancelSheet, ChangeSheet, LateSheet, LateBlock, ChangeCard, CancelledCard, useShiftChanges, t12 as t12c, type LateNotice } from '../components/ShiftChange';
 
 type MgrLate = { id: string; shift_id: string; event_id: string; name: string; eta: string; reason: string | null; note?: string | null };
@@ -95,6 +97,8 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
     supabase.from('staff_alerts').select('id,kind,title,body,event_id').eq('staff_id', me.id).is('seen_at', null).order('created_at')
       .then(({ data }) => setAlerts((data ?? []) as typeof alerts));
   }, [me.id]);
+  // push 38 · meetings: today's at the top, then unanswered ones + the next 14 days above the next shift
+  const { meetings, setMeetings } = useMyMeetings(me.id, preview);
   const gotIt = async (id: string) => { setAlerts(alerts.filter((a) => a.id !== id)); if (!preview) await supabase.rpc('alert_seen', { p_id: id }); };
   const { dates: myDates, reload: reloadDates } = useMyDates(me.id, preview); // push 35 · My dates (count, reminder, said yes)
   const [notSure, setNotSure] = useState(false);
@@ -138,6 +142,12 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
   const myDatesTo = (q: string) => `${preview ? base : ''}/my-dates?tab=${q}`;
   const first = callName(me);
   const today = todayIso();
+  const mtgTo = (id: string) => (preview ? `/admin/meeting/${id}` : `/meeting/${id}`);
+  const mtgAnswered = (id: string, a: 'coming' | 'cant') => setMeetings((l) => (l ?? []).map((x) => (x.id === id ? { ...x, answer: a } : x)));
+  const mtgToday = (meetings ?? []).filter((m) => dayOfMtl(m.starts_at) === todayMtl());
+  const soonDay = addDay(today, 14);
+  const mtgLater = (meetings ?? []).filter((m) => dayOfMtl(m.starts_at) > todayMtl() && m.answer !== 'cant' && (m.answer === null || dayOfMtl(m.starts_at) <= soonDay));
+  const MEETING_ON_CARD = ['meeting_invite', 'meeting_today']; // the meeting card itself shows these
 
   const whenLabel = (s: ShiftRow) => {
     const d = s.events.event_date;
@@ -156,9 +166,11 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
         <ProfileButton me={me} preview={preview} />
       </header>
 
-      {alerts.map((a) => (
-        <div key={a.id} className="alert-card">
-          <div className="grow"><small>{a.kind === 'removed' ? 'SCHEDULE CHANGE' : a.kind === 'booked' ? 'NEW SHIFT' : 'SHIFT CHANGED'}</small><b>{a.title}</b>{a.body && <span>{a.body}</span>}</div>
+      {mtgToday.map((m) => <MeetingCard key={m.id} m={m} to={mtgTo(m.id)} preview={preview} onAnswered={(a) => mtgAnswered(m.id, a)} />)}
+
+      {alerts.filter((a) => !MEETING_ON_CARD.includes(a.kind)).map((a) => (
+        <div key={a.id} className={'alert-card' + (a.kind.startsWith('meeting') ? ' mtg-alert' : '')}>
+          <div className="grow"><small>{a.kind === 'meeting_cancelled' ? 'MEETING' : a.kind === 'meeting_changed' ? 'MEETING CHANGED' : a.kind === 'removed' ? 'SCHEDULE CHANGE' : a.kind === 'booked' ? 'NEW SHIFT' : 'SHIFT CHANGED'}</small><b>{a.title}</b>{a.body && <span>{a.body}</span>}</div>
           <button className="pill-red" onClick={() => gotIt(a.id)}>Got it</button>
         </div>
       ))}
@@ -242,7 +254,9 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
         );
       })}
 
-      {!next && !doneToday.length && <div className="card"><p className="muted" style={{ margin: 0 }}>No shifts booked yet.</p></div>}
+      {mtgLater.map((m) => <MeetingCard key={m.id} m={m} to={mtgTo(m.id)} preview={preview} onAnswered={(a) => mtgAnswered(m.id, a)} />)}
+
+      {!next && !doneToday.length && !mtgToday.length && !mtgLater.length && <div className="card"><p className="muted" style={{ margin: 0 }}>No shifts booked yet.</p></div>}
 
       {next && (() => {
         const addr = next.events.address || next.events.venues?.address || '';

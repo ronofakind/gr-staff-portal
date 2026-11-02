@@ -40,6 +40,8 @@ import { Settings } from './admin/Settings';
 import { Go } from './pages/Go';
 import { Messages as StaffMessages } from './pages/Messages';
 import { MgrMessages } from './pages/MgrMessages';
+import { Meeting } from './pages/Meeting';
+import { Meetings, MeetingForm, MeetingAdmin } from './admin/Meetings';
 
 export function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
@@ -127,6 +129,10 @@ export function App() {
             <Route path="extras/:id" element={<Extras />} />
             <Route path="venues" element={<Venues />} />
             <Route path="settings" element={<Settings />} />
+            <Route path="meetings" element={<Meetings />} />
+            <Route path="meeting/new" element={<MeetingForm />} />
+            <Route path="meeting/:id" element={<MeetingAdmin />} />
+            <Route path="meeting/:id/edit" element={<MeetingForm />} />
           </Route>
         )}
         {me.role === 'admin' && <Route path="/admin/view/:staffId/*" element={<ViewAs />} />}
@@ -134,6 +140,7 @@ export function App() {
         <Route path="/schedule" element={<Navigate to="/my-dates" replace />} />{/* push 35a · old Schedule tab */}
         <Route path="/shift/:id" element={<Shift />} />
         <Route path="/shift/:id/plan" element={<EventPlan />} />
+        <Route path="/meeting/:id" element={<Meeting />} />
         <Route path="/hours" element={<HoursPage me={me} />} />
         <Route path="/availability" element={<StaffAvail me={me} />} />
         <Route path="/manage/:eventId" element={<Manage me={me} />} />

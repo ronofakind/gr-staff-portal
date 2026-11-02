@@ -12,6 +12,7 @@ import {
   useMyDates, toAnswer, isOpen, urgent, latestKnows, answerByText, whereText, dayLabel, monDay, mtlToday, addDays, D,
   type MyDate,
 } from '../lib/myDates';
+import { useMyMeetings, dayOfMtl, t12 as mt12, type MyMeeting } from '../lib/meetings';
 
 /** Booked tab rows (shifts from today on). confirm_by is push 33 (039). */
 type Shift = { id: string; status: 'booked' | 'confirmed' | 'declined'; attendance: string | null; planned_start: string; time_tbc: boolean;
@@ -39,6 +40,7 @@ export function MyDates({ me, base = '', preview = false }: { me: Staff; base?: 
   const [dkyOpen, setDkyOpen] = useState(false);
   const [thanks, setThanks] = useState<Shift | null>(null);
   const { cal, setCal } = useMyCalendar(preview);
+  const { meetings } = useMyMeetings(me.id, preview); // push 38 · meetings in Booked (MEETING tag)
 
   const loadShifts = () => supabase.from('shifts')
     .select('id,status,attendance,planned_start,time_tbc,confirm_by,events!inner(id,event_date,title,details_pending,venues(name))')
@@ -60,6 +62,10 @@ export function MyDates({ me, base = '', preview = false }: { me: Staff; base?: 
   const waiting = all.filter((d) => toAnswer(d, today));
   const answered = all.filter((d) => !d.booked && d.status !== 'asked' && !toAnswer(d, today));
   const booked = shifts ?? [];
+  const mtgs = (meetings ?? []).filter((m) => dayOfMtl(m.starts_at) >= today);
+  const bookedRows: ({ k: 's'; at: string; s: Shift } | { k: 'm'; at: string; m: MyMeeting })[] = [
+    ...booked.map((s) => ({ k: 's' as const, at: s.planned_start, s })), ...mtgs.map((m) => ({ k: 'm' as const, at: m.starts_at, m })),
+  ].sort((a, b) => a.at.localeCompare(b.at));
 
   const tabParam = params.get('tab') as Tab | null;
   const view = params.get('view') === 'cal' ? 'cal' : 'list';
@@ -115,7 +121,7 @@ export function MyDates({ me, base = '', preview = false }: { me: Staff; base?: 
       {view === 'list' ? <>
         <div className="md-tabs" role="tablist">
           <button className={curTab === 'answer' ? 'on' : ''} onClick={() => setTab('answer')}>Answer <i className={'n' + (waiting.length ? ' red' : '')}>{waiting.length}</i></button>
-          <button className={curTab === 'booked' ? 'on' : ''} onClick={() => setTab('booked')}>Booked <i className={'n' + (curTab === 'booked' && booked.length ? ' green' : '')}>{booked.length}</i></button>
+          <button className={curTab === 'booked' ? 'on' : ''} onClick={() => setTab('booked')}>Booked <i className={'n' + (curTab === 'booked' && bookedRows.length ? ' green' : '')}>{bookedRows.length}</i></button>
           <button className={curTab === 'answered' ? 'on' : ''} onClick={() => setTab('answered')}>Answered <i className={'n' + (curTab === 'answered' && answered.length ? ' dark' : '')}>{answered.length}</i></button>
         </div>
 
@@ -143,8 +149,9 @@ export function MyDates({ me, base = '', preview = false }: { me: Staff; base?: 
           </section>
         ) : curTab === 'booked' ? (
           <section className="md-list">
-            {booked.map((s) => <BookedRow key={s.id} s={s} base={base} onConfirm={() => confirm(s)} />)}
-            {!booked.length && <div className="md-empty"><b className="serif">No shifts booked yet</b><span>Shifts G&amp;R books you on show up here.</span></div>}
+            {bookedRows.map((r) => r.k === 's' ? <BookedRow key={r.s.id} s={r.s} base={base} onConfirm={() => confirm(r.s)} />
+              : <MeetingRow key={r.m.id} m={r.m} to={preview ? `/admin/meeting/${r.m.id}` : `/meeting/${r.m.id}`} />)}
+            {!bookedRows.length && <div className="md-empty"><b className="serif">No shifts booked yet</b><span>Shifts G&amp;R books you on show up here.</span></div>}
           </section>
         ) : (
           <section className="md-list">
@@ -175,7 +182,7 @@ export function MyDates({ me, base = '', preview = false }: { me: Staff; base?: 
 
 const monthsOf = (list: MyDate[]) => { const m = [...new Set(list.map((d) => monthName(d.for_date)))]; return m.length === 1 ? m[0] : ''; };
 
-function DateSq({ iso, kind }: { iso: string; kind: 'neutral' | 'booked' | 'yes' | 'maybe' | 'no' | 'answer' }) {
+function DateSq({ iso, kind }: { iso: string; kind: 'neutral' | 'booked' | 'yes' | 'maybe' | 'no' | 'answer' | 'meeting' }) {
   return <div className={'md-sq ' + kind}><small>{dow3(iso)}</small><b>{D(iso).getDate()}</b></div>;
 }
 
@@ -239,6 +246,20 @@ function BookedRow({ s, base, onConfirm }: { s: Shift; base: string; onConfirm: 
       </div>
       {toConfirm ? <button className="md-confirm" onClick={onConfirm}>Confirm</button> : <Link className="md-chg" to={`${base}/shift/${s.id}`}>Details</Link>}
     </div>
+  );
+}
+
+/** push 38 · a meeting in Booked: Teams-purple date square + MEETING tag. */
+function MeetingRow({ m, to }: { m: MyMeeting; to: string }) {
+  return (
+    <Link to={to} className="md-card row mtg-mdrow">
+      <DateSq iso={dayOfMtl(m.starts_at)} kind="meeting" />
+      <div className="grow" style={{ minWidth: 0 }}>
+        <b>{m.title} · {mt12(m.starts_at)}</b>
+        <span className="md-tag mtg">MEETING</span>{m.answer === 'coming' ? <span className="md-tag ok" style={{ marginLeft: 6 }}>✓ COMING</span> : m.answer === 'cant' ? <span className="md-tag soon" style={{ marginLeft: 6 }}>CAN’T MAKE IT</span> : <span className="md-tag red" style={{ marginLeft: 6 }}>ANSWER</span>}
+      </div>
+      <span className="md-chg">Details</span>
+    </Link>
   );
 }
 

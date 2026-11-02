@@ -4,6 +4,7 @@ import { supabase, type Staff } from '../lib/supabase';
 import { TabBar } from '../components/TabBar';
 import { PageHead } from '../components/ProfileMenu';
 import { AskHours, todayIso } from './Home';
+import type { MeetingHours } from '../lib/meetings';
 import { payPeriod, shiftPeriod, payDay, payDayLabel, periodLabel, paidHours, workedHours } from '../lib/hours';
 
 type P = { punch_in: string | null; punch_out: string | null } | null;
@@ -26,6 +27,7 @@ export function Hours({ me }: { me: Staff }) {
   const [view, setView] = useState<'mine' | 'past' | 'teams'>('mine');
   const [open, setOpen] = useState<Row | null>(null); const [ask, setAsk] = useState<Row | null>(null);
   const [teams, setTeams] = useState<Team[] | null>(null); const [team, setTeam] = useState<Team | null>(null);
+  const [mh, setMh] = useState<MeetingHours[]>([]); // push 38 · paid meetings (ended)
   const yearStart = `${today.slice(0, 4)}-01-01`;
   const isMgr = me.role === 'manager' || me.role === 'admin';
   const nav = useNavigate();
@@ -35,6 +37,7 @@ export function Hours({ me }: { me: Staff }) {
     const { data } = await supabase.from('shifts').select('id,planned_start,attendance,left_early,punches(punch_in,punch_out),events!inner(id,title,event_date,hours_submitted_at,manager_id,transport,paid_travel_min)')
       .eq('staff_id', me.id).neq('status', 'declined').gte('events.event_date', from).lte('events.event_date', today);
     const list = ((data ?? []) as unknown as Row[]).map((r) => ({ ...r, punches: one(r.punches as P | P[]) }));
+    supabase.rpc('meeting_hours', { p_from: from, p_to: today }).then(({ data: m, error }) => setMh(error ? [] : ((m ?? []) as MeetingHours[]).filter((x) => x.paid && x.ended)));
     setRows(list);
     const ids = list.map((r) => r.id);
     if (ids.length) {
@@ -56,13 +59,15 @@ export function Hours({ me }: { me: Staff }) {
   const hoursOf = (r: Row) => paidHours(r.punches!.punch_in!, r.punches!.punch_out!, !!r.left_early) + travelOf(r);
   const inPer = (p: { start: string; end: string }) => (rows ?? []).filter((r) => r.events.event_date >= p.start && r.events.event_date <= p.end && done(r)).sort((a, b) => b.planned_start.localeCompare(a.planned_start));
   const shifts = inPer(per);
-  const total = shifts.reduce((n, r) => n + hoursOf(r), 0);
+  const mIn = (p: { start: string; end: string }) => mh.filter((x) => x.meeting_date >= p.start && x.meeting_date <= p.end).sort((a, b) => b.starts_at.localeCompare(a.starts_at));
+  const mtgs = mIn(per); const mtgH = mtgs.reduce((n, x) => n + Number(x.hours), 0);
+  const total = shifts.reduce((n, r) => n + hoursOf(r), 0) + mtgH;
   const approved = shifts.filter((r) => r.events.hours_submitted_at).length;
   const questions = shifts.filter((r) => qs[r.id]?.status === 'open').length;
   const isCurrent = per.start === payPeriod(today).start;
   const past = useMemo(() => { const out: { p: { start: string; end: string }; h: number; n: number }[] = []; let p = payPeriod(today);
-    for (let i = 0; i < 24 && p.end >= yearStart; i++) { const l = inPer(p); out.push({ p, h: l.reduce((n, r) => n + hoursOf(r), 0), n: l.length }); p = shiftPeriod(p, -1); }
-    return out; }, [rows]); // eslint-disable-line react-hooks/exhaustive-deps
+    for (let i = 0; i < 24 && p.end >= yearStart; i++) { const l = inPer(p); const ml = mIn(p); out.push({ p, h: l.reduce((n, r) => n + hoursOf(r), 0) + ml.reduce((n, x) => n + Number(x.hours), 0), n: l.length + ml.length }); p = shiftPeriod(p, -1); }
+    return out; }, [rows, mh]); // eslint-disable-line react-hooks/exhaustive-deps
   const year = past.reduce((n, x) => n + x.h, 0); const yearN = past.reduce((n, x) => n + x.n, 0);
   const maxH = Math.max(1, ...past.slice(0, 8).map((x) => x.h));
 
@@ -101,7 +106,7 @@ export function Hours({ me }: { me: Staff }) {
         <section className="hz-big">
           <div className="row" style={{ alignItems: 'flex-end', justifyContent: 'space-between' }}>
             <div><small>HOURS THIS PAY PERIOD</small><div className="serif hz-num">{fmtH(total)}<span> h</span></div></div>
-            <div style={{ textAlign: 'right' }}><div><b>{shifts.length}</b> shift{shifts.length === 1 ? '' : 's'}</div><div className="hz-paid">{payDay(per) <= today ? '✓ Paid' : 'Paid'} {payDayLabel(per)}</div></div>
+            <div style={{ textAlign: 'right' }}><div><b>{shifts.length}</b> shift{shifts.length === 1 ? '' : 's'}{mtgs.length ? <> · <b>{mtgs.length}</b> meeting{mtgs.length === 1 ? '' : 's'}</> : null}</div><div className="hz-paid">{payDay(per) <= today ? '✓ Paid' : 'Paid'} {payDayLabel(per)}</div></div>
           </div>
           {shifts.length > 0 && <div className="row wrap" style={{ gap: 6 }}>
             {approved > 0 && <span className="hz-chip ok">✓ {approved} approved</span>}
@@ -111,7 +116,14 @@ export function Hours({ me }: { me: Staff }) {
         </section>
         <div className="sec-head"><span className="serif">Shifts</span><span className="muted sm">{shifts.length}</span></div>
         <section className="stack" style={{ gap: 8 }}>
-          {!shifts.length && <div className="card muted sm">No hours in this pay period yet.</div>}
+          {!shifts.length && !mtgs.length && <div className="card muted sm">No hours in this pay period yet.</div>}
+          {mtgs.map((x) => (
+            <button key={x.meeting_id} className="hz-row" onClick={() => nav(`/meeting/${x.meeting_id}`)}>
+              <div className="hz-d"><small>{dow(x.meeting_date)}</small><b className="serif">{D(x.meeting_date).getDate()}</b></div>
+              <div className="grow" style={{ minWidth: 0, textAlign: 'left' }}><b>{x.title}</b><span>{t12(x.paid_in)} – {t12(x.paid_out)}</span><em>Meeting · paid, no 4-hour minimum</em></div>
+              <div style={{ textAlign: 'right' }}><div className="serif hz-h">{fmtH(Number(x.hours))}<span> h</span></div><span className="hz-tag mtg">MEETING</span></div>
+            </button>
+          ))}
           {shifts.map((r) => (
             <button key={r.id} className={'hz-row' + (qs[r.id]?.status === 'open' ? ' asked' : '')} onClick={() => setOpen(r)}>
               <div className="hz-d"><small>{dow(r.events.event_date)}</small><b className="serif">{D(r.events.event_date).getDate()}</b></div>

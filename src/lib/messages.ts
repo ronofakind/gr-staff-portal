@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { supabase } from './supabase';
+import { meetingMorningCheck } from './meetings';
 
 /* Push 36 · Messages: shared types + helpers (staff tab, Ronnie's inbox, manager replies). Migration 042. */
 
@@ -108,7 +109,7 @@ export function useMessagesBadge(off = false) {
   useEffect(() => {
     if (off) return;
     let live = true;
-    supabase.rpc('messages_badge').then(({ data, error }) => { if (live && !error && typeof data === 'number') setN(data); });
+    meetingMorningCheck().then(() => supabase.rpc('messages_badge').then(({ data, error }) => { if (live && !error && typeof data === 'number') setN(data); }));
     return () => { live = false; };
   }, [off, pathname, search]);
   return n;
