@@ -331,11 +331,6 @@ function AboutCard({ s, people }: { s: AStaff; people: AStaff[] }) {
       <div className="row" style={{ justifyContent: 'space-between' }}><span className="kick">ABOUT · MANAGERS SEE THIS</span>{ok && <span className="ab-saved">{ok}</span>}</div>
       {!a ? <div className="muted sm">{err || 'Loading…'}</div> : <>
         <div className="ab-sec">
-          <div className="ab-h"><span>WITH G&amp;R</span><i className="ab-badge you">YOU · 1 TAP</i></div>
-          <div className="seg"><button className={a.veteran ? 'on' : ''} onClick={() => save({ veteran: true })}>Regular</button><button className={a.veteran === false || a.veteran === null ? 'on' : ''} onClick={() => save({ veteran: false })}>New</button></div>
-          <div className="muted sm">New = managers see a NEW tag and the “new staff” check for their first 3 app shifts. Regular turns that off.</div>
-        </div>
-        <div className="ab-sec">
           <div className="ab-h"><span>EXPERIENCE</span><i className="ab-badge you">YOU · 1 TAP</i></div>
           <div className="seg">{EXP.map(([k, l]) => <button key={k} className={a.experience === k ? 'on' : ''} onClick={() => save({ experience: a.experience === k ? null : k })}>{l}</button>)}</div>
           <input placeholder="Short note (optional · e.g. 2 yrs restaurant)" maxLength={60} value={expNote} onChange={(e) => setExpNote(e.target.value)} onBlur={() => blurSave('experience_note', expNote)} />
