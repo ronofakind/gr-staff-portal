@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">G&amp;R</string>
+    <string name="title_activity_main">G&amp;R</string>
+    <string name="package_name">ca.gravotreservice.staff</string>
+    <string name="custom_url_scheme">ca.gravotreservice.staff</string>
+</resources>
