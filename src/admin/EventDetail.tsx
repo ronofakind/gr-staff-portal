@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { supabase, type ShiftRow } from '../lib/supabase';
 import { DriveFiles } from '../components/DriveFiles';
 import { DeleteEvent } from './DeleteEvent';
+import { AlsoManaging } from './AlsoManaging';
 import { ConfirmTracker } from './Confirmations';
 import { RidesAdmin } from './Rides';
 import { ShiftView } from '../pages/Shift';
@@ -58,7 +59,7 @@ export function EventDetail() {
   const uniRows = uniformRows(evs, x?.uniform_items ?? null);
   const fee = /brera/i.test(x?.client?.name ?? p?.client ?? '') ? 8 : 10;
   const rateLabel = x?.client && x.client.rate_sets.length >= 2 ? x.client.rate_sets.find((r) => r.key === (x.rate_set ?? x.client!.rate_sets[0].key))?.label : null;
-  const keys = ['event', 'confirm', 'staffing', 'uniforms', 'folder', 'billing', 'rides', 'lands'];
+  const keys = ['event', 'confirm', 'staffing', 'managers', 'uniforms', 'folder', 'billing', 'rides', 'lands'];
 
   return (
     <div className="stack-lg ed2">
@@ -121,6 +122,10 @@ export function EventDetail() {
           </div>
           <div className="ed2-tot"><span>{floor ? `${nFloor} floor` : ''}{floor && bar ? ' · ' : ''}{bar ? `${nBar} bar` : ''}</span><b>{nFloor + nBar} total</b></div>
           <Link className="sm strong no-print" to={`/admin/bookings?date=${e.event_date}`}>Who's booked →</Link>
+        </Sec>
+
+        <Sec k="managers" title="Check-in managers" open={isOpen('managers')} setOpen={setFold} summary={[floor && bar ? (e.department === 'bar' ? 'Bar' : 'Floor') : null, 'lead + also managing'].filter(Boolean).join(' · ')}>
+          <AlsoManaging ev={e} />
         </Sec>
 
         <Sec k="uniforms" title="Uniforms" open={isOpen('uniforms')} setOpen={setFold} summary={[floor ? 'Floor' : null, bar ? 'Bar' : null].filter(Boolean).join(' + ') + ' · men / women'}>

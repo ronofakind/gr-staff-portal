@@ -79,7 +79,9 @@ const fullT = (iso: string) => new Date(iso).toLocaleTimeString('en-US', { hour:
 const shortT = (iso: string) => fullT(iso).replace(/\s?[AP]M$/, '');
 type Ev = { id: string; title: string; event_date: string };
 type EvFull = Ev & { staffing?: { start: string; end?: string | null }[] | null; drive_folder_url?: string | null; address: string | null; start_time: string | null; end_time: string | null; description: string | null;
-  dress_code: string | null; hours_submitted_at: string | null; venues: { address: string | null; staff_notes: string | null } | null };
+  dress_code: string | null; hours_submitted_at: string | null; venues: { address: string | null; staff_notes: string | null } | null;
+  /** push 39 · lead + co-managers (migration 037) for the "Benjamin · Isaac" line */
+  manager_id?: string | null; co_manager_ids?: string[] | null; manager?: { full_name: string; nickname?: string | null } | null };
 
 const L = {
   fr: { team: 'Équipe', notIn: 'Pas commencé', start: 'Commencer', end: 'Terminer', startAll: 'Commencer tous', endAll: 'Terminer tous',
@@ -235,7 +237,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
 
   const load = async () => {
     const [e, s] = await Promise.all([
-      supabase.from('events').select('id,title,event_date,address,start_time,end_time,description,dress_code,hours_submitted_at,drive_folder_url,staffing,venues(address,staff_notes)').eq('id', eventId!).single(),
+      supabase.from('events').select('id,title,event_date,address,start_time,end_time,description,dress_code,hours_submitted_at,drive_folder_url,staffing,venues(address,staff_notes),manager_id,co_manager_ids,manager:staff!events_manager_id_fkey(full_name,nickname)').eq('id', eventId!).single(),
       (async () => {
         const q = (cols: string) => supabase.from('shifts').select(cols).eq('event_id', eventId!).neq('status', 'declined').order('planned_start');
         const r = await q(ROW_COLS + ',cancel_self,cancel_sent_to_manager,replacement_for');
@@ -367,6 +369,9 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
   const pct = (n: number) => `${rows.length ? (n / rows.length) * 100 : 0}%`;
   const lateMin = late.length ? Math.round((Date.now() - Math.min(...late.map((r) => new Date(r.planned_start).getTime()))) / 60000) : 0;
   const first = (n?: string) => (n ?? '').split(' ')[0];
+  // push 39 · both managers at the top when there is a co-manager ("Benjamin · Isaac")
+  const callOf = (id: string) => { const r = rows.find((x) => x.staff_id === id); return r?.staff ? (r.staff.nickname || first(r.staff.full_name)) : ''; };
+  const mgrNames = (ev.co_manager_ids ?? []).length ? [...new Set([ev.manager_id ? (callOf(ev.manager_id) || ev.manager?.nickname || first(ev.manager?.full_name)) : '', ...(ev.co_manager_ids ?? []).map(callOf)].filter(Boolean))] : [];
   const newWorked = active.filter((r) => r.punches?.punch_in && infoOf(r)?.is_new);
   const lateOf = (r: Row) => (!r.attendance ? lateN[r.id] : undefined);
   const runningLate = active.filter((r) => lateOf(r) && !r.punches?.punch_in);
@@ -382,6 +387,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
       <div style={{ padding: '0 6px' }}>
         <div className="serif" style={{ fontSize: 34, lineHeight: 1 }}>{ev.title}</div>
         <div className="muted sm" style={{ marginTop: 4 }}>{new Date(ev.event_date + 'T12:00:00').toLocaleDateString('en-CA', { weekday: 'long', month: 'long', day: 'numeric' })}{ev.start_time ? ` · ${fmt12(ev.start_time)}${ev.end_time ? ` – ${fmt12(ev.end_time)}` : ''}` : ''}</div>
+        {mgrNames.length > 1 && <div className="mgrs-line">Managers · <b>{mgrNames.join(' · ')}</b></div>}
         {notices.filter((n) => !seen.includes(n.id)).map((n) => (
           <div key={n.id} className="notice"><span className="notice-ic">⇄</span><div className="grow"><b>{n.body}</b><small>{time(n.created_at, lang)}</small></div>
             <button onClick={() => { const v = [...seen, n.id]; setSeen(v); try { localStorage.setItem('gr-notice-seen', JSON.stringify(v)); } catch { /* private mode */ } }}>OK</button></div>

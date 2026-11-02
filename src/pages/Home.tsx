@@ -25,6 +25,8 @@ type MgrLate = { id: string; shift_id: string; event_id: string; name: string; e
 type Gone = { id: string; title: string; date: string; late: boolean };
 const OK_KEY = 'gr-cancel-ok';
 const readOk = (): string[] => { try { return JSON.parse(localStorage.getItem(OK_KEY) || '[]'); } catch { return []; } };
+const COMGR_KEY = 'gr-comgr-seen'; // push 39 · "Ronnie made you a manager" notes dismissed (event ids)
+const readComgr = (): string[] => { try { const v = JSON.parse(localStorage.getItem(COMGR_KEY) || '[]'); return Array.isArray(v) ? v : []; } catch { return []; } };
 
 /** push 33 shift columns (migration 039), read on their own so Home still loads before it is applied. */
 type Prev = { start?: string | null; position?: string | null; place?: string | null; address?: string | null };
@@ -105,6 +107,8 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
   const upcomingIds = (shifts ?? []).filter((s) => !(s.punches?.punch_out && new Date(s.punches.punch_out).getTime() <= Date.now())).map((s) => s.id);
   const chg = useShiftChanges(preview ? [] : upcomingIds);
   const mgrGotIt = async (id: string) => { setMgrLate((v) => v.filter((x) => x.id !== id)); if (!preview) await supabase.rpc('late_notice_seen', { p_id: id }); };
+  const [comgrSeen, setComgrSeen] = useState<string[]>(readComgr);
+  const comgrOk = (eventId: string) => { const v = [...comgrSeen, eventId]; setComgrSeen(v); try { localStorage.setItem(COMGR_KEY, JSON.stringify(v.slice(-50))); } catch { /* private mode */ } };
   const okGone = (id: string) => { const v = [...okd, id]; setOkd(v); try { localStorage.setItem(OK_KEY, JSON.stringify(v.slice(-50))); } catch { /* private mode */ } };
 
   const respond = async (id: string, r: 'confirmed' | 'declined') => {
@@ -157,6 +161,10 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
   };
   const isLead = (s: ShiftRow) => s.position_code === 'MD' || s.position_code === 'BM';
   const role = (s: ShiftRow) => s.position_code === 'MD' ? 'MD' : s.position_detail ? s.position_detail.replace(/^bar\s*-\s*/i, '') : isBar(s.position_code, null) ? 'Bar' : 'Waiter';
+  // push 39 · co-manager (events.co_manager_ids, not the lead): keeps his own position, reads "Waiter · manager"
+  const coMgr = (s: ShiftRow) => !isLead(s) && s.events.manager_id !== me.id && (s.events.co_manager_ids ?? []).includes(me.id);
+  const pos = (s: ShiftRow) => role(s) + (coMgr(s) ? ' · manager' : '');
+  const comgrNotes = [...new Map(shifts.filter((s) => !isDone(s) && s.events.event_date >= today && coMgr(s) && !comgrSeen.includes(s.events.id)).map((s) => [s.events.id, s])).values()];
 
   return (
     <main className="page v2">
@@ -165,6 +173,13 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
         <div className="hello"><b>Hi {first}</b><span>{longDate(today, lang)}</span></div>
         <ProfileButton me={me} preview={preview} />
       </header>
+
+      {comgrNotes.map((s) => (
+        <div key={'cm' + s.events.id} className="comgr-note" role="status">
+          <span className="grow">✓ Ronnie made you a manager for {new Date(s.events.event_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).replace(',', '')} · {s.events.venues?.name ?? s.events.title}. You can start, end and submit the team.</span>
+          <button aria-label="Dismiss" onClick={() => comgrOk(s.events.id)}>✕</button>
+        </div>
+      ))}
 
       {mtgToday.map((m) => <MeetingCard key={m.id} m={m} to={mtgTo(m.id)} preview={preview} onAnswered={(a) => mtgAnswered(m.id, a)} />)}
 
@@ -279,7 +294,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
             <section className="next details-coming" style={{ gap: 14, padding: 18 }}>
               <div className="top-line"><span className="day-word">{d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase()}</span><span className="soon-pill">Details coming</span></div>
               <div className="venue serif">You’re booked</div>
-              <StartPos start={null} role={role(next)} />
+              <StartPos start={null} role={pos(next)} mgr={coMgr(next)} />
               <div className="sub dc-text">The time and place are coming. You’ll be asked to confirm once they’re set, and you’ll have 24 hours from then.</div>
               {needChange}
             </section>
@@ -306,12 +321,12 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
               {!isSetup(next.events) && <span className="wear-tile" style={{ width: 52, height: 52, borderRadius: 14 }} title={uniformLabel(uniformFor(next))}><UniformIcon kind={uniformFor(next)} size={38} /></span>}
             </div>
             {working ? <>
-              <div className="pos-line"><small>Your position</small><span className="pos-pill-lg">{role(next)}</span></div>
+              <div className="pos-line"><small>Your position</small><span className="pos-pill-lg">{pos(next)}</span></div>
               <div className="row2">
                 <div className="tbox"><small>Started</small><BigTime iso={next.punches!.punch_in!} small /></div>
                 <div className="tbox"><small>On the clock</small><span className="big serif sm-big mint"><Elapsed iso={next.punches!.punch_in!} /></span></div>
               </div>
-            </> : <StartPos start={next.time_tbc ? null : next.planned_start} role={role(next)} />}
+            </> : <StartPos start={next.time_tbc ? null : next.planned_start} role={pos(next)} mgr={coMgr(next)} />}
             {prev && <ChangedBox prev={prev} s={next} role={role(next)} calOn={!!cal?.added_at} onSeen={() => changeSeen(next)} />}
             {myAlerts.map((a) => (
               <div key={a.id} className="mgr-late"><span className="grow">⏱ <b>{a.name.split(' ')[0]} running late</b> · ~{t12c(a.eta).replace(/\s?[AP]M$/, '')}{a.reason ? ` · ${a.reason.toLowerCase()}` : ''}{a.note ? ` · “${a.note}”` : ''}</span>
@@ -348,7 +363,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
             <Link to={`${base}/shift/${mini.id}`} className={'next-mini' + (ok ? ' ok' : '')}>
               <div className="d"><small>{b.dow}</small><b>{b.day}</b></div>
               <div className="grow"><small>NEXT · {soon(mini) ? 'DETAILS COMING' : ok ? '✓ CONFIRMED' : 'TO CONFIRM'}</small><b>{soon(mini) ? 'You’re booked' : mini.events.title}</b>
-                <span>{soon(mini) || mini.time_tbc ? 'Time TBC' : time(mini.planned_start, lang)} · {role(mini)} · {whenLabel(mini).split(' · ')[0].toLowerCase()}</span></div>
+                <span>{soon(mini) || mini.time_tbc ? 'Time TBC' : time(mini.planned_start, lang)} · {pos(mini)} · {whenLabel(mini).split(' · ')[0].toLowerCase()}</span></div>
               <span className="row-wear"><UniformIcon kind={uniformFor(mini)} size={30} /></span>
             </Link>
           ); })()}
@@ -383,7 +398,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
                     <Link key={s.id} to={teams[s.events.id] && !preview ? `/manage/${s.events.id}` : `${base}/shift/${s.id}`} className="agenda-row" style={{ minHeight: 64 }}>
                       <div className="d" style={{ width: 40, alignItems: 'center' }}><small>{b.dow}</small><b>{b.day}</b></div>
                       <div className="what" style={{ gap: 5 }}><b className={pend ? 'muted' : ''}>{pend ? 'Place to come' : s.events.title}</b>
-                        <span className="pos-row2"><span className={'pos-pill' + (isLead(s) ? ' lead' : '')}>{role(s)}</span>{teams[s.events.id] && !preview ? <span>team {teams[s.events.id].length}</span> : null}</span></div>
+                        <span className="pos-row2"><span className={'pos-pill' + (isLead(s) ? ' lead' : '')}>{pos(s)}</span>{teams[s.events.id] && !preview ? <span>team {teams[s.events.id].length}</span> : null}</span></div>
                       <span className="row-wear" title={uniformLabel(uniformFor(s))}><UniformIcon kind={uniformFor(s)} size={30} /></span>
                       <div className="row-time"><small>Starts</small>{pend ? <b className="tbc">To come</b> : s.time_tbc ? <b className="tbc">Time TBC</b> : <b><span className="serif">{time(s.planned_start, lang).replace(/\s?[ap]\.?\s?m\.?/i, '')}</span><i>{/p\.?\s?m/i.test(time(s.planned_start, lang)) ? ' PM' : ' AM'}</i></b>}</div>
                       {soon(s) ? <span className="tag-soon">Details coming</span> : s.status === 'confirmed' ? <span className="ok-dot" aria-label="Confirmed" /> : notFinal(s) ? <span className="tag-soon">Details coming</span> : <span className="tag-ask" style={{ height: 26, fontSize: 11 }}>Confirm</span>}
@@ -419,11 +434,11 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
 }
 
 /** push 33a · Shift starts + Your position in one light row (position centred under its label). */
-export function StartPos({ start, role }: { start: string | null; role: string }) {
+export function StartPos({ start, role, mgr = false }: { start: string | null; role: string; mgr?: boolean }) {
   return (
     <div className="start-pos">
       <div><small>Shift starts</small>{start ? <BigTime iso={start} small /> : <span className="big serif sm-big">TBC</span>}</div>
-      <div className="sp-pos"><small>Your position</small><span className="pos-pill-dark">{role}</span></div>
+      <div className="sp-pos"><small>Your position</small><span className={'pos-pill-dark' + (mgr ? ' mgr' : '')}>{role}</span></div>
     </div>
   );
 }
