@@ -2384,3 +2384,9 @@ a.d37-where, a.d37-addr { color: inherit; text-decoration: none; -webkit-tap-hig
 .wk-save-row { display: flex; gap: 10px; }
 .wk-save-row .big-btn { flex: 1 1 0; justify-content: center; }
 .big-btn.wk-any { background: var(--ok-bg); color: var(--ok); border: 2px solid var(--ok); }
+/* fixes: the where-row text rules were hitting the green arrow circle and the mini calendar date */
+.d37-where .d37-go { display: flex; width: 38px; height: 38px; margin: 0; overflow: visible; color: #fff; }
+.d37-where .d37-go svg { display: block; margin-left: -2px; margin-top: 1px; }
+.d3-where .mini-cal b, .d3-where .mini-cal i { display: flex; align-items: center; justify-content: center; }
+.d3-where .mini-cal b { flex: 1; font-size: 16px; line-height: 1; }
+.d3-where .mini-cal i { font-size: 7px; }
