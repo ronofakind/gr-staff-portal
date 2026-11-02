@@ -6,6 +6,9 @@ import { App } from './App';
 import './styles.css';
 import { registerSW } from 'virtual:pwa-register';
 import { Capacitor } from '@capacitor/core';
+import { setupNative } from './lib/native';
+
+setupNative();
 
 // New version deployed → swap it in and reload right away; check again whenever the app comes back to the front.
 // Not inside the native app (Capacitor): the store app ships its own copy, no service worker there.

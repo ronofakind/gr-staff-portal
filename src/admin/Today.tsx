@@ -1,3 +1,4 @@
+import { siteOrigin } from '../lib/native';
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { LastMinute, ChangeAnswer, CHANGE_COLS, replaceUrl, isSelfCancel, isEventDayCancel, replacementOf, hoursBefore, type ChangeRow } from './Changes';
@@ -151,7 +152,7 @@ export function Today() {
             if (!st.email) { alert(`${fn} has no email. Add it on their profile first.`); return; }
             if (!confirm(`Email a reset code + link to ${st.email}?`)) return;
             // Same email as "Forgot your code?" on the sign-in screen (6-digit code + link → choose a new code).
-            const { error } = await supabase.auth.signInWithOtp({ email: st.email, options: { shouldCreateUser: false, emailRedirectTo: window.location.origin } });
+            const { error } = await supabase.auth.signInWithOtp({ email: st.email, options: { shouldCreateUser: false, emailRedirectTo: siteOrigin() } });
             if (error) { alert(error.message); return; }
             await supabase.from('reset_requests').update({ handled_at: new Date().toISOString(), handled_by: (await supabase.rpc('me')).data ?? null }).eq('id', r.id);
             setTick((t) => t + 1);

@@ -1,3 +1,4 @@
+import { siteOrigin } from '../lib/native';
 import { useEffect, useState, type ReactNode } from 'react';
 import { supabase, type Staff } from '../lib/supabase';
 import { setting } from '../lib/settings';
@@ -145,7 +146,7 @@ function YouStep({ me, info, head, onNext }: { me: Staff; info: CheckupInfo; hea
       const newEmail = email.trim().toLowerCase();
       if (newEmail !== (me.email ?? '').toLowerCase()) {
         // Sign-in email changes only through Supabase Auth (confirm link). staff.email follows once confirmed (036 trigger).
-        const { error } = await supabase.auth.updateUser({ email: newEmail }, { emailRedirectTo: window.location.origin });
+        const { error } = await supabase.auth.updateUser({ email: newEmail }, { emailRedirectTo: siteOrigin() });
         if (error) throw new Error(/already|registered|exists/i.test(error.message) ? 'That email is already used by another account. Talk to Ronnie.' : error.message);
         setSentTo(newEmail); setPendingEmail(newEmail); return;
       }
@@ -285,7 +286,7 @@ function HomeScreenStep({ head, onDone }: { head: ReactNode; onDone: () => void 
   useEffect(() => onInstallChange(() => force((x) => x + 1)), []);
   const inApp = isInAppBrowser();
   const [copied, setCopied] = useState(false);
-  const copy = async () => { try { await navigator.clipboard.writeText(window.location.origin); setCopied(true); } catch { setCopied(false); } };
+  const copy = async () => { try { await navigator.clipboard.writeText(siteOrigin()); setCopied(true); } catch { setCopied(false); } };
   const install = async () => { if (await promptInstall()) { clearHomeSkip(); onDone(); } };
   return (
     <>

@@ -14,3 +14,14 @@ Private app: App Store **unlisted** + Google Play. Published under **Ronald Lado
 - Native notifications (`@capacitor/push-notifications`, APNs key + Firebase project) → check-up step 6 "Turn on notifications".
 - Face ID / fingerprint option after the code.
 - Store listing text + screenshots; privacy page `/privacy` exists.
+
+## Done in the app code (Nov 2)
+- `src/lib/native.ts`: inside the app, `/api/*` calls go to https://gr-staff-portal.vercel.app; links we hand out (invite text, calendar feed, email redirect) use the live site; `appUrlOpen` routes opened links (/go/…) inside the app.
+- `api/*`: CORS + OPTIONS preflight so the app (capacitor://localhost, https://localhost) can call them. **These api changes must be on main / live before the app ships.**
+- Check-up: the app counts as installed (no Home Screen step); Android WebView is not treated as an in-app browser.
+
+## Waiting / later
+- Universal Links: `public/.well-known/apple-app-site-association` needs the Apple **Team ID** (enrollment pending). Android App Links: `public/.well-known/assetlinks.json` needs the Play App Signing SHA-256 (after the first upload).
+- Notifications: `@capacitor/push-notifications` + Firebase project (google-services.json) + APNs key; sending side = push 24.
+- Face ID: after first release (sessions already stay signed in; Face ID would unlock instead of the code).
+- Builds can't run in the cloud container (no Android SDK / Xcode): Ronnie builds on the Mac mini (Xcode + Android Studio) with the steps above.

@@ -2,6 +2,11 @@
 import { CID, REDIRECT, bearer, rpc } from '../_google.js';
 
 export default async function handler(req, res) {
+  // Native app (Capacitor) calls from capacitor://localhost / https://localhost: allow it, answer preflight.
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  if (req.method === 'OPTIONS') { res.status(204).end(); return; }
   const jwt = bearer(req);
   if (!jwt || !CID) { res.status(401).json({ error: 'Not allowed' }); return; }
   const s = await rpc('google_begin', {}, jwt);

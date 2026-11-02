@@ -1,3 +1,4 @@
+import { siteHost, siteOrigin } from './native';
 import { useEffect, useState } from 'react';
 import { supabase } from './supabase';
 import { isAndroid, isIOS } from './install';
@@ -27,9 +28,9 @@ export function useMyCalendar(skip = false) {
 
 export const defaultCalOs = (): CalOs => (isAndroid() && !isIOS() ? 'android' : 'ios');
 export function feedUrls(token: string) {
-  const host = window.location.host;
+  const host = siteHost();
   const webcal = `webcal://${host}/api/feed?t=${token}`;
-  return { webcal, google: `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcal)}`, https: `${window.location.origin}/api/feed?t=${token}` };
+  return { webcal, google: `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcal)}`, https: `${siteOrigin()}/api/feed?t=${token}` };
 }
 
 /** Records the tap (we can't see the phone's calendar) and opens the phone's subscribe screen. */

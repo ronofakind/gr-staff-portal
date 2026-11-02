@@ -1,3 +1,4 @@
+import { siteOrigin } from '../lib/native';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { supabase, SHIFT_SELECT, isSetup, type ShiftRow } from '../lib/supabase';
@@ -62,7 +63,7 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team }: { s:
   const ev = s.events;
   const address = ev.address || ev.venues?.address || '';
   const arrive = minus(s.planned_start, s.arrive_before_min);
-  const cal = s.cal_token && !/android/i.test(navigator.userAgent) ? `/api/cal?t=${s.cal_token}` : calendarUrl(ev.title, arrive, s.planned_end, address);
+  const cal = s.cal_token && !/android/i.test(navigator.userAgent) ? `${siteOrigin()}/api/cal?t=${s.cal_token}` : calendarUrl(ev.title, arrive, s.planned_end, address);
 
   const kind = uniformFor(s);
   const role = s.position_code === 'MD' ? 'MD' : s.position_detail ? s.position_detail.replace(/^bar\s*-\s*/i, '') : isBar(s.position_code, null) ? 'Bar' : 'Waiter';
