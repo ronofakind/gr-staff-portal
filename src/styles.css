@@ -2379,3 +2379,8 @@ div.avatar { color: var(--accent); background: var(--accent-bg); }
 
 /* address rows open Google Maps */
 a.d37-where, a.d37-addr { color: inherit; text-decoration: none; -webkit-tap-highlight-color: transparent; }
+
+/* usual week sheet: [Any time] [Save] side by side */
+.wk-save-row { display: flex; gap: 10px; }
+.wk-save-row .big-btn { flex: 1 1 0; justify-content: center; }
+.big-btn.wk-any { background: var(--ok-bg); color: var(--ok); border: 2px solid var(--ok); }
