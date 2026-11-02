@@ -2070,3 +2070,14 @@ div.avatar { color: var(--accent); background: var(--accent-bg); }
 .any-tile.now small { color: var(--ok); font-size: 13px; }
 .cu-overlay { position: fixed; inset: 0; z-index: 35; background: var(--bg, #F6F2EC); overflow: auto; }
 .cu-overlay .cu { background: #F6F2EC; }
+/* NEW person: badge on the photo + banner above the team (fixes chat, Nov 2, option D) */
+.ring.tap { position: relative; }
+.new-badge { position: absolute; bottom: -7px; left: 50%; transform: translateX(-50%); font-style: normal; font-size: 9px; font-weight: 800; letter-spacing: .06em; color: #fff; background: #C9A227; border: 2px solid #fff; border-radius: 8px; padding: 1px 6px; white-space: nowrap; line-height: 1.3; }
+.crew { padding-top: 14px; padding-bottom: 14px; }
+.new-banner { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: #FBF3E0; border: 1.5px solid #E6CF8A; border-radius: 16px; padding: 10px 12px; font: 13px Inter, system-ui, sans-serif; color: #6B4E12; cursor: pointer; }
+.new-banner b { font-weight: 700; }
+.nb-faces { display: flex; flex: 0 0 auto; }
+.nb-face { border-radius: 50%; box-shadow: 0 0 0 2px #C9A227; display: inline-flex; background: #fff; }
+.nb-face + .nb-face { margin-left: -8px; }
+.nb-go { font-weight: 700; color: #B7791F; white-space: nowrap; }
+.nb-next { color: #B7791F; font-weight: 700; margin-top: 4px; }

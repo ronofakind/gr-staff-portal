@@ -348,6 +348,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
 
   if (!ev) return <div className="loading" />;
   const active = rows.filter((r) => !r.attendance);
+  const newRows = active.filter((r) => { const i = infoOf(r); return !!i?.is_new && i.done_before < newUnder; });
   const groups = Array.from(new Set(rows.map((r) => r.planned_start)));
   const barN = active.filter((r) => isBar(r.position_code, r.position_detail)).length;
   const floorN = active.length - barN;
@@ -439,6 +440,19 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
       )}
       {err && <p className="error">{err}</p>}
 
+      {newRows.length > 0 && (() => {
+        const n0 = newRows[0]; const inf0 = infoOf(n0);
+        const names = newRows.length === 1 ? `${first(n0.staff?.full_name)}, ${ORD[inf0?.done_before ?? 0] ?? ''} shift`
+          : newRows.slice(0, 2).map((r) => first(r.staff?.full_name)).join(', ') + (newRows.length > 2 ? ` +${newRows.length - 2}` : '');
+        return (
+          <button className="new-banner" onClick={() => openRow(n0, true)}>
+            <span className="nb-faces">{newRows.slice(0, 3).map((r) => <span key={r.id} className="nb-face"><Avatar name={r.staff?.full_name ?? '?'} url={r.staff?.photo_url} size={30} /></span>)}</span>
+            <span className="grow"><b>{newRows.length} new tonight</b> · {names}</span>
+            <span className="nb-go">Meet ›</span>
+          </button>
+        );
+      })()}
+
       {groups.map((g) => {
         const grp = rows.filter((r) => r.planned_start === g);
         const notIn = grp.filter((r) => !r.attendance && !r.punches?.punch_in);
@@ -468,6 +482,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
                 <div className={'crew' + (r.attendance ? ' flagged' : '') + (r.left_early ? ' left' : '')}>
                   <button className={'ring tap ' + ring + (isNew ? ' newp' : '')} aria-label={`Options for ${r.staff?.full_name}`} onClick={() => openRow(r, isNew)}>
                     <Avatar name={r.staff?.full_name ?? '?'} url={r.staff?.photo_url} size={44} />
+                    {isNew && <i className="new-badge">NEW</i>}
                   </button>
                   <button className="who" aria-label={`Options for ${r.staff?.full_name}`} onClick={() => openRow(r, isNew)}>
                     <span className="nm">{r.staff ? teamName(r.staff) : ''}{r.adder && <i className="added-tag">ADDED BY {r.adder.full_name.split(' ')[0].toUpperCase()}</i>}</span>
@@ -477,8 +492,6 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
                     {ln && lnPassed && <span><i className="p28-tag red">~{shortT(ln.eta)} PASSED · NOT IN YET</i></span>}
                     {ln && pin && <span><i className="p28-tag green">IN {fullT(r.punches?.arrived_at ?? pin)} · TOLD AHEAD</i></span>}
                     <span className="rl">{roleLabel(r.position_code, r.position_detail)}{r.manager_note ? ' · 📝 note' : ''}{fbOn && inf?.fb_stars ? ` · ★ ${inf.fb_stars}` : ''}</span>
-                    {isNew && <span><i className="new-shift">NEW · {ORD[inf!.done_before] ?? ''} shift</i></span>}
-                    {isNew && <span><i className="see-det"><b>ⓘ</b> See details ›</i></span>}
                     {fromRonnie ? <span className="st muted-st">Don’t wait for {first(r.staff?.full_name)}{r.attendance_reason ? ` · ${r.attendance_reason}` : ''}</span>
                       : r.attendance ? <span className="st muted-st">{r.attendance === 'no_show' ? 'No-show' : 'Cancelled'}{r.attendance_reason ? ` · ${r.attendance_reason}` : ''}</span>
                       : r.left_early && pin && pout ? <span className="st gold">{time(pin, lang)} → {time(pout, lang)} · {hours(pin, pout)} {t.hours}<i className="st-tag gold">LEFT EARLY</i></span>
@@ -611,6 +624,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
               <button className={'pf-photo' + (isNewO ? ' newp' : '')} aria-label="See the photo full size" onClick={() => setBigPhoto(true)}><Avatar name={open.staff?.full_name ?? '?'} url={open.staff?.photo_url} size={62} /></button>
               <div className="serif" style={{ fontSize: 24, lineHeight: 1.1 }}>{open.staff?.full_name}</div>
               <div className="muted sm pf-sub"><span>{roleLabel(open.position_code, open.position_detail)} · call {time(open.planned_start, lang)}{open.punches?.arrived_at ? ` · arrived ${time(open.punches.arrived_at, lang)}` : ''}</span>{isNewO && <i className="new-shift">NEW · {ORD[inf!.done_before] ?? ''} shift</i>}</div>
+              {isNewO && newRows.length > 1 && (() => { const k = newRows.findIndex((r) => r.id === open.id); const nx = newRows[(k + 1) % newRows.length]; return <button className="link-btn nb-next" onClick={() => openRow(nx, true)}>Next new · {first(nx.staff?.full_name)} ›</button>; })()}
             </div>
             {isNewO && (ab.exp || ab.knows || ab.langs.length > 0 || ab.note) && (
               <div className="pf-about" ref={(el) => { if (el && jump.current) { jump.current = false; requestAnimationFrame(() => el.scrollIntoView({ block: 'nearest', behavior: 'smooth' })); } }}>
