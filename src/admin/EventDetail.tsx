@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { supabase, type ShiftRow } from '../lib/supabase';
 import { DriveFiles } from '../components/DriveFiles';
 import { DeleteEvent } from './DeleteEvent';
+import { ConfirmTracker } from './Confirmations';
 import { RidesAdmin } from './Rides';
 import { ShiftView } from '../pages/Shift';
 import { UniformIcon, PantsIcon, ShoesIcon, ApronIcon, TieIcon, WineKeyIcon, PIECE, defaultItems, uniformLabel, type UniItemsMap, type UniLineKey, type UniformKind } from '../components/Uniform';
@@ -57,7 +58,7 @@ export function EventDetail() {
   const uniRows = uniformRows(evs, x?.uniform_items ?? null);
   const fee = /brera/i.test(x?.client?.name ?? p?.client ?? '') ? 8 : 10;
   const rateLabel = x?.client && x.client.rate_sets.length >= 2 ? x.client.rate_sets.find((r) => r.key === (x.rate_set ?? x.client!.rate_sets[0].key))?.label : null;
-  const keys = ['event', 'staffing', 'uniforms', 'folder', 'billing', 'rides', 'lands'];
+  const keys = ['event', 'confirm', 'staffing', 'uniforms', 'folder', 'billing', 'rides', 'lands'];
 
   return (
     <div className="stack-lg ed2">
@@ -101,6 +102,10 @@ export function EventDetail() {
           </div>
           {e.notes && <div className="ed2-note"><small>Note for staff</small>{e.notes}</div>}
         </Sec>
+
+        {e.event_date >= new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' }) && <Sec k="confirm" title="Confirmations" open={isOpen('confirm')} setOpen={setFold} summary="who confirmed · who to text">
+          <ConfirmTracker evs={evs} venue={x?.venue?.name ?? e.title} />
+        </Sec>}
 
         <Sec k="staffing" title="Staffing" open={isOpen('staffing')} setOpen={setFold} summary={[floor ? `${nFloor} floor` : null, bar ? `${nBar} bar` : null, String(nFloor + nBar)].filter(Boolean).join(' · ')}>
           <div className="ed2-lines">

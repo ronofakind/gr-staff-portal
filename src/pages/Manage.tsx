@@ -58,17 +58,18 @@ function Stars({ value, onChange, size = 'md', label }: { value: number; onChang
   );
 }
 import { IncidentSheet, kindLabel, type Incident } from '../components/IncidentReport';
+import { teamName } from '../lib/nickname';
 
 type Row = {
   id: string; staff_id?: string; position_code: string | null; position_detail: string | null; planned_start: string; planned_end: string | null;
   attendance: 'no_show' | 'cancelled' | null; leave_by: string | null; manager_note: string | null; left_early?: boolean; attendance_reason?: string | null; added_note?: string | null; adder?: { full_name: string } | null;
-  staff: { full_name: string; photo_url: string | null; phone: string | null } | null; punches: { punch_in: string | null; punch_out: string | null; arrived_at: string | null; updated_at: string } | null;
+  staff: { full_name: string; nickname?: string | null; photo_url: string | null; phone: string | null } | null; punches: { punch_in: string | null; punch_out: string | null; arrived_at: string | null; updated_at: string } | null;
   /** push 28 (migration 034) */
   cancel_self?: boolean; cancel_sent_to_manager?: string | null; replacement_for?: string | null;
 };
 /** push 28e · "I'm running late" from the person (late_notices, read by the event's manager). */
 type Late = { id: string; shift_id: string; minutes: number; eta: string; reason: string | null; note?: string | null; sent_at: string; seen_at: string | null };
-const ROW_COLS = 'id,staff_id,position_code,position_detail,planned_start,planned_end,attendance,left_early,attendance_reason,added_note,adder:staff!shifts_added_by_fkey(full_name),leave_by,manager_note,staff:staff!shifts_staff_id_fkey(full_name,photo_url,phone),punches(punch_in,punch_out,arrived_at,updated_at)';
+const ROW_COLS = 'id,staff_id,position_code,position_detail,planned_start,planned_end,attendance,left_early,attendance_reason,added_note,adder:staff!shifts_added_by_fkey(full_name),leave_by,manager_note,staff:staff!shifts_staff_id_fkey(full_name,nickname,photo_url,phone),punches(punch_in,punch_out,arrived_at,updated_at)';
 const fullT = (iso: string) => new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' });
 const shortT = (iso: string) => fullT(iso).replace(/\s?[AP]M$/, '');
 type Ev = { id: string; title: string; event_date: string };
@@ -469,7 +470,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
                     <Avatar name={r.staff?.full_name ?? '?'} url={r.staff?.photo_url} size={44} />
                   </button>
                   <button className="who" aria-label={`Options for ${r.staff?.full_name}`} onClick={() => openRow(r, isNew)}>
-                    <span className="nm">{r.staff?.full_name}{r.adder && <i className="added-tag">ADDED BY {r.adder.full_name.split(' ')[0].toUpperCase()}</i>}</span>
+                    <span className="nm">{r.staff ? teamName(r.staff) : ''}{r.adder && <i className="added-tag">ADDED BY {r.adder.full_name.split(' ')[0].toUpperCase()}</i>}</span>
                     {fromRonnie && <span><i className="p28-tag red">CANCELLED{r.attendance === 'no_show' ? ' · NO-SHOW' : ''} · FROM RONNIE</i></span>}
                     {r.replacement_for && !r.attendance && <span><i className="p28-tag blue">REPLACEMENT · {fullT(r.planned_start)}</i></span>}
                     {ln && !pin && !lnPassed && <span><i className="p28-tag gold">LATE ~{shortT(ln.eta)}{ln.reason ? ` · ${ln.reason.toUpperCase()}` : ''}{ln.seen_at ? ' · ✓ SEEN' : ''}</i></span>}

@@ -52,7 +52,7 @@ export function CheckupTracker({ staff, onOpen }: { staff: AStaff[]; onOpen: (s:
         {shown.map((s) => {
           const x = r(s); const lo = lastOpened(x);
           const sub = x?.checkup_done_at ? when(x.checkup_done_at) + (x.has_emergency ? '' : ' · no emergency contact')
-            : [next[s.id] ? `booked ${dLabel(next[s.id], { month: 'short', day: 'numeric' })}` : 'nothing booked', lo ? `last opened ${dLabel(isoDay(new Date(lo)), { month: 'short', day: 'numeric' })}` : 'never opened', x?.last_seen_at && (x.checkup_step ?? 1) > 1 ? `at step ${Math.min(6, x.checkup_step)}` : ''].filter(Boolean).join(' · ');
+            : [next[s.id] ? `booked ${dLabel(next[s.id], { month: 'short', day: 'numeric' })}` : 'nothing booked', lo ? `last opened ${dLabel(isoDay(new Date(lo)), { month: 'short', day: 'numeric' })}` : 'never opened', x?.last_seen_at && (x.checkup_step ?? 1) > 1 ? (x.checkup_step >= 8 ? 'at the last step' : `at step ${Math.min(6, x.checkup_step)}`) : ''].filter(Boolean).join(' · ');
           return (
             <button key={s.id} className="cu-tr-row" onClick={() => onOpen(s)}>
               <span className="grow"><b>{s.full_name}</b><span className="muted"> · {sub}</span></span>

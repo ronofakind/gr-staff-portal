@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import type { Session } from '@supabase/supabase-js';
 import { supabase, type Staff } from './lib/supabase';
@@ -30,7 +30,8 @@ import { Bookings } from './admin/Bookings';
 import { Messages } from './admin/Messages';
 import { Hours as HoursPage } from './pages/Hours';
 import { Extras } from './admin/Extras';
-import { Checkup, HomeScreenAgain } from './pages/Checkup';
+import { Checkup, HomeScreenAgain, CalendarAgain } from './pages/Checkup';
+import { loadMyCalendar, type MyCal } from './lib/calendar';
 import { CheckupContext, loadCheckup, type CheckupInfo } from './lib/checkup';
 import { homeStepDue } from './lib/install';
 import { loadSettings, onSettings } from './lib/settings';
@@ -44,6 +45,9 @@ export function App() {
   // push 31 · profile check-up gate. undefined = loading, null = unknown (RPC missing) → never blocks.
   const [checkup, setCheckup] = useState<CheckupInfo | null | undefined>(undefined);
   const [homeAgain, setHomeAgain] = useState(homeStepDue);
+  // push 33h · finished the check-up before the calendar step existed → "ONE MORE THING" once (not admins, not once added)
+  const [calAgain, setCalAgain] = useState<MyCal | null>(null);
+  const calChecked = useRef(false);
   // push 32 · app settings: re-render the tree when they arrive / change (plain functions read the cache).
   const [, setSettingsV] = useState(0);
   useEffect(() => onSettings(() => setSettingsV((n) => n + 1)), []);
@@ -70,6 +74,14 @@ export function App() {
     supabase.rpc('touch_last_seen').then(() => {}, () => {}); // "last opened" for the admin check-up tracker
   }, [meId]);
 
+  useEffect(() => {
+    // Only for people already done when the app opened (someone finishing now just saw the step inside the check-up).
+    if (checkup === undefined || calChecked.current || !me) return;
+    calChecked.current = true;
+    if (!checkup?.done_at || me.role === 'admin') return;
+    loadMyCalendar().then((c) => { if (c && !c.added_at && !c.prompt_seen_at) setCalAgain(c); });
+  }, [checkup, me]);
+
   const legal = window.location.pathname.replace(/\/$/, '');
   if (legal === '/privacy' || legal === '/terms') return <Legal kind={legal.slice(1) as 'privacy' | 'terms'} />;
   if (session === undefined || (session && me === undefined) || (me && checkup === undefined)) return <div className="loading" />;
@@ -81,6 +93,7 @@ export function App() {
   // Every route goes through the check-up until it's done (Log out is on every step).
   else if (checkup && !checkup.done_at) body = <Checkup me={me} info={checkup} onFinish={() => { loadMe(session.user.id); loadCheckup().then(setCheckup); }} />;
   else if (homeAgain) body = <HomeScreenAgain onClose={() => setHomeAgain(false)} />;
+  else if (calAgain) body = <CalendarAgain me={me} cal={calAgain} onClose={() => setCalAgain(null)} />;
   else body = (
     <BrowserRouter>
       <Routes>

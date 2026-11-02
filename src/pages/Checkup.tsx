@@ -4,46 +4,58 @@ import { setting } from '../lib/settings';
 import { uploadPhoto } from '../lib/photo';
 import { RELATIONS, saveMyProfile, setCheckupStep, type CheckupInfo } from '../lib/checkup';
 import { useUsualWeek, UsualWeekList } from '../components/UsualWeek';
+import { Avatar } from '../components/Avatar';
 import {
   canPromptInstall, onInstallChange, promptInstall, isIOS, isAndroid, isInAppBrowser, chromeIntentUrl,
   homeStepApplies, setHomeSkip, clearHomeSkip, markHomeStepSeen,
 } from '../lib/install';
+import { useMyCalendar, addCalendar, calendarPromptSeen, defaultCalOs, type MyCal, type CalOs } from '../lib/calendar';
+import { callName } from '../lib/nickname';
 
 /**
  * Push 31a/b · Profile check-up. Full screen straight after sign-in until staff_private.checkup_done_at is set
  * (staff, managers and admins). Resumes at checkup_step; every step saves as it goes.
  * Steps (fixed ids): 1 photo · 2 you · 3 emergency (can skip) · 4 languages · 5 usual week · 6 Home Screen (can skip,
- * phone browsers only, not installed) · 7 = Done screen.
+ * phone browsers only, not installed) · 8 G&R calendar (push 33h, can skip, not for admins, skipped once added) ·
+ * 9 A note from Ronnie (push 33h, not counted in "N OF M") · 7 = Done screen.
+ * 7 stays "Done" so everyone already at checkup_step = 7 is still done; the new screens got new ids (migration 039).
  */
+const ORDER = [1, 2, 3, 4, 5, 6, 8, 9];
 export function Checkup({ me, info, onFinish }: { me: Staff; info: CheckupInfo; onFinish: () => void }) {
-  const ids = [1, 2, 3, 4, 5, ...(homeStepApplies() ? [6] : [])];
-  const startAt = (s: number) => (s >= 7 || (s > 5 && !ids.includes(s)) ? 7 : ids.includes(s) ? s : 1);
-  const [step, setStep] = useState(() => startAt(info.step));
+  const { cal, setCal } = useMyCalendar(me.role === 'admin');
+  // Decided once (tapping Add mid-step must not remove the step under them).
+  const [calOn, setCalOn] = useState<boolean | null>(null);
+  useEffect(() => { if (cal !== undefined && calOn === null) setCalOn(!!cal && !cal.added_at); }, [cal, calOn]);
+  const ids = [1, 2, 3, 4, 5, ...(homeStepApplies() ? [6] : []), ...(calOn ? [8] : []), 9];
+  const startAt = (s: number) => (s === 7 ? 7 : ids.includes(s) ? s : ORDER.includes(s) ? ORDER.slice(ORDER.indexOf(s) + 1).find((x) => ids.includes(x)) ?? 7 : 1);
+  const [step, setStep] = useState<number | null>(null);
+  useEffect(() => { if (calOn !== null && step === null) setStep(startAt(info.step)); }, [calOn]); // eslint-disable-line react-hooks/exhaustive-deps
   const [photo, setPhoto] = useState(me.photo_url);
   const go = (n: number) => {
-    const next = n > 5 && !ids.includes(n) ? 7 : n;
-    setStep(next); window.scrollTo(0, 0);
-    setCheckupStep(next, next === 7).then(({ error }) => { if (error) console.warn('[checkup]', error.message); });
+    setStep(n); window.scrollTo(0, 0);
+    setCheckupStep(n, n === 7).then(({ error }) => { if (error) console.warn('[checkup]', error.message); });
   };
-  useEffect(() => { if (step === 7) setCheckupStep(7, true); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (step === 7) setCheckupStep(7, true); }, [step === 7]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const first = me.nickname || me.full_name.split(' ')[0];
+  const first = callName(me);
+  if (step === null) return <div className="loading" />;
   if (step === 7) return (
     <main className="v2 cu cu-done">
       <div className="cu-done-c">
         <span className="cu-check">✓</span>
         <div className="serif" style={{ fontSize: 30 }}>Thanks {first}!</div>
-        <p>You’re all set. Uniform sizes and the rest can be filled in anytime in Profile.</p>
       </div>
       <div className="cu-foot"><button className="cu-btn green" onClick={onFinish}>Go to Home</button></div>
     </main>
   );
+  if (step === 9) return <RonnieNote name={first} onNext={() => go(7)} />;
 
-  const n = ids.indexOf(step) + 1;
+  const counted = ids.filter((x) => x !== 9);
+  const n = counted.indexOf(step) + 1;
   const head = (title: string, sub: string, skippable = false) => (
     <div className="cu-head">
-      <div className="spread" style={{ alignItems: 'center' }}><span className="cu-kick">PROFILE CHECK-UP · {n} OF {ids.length}</span><span className="cu-req">{skippable ? 'can skip' : 'required'}</span></div>
-      <div className="cu-bar">{ids.map((x, i) => <span key={x} className={i < n ? 'on' : ''} />)}</div>
+      <div className="spread" style={{ alignItems: 'center' }}><span className="cu-kick">PROFILE CHECK-UP · {n} OF {counted.length}</span><span className="cu-req">{skippable ? 'can skip' : 'required'}</span></div>
+      <div className="cu-bar">{counted.map((x, i) => <span key={x} className={i < n ? 'on' : ''} />)}</div>
       <div className="serif cu-title">{title}</div><div className="cu-sub">{sub}</div>
     </div>
   );
@@ -56,10 +68,24 @@ export function Checkup({ me, info, onFinish }: { me: Staff; info: CheckupInfo; 
       {step === 3 && <EmergencyStep info={info} head={head('Emergency contact', 'only used if something happens at an event', setting('checkup.emergency') !== 'required')} onNext={() => go(nextOf(3))} />}
       {step === 4 && <LangStep info={info} head={head('Languages', 'how well do you speak with guests?')} onNext={() => go(nextOf(4))} />}
       {step === 5 && <WeekStep me={me} head={head('Your usual week', 'flip on the days you can usually work')} onNext={() => go(nextOf(5))} />}
-      {step === 6 && <HomeScreenStep head={head('Add G&R to your Home Screen', 'opens faster · lets your phone buzz for shifts', setting('checkup.home_screen') !== 'required')} onDone={() => go(7)} />}
+      {step === 6 && <HomeScreenStep head={head('Add G&R to your Home Screen', 'opens faster · lets your phone buzz for shifts', setting('checkup.home_screen') !== 'required')} onDone={() => go(nextOf(6))} />}
+      {step === 8 && cal && <CalendarStep me={me} cal={cal} onCal={setCal} head={head('Add your G&R calendar', 'your confirmed shifts, right in your phone’s calendar', setting('checkup.calendar') !== 'required')} required={setting('checkup.calendar') === 'required'} onDone={() => go(nextOf(8))} />}
       <button className="cu-out" onClick={() => supabase.auth.signOut().then(() => window.location.replace('/'))}>Log out</button>
     </main>
   );
+}
+
+/** Push 33h · staff who had already finished the check-up: the calendar step once as "ONE MORE THING", then the note from Ronnie. */
+export function CalendarAgain({ me, cal, onClose }: { me: Staff; cal: MyCal; onClose: () => void }) {
+  const [c, setC] = useState(cal); const [note, setNote] = useState(false);
+  if (note) return <RonnieNote name={callName(me)} onNext={onClose} />;
+  const head = (
+    <div className="cu-head">
+      <div className="spread" style={{ alignItems: 'center' }}><span className="cu-kick">ONE MORE THING</span><span className="cu-req">can skip</span></div>
+      <div className="serif cu-title">Add your G&amp;R calendar</div><div className="cu-sub">your confirmed shifts, right in your phone’s calendar</div>
+    </div>
+  );
+  return <main className="v2 cu"><CalendarStep me={me} cal={c} onCal={setC} head={head} onDone={() => { window.scrollTo(0, 0); setNote(true); }} /></main>;
 }
 
 /** Shown on its own (not the whole check-up) when they chose "Skip for now" on step 6 and open the app from the browser again. */
@@ -277,6 +303,84 @@ function HomeScreenStep({ head, onDone }: { head: ReactNode; onDone: () => void 
         {setting('checkup.home_screen') !== 'required' && <button className="cu-skip" onClick={() => { setHomeSkip(); onDone(); }}><span>Skip for now</span></button>}
       </Foot>
     </>
+  );
+}
+
+// ───────── 8 · G&R calendar (push 33h) ─────────
+type Prev = { dow: string; day: number; venue: string; time: string };
+const SAMPLE: Prev[] = [{ dow: 'THU', day: 5, venue: 'Le 9e', time: '5:00 PM' }, { dow: 'FRI', day: 6, venue: 'Maison Principale', time: '3:00 PM' }];
+/** The calendar step body (check-up step 8, "One more thing", and Profile → Add my G&R calendar). */
+export function CalendarBody({ me, cal, onCal, onAdded }: { me: Staff; cal: MyCal; onCal: (c: MyCal) => void; onAdded?: () => void }) {
+  const [os, setOs] = useState<CalOs>(defaultCalOs);
+  const [prev, setPrev] = useState<Prev[] | null>(null);
+  useEffect(() => {
+    supabase.from('shifts').select('planned_start,time_tbc,events!inner(event_date,title,details_pending,venues(name))').eq('staff_id', me.id).neq('status', 'declined')
+      .gte('planned_start', new Date().toISOString()).order('planned_start').limit(6)
+      .then(({ data }) => {
+        type R = { planned_start: string; time_tbc: boolean | null; events: { event_date: string; title: string; details_pending?: boolean; venues: { name: string } | null } };
+        const rows = ((data ?? []) as unknown as R[]).filter((r) => r.events && !r.events.details_pending && !r.time_tbc).slice(0, 2);
+        setPrev(rows.length === 2 ? rows.map((r) => { const d = new Date(r.events.event_date + 'T12:00:00');
+          return { dow: d.toLocaleDateString('en-CA', { weekday: 'short' }).replace('.', '').toUpperCase(), day: d.getDate(), venue: r.events.venues?.name ?? r.events.title,
+            time: new Date(r.planned_start).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' }) }; }) : SAMPLE);
+      }, () => setPrev(SAMPLE));
+  }, [me.id]);
+  const add = async () => { onCal(await addCalendar(cal, os)); onAdded?.(); };
+  return (
+    <>
+      <div className="seg cu-os">
+        <button className={os === 'ios' ? 'on' : ''} onClick={() => setOs('ios')}><AppleIcon /> iPhone</button>
+        <button className={os === 'android' ? 'on' : ''} onClick={() => setOs('android')}><DroidIcon /> Android</button>
+      </div>
+      <div className="cal-prev">
+        <div className="cu-kick">IN YOUR PHONE’S CALENDAR{prev === SAMPLE ? ' · EXAMPLE' : ''}</div>
+        {(prev ?? SAMPLE).map((p, i) => (
+          <div key={i} className="cal-prev-row"><span className="d"><small>{p.dow}</small><b>{p.day}</b></span><span className="ev"><b>{p.venue} · G&amp;R shift</b><small>{p.time}</small></span></div>
+        ))}
+      </div>
+      <ul className="cal-checks">
+        <li>Only shifts you’ve confirmed, with the final time and place</li>
+        <li>Time or place changes update by themselves</li>
+        <li>Cancelled shifts disappear</li>
+        <li>Reminders 1 day and 2 hours before</li>
+      </ul>
+      {cal.added_at && <div className="cu-box ok"><b>✓ G&amp;R calendar added · you’re all set</b><span>Every shift you confirm shows up by itself. Didn’t see “Subscribe”? Tap the button again.</span></div>}
+      <button className={'cu-btn ' + (cal.added_at ? 'line' : 'green')} onClick={add}>{os === 'ios' ? 'Add to my iPhone calendar' : 'Add to my Google Calendar'}</button>
+      <p className="cu-note" style={{ textAlign: 'center' }}>{os === 'ios' ? 'Your iPhone will ask “Subscribe?” · tap Subscribe' : 'Opens Google Calendar · tap Add · changes can take a few hours on Android'}</p>
+    </>
+  );
+}
+function CalendarStep({ me, cal, onCal, head, required = false, onDone }: { me: Staff; cal: MyCal; onCal: (c: MyCal) => void; head: ReactNode; required?: boolean; onDone: () => void }) {
+  useEffect(() => { calendarPromptSeen(); }, []); // shown once: the "ONE MORE THING" copy won't come back
+  return (
+    <>
+      {head}
+      <div className="cu-body"><CalendarBody me={me} cal={cal} onCal={onCal} /></div>
+      <Foot>
+        {cal.added_at && <button className="cu-btn green" onClick={onDone}>Next</button>}
+        {!cal.added_at && !required && <button className="cu-skip" onClick={onDone}><span>Skip for now</span></button>}
+      </Foot>
+    </>
+  );
+}
+
+// ───────── A note from Ronnie (push 33h, after the last step, before Done) ─────────
+export function RonnieNote({ name, onNext }: { name: string; onNext: () => void }) {
+  return (
+    <main className="v2 cu">
+      <div className="cu-head"><span className="cu-kick">A NOTE FROM RONNIE</span>
+        <div className="row" style={{ gap: 12, alignItems: 'center', marginTop: 6 }}><Avatar name="Ronnie" size={48} /><div><b>Ronnie</b><div className="cu-sub" style={{ marginTop: 0 }}>G&amp;R à votre service</div></div></div>
+      </div>
+      <div className="cu-body">
+        <div className="ronnie-note">
+          <p>Hi {name},</p>
+          <p>I built this app myself so everything you need (your shifts, hours and event details) is in one place. It’s brand new, and I’m still learning as I go, so thank you for your patience.</p>
+          <p>If something looks off or doesn’t work, take a screenshot and send it to me. Ideas are welcome too. This app is for our G&amp;R familia, and your feedback makes it better.</p>
+          <p>Thanks for being part of the team. ❤️</p>
+          <p className="sig">- Ronnie</p>
+        </div>
+      </div>
+      <Foot><button className="cu-btn green" onClick={onNext}>Thanks, let’s go</button></Foot>
+    </main>
   );
 }
 

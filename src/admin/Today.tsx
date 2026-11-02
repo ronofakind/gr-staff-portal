@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { LastMinute, ChangeAnswer, CHANGE_COLS, replaceUrl, isSelfCancel, isEventDayCancel, replacementOf, hoursBefore, type ChangeRow } from './Changes';
 import { summaryOf } from './Extras';
+import { lateConfirmations, NicknameCards } from './Confirmations';
 import { DeleteEvent } from './DeleteEvent';
 import { DeptTag } from './DeptTag';
 import { hoursBetween } from './api';
@@ -60,6 +61,9 @@ export function Today() {
         const unsent = e.shifts.filter((s) => !s.notified_at || s.changed_at > s.notified_at).length;
         if (booked && unsent && e.event_date <= addDays(today, 7)) n.push({ key: e.id + 'send', title: `${e.title} · ${dLabel(e.event_date)}`, sub: `${unsent} not sent details yet`, action: 'Send', to: `/admin/day?d=${e.event_date}` });
       }
+      // push 33g · booked, asked to confirm 6 h+ ago (red once past 24 h)
+      const lc = await lateConfirmations(today);
+      if (lc) n.unshift({ key: 'confirm6h', red: lc.title.includes('overdue'), title: lc.title, sub: lc.sub, action: 'View', to: lc.to });
       if (miss.length) n.push({ key: 'miss', title: `Pay period ${dLabel(cur.start, { month: 'short', day: 'numeric' })} – ${dLabel(cur.end, { day: 'numeric' })}`, sub: `${miss.length} missing end time${miss.length > 1 ? 's' : ''}`, action: 'Fix', to: '/admin/hours' });
       const { data: hq } = await supabase.from('hours_questions').select('id,kind,claimed_at,shifts!inner(event_id,staff:staff!shifts_staff_id_fkey(full_name),events(title))').eq('status', 'open');
       { const m: Record<string, number> = {}; for (const x of (hq ?? []) as unknown as { shifts?: { event_id: string } }[]) if (x.shifts?.event_id) m[x.shifts.event_id] = (m[x.shifts.event_id] ?? 0) + 1; setQBy(m); }
@@ -209,6 +213,7 @@ export function Today() {
           })()}
         </section>
         <section className="stack">
+          <NicknameCards />
           {lm.map(({ e, s }) => <LastMinute key={s.id} e={e} s={s} mgr={e.manager_id ? mgrs[e.manager_id] ?? null : null} onSent={() => setTick((t) => t + 1)} />)}
           <div className="sec"><span className="serif">Needs you <b className="accent sm">{shown.length || ''}</b></span>{shown.length > 0 && <button className="abtn sm" onClick={() => archive(shown)}>{ARCH_ICON} Archive all</button>}</div>
           <div className="adm-card" style={{ padding: '4px 16px' }}>

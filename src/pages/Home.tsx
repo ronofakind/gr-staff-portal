@@ -4,10 +4,13 @@ import { Link, useNavigate } from 'react-router-dom';
 import { supabase, SHIFT_SELECT, isSetup, type ShiftRow, type Staff } from '../lib/supabase';
 import { setting, useSettings } from '../lib/settings';
 import { useLang } from '../lib/i18n';
-import { time, longDate, dayBadge, minus } from '../lib/format';
+import { time, longDate, dayBadge, minus, mapsUrl } from '../lib/format';
 import { Avatar } from '../components/Avatar';
 import { TabBar } from '../components/TabBar';
-import { AskCards, useAsks } from '../components/AskCards';
+import { useAsks } from '../components/AskCards';
+import { ConfirmThanks, CalIcon } from '../components/ConfirmThanks';
+import { useMyCalendar } from '../lib/calendar';
+import { callName } from '../lib/nickname';
 import { UniformIcon, uniformFor, uniformLabel } from '../components/Uniform';
 import { AnnounceCards } from '../components/Announce';
 import { useCheckup } from '../lib/checkup';
@@ -20,6 +23,9 @@ type Gone = { id: string; title: string; date: string; late: boolean };
 const OK_KEY = 'gr-cancel-ok';
 const readOk = (): string[] => { try { return JSON.parse(localStorage.getItem(OK_KEY) || '[]'); } catch { return []; } };
 
+/** push 33 shift columns (migration 039), read on their own so Home still loads before it is applied. */
+type Prev = { start?: string | null; position?: string | null; place?: string | null; address?: string | null };
+type P33 = { confirm_sent_at: string | null; confirm_by: string | null; change_prev: Prev | null; change_seen_at: string | null };
 type Mate = { full_name: string; photo_url: string | null; position_code: string | null; position_detail: string | null; punches: { punch_in: string | null; punch_out: string | null } | null };
 type Q = { shift_id: string; status: 'open' | 'fixed' | 'correct' };
 const q15 = (iso: string) => new Date(Math.round(new Date(iso).getTime() / 900000) * 900000).toISOString();
@@ -43,6 +49,10 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
   const [mgrLate, setMgrLate] = useState<MgrLate[]>([]);
   // push 31 · emergency contact skipped in the check-up → small reminder until it's filled
   const { info: cu, reload: reloadCu } = useCheckup(); const [emOpen, setEmOpen] = useState(false);
+  // push 33
+  const [x33, setX33] = useState<Record<string, P33>>({});
+  const [thanks, setThanks] = useState<ShiftRow | null>(null);
+  const { cal, setCal } = useMyCalendar(preview);
 
   const load = async () => {
     const since = new Date(Date.now() - 12 * 3600e3).toISOString();
@@ -52,6 +62,8 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
     const all = (data as unknown as ShiftRow[]) ?? [];
     const rows = all.filter((r) => r.attendance !== 'cancelled'); // push 28: a cancelled shift is off Home
     setShifts(rows);
+    if (rows.length) supabase.from('shifts').select('id,confirm_sent_at,confirm_by,change_prev,change_seen_at').in('id', rows.map((r) => r.id))
+      .then(({ data: d, error }) => { if (!error && Array.isArray(d)) setX33(Object.fromEntries((d as (P33 & { id: string })[]).map((x) => [x.id, x]))); });
     // push 28 · "Shift cancelled · Ronnie has been told" for 24 h (cancelled_at is new in 034: errors → none)
     const cut = new Date(Date.now() - 24 * 3600e3).toISOString();
     supabase.from('shifts').select('id,cancelled_at,cancel_late,events(title,event_date)').eq('staff_id', me.id).eq('cancel_self', true).gte('cancelled_at', cut)
@@ -82,7 +94,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
       .then(({ data }) => setAlerts((data ?? []) as typeof alerts));
   }, [me.id]);
   const gotIt = async (id: string) => { setAlerts(alerts.filter((a) => a.id !== id)); if (!preview) await supabase.rpc('alert_seen', { p_id: id }); };
-  const { asks, week: usualWeek, reload: reloadAsks } = useAsks(me.id);
+  const { asks } = useAsks(me.id); // push 33c · only the count (answered in Availability)
   const upcomingIds = (shifts ?? []).filter((s) => !(s.punches?.punch_out && new Date(s.punches.punch_out).getTime() <= Date.now())).map((s) => s.id);
   const chg = useShiftChanges(preview ? [] : upcomingIds);
   const mgrGotIt = async (id: string) => { setMgrLate((v) => v.filter((x) => x.id !== id)); if (!preview) await supabase.rpc('late_notice_seen', { p_id: id }); };
@@ -90,20 +102,34 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
 
   const respond = async (id: string, r: 'confirmed' | 'declined') => {
     if (preview) return;
-    await supabase.rpc('respond_to_shift', { p_shift: id, p_response: r });
+    const { error } = await supabase.rpc('respond_to_shift', { p_shift: id, p_response: r });
+    if (!error && r === 'confirmed') setThanks((shifts ?? []).find((x) => x.id === id) ?? null); // push 33a · thank-you pop-up
     load();
+  };
+  // push 33f · "Got it" on the gold box (also clears the matching "SHIFT CHANGED" alert card)
+  const changeSeen = async (s: ShiftRow) => {
+    setX33((m) => ({ ...m, [s.id]: { ...m[s.id], change_seen_at: new Date().toISOString() } }));
+    const dup = alerts.filter((a) => a.kind === 'moved' && a.event_id === s.events.id);
+    if (dup.length) setAlerts(alerts.filter((a) => !dup.includes(a)));
+    if (preview) return;
+    await supabase.rpc('shift_change_seen', { p_shift: s.id });
+    for (const a of dup) await supabase.rpc('alert_seen', { p_id: a.id });
   };
 
   if (!shifts) return <div className="loading" />;
   const isDone = (s: ShiftRow) => !!s.punches?.punch_in && !!s.punches.punch_out && new Date(s.punches.punch_out).getTime() <= Date.now();
   const doneToday = shifts.filter((s) => isDone(s) && s.events.event_date === todayIso());
   const [next, ...rest] = shifts.filter((s) => !isDone(s));
-  const pending = shifts.filter((s) => s.status === 'booked' && !s.events.details_pending);
-  const soon = (s: ShiftRow) => !!s.events.details_pending;
+  // push 33e · not final = details pending or time TBC: "Details coming", never a Confirm button
+  const notFinal = (s: ShiftRow) => !!s.events.details_pending || !!s.time_tbc;
+  const soon = (s: ShiftRow) => !!s.events.details_pending || (!!s.time_tbc && s.status === 'booked');
+  const pending = shifts.filter((s) => s.status === 'booked' && !notFinal(s) && s !== next); // the next shift confirms on its own card
+  const changed = (s: ShiftRow) => { const x = x33[s.id]; return s.status === 'confirmed' && x?.change_prev && !x.change_seen_at ? x.change_prev : null; };
+  const waitingAsks = (asks ?? []).filter((a) => a.status === 'asked').length;
   // Dates they said yes to that G&R hasn't booked (yet)
   const bookedDates = new Set(shifts.map((s) => s.events.event_date));
   const saidYes = (asks ?? []).filter((a) => a.status === 'yes' && a.for_date >= todayIso() && !bookedDates.has(a.for_date));
-  const first = me.nickname || me.full_name.split(' ')[0];
+  const first = callName(me);
   const today = todayIso();
 
   const whenLabel = (s: ShiftRow) => {
@@ -134,7 +160,6 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
 
       {!preview && <AnnounceCards meId={me.id} />}
 
-      <AskCards asks={asks} week={usualWeek} preview={preview} onlyWaiting onAnswered={reloadAsks} />
 
       {!preview && cu?.done_at && !cu.emergency_phone && (
         <button className="em-card" onClick={() => setEmOpen(true)}>
@@ -217,54 +242,65 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
         const req = chg.reqs[next.id];
         const mgrName = next.events.manager?.full_name ?? null;
         const myAlerts = mgrLate.filter((x) => x.event_id === next.events.id);
-        if (soon(next)) return (
-          <section className="next soon" style={{ gap: 12, padding: 18 }}>
-            <div className="top-line"><span className="day-word">NEXT · {dayWord.toUpperCase()}</span><span className="soon-tag">DETAILS COMING</span></div>
-            <div><div className="venue serif" style={{ fontSize: 26 }}>You’re on for {dayWord === 'Today' || dayWord === 'Tomorrow' ? dayWord.toLowerCase() : dayWord.split(',')[0]}</div>
-              <div className="sub" style={{ whiteSpace: 'normal' }}>G&R has you that day as <b>{role(next)}</b>. The place and time are coming — you’ll get a notice to confirm once they’re set.</div></div>
-            <div className="row2">
-              <div className="tbox start"><small>Where</small><span className="big serif sm-big">To come</span></div>
-              <div className="tbox"><small>Shift starts</small><span className="big serif sm-big">To come</span></div>
-            </div>
-            <div className="sub" style={{ textAlign: 'center' }}>Keep the day free · nothing to do for now</div>
-          </section>
-        );
+        const needChange = !started && !managesIt && <NeedChange canSchedule={!(req?.status === 'pending' || (req?.status === 'keep' && !req.keep_reply))} onSchedule={() => setSheet({ kind: 'change', s: next })} onCancel={() => setSheet({ kind: 'cancel', s: next })} />;
+        // push 33e · booked, details not final: no Confirm, the 24 h starts once they're set
+        if (!working && soon(next)) {
+          const d = new Date(next.events.event_date + 'T12:00:00');
+          return (
+            <section className="next details-coming" style={{ gap: 14, padding: 18 }}>
+              <div className="top-line"><span className="day-word">{d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase()}</span><span className="soon-pill">Details coming</span></div>
+              <div className="venue serif">You’re booked</div>
+              <StartPos start={null} role={role(next)} />
+              <div className="sub dc-text">The time and place are coming. You’ll be asked to confirm once they’re set, and you’ll have 24 hours from then.</div>
+              {needChange}
+            </section>
+          );
+        }
+        const waiting = !working && next.status === 'booked'; // push 33a · waiting for Confirm (details are final here)
+        const confirmed = !working && next.status === 'confirmed';
+        const by = x33[next.id]?.confirm_by ?? null;
+        const prev = changed(next);
         return (
-          <section className={'next' + (working ? ' working' : '')} style={{ gap: 14, padding: 18 }}>
+          <section className={'next' + (working ? ' working' : '') + (waiting ? ' to-confirm' : '') + (confirmed ? ' is-confirmed' : '')} style={{ gap: 14, padding: 18 }}>
             <div className="top-line">
               <span className="day-word">{working ? <><i className="live-dot" aria-hidden="true" />WORKING NOW</> : dayWord.toUpperCase()}</span>
-              {working ? <span className="countdown">since {time(next.punches!.punch_in!, lang)}</span> : !next.time_tbc && <Countdown iso={minus(next.planned_start, next.arrive_before_min)} start={next.planned_start} />}
+              {working ? <span className="countdown">since {time(next.punches!.punch_in!, lang)}</span>
+                : waiting ? <ConfirmPill by={by} />
+                : !next.time_tbc && <Countdown iso={minus(next.planned_start, next.arrive_before_min)} start={next.planned_start} />}
             </div>
             <div className="spread" style={{ alignItems: 'flex-end' }}>
               <div style={{ minWidth: 0 }}>
                 <div className="venue serif">{next.events.title}</div>
                 {addr && <div className="sub" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{addr.split(',').slice(0, 2).join(' ·')}</div>}
+                {confirmed && <div className="you-confirmed">✓ You confirmed</div>}
               </div>
               {!isSetup(next.events) && <span className="wear-tile" style={{ width: 52, height: 52, borderRadius: 14 }} title={uniformLabel(uniformFor(next))}><UniformIcon kind={uniformFor(next)} size={38} /></span>}
             </div>
-            <div className="pos-line"><small>Your position</small><span className="pos-pill-lg">{role(next)}</span></div>
-            <div className="row2">
-              {working ? <>
+            {working ? <>
+              <div className="pos-line"><small>Your position</small><span className="pos-pill-lg">{role(next)}</span></div>
+              <div className="row2">
                 <div className="tbox"><small>Started</small><BigTime iso={next.punches!.punch_in!} small /></div>
                 <div className="tbox"><small>On the clock</small><span className="big serif sm-big mint"><Elapsed iso={next.punches!.punch_in!} /></span></div>
-              </> : <>
-              <div className="tbox start"><small>Shift starts</small>{next.time_tbc ? <span className="big serif sm-big">TBC</span> : <BigTime iso={next.planned_start} small />}</div>
-              {!isSetup(next.events) && <div className="tbox"><small>Be there</small>{next.time_tbc ? <span className="big serif sm-big">TBC</span> : <><BigTime iso={minus(next.planned_start, next.arrive_before_min)} small /><span className="tb-note">{next.arrive_before_min} min before</span></>}</div>}
-              </>}
-            </div>
+              </div>
+            </> : <StartPos start={next.time_tbc ? null : next.planned_start} role={role(next)} />}
+            {prev && <ChangedBox prev={prev} s={next} role={role(next)} calOn={!!cal?.added_at} onSeen={() => changeSeen(next)} />}
             {myAlerts.map((a) => (
               <div key={a.id} className="mgr-late"><span className="grow">⏱ <b>{a.name.split(' ')[0]} running late</b> · ~{t12c(a.eta).replace(/\s?[AP]M$/, '')}{a.reason ? ` · ${a.reason.toLowerCase()}` : ''}{a.note ? ` · “${a.note}”` : ''}</span>
                 <button onClick={() => mgrGotIt(a.id)}>Got it ✓</button></div>
             ))}
             {lateOn && <LateBlock notice={chg.late[next.id] ?? null} mgr={mgrName} mgrPhone={next.events.manager?.phone} onOpen={() => setSheet({ kind: 'late', s: next })} />}
+            {waiting && <>
+              <button className="confirm-glow" onClick={() => respond(next.id, 'confirmed')}>Confirm my shift</button>
+              {by && <div className="confirm-by">{new Date(by).getTime() > Date.now() ? 'Confirm within 24 h' : 'Please confirm now'} · by {byLabel(by)}</div>}
+            </>}
             <div className="row2">
               <Link className="light-btn" style={{ height: 46, borderRadius: 14 }} to={`${base}/shift/${next.id}`}>Details</Link>
-              {team && !preview
+              {team && !preview && !waiting
                 ? <Link className="team-btn" to={`/manage/${next.events.id}`}>My team · {team.length} ›</Link>
-                : next.status === 'confirmed' ? <span className="light-btn confirmed-chip" style={{ height: 46, borderRadius: 14 }}>✓ Confirmed</span>
-                : <button className="team-btn" style={{ border: 'none' }} onClick={() => respond(next.id, 'confirmed')}>Confirm</button>}
+                : addr ? <a className="dir-btn" href={mapsUrl(addr)} target="_blank" rel="noreferrer">Directions</a>
+                : <span className="dir-btn" aria-disabled>Directions</span>}
             </div>
-            {!started && !managesIt && <NeedChange canSchedule={!(req?.status === 'pending' || (req?.status === 'keep' && !req.keep_reply))} onSchedule={() => setSheet({ kind: 'change', s: next })} onCancel={() => setSheet({ kind: 'cancel', s: next })} />}
+            {needChange}
           </section>
         );
       })()}
@@ -272,26 +308,49 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
 
       {/* Pay-period hours card removed from Home (Oct 31) — it lives in the Hours tab. */}
 
-      {rest.length > 0 && (
-        <>
-          <div className="sec-head"><span className="serif">Coming up</span><Link to={`${base}/schedule`}>Full schedule ›</Link></div>
-          <section className="agenda">
-            {rest.slice(0, 5).map((s) => {
-              const b = dayBadge(s.events.event_date, lang);
-              return (
-                <Link key={s.id} to={teams[s.events.id] && !preview ? `/manage/${s.events.id}` : `${base}/shift/${s.id}`} className="agenda-row" style={{ minHeight: 64 }}>
-                  <div className="d" style={{ width: 40, alignItems: 'center' }}><small>{b.dow}</small><b>{b.day}</b></div>
-                  <div className="what" style={{ gap: 5 }}><b className={soon(s) ? 'muted' : ''}>{soon(s) ? 'Place to come' : s.events.title}</b>
-                    <span className="pos-row2"><span className={'pos-pill' + (isLead(s) ? ' lead' : '')}>{role(s)}</span>{teams[s.events.id] && !preview ? <span>team {teams[s.events.id].length}</span> : null}</span></div>
-                  <span className="row-wear" title={uniformLabel(uniformFor(s))}><UniformIcon kind={uniformFor(s)} size={30} /></span>
-                  <div className="row-time"><small>Starts</small>{soon(s) ? <b className="tbc">To come</b> : s.time_tbc ? <b className="tbc">Time TBC</b> : <b><span className="serif">{time(s.planned_start, lang).replace(/\s?[ap]\.?\s?m\.?/i, '')}</span><i>{/p\.?\s?m/i.test(time(s.planned_start, lang)) ? ' PM' : ' AM'}</i></b>}</div>
-                  {soon(s) ? <span className="tag-soon">Details coming</span> : s.status === 'confirmed' ? <span className="ok-dot" aria-label="Confirmed" /> : <span className="tag-ask" style={{ height: 26, fontSize: 11 }}>Confirm</span>}
-                </Link>
-              );
-            })}
-          </section>
-        </>
-      )}
+      {(() => {
+        // push 33c · while on shift: the next shift shrinks to one line, then the red pill, then Coming up
+        const working = !!next?.punches?.punch_in && new Date(next.punches.punch_in).getTime() <= Date.now();
+        const mini = working ? rest[0] : undefined;
+        const list = mini ? rest.slice(1) : rest;
+        return <>
+          {mini && (() => { const b = dayBadge(mini.events.event_date, lang); const ok = mini.status === 'confirmed'; return (
+            <Link to={`${base}/shift/${mini.id}`} className={'next-mini' + (ok ? ' ok' : '')}>
+              <div className="d"><small>{b.dow}</small><b>{b.day}</b></div>
+              <div className="grow"><small>NEXT · {soon(mini) ? 'DETAILS COMING' : ok ? '✓ CONFIRMED' : 'TO CONFIRM'}</small><b>{soon(mini) ? 'You’re booked' : mini.events.title}</b>
+                <span>{soon(mini) || mini.time_tbc ? 'Time TBC' : time(mini.planned_start, lang)} · {role(mini)} · {whenLabel(mini).split(' · ')[0].toLowerCase()}</span></div>
+              <span className="row-wear"><UniformIcon kind={uniformFor(mini)} size={30} /></span>
+            </Link>
+          ); })()}
+          {waitingAsks > 0 && (
+            <Link to={preview ? `${base}/schedule` : '/availability'} className="dates-pill">
+              <CalIcon /><b className="grow">{waitingAsks} date{waitingAsks > 1 ? 's' : ''} to answer</b><span className="dp-go">Answer ›</span>
+            </Link>
+          )}
+          {list.filter((s) => s !== next && changed(s)).map((s) => <ChangedBox key={s.id} prev={changed(s)!} s={s} role={role(s)} calOn={!!cal?.added_at} onSeen={() => changeSeen(s)} standalone />)}
+          {list.length > 0 && (
+            <>
+              <div className="sec-head"><span className="serif">Coming up</span><Link to={`${base}/schedule`}>Full schedule ›</Link></div>
+              <section className="agenda">
+                {list.slice(0, 5).map((s) => {
+                  const b = dayBadge(s.events.event_date, lang);
+                  const pend = !!s.events.details_pending;
+                  return (
+                    <Link key={s.id} to={teams[s.events.id] && !preview ? `/manage/${s.events.id}` : `${base}/shift/${s.id}`} className="agenda-row" style={{ minHeight: 64 }}>
+                      <div className="d" style={{ width: 40, alignItems: 'center' }}><small>{b.dow}</small><b>{b.day}</b></div>
+                      <div className="what" style={{ gap: 5 }}><b className={pend ? 'muted' : ''}>{pend ? 'Place to come' : s.events.title}</b>
+                        <span className="pos-row2"><span className={'pos-pill' + (isLead(s) ? ' lead' : '')}>{role(s)}</span>{teams[s.events.id] && !preview ? <span>team {teams[s.events.id].length}</span> : null}</span></div>
+                      <span className="row-wear" title={uniformLabel(uniformFor(s))}><UniformIcon kind={uniformFor(s)} size={30} /></span>
+                      <div className="row-time"><small>Starts</small>{pend ? <b className="tbc">To come</b> : s.time_tbc ? <b className="tbc">Time TBC</b> : <b><span className="serif">{time(s.planned_start, lang).replace(/\s?[ap]\.?\s?m\.?/i, '')}</span><i>{/p\.?\s?m/i.test(time(s.planned_start, lang)) ? ' PM' : ' AM'}</i></b>}</div>
+                      {soon(s) ? <span className="tag-soon">Details coming</span> : s.status === 'confirmed' ? <span className="ok-dot" aria-label="Confirmed" /> : notFinal(s) ? <span className="tag-soon">Details coming</span> : <span className="tag-ask" style={{ height: 26, fontSize: 11 }}>Confirm</span>}
+                    </Link>
+                  );
+                })}
+              </section>
+            </>
+          )}
+        </>;
+      })()}
       {sheet?.kind === 'cancel' && <CancelSheet s={sheet.s} preview={preview} onClose={() => setSheet(null)} onDone={(late) => { setGone((g) => [...g, { id: sheet.s.id, title: sheet.s.events.title, date: sheet.s.events.event_date, late }]); setSheet(null); load(); }} />}
       {sheet?.kind === 'change' && <ChangeSheet s={sheet.s} preview={preview} onClose={() => setSheet(null)} onSent={() => { setSheet(null); chg.reload(); }} />}
       {sheet?.kind === 'late' && <LateSheet s={sheet.s} mgr={sheet.s.events.manager?.full_name ?? null} again={chg.late[sheet.s.id] ?? null} preview={preview} onClose={() => setSheet(null)}
@@ -304,8 +363,51 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
         </Link>
       )}
       {askQ && <AskHours s={askQ} onClose={() => setAskQ(null)} onSent={() => { setQs({ ...qs, [askQ.id]: 'open' }); setAskQ(null); }} />}
+      {thanks && <ConfirmThanks name={first} cal={preview ? null : cal} onCal={setCal} onClose={() => setThanks(null)}
+        line={`${thanks.events.venues?.name ?? thanks.events.title} · ${new Date(thanks.events.event_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).replace(',', '')} · ${t12(thanks.planned_start)}`} />}
       <TabBar base={base} />
     </main>
+  );
+}
+
+/** push 33a · Shift starts + Your position in one light row (position centred under its label). */
+function StartPos({ start, role }: { start: string | null; role: string }) {
+  return (
+    <div className="start-pos">
+      <div><small>Shift starts</small>{start ? <BigTime iso={start} small /> : <span className="big serif sm-big">TBC</span>}</div>
+      <div className="sp-pos"><small>Your position</small><span className="pos-pill-dark">{role}</span></div>
+    </div>
+  );
+}
+
+const byLabel = (iso: string) => new Date(iso).toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' }).replace(',', '');
+/** push 33a · red "Confirm · 21 h left" pill (stays red once overdue; nothing is auto-cancelled). */
+function ConfirmPill({ by }: { by: string | null }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => { const id = setInterval(() => setNow(Date.now()), 60000); return () => clearInterval(id); }, []);
+  if (!by) return <span className="confirm-pill"><i />Confirm</span>;
+  const m = Math.floor((new Date(by).getTime() - now) / 60000);
+  return <span className="confirm-pill"><i />{m <= 0 ? 'Confirm · overdue' : m < 60 ? `Confirm · ${m} min left` : `Confirm · ${Math.floor(m / 60)} h left`}</span>;
+}
+
+/** push 33f · gold "Your shift changed" box until Got it. */
+function ChangedBox({ prev, s, role, calOn, onSeen, standalone = false }: { prev: Prev; s: ShiftRow; role: string; calOn: boolean; onSeen: () => void; standalone?: boolean }) {
+  const place = s.events.venues?.name ?? s.events.title;
+  const bits: JSX.Element[] = [];
+  if (prev.start && new Date(prev.start).getTime() !== new Date(s.planned_start).getTime() && !s.time_tbc) bits.push(<span key="t">Now starts <b>{t12(s.planned_start)}</b> <s>{t12(prev.start)}</s></span>);
+  if (prev.place && prev.place !== place) bits.push(<span key="p">Now at <b>{place}</b> <s>{prev.place}</s></span>);
+  else if (prev.address && prev.address !== (s.events.address || s.events.venues?.address || '')) bits.push(<span key="a">New address <b>{s.events.address || s.events.venues?.address}</b></span>);
+  if (prev.position && prev.position.replace(/^bar\s*-\s*/i, '') !== role && !/^\d+$/.test(prev.position)) bits.push(<span key="r">Now <b>{role}</b> <s>{prev.position.replace(/^bar\s*-\s*/i, '')}</s></span>);
+  if (!bits.length) bits.push(<span key="x">Some details changed. Check Details.</span>);
+  return (
+    <div className={'changed-box' + (standalone ? ' standalone' : '')}>
+      <div className="grow">
+        <b>Your shift changed{standalone ? ` · ${new Date(s.events.event_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}` : ''}</b>
+        {bits}
+        {calOn && <small>Your G&amp;R calendar updates by itself.</small>}
+      </div>
+      <button onClick={onSeen}>Got it</button>
+    </div>
   );
 }
 

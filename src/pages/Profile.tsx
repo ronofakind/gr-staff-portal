@@ -6,6 +6,9 @@ import { PhotoPicker } from '../components/Avatar';
 import { TabBar } from '../components/TabBar';
 import { LenSeg } from '../components/PinPad';
 import { pinPassword, resolvePinLen, saveMyPinLen, type PinLen } from '../lib/pin';
+import { NICK_ERROR, cleanNick, nickState } from '../lib/nickname';
+import { useMyCalendar } from '../lib/calendar';
+import { CalendarBody } from './Checkup';
 
 type Extra = { transport: string | null; positions: string[] | null; shirt_size: string | null; pants_size: string | null; dress_size: string | null };
 const POSITIONS = ['Waiter', 'Bartender', 'Barback'];
@@ -18,6 +21,8 @@ export function Profile({ me }: { me: Staff }) {
   const [x, setX] = useState<Extra | null>(null);
   const [msg, setMsg] = useState('');
   const [edit, setEdit] = useState<null | 'phone' | 'pin'>(null);
+  const [nick, setNick] = useState(me.nickname ?? null); const [nickOpen, setNickOpen] = useState(false); // push 33d
+  const { cal, setCal } = useMyCalendar(); const [calOpen, setCalOpen] = useState(false); // push 33b
   const [phone, setPhone] = useState(me.phone ?? '');
   const [pinLen, setPinLen] = useState<PinLen | null>(null);
   useEffect(() => { if (me.email) resolvePinLen(me.email).then((r) => setPinLen(r.known ? r.len : null)); }, [me.email]);
@@ -47,12 +52,17 @@ export function Profile({ me }: { me: Staff }) {
         <span className="sm strong" style={{ color: msg.startsWith('✓') ? 'var(--ok)' : 'var(--muted)' }}>{msg}</span>
       </div>
 
-      <section className="card row" style={{ gap: 16 }}>
-        <PhotoPicker name={me.full_name} url={url} onPick={pick} size={84} />
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 18, fontWeight: 700 }}>{me.full_name}</div>
-          <div className="muted sm">{me.role === 'manager' ? 'Manager' : me.role === 'admin' ? 'Admin' : 'Staff'}</div>
+      <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div className="row" style={{ gap: 16 }}>
+          <PhotoPicker name={me.full_name} url={url} onPick={pick} size={84} />
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 18, fontWeight: 700 }}>{me.full_name}</div>
+            <div className="muted sm">{me.role === 'manager' ? 'Manager' : me.role === 'admin' ? 'Admin' : 'Staff'}</div>
+          </div>
         </div>
+        <button className="nick-row" onClick={() => setNickOpen(true)}>
+          <span className="grow"><small>Name we call you (optional)</small><b>{nick || me.full_name.split(' ')[0]}</b></span><span className="strong sm">Edit ›</span>
+        </button>
       </section>
 
       <div className="sec-head"><span className="serif">Contact &amp; login</span></div>
@@ -93,8 +103,21 @@ export function Profile({ me }: { me: Staff }) {
         </section>
       </>}
 
+      {cal && me.role !== 'admin' && <section className="sizes">
+        <button className="size-row edit-row" onClick={() => setCalOpen(true)}><span className="grow">{cal.added_at ? 'My G&R calendar' : 'Add my G&R calendar'}</span><span className="muted sm">{cal.added_at ? 'Added · add again ›' : '›'}</span></button>
+      </section>}
+
       <button className="btn" onClick={() => supabase.auth.signOut().then(() => window.location.replace('/'))}>Log out</button>
       <TabBar />
+      {nickOpen && <NickSheet me={me} nick={nick} onClose={() => setNickOpen(false)} onSaved={(v) => { setNick(v); me.nickname = v; setMsg('✓ Saved'); setNickOpen(false); }} />}
+      {calOpen && cal && <>
+        <div className="scrim" onClick={() => setCalOpen(false)} />
+        <div className="sheet" role="dialog" aria-label="Add my G&R calendar">
+          <div className="grab" />
+          <div className="spread" style={{ alignItems: 'center' }}><span className="serif" style={{ fontSize: 24 }}>Your G&amp;R calendar</span><button className="btn link" onClick={() => setCalOpen(false)}>Close</button></div>
+          <div className="cu-body"><CalendarBody me={me} cal={cal} onCal={setCal} /></div>
+        </div>
+      </>}
       {edit && <EditSheet kind={edit} me={me} phone={phone} pinLen={pinLen} onPinLen={setPinLen} onClose={() => setEdit(null)} onPhone={(v) => { setPhone(v); setMsg('✓ Saved'); }} />}
     </main>
   );
@@ -162,6 +185,42 @@ function EditSheet({ kind, me, phone, pinLen, onPinLen, onClose, onPhone }: { ki
           <button className="btn-ink green" disabled={!pinOk || busy} style={{ opacity: pinOk ? 1 : 0.45 }} onClick={savePin}>{busy ? 'Saving…' : 'Save'}</button>
         </>}
         {err && <p className="error">{err}</p>}
+      </div>
+    </>
+  );
+}
+
+/** push 33d · "What should we call you?" (validated here and again in set_my_nickname). */
+function NickSheet({ me, nick, onClose, onSaved }: { me: Staff; nick: string | null; onClose: () => void; onSaved: (v: string | null) => void }) {
+  const [v, setV] = useState(nick ?? ''); const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
+  const st = nickState(v);
+  const canSave = !busy && (st === 'ok' ? cleanNick(v) !== (nick ?? '') : st === 'empty' && !!nick);
+  const save = async () => {
+    setBusy(true); setErr('');
+    const { data, error } = await supabase.rpc('set_my_nickname', { p_nickname: cleanNick(v) });
+    setBusy(false);
+    if (error) return setErr(/real name|letters/i.test(error.message) ? NICK_ERROR : error.message);
+    onSaved(typeof data === 'string' && data ? data : null);
+  };
+  return (
+    <>
+      <div className="scrim" onClick={onClose} />
+      <div className="sheet nick-sheet" role="dialog" aria-label="What should we call you?">
+        <div className="grab" />
+        <div className="spread" style={{ alignItems: 'center' }}><span className="kicker">PROFILE</span><button className="btn link" onClick={onClose}>Cancel</button></div>
+        <div className="nick-full"><small>Full name (from G&amp;R)</small><b>{me.full_name}</b></div>
+        <div className="serif" style={{ fontSize: 24 }}>What should we call you?</div>
+        <p className="muted sm" style={{ margin: 0 }}>The name you go by at work. Your manager and team will see it on sections, teams and in the app.</p>
+        <div className={'nick-input' + (st === 'bad' ? ' bad' : st === 'ok' ? ' ok' : '')}>
+          <input className="sheet-input" autoFocus maxLength={15} autoComplete="nickname" placeholder="e.g. Mo" value={v} onChange={(e) => setV(e.target.value)} />
+          {st === 'ok' && <span aria-hidden="true">✓</span>}
+        </div>
+        {st === 'bad' ? <p className="error sm">{NICK_ERROR}</p>
+          : st === 'ok' ? <p className="sm strong" style={{ margin: 0, color: 'var(--ok)' }}>Looks good!</p>
+          : st === 'empty' && nick ? <p className="muted sm" style={{ margin: 0 }}>Leave it empty to use your first name ({me.full_name.split(' ')[0]}).</p>
+          : <p className="muted sm" style={{ margin: 0 }}>Letters only, 2 to 15 characters. Your first name or a short version of it is perfect.</p>}
+        {err && <p className="error">{err}</p>}
+        <button className="btn-ink" disabled={!canSave} style={{ opacity: canSave ? 1 : 0.45 }} onClick={save}>{busy ? 'Saving…' : 'Save'}</button>
       </div>
     </>
   );

@@ -12,7 +12,9 @@ export type EventPlanData = {
   documents?: { name: string; url: string }[];
 };
 export type ShiftPlan = { cocktail?: { role: string; from?: string }; side?: string; section?: string };
-type Person = { id?: string; full_name: string; photo_url: string | null };
+type Person = { id?: string; full_name: string; nickname?: string | null; photo_url: string | null };
+/** push 33d · nickname on section / side lists (first name if none). */
+const shown = (p: Person) => p.nickname || p.full_name.split(' ')[0];
 
 /** Big event: only this person's part of the plan. */
 export function EventPlan({ backTo }: { backTo?: string }) {
@@ -38,7 +40,7 @@ export function EventPlan({ backTo }: { backTo?: string }) {
   const section = ep.sections?.find((s) => s.name === mine.section);
   const faces = (ids: string[] | undefined, ring: string) => (ids ?? []).map((i) => people[i]).filter(Boolean).map((p) => (
     <div key={p.id} className="plan-face" style={{ ['--ring' as string]: ring }}>
-      <Avatar name={p.full_name} url={p.photo_url} size={52} /><span>{p.full_name.split(' ')[0]}</span>
+      <Avatar name={p.full_name} url={p.photo_url} size={52} /><span>{shown(p)}</span>
     </div>));
   let n = 0;
 
@@ -72,7 +74,7 @@ export function EventPlan({ backTo }: { backTo?: string }) {
           <Head icon="🍷" kicker={`${++n} · Wine and water`} title={section.name} sub="Your team pours for these tables all night" />
           {(section.tables?.length ?? 0) > 0 && <div className="plan-tables">{section.tables!.map((t) => <span key={t}>{t}</span>)}</div>}
           {team.length > 0 && <div className="plan-people"><span className="lbl green">Your team</span><div className="faces">{team.map((p) => (
-            <div key={p.full_name} className="plan-face" style={{ ['--ring' as string]: '#2E7D5B' }}><Avatar name={p.full_name} url={p.photo_url} size={52} /><span>{p.full_name.split(' ')[0]}</span></div>))}</div></div>}
+            <div key={p.full_name} className="plan-face" style={{ ['--ring' as string]: '#2E7D5B' }}><Avatar name={p.full_name} url={p.photo_url} size={52} /><span>{shown(p)}</span></div>))}</div></div>}
         </section>
       )}
 

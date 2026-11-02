@@ -44,6 +44,7 @@ export type Settings = {
   // Profile check-up & sign-in (push 31)
   'checkup.emergency': 'skip' | 'required';
   'checkup.home_screen': 'skip' | 'required';
+  'checkup.calendar': 'skip' | 'required'; // push 33h · "Add your G&R calendar"
   'signin.code': 'choose' | 'force6';
   'signin.ask_reset': boolean;
 };
@@ -78,19 +79,20 @@ export const DEFAULTS: Settings = {
   'mgr.start_from_h': 3,
   'checkup.emergency': 'skip',
   'checkup.home_screen': 'skip',
+  'checkup.calendar': 'skip',
   'signin.code': 'choose',
   'signin.ask_reset': true,
 };
 
-/** Keys staff and manager screens read (same list as the RLS whitelist in migration 038). */
+/** Keys staff and manager screens read (same list as the RLS whitelist in migration 038, + checkup.calendar in 039). */
 export const STAFF_KEYS: SettingKey[] = ['bookings.running_late', 'bookings.new_tag_shifts', 'hours.min', 'hours.rounding',
-  'mgr.feedback', 'mgr.undo', 'mgr.start_from_h', 'checkup.emergency', 'checkup.home_screen', 'signin.code', 'signin.ask_reset'];
+  'mgr.feedback', 'mgr.undo', 'mgr.start_from_h', 'checkup.emergency', 'checkup.home_screen', 'checkup.calendar', 'signin.code', 'signin.ask_reset'];
 /** Allowed string values (anything else in the table falls back to the default). */
 const CHOICES: Partial<Record<SettingKey, string[]>> = {
   'ask.how_many': ['yes_rate'], 'bookings.late_cancel': ['after_confirmed'], 'bookings.running_late': ['event_day', 'off'],
   'extras.default_billing': ['gr', 'client'], 'mgr.feedback': ['benjamin', 'all'], 'mgr.announce_window': ['day_before'],
   'mgr.undo': ['until_submitted', 'off'], 'checkup.emergency': ['skip', 'required'], 'checkup.home_screen': ['skip', 'required'],
-  'signin.code': ['choose', 'force6'],
+  'checkup.calendar': ['skip', 'required'], 'signin.code': ['choose', 'force6'],
 };
 
 type Row = { key: string; value: unknown; updated_at?: string | null };

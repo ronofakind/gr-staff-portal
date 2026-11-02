@@ -79,6 +79,7 @@ const SECTIONS: Section[] = [
   { title: 'Profile check-up & sign-in', sub: 'push 31', rows: [
     { label: 'Emergency contact', sub: 'skipped → reminder card on their Home', k: 'checkup.emergency', kind: 'choice', choices: [['skip', 'Can skip'], ['required', 'Required']], show: ((v: string) => (v === 'required' ? 'Required' : 'Can skip')) as (v: never) => string },
     { label: 'Home Screen step', sub: 'only shows if opened in the browser', k: 'checkup.home_screen', kind: 'choice', choices: [['skip', 'Can skip'], ['required', 'Required']], show: ((v: string) => (v === 'required' ? 'Required' : 'Can skip')) as (v: never) => string },
+    { label: 'G&R calendar step', sub: 'last step · staff who already finished see it once', k: 'checkup.calendar', kind: 'choice', choices: [['skip', 'Can skip'], ['required', 'Required']], show: ((v: string) => (v === 'required' ? 'Required' : 'Can skip')) as (v: never) => string },
     { label: 'Sign-in code', sub: 'or force 6 digits for everyone', k: 'signin.code', kind: 'choice', choices: [['choose', 'Staff choose 4 or 6'], ['force6', '6 digits for everyone']], show: ((v: string) => (v === 'force6' ? '6 digits for everyone' : 'Staff choose 4 or 6')) as (v: never) => string },
     { label: '“Ask Ronnie to reset”', sub: 'for people who can’t open their email', k: 'signin.ask_reset', kind: 'choice', choices: [['on', 'On'], ['off', 'Off']], show: ((v: boolean) => (v ? 'On' : 'Off')) as (v: never) => string },
   ] },
