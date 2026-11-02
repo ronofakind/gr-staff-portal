@@ -2403,3 +2403,9 @@ a.d37-where, a.d37-addr { color: inherit; text-decoration: none; -webkit-tap-hig
 .start-pos > div > :not(small) { margin-top: auto; margin-bottom: auto; }
 .start-pos .sp-pos, .d37 .d3-hero .start-pos .sp-pos { padding-bottom: 0; }
 .start-pos .big { line-height: 1; }
+
+/* event page: subscribed to the G&R calendar → label, not a button */
+.d37-cal { padding: 0 10px; gap: 8px; font-size: 12.5px; line-height: 1.2; text-align: left; }
+button.big-btn.d37-cal { border: 0; font: inherit; font-size: 12.5px; font-weight: 600; color: var(--ink); cursor: pointer; }
+.big-btn.d37-calon { background: var(--ok-bg); color: var(--ok); box-shadow: inset 0 0 0 1.5px var(--ok); font-weight: 700; cursor: default; }
+.big-btn.d37-calon.wait { background: #fff; color: var(--muted); box-shadow: inset 0 0 0 1.5px #E2D9CC; font-weight: 600; }

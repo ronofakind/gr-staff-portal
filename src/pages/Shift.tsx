@@ -9,6 +9,7 @@ import { Status, isBar, StartPos } from './Home';
 import { GettingThere } from '../components/GettingThere';
 import { PinnedAnnouncements } from '../components/Announce';
 import { MessageRonnieLink } from '../components/MessageCard';
+import { useMyCalendar, addCalendar, defaultCalOs } from '../lib/calendar';
 import { NeedChange, CancelSheet, ChangeSheet, ChangeCard, CancelledCard, useShiftChanges } from '../components/ShiftChange';
 
 export function Shift({ backTo = '/' }: { backTo?: string }) {
@@ -55,6 +56,8 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team }: { s:
   const [sheet, setSheet] = useState<'cancel' | 'change' | null>(null);
   const [gone, setGone] = useState<{ late: boolean } | null>(s.attendance === 'cancelled' ? { late: false } : null);
   const chg = useShiftChanges(preview ? [] : [s.id]);
+  const { cal: myCal, setCal: setMyCal } = useMyCalendar(preview); // subscribed to the G&R calendar → no one-off Add to calendar
+  const inFeed = s.status === 'confirmed' && !s.time_tbc && !(s.events as { details_pending?: boolean }).details_pending;
   const req = chg.reqs[s.id];
   const ev = s.events;
   const address = ev.address || ev.venues?.address || '';
@@ -166,8 +169,11 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team }: { s:
         <div className="row2" style={{ gap: 8 }}>
           {address ? <a className={'big-btn dark d37-dir' + (isToday ? ' ok' : '')} href={dirUrl(address)} target="_blank" rel="noreferrer">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 11 21 3l-8 18-2-8z" /></svg>Directions</a> : <span />}
-          <a className="big-btn d37-cal" href={cal} target="_blank" rel="noreferrer">
-            <span className="mini-cal"><i>{d.toLocaleDateString('en-CA', { month: 'short' }).toUpperCase().replace('.', '')}</i><b>{d.getDate()}</b></span>Add to calendar</a>
+          {myCal?.added_at
+            ? <div className={'big-btn d37-cal d37-calon' + (inFeed ? '' : ' wait')}><span className="mini-cal"><i>{d.toLocaleDateString('en-CA', { month: 'short' }).toUpperCase().replace('.', '')}</i><b>{d.getDate()}</b></span>{inFeed ? '✓ In your calendar' : 'In calendar once confirmed'}</div>
+            : myCal
+              ? <button type="button" className="big-btn d37-cal" onClick={() => addCalendar(myCal, defaultCalOs()).then(setMyCal)}><span className="mini-cal"><i>{d.toLocaleDateString('en-CA', { month: 'short' }).toUpperCase().replace('.', '')}</i><b>{d.getDate()}</b></span>Add my G&R calendar</button>
+              : <a className="big-btn d37-cal" href={cal} target="_blank" rel="noreferrer"><span className="mini-cal"><i>{d.toLocaleDateString('en-CA', { month: 'short' }).toUpperCase().replace('.', '')}</i><b>{d.getDate()}</b></span>Add to calendar</a>}
         </div>
       </section>
 
