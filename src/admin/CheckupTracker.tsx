@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { dLabel, tTime, isoDay, type AStaff } from './api';
 
-type Row = { staff_id: string; checkup_done_at: string | null; checkup_step: number; has_emergency: boolean; last_seen_at: string | null; last_sign_in_at: string | null };
-type Filter = 'notyet' | 'done' | 'skipped' | 'never';
+type Row = { staff_id: string; checkup_done_at: string | null; checkup_step: number; has_emergency: boolean; last_seen_at: string | null; last_sign_in_at: string | null; usual_week_skipped?: boolean };
+type Filter = 'notyet' | 'done' | 'skipped' | 'week' | 'never';
 
 /** "last opened" = the later of last_seen_at (from push 31, app load) and the auth last sign-in. */
 export const lastOpened = (r?: Pick<Row, 'last_seen_at' | 'last_sign_in_at'> | null) =>
@@ -30,11 +30,12 @@ export function CheckupTracker({ staff, onOpen }: { staff: AStaff[]; onOpen: (s:
   const r = (s: AStaff) => rows[s.id];
   const done = active.filter((s) => r(s)?.checkup_done_at);
   const skipped = done.filter((s) => !r(s)?.has_emergency);
+  const skippedWeek = active.filter((s) => r(s)?.usual_week_skipped); // push 34d · "Skip for now" on step 5, no day set since
   const never = active.filter((s) => !r(s)?.checkup_done_at && !r(s)?.last_seen_at); // hasn't opened the app since the check-up went live
   const notYet = active.filter((s) => !r(s)?.checkup_done_at);
   const pct = active.length ? Math.round((done.length / active.length) * 100) : 0;
-  const list = (f === 'done' ? done : f === 'skipped' ? skipped : f === 'never' ? never : notYet).slice().sort((a, b) => {
-    if (f === 'done' || f === 'skipped') return (r(b)?.checkup_done_at ?? '').localeCompare(r(a)?.checkup_done_at ?? '');
+  const list = (f === 'done' ? done : f === 'skipped' ? skipped : f === 'week' ? skippedWeek : f === 'never' ? never : notYet).slice().sort((a, b) => {
+    if (f === 'done' || f === 'skipped' || f === 'week') return (r(b)?.checkup_done_at ?? '').localeCompare(r(a)?.checkup_done_at ?? '');
     return (next[a.id] ?? '9999').localeCompare(next[b.id] ?? '9999') || a.full_name.localeCompare(b.full_name, 'fr');
   });
   const shown = all ? list : list.slice(0, 8);
@@ -45,13 +46,14 @@ export function CheckupTracker({ staff, onOpen }: { staff: AStaff[]; onOpen: (s:
       <div className="cu-tr-chips">
         <button className={'c-done' + (f === 'done' ? ' on' : '')} onClick={() => setF('done')}>Done {done.length}</button>
         <button className={'c-skip' + (f === 'skipped' ? ' on' : '')} onClick={() => setF('skipped')}>Skipped emergency contact {skipped.length}</button>
+        <button className={'c-skip' + (f === 'week' ? ' on' : '')} onClick={() => setF('week')}>Skipped usual week {skippedWeek.length}</button>
         <button className={'c-never' + (f === 'never' ? ' on' : '')} onClick={() => setF('never')}>Not opened the app yet {never.length}</button>
         <button className={'c-all' + (f === 'notyet' ? ' on' : '')} onClick={() => setF('notyet')}>All not done {notYet.length}</button>
       </div>
       <div className="cu-tr-list">
         {shown.map((s) => {
           const x = r(s); const lo = lastOpened(x);
-          const sub = x?.checkup_done_at ? when(x.checkup_done_at) + (x.has_emergency ? '' : ' · no emergency contact')
+          const sub = x?.checkup_done_at ? when(x.checkup_done_at) + (x.has_emergency ? '' : ' · no emergency contact') + (x.usual_week_skipped ? ' · skipped usual week' : '')
             : [next[s.id] ? `booked ${dLabel(next[s.id], { month: 'short', day: 'numeric' })}` : 'nothing booked', lo ? `last opened ${dLabel(isoDay(new Date(lo)), { month: 'short', day: 'numeric' })}` : 'never opened', x?.last_seen_at && (x.checkup_step ?? 1) > 1 ? (x.checkup_step >= 8 ? 'at the last step' : `at step ${Math.min(6, x.checkup_step)}`) : ''].filter(Boolean).join(' · ');
           return (
             <button key={s.id} className="cu-tr-row" onClick={() => onOpen(s)}>

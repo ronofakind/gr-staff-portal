@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="x-apple-disable-message-reformatting">
+  <meta name="color-scheme" content="light">
+  <meta name="supported-color-schemes" content="light">
+  <title>Your G&amp;R sign-in code</title>
+</head>
+<body style="margin:0;padding:0;background-color:#F6F2EC;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F6F2EC;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:480px;background-color:#FFFFFF;border-radius:20px;">
+          <tr>
+            <td align="center" style="padding:30px 28px 6px 28px;">
+              <img src="https://gr-staff-portal.vercel.app/logo-full.png" width="150" alt="G&amp;R à votre service" style="display:block;width:150px;max-width:150px;height:auto;border:0;outline:none;text-decoration:none;">
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="padding:16px 28px 8px 28px;font-family:'Fraunces',Georgia,'Times New Roman',serif;font-size:26px;line-height:32px;font-weight:normal;color:#1A1714;">Your sign-in code</td>
+          </tr>
+          <tr>
+            <td align="center" style="padding:0 28px 18px 28px;font-family:Helvetica,Arial,sans-serif;font-size:15px;line-height:22px;color:#4A433C;">You asked to reset your code. Type it in the app, then choose a new code (4 or 6 digits).</td>
+          </tr>
+              <tr>
+                <td align="center" style="padding:6px 28px 22px 28px;">
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                      <td align="center" style="background-color:#F6F2EC;border-radius:12px;padding:14px 22px;font-family:Georgia,'Times New Roman',serif;font-size:34px;line-height:40px;font-weight:bold;letter-spacing:10px;color:#1A1714;">{{ .Token }}</td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+          <tr>
+            <td align="center" style="padding:0 28px 22px 28px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td align="center" bgcolor="#2E7D5B" style="border-radius:12px;background-color:#2E7D5B;">
+                    <a href="{{ .ConfirmationURL }}" target="_blank" style="display:block;padding:15px 20px;font-family:Helvetica,Arial,sans-serif;font-size:16px;line-height:20px;font-weight:bold;color:#FFFFFF;text-decoration:none;border-radius:12px;">Open G&amp;R</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="padding:0 28px 28px 28px;font-family:Helvetica,Arial,sans-serif;font-size:12px;line-height:18px;color:#9A9187;">This code works for 1 hour.<br>Didn&#39;t ask for this? You can ignore this email.<br>G&amp;R à votre service · Montréal</td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

@@ -37,6 +37,7 @@ import { homeStepDue } from './lib/install';
 import { loadSettings, onSettings } from './lib/settings';
 import { Venues } from './admin/Venues';
 import { Settings } from './admin/Settings';
+import { Go } from './pages/Go';
 
 export function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
@@ -84,6 +85,9 @@ export function App() {
 
   const legal = window.location.pathname.replace(/\/$/, '');
   if (legal === '/privacy' || legal === '/terms') return <Legal kind={legal.slice(1) as 'privacy' | 'terms'} />;
+  // push 34b · personal invite link: its own screen, signed in or not (it signs them in at the end, then goes to '/')
+  const go = /^\/go\/([A-Za-z0-9_-]{10,64})$/.exec(legal);
+  if (go) return <LangContext.Provider value={lang}>{session === undefined ? <div className="loading" /> : <Go token={go[1]} />}</LangContext.Provider>;
   if (session === undefined || (session && me === undefined) || (me && checkup === undefined)) return <div className="loading" />;
 
   let body: JSX.Element;

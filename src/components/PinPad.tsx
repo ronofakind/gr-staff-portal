@@ -44,7 +44,7 @@ export function LenSeg({ len, onLen }: { len: PinLen; onLen: (l: PinLen) => void
  * Choose your code (first sign-in after the email code, after a reset): 4 | 6 segment, dots, pad, then type it again.
  * onSave gets the code; throw from it to show an error and start over.
  */
-export function ChooseCode({ initialLen = 6, onSave, title = 'CHOOSE YOUR CODE' }: { initialLen?: PinLen; onSave: (code: string, len: PinLen) => Promise<void>; title?: string }) {
+export function ChooseCode({ initialLen = 6, onSave, title = 'CHOOSE YOUR CODE', sub = 'You’ll use it to sign in.' }: { initialLen?: PinLen; onSave: (code: string, len: PinLen) => Promise<void>; title?: string; sub?: string }) {
   const force6 = setting('signin.code') === 'force6'; // push 32: Settings → Sign-in code (force 6 digits for everyone)
   const [len, setLen] = useState<PinLen>(force6 ? 6 : initialLen);
   const [first, setFirst] = useState<string | null>(null);
@@ -66,7 +66,7 @@ export function ChooseCode({ initialLen = 6, onSave, title = 'CHOOSE YOUR CODE' 
     <div className="pin-screen">
       <div className="pin-head">
         <span className="pin-kick">{first === null ? title : 'TYPE IT AGAIN'}</span>
-        <span className="pin-sub">{first === null ? 'You’ll use it to sign in.' : 'Same code once more, to be sure.'}</span>
+        <span className="pin-sub">{first === null ? sub : 'Same code once more, to be sure.'}</span>
       </div>
       {first === null && !force6 && <LenSeg len={len} onLen={(l) => { setLen(l); setV(''); setErr(''); }} />}
       <PinDots len={len} filled={v.length} shake={shake} />

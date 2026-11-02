@@ -34,11 +34,16 @@ export function TimeWheel({ value, onChange, rest = '17:00' }: { value: string |
   );
 }
 
-/** "Any time" tile + wheel. choice: 'any' | 'HH:MM' | null. */
-export function FromPicker({ choice, setChoice, rest }: { choice: string | null; setChoice: (c: string) => void; rest?: string }) {
+/**
+ * "Any time" tile + wheel. choice: 'any' | 'HH:MM' | null.
+ * onAny (push 34d, usual week): Any time saves at once and closes the sheet; Done is only for a wheel time.
+ */
+export function FromPicker({ choice, setChoice, rest, onAny }: { choice: string | null; setChoice: (c: string) => void; rest?: string; onAny?: () => void }) {
   return (
-    <div className="from-pick">
-      <button type="button" className={'any-tile' + (choice === 'any' ? ' on' : '')} onClick={() => setChoice('any')}><b>Any time</b><small>whole event</small></button>
+    <div className={'from-pick' + (onAny ? ' one-tap' : '')}>
+      {onAny
+        ? <button type="button" className={'any-tile now' + (choice === 'any' ? ' on' : '')} onClick={onAny}><b>Any time</b><small>saves right away</small></button>
+        : <button type="button" className={'any-tile' + (choice === 'any' ? ' on' : '')} onClick={() => setChoice('any')}><b>Any time</b><small>whole event</small></button>}
       <TimeWheel value={choice && choice !== 'any' ? choice : null} onChange={setChoice} rest={rest} />
     </div>
   );

@@ -7,6 +7,7 @@ import { uploadPhoto } from '../lib/photo';
 import { PhotoPicker, Avatar } from '../components/Avatar';
 import { StaffProfile } from './StaffProfile';
 import { CheckupTracker } from './CheckupTracker';
+import { appStatus, loadInviteStatus, InviteModal, AppChip, type InviteRow } from './Invite';
 
 type Off = { id: string; staff_id: string; from_date: string; to_date: string; every_dow: number | null };
 const DOWS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -26,9 +27,22 @@ export function Staff() {
   const [off, setOff] = useState<Off[]>([]);
   const [rules, setRules] = useState<{ links: SLink[]; conds: SCond[] }>({ links: [], conds: [] });
   const [params, setParams] = useSearchParams();
+  // push 34a · app status (invite by text)
+  const [inv, setInv] = useState<Record<string, InviteRow> | string | null>(null);
+  const [appF, setAppF] = useState<'all' | 'signed' | 'invited' | 'not'>('all');
+  const [sel, setSel] = useState<Set<string>>(new Set());
+  const [inviteQ, setInviteQ] = useState<AStaff[] | null>(null);
+  const loadInv = () => loadInviteStatus().then(setInv);
   const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' });
   const load = () => {
-    allStaff().then((l) => { setList(l); const o = params.get('open'); if (o) { const hit = l.find((x) => x.id === o); if (hit) setProf(hit); const p = new URLSearchParams(params); p.delete('open'); setParams(p, { replace: true }); } });
+    allStaff().then((l) => {
+      setList(l);
+      const o = params.get('open'); const iv = params.get('invite'); // ?invite=<id>: Needs you "invite link expired · Resend"
+      if (o) { const hit = l.find((x) => x.id === o); if (hit) setProf(hit); }
+      if (iv) { const hit = l.find((x) => x.id === iv); if (hit) setInviteQ([hit]); }
+      if (o || iv) { const p = new URLSearchParams(params); p.delete('open'); p.delete('invite'); setParams(p, { replace: true }); }
+    });
+    loadInv();
     loadRules().then(setRules);
     supabase.from('shifts').select('staff_id,events!inner(event_date)').neq('status', 'declined').gte('events.event_date', today.slice(0, 8) + '01').lte('events.event_date', today.slice(0, 8) + '31')
       .then(({ data }) => { const m: Record<string, number> = {}; for (const r of (data ?? []) as { staff_id: string }[]) m[r.staff_id] = (m[r.staff_id] ?? 0) + 1; setMonth(m); });
@@ -42,9 +56,13 @@ export function Staff() {
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
   const digits = q.replace(/\D/g, '');
   const searched = base.filter((s) => words.every((w) => (s.full_name + ' ' + (s.nickname ?? '')).toLowerCase().includes(w)) || (digits.length >= 3 && (s.phone ?? '').replace(/\D/g, '').includes(digits)));
+  const invRows = typeof inv === 'object' && inv ? inv : null;
+  const app = (s: AStaff) => appStatus(s, invRows?.[s.id]);
+  const appGroup = (s: AStaff) => { const k = app(s).key; return k === 'signed' ? 'signed' : k === 'none' || k === 'noemail' ? 'not' : 'invited'; };
+  const appCount = (g: 'signed' | 'invited' | 'not') => searched.filter((s) => appGroup(s) === g).length;
   const tOf = (s: AStaff) => s.staff_private?.tier ?? null;
   const count = (t: string) => searched.filter((s) => (t === 'none' ? !tOf(s) : tOf(s) === t)).length;
-  const rows = searched.filter((s) => tier === 'all' || (tier === 'none' ? !tOf(s) : tOf(s) === tier)).sort((a, b) => {
+  const rows = searched.filter((s) => tier === 'all' || (tier === 'none' ? !tOf(s) : tOf(s) === tier)).filter((s) => appF === 'all' || !invRows || appGroup(s) === appF).sort((a, b) => {
     const r = (x: AStaff) => x.staff_private?.ranking ?? 9999;
     switch (sort) {
       case 'last': return lastName(a).localeCompare(lastName(b), 'fr');
@@ -83,20 +101,32 @@ export function Staff() {
         <label className="row sm" style={{ gap: 6 }}><input type="checkbox" checked={inactive} onChange={(e) => setInactive(e.target.checked)} /> Show inactive</label>
       </div>
       {list && <CheckupTracker staff={list} onOpen={setProf} />}
+      <div className="adm-card app-bar">
+        {typeof inv === 'string' ? <span className="muted sm">{inv}</span> : <div className="app-counts">
+          {([['signed', 'Signed in', 'green'], ['invited', 'Invited · waiting', 'gold'], ['not', 'Not invited', 'grey']] as const).map(([k, l, c]) => (
+            <button key={k} className={'app-chip btn-chip ' + c + (appF === k ? ' on' : '')} aria-pressed={appF === k} onClick={() => setAppF(appF === k ? 'all' : k)}>{l} {invRows ? appCount(k) : '…'}</button>))}
+        </div>}
+        <button className="abtn dark" disabled={!sel.size} onClick={() => setInviteQ(rows.filter((s) => sel.has(s.id) && app(s).key !== 'signed'))}>✉ Invite {sel.size} selected</button>
+        <span className="muted sm app-note">Invite needs an email (their sign-in) and a phone (where the text goes). Filters: Not invited · Invited · Signed in.</span>
+      </div>
       {open === 'new' && <Editor onDone={() => { setOpen(null); load(); }} />}
       <div className="adm-card" style={{ padding: 0 }}>
-        <div className="st-row st-head"><span>NAME</span><span>TIER · RANK</span><span className="hide-sm">{mName}</span><span className="hide-sm">TIME OFF</span><span /></div>
+        <div className="st-row sl-row st-head"><span /><span>NAME</span><span>TIER · RANK</span><span className="hide-sm">{mName}</span><span className="hide-sm">TIME OFF</span><span className="hide-sm">APP</span><span /></div>
         {rows.map((s, k) => {
           const L = letters && (k === 0 || letterOf(rows[k - 1]) !== letterOf(s)) ? letterOf(s) : null;
-          const tr = tOf(s); const o = offText(s.id);
+          const tr = tOf(s); const o = offText(s.id); const ap = app(s);
+          const act = (e: React.MouseEvent) => { e.stopPropagation(); if (ap.action === 'Invite' || ap.action === 'Resend') setInviteQ([s]); else setOpen(s.id); };
           return (
             <Fragment key={s.id}>
               {L && <div className="st-letter">{L}</div>}
-              <div className={'st-row' + (s.active ? '' : ' inactive') + (prof?.id === s.id ? ' sel' : '')} onClick={() => setProf(s)}>
+              <div className={'st-row sl-row' + (s.active ? '' : ' inactive') + (prof?.id === s.id ? ' sel' : '')} onClick={() => setProf(s)}>
+                <span className="sl-check" onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={`Select ${s.full_name}`} checked={sel.has(s.id)}
+                  onChange={(e) => { const n = new Set(sel); if (e.target.checked) n.add(s.id); else n.delete(s.id); setSel(n); }} /></span>
                 <span className="st-name"><Avatar name={s.full_name} url={s.photo_url} size={34} /><span><b>{s.full_name}{!tr && <i className="new-tag">NEW</i>}<RuleIcons sid={s.id} links={rules.links} conds={rules.conds} /></b><small>{s.nickname ? `"${s.nickname}" · ` : ''}{s.positions.map((p) => p.toLowerCase()).join(', ') || s.role}{s.role !== 'staff' ? ` · ${s.role}` : ''}</small></span></span>
                 <span>{tr ? <><i className={'tier-dot ' + tr}>{tr}</i> <span className="muted">#{s.staff_private?.ranking ?? '–'}</span></> : <><i className="tier-q">?</i> <Link to="/admin/tiers" className="accent strong sm" onClick={(e) => e.stopPropagation()}>Rank ›</Link></>}</span>
                 <span className="hide-sm">{month[s.id] ?? 0}</span>
                 <span className="hide-sm">{o ? <span className="tag" style={{ height: 24 }}>{o}</span> : <span className="muted">—</span>}</span>
+                <span className="sl-app">{invRows && <><AppChip st={ap} />{ap.action ? <button className={'abtn sm' + (ap.action === 'Invite' ? ' dark' : '')} onClick={act}>{ap.action}</button> : <span className="muted">—</span>}</>}</span>
                 <span className="st-open">{prof?.id === s.id ? <b className="accent sm">Selected</b> : <span className="sm strong">Open ›</span>}</span>
               </div>
               {open === s.id && <div style={{ padding: '0 16px 16px' }}><Editor s={s} onDone={() => { setOpen(null); load(); }} /></div>}
@@ -108,6 +138,8 @@ export function Staff() {
       </div>
       <div className="st-who"><b>WHO SEES RANKINGS</b><span>✓ Admin accounts only · ✕ Managers and MDs: names and roles only · ✕ Staff: never their own or anyone's tier. Enforced in the database, not only hidden on screen.</span></div>
       {prof && <StaffProfile s={prof} all={list ?? undefined} onClose={() => { setProf(null); load(); }} onEdit={() => { setOpen(prof.id); setProf(null); }} />}
+      {inviteQ && inviteQ.length > 0 && <InviteModal queue={inviteQ} onClose={() => { setInviteQ(null); setSel(new Set()); loadInv(); }} onChanged={loadInv}
+        onFix={(s) => { setInviteQ(null); setProf(null); setOpen(s.id); }} />}
     </div>
   );
 }

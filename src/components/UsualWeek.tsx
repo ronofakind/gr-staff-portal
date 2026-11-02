@@ -49,9 +49,11 @@ export function UsualWeekList({ week, setDay, plural = false }: { week: Record<n
           <SwipeSheet onClose={() => setWkSheet(null)} label="From what time can you usually start?">
             <div><div className="kicker">{DAYS[wkSheet].toUpperCase()}S · <span style={{ color: 'var(--ok)' }}>YES ✓</span></div>
               <div className="serif" style={{ fontSize: 26 }}>From what time can you usually start?</div></div>
-            <FromPicker choice={wkChoice} setChoice={setWkChoice} />
-            <button className="big-btn dark" disabled={!wkChoice} style={{ justifyContent: 'center' }} onClick={() => { setDay(wkSheet, 'yes', wkChoice === 'any' ? null : wkChoice); setWkSheet(null); }}>
-              {!wkChoice ? 'Pick a time or Any time' : `Done · ${DAYS[wkSheet]}s ${wkChoice === 'any' ? 'any time' : 'from ' + ampm15(wkChoice)}`}</button>
+            {/* push 34d · Any time = one tap (saves + closes). Done only for a time picked on the wheel. */}
+            <FromPicker choice={wkChoice} setChoice={setWkChoice} onAny={() => { setDay(wkSheet, 'yes', null); setWkSheet(null); }} />
+            <button className="big-btn dark" disabled={!wkChoice || wkChoice === 'any'} style={{ justifyContent: 'center' }} onClick={() => { if (!wkChoice || wkChoice === 'any') return; setDay(wkSheet, 'yes', wkChoice); setWkSheet(null); }}>
+              {!wkChoice || wkChoice === 'any' ? 'Pick a time on the wheel' : `Done · ${DAYS[wkSheet]}s from ${ampm15(wkChoice)}`}</button>
+            <p className="muted sm" style={{ margin: '-4px 0 0', textAlign: 'center' }}>Done is only for a time picked on the wheel. Tapping Any time saves and closes the sheet.</p>
           </SwipeSheet>
         </>
       )}

@@ -14,7 +14,9 @@ type Step = 'email' | 'pin' | 'forgot' | 'code' | 'setpin' | 'asked';
 export function Login({ mustSetPin }: { mustSetPin?: boolean }) {
   const t = useT(); useSettings(); // push 32: "Ask Ronnie to reset" on/off (readable signed out)
   const saved = localStorage.getItem('gr_email') ?? '';
-  const [step, setStep] = useState<Step>(mustSetPin ? 'setpin' : saved ? 'pin' : 'email');
+  // push 34b · "Sign in with my email" on an expired invite link → straight to the email-code step
+  const [viaInvite] = useState(() => { try { const v = sessionStorage.getItem('gr_login_step') === 'forgot'; sessionStorage.removeItem('gr_login_step'); return v; } catch { return false; } });
+  const [step, setStep] = useState<Step>(mustSetPin ? 'setpin' : saved ? (viaInvite ? 'forgot' : 'pin') : 'email');
   const [email, setEmail] = useState(saved);
   const [len, setLen] = useState<PinLen>(6); const [known, setKnown] = useState(true); const [lenReady, setLenReady] = useState(!saved || !!mustSetPin);
   const [value, setValue] = useState('');

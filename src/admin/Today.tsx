@@ -157,6 +157,13 @@ export function Today() {
             setTick((t) => t + 1);
           } });
       }
+      // push 34b · "Ask Ronnie for a new link" on an expired / used invite link → Resend opens the Invite pop-up
+      const { data: ir, error: irErr } = await supabase.from('invite_requests').select('id,created_at,staff:staff!invite_requests_staff_id_fkey(id,full_name,email)').is('handled_at', null).order('created_at');
+      if (!irErr) for (const r of (ir ?? []) as unknown as ResetReq[]) {
+        const st = r.staff; if (!st) continue;
+        n.unshift({ key: 'ir' + r.id, red: true, title: `${st.full_name.split(' ')[0]}'s invite link expired`, sub: `Asked for a new link ${dLabel(isoDay(new Date(r.created_at)), { month: 'short', day: 'numeric' })} ${tTime(r.created_at)}`,
+          action: 'Resend', to: `/admin/staff?invite=${st.id}` });
+      }
       setNeeds(n);
     })();
   }, [tick]);

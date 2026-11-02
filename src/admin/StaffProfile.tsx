@@ -6,6 +6,7 @@ import { isoDay, flagsOf, hoursBetween, dLabel, allStaff, type AStaff, type Flag
 import { loadRules, linksOf, other, condLabel, DOW3, type SLink, type SCond, type LinkKind, type CondKind } from './rules';
 import { loadScoreData, scoreOf, AREAS, avgStars, isStar, type ScoreData } from './score';
 import { ScoreWhy } from './Ranking';
+import { appStatus, loadInviteStatus, InviteModal, AppChip, type InviteRow } from './Invite';
 
 const DOW = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 type Sh = { id: string; planned_start: string; attendance: string | null; left_early?: boolean; punches: { punch_in: string | null; punch_out: string | null } | null; events: { event_date: string; title: string } };
@@ -20,6 +21,10 @@ export function StaffProfile({ s, onClose, onEdit, all }: { s: AStaff; onClose: 
   const [sex, setSex] = useState<'m' | 'f' | null>(s.sex ?? null);
   useEffect(() => setSex(s.sex ?? null), [s.id]);
   const [shifts, setShifts] = useState<Sh[]>([]);
+  // push 34a · Invite / Resend (same pop-up as the Staff list)
+  const [inv, setInv] = useState<InviteRow | null | undefined>(undefined); const [inviting, setInviting] = useState(false);
+  const loadInv = () => loadInviteStatus().then((m) => setInv(typeof m === 'string' ? null : m[s.id] ?? null));
+  useEffect(() => { loadInv(); }, [s.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const [notes, setNotes] = useState(s.staff_private?.notes ?? ''); const [saved, setSaved] = useState(true);
   const [people, setPeople] = useState<AStaff[]>(all ?? []); const [venues, setVenues] = useState<Venue[]>([]);
   const [links, setLinks] = useState<SLink[]>([]); const [conds, setConds] = useState<SCond[]>([]); const [adding, setAdding] = useState(false);
@@ -95,6 +100,9 @@ export function StaffProfile({ s, onClose, onEdit, all }: { s: AStaff; onClose: 
           {tel ? <a className="abtn dark" href={`sms:${tel}`}>Text</a> : <span />}
           <Link className="abtn" to={`/admin/view/${s.id}`}>View as</Link>
         </div>
+        {inv !== undefined && (() => { const ap = appStatus(s, inv); return (
+          <div className="row sm sp-app" style={{ gap: 8 }}><span className="muted">App</span><AppChip st={ap} />
+            {ap.action && <button className={'abtn sm' + (ap.action === 'Invite' ? ' dark' : '')} style={{ marginLeft: 'auto' }} onClick={() => (ap.action === 'Invite' || ap.action === 'Resend' ? setInviting(true) : onEdit())}>{ap.action}</button>}</div>); })()}
         <div className="pcard"><div className="kick">THIS MONTH</div><div className="row" style={{ gap: 20 }}><b className="big">{month.length} <small>shifts</small></b><b className="big">{monthHours} <small>hrs</small></b></div></div>
         {sd && <div className="pcard"><div className="row" style={{ justifyContent: 'space-between' }}><span className="kick">SCORE</span><Link to="/admin/ranking" className="sm accent strong">Ranking ›</Link></div>
           <ScoreWhy compact s={{ ...s, staff_private: s.staff_private ? { ...s.staff_private, tier: tierNow } : s.staff_private }} sc={scoreOf({ ...s, staff_private: s.staff_private ? { ...s.staff_private, tier: tierNow } : s.staff_private }, sd)}
@@ -161,6 +169,7 @@ export function StaffProfile({ s, onClose, onEdit, all }: { s: AStaff; onClose: 
         <div className="row wrap"><button className="abtn" onClick={onEdit}>Edit details</button><Link className="abtn" to="/admin/tiers">Change tier</Link></div>
         {s.active && <button className="lnk accent" style={{ alignSelf: 'flex-start' }} onClick={async () => { if (confirm(`Mark ${s.full_name} inactive? They stay in the history.`)) { await supabase.from('staff').update({ active: false }).eq('id', s.id); onClose(); } }}>Mark inactive</button>}
       </aside>
+      {inviting && <InviteModal queue={[s]} onClose={() => { setInviting(false); loadInv(); }} onChanged={loadInv} onFix={() => { setInviting(false); onEdit(); }} />}
       {adding && <AddRule s={s} people={people} venues={venues} links={links} onClose={() => setAdding(false)} onSaved={() => { setAdding(false); reloadRules(); }} />}
     </>
   );

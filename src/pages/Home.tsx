@@ -14,7 +14,7 @@ import { callName } from '../lib/nickname';
 import { UniformIcon, uniformFor, uniformLabel } from '../components/Uniform';
 import { AnnounceCards } from '../components/Announce';
 import { useCheckup } from '../lib/checkup';
-import { EmergencyForm } from './Checkup';
+import { EmergencyForm, UsualWeekScreen } from './Checkup';
 import { SwipeSheet } from '../components/SwipeSheet';
 import { NeedChange, CancelSheet, ChangeSheet, LateSheet, LateBlock, ChangeCard, CancelledCard, useShiftChanges, t12 as t12c, type LateNotice } from '../components/ShiftChange';
 
@@ -49,6 +49,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
   const [mgrLate, setMgrLate] = useState<MgrLate[]>([]);
   // push 31 · emergency contact skipped in the check-up → small reminder until it's filled
   const { info: cu, reload: reloadCu } = useCheckup(); const [emOpen, setEmOpen] = useState(false);
+  const [wkOpen, setWkOpen] = useState(false); // push 34d · usual week skipped in the check-up
   // push 33
   const [x33, setX33] = useState<Record<string, P33>>({});
   const [thanks, setThanks] = useState<ShiftRow | null>(null);
@@ -168,6 +169,14 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
           <span className="em-go">Add ›</span>
         </button>
       )}
+      {!preview && cu?.done_at && cu.usual_week_skipped_at && (
+        <button className="em-card wk-card" onClick={() => setWkOpen(true)}>
+          <span className="em-ic" aria-hidden="true">🗓</span>
+          <span className="grow"><b>Set your usual week</b><span>The days you can usually work. Ronnie only asks you for those.</span></span>
+          <span className="em-go">›</span>
+        </button>
+      )}
+      {wkOpen && <UsualWeekScreen me={me} onClose={() => { setWkOpen(false); reloadCu(); }} />}
       {emOpen && cu && <>
         <div className="scrim" onClick={() => setEmOpen(false)} />
         <SwipeSheet onClose={() => setEmOpen(false)} label="Emergency contact">

@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { supabase, type Staff } from '../lib/supabase';
 import { setting } from '../lib/settings';
 import { uploadPhoto } from '../lib/photo';
-import { RELATIONS, saveMyProfile, setCheckupStep, type CheckupInfo } from '../lib/checkup';
+import { RELATIONS, saveMyProfile, setCheckupStep, setUsualWeekSkipped, type CheckupInfo } from '../lib/checkup';
 import { useUsualWeek, UsualWeekList } from '../components/UsualWeek';
 import { Avatar } from '../components/Avatar';
 import {
@@ -67,7 +67,7 @@ export function Checkup({ me, info, onFinish }: { me: Staff; info: CheckupInfo; 
       {step === 2 && <YouStep me={me} info={info} head={head('Is this still right?', 'we filled in what we have')} onNext={() => go(nextOf(2))} />}
       {step === 3 && <EmergencyStep info={info} head={head('Emergency contact', 'only used if something happens at an event', setting('checkup.emergency') !== 'required')} onNext={() => go(nextOf(3))} />}
       {step === 4 && <LangStep info={info} head={head('Languages', 'how well do you speak with guests?')} onNext={() => go(nextOf(4))} />}
-      {step === 5 && <WeekStep me={me} head={head('Your usual week', 'flip on the days you can usually work')} onNext={() => go(nextOf(5))} />}
+      {step === 5 && <WeekStep me={me} head={head('Your usual week', 'flip on the days you can usually work', true)} onNext={() => go(nextOf(5))} />}
       {step === 6 && <HomeScreenStep head={head('Add G&R to your Home Screen', 'opens faster · lets your phone buzz for shifts', setting('checkup.home_screen') !== 'required')} onDone={() => go(nextOf(6))} />}
       {step === 8 && cal && <CalendarStep me={me} cal={cal} onCal={setCal} head={head('Add your G&R calendar', 'your confirmed shifts, right in your phone’s calendar', setting('checkup.calendar') !== 'required')} required={setting('checkup.calendar') === 'required'} onDone={() => go(nextOf(8))} />}
       <button className="cu-out" onClick={() => supabase.auth.signOut().then(() => window.location.replace('/'))}>Log out</button>
@@ -238,7 +238,7 @@ function LangStep({ info, head, onNext }: { info: CheckupInfo; head: ReactNode; 
   );
 }
 
-// ───────── 5 · Usual week (same as Availability) ─────────
+// ───────── 5 · Usual week (same as Availability) · push 34d: can skip ─────────
 function WeekStep({ me, head, onNext }: { me: Staff; head: ReactNode; onNext: () => void }) {
   const { week, setDay, loaded, err } = useUsualWeek(me.id);
   return (
@@ -249,8 +249,32 @@ function WeekStep({ me, head, onNext }: { me: Staff; head: ReactNode; onNext: ()
         {err && <p className="error">{err}</p>}
         <p className="cu-note">Same as My usual week in Availability. Already set? It shows here, just tap Next.</p>
       </div>
-      <Foot><button className="cu-btn green" disabled={!loaded} onClick={onNext}>Next</button></Foot>
+      <Foot>
+        <button className="cu-btn green" disabled={!loaded} onClick={() => { setUsualWeekSkipped(false); onNext(); }}>Next</button>
+        <button className="cu-skip" onClick={() => { setUsualWeekSkipped(true); onNext(); }}><span>Skip for now</span><small>We’ll remind you on Home later</small></button>
+      </Foot>
     </>
+  );
+}
+
+/** push 34d · Home → "🗓 Set your usual week ›": the same switches, full screen. Done (even with all days off) removes the card. */
+export function UsualWeekScreen({ me, onClose }: { me: Staff; onClose: (answered: boolean) => void }) {
+  const { week, setDay, loaded, err } = useUsualWeek(me.id);
+  return (
+    <div className="cu-overlay">
+      <main className="v2 cu">
+        <div className="cu-head">
+          <div className="spread" style={{ alignItems: 'center' }}><span className="cu-kick">MY USUAL WEEK</span><button className="sq" aria-label="Close" onClick={() => onClose(false)}>×</button></div>
+          <div className="serif cu-title">Your usual week</div><div className="cu-sub">flip on the days you can usually work</div>
+        </div>
+        <div className="cu-body">
+          {loaded ? <UsualWeekList week={week} setDay={setDay} plural /> : <div className="card muted sm">Loading…</div>}
+          {err && <p className="error">{err}</p>}
+          <p className="cu-note">Same as My usual week in Availability. Ronnie only asks you for days you’re usually free.</p>
+        </div>
+        <Foot><button className="cu-btn green" disabled={!loaded} onClick={async () => { await setUsualWeekSkipped(false); onClose(true); }}>Done</button></Foot>
+      </main>
+    </div>
   );
 }
 
