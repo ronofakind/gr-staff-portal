@@ -405,7 +405,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
 }
 
 /** push 33a · Shift starts + Your position in one light row (position centred under its label). */
-function StartPos({ start, role }: { start: string | null; role: string }) {
+export function StartPos({ start, role }: { start: string | null; role: string }) {
   return (
     <div className="start-pos">
       <div><small>Shift starts</small>{start ? <BigTime iso={start} small /> : <span className="big serif sm-big">TBC</span>}</div>
