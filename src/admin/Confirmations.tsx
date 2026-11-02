@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { NICK_RE, cleanNick } from '../lib/nickname';
 import { dLabel, tTime, type AEvent } from './api';
@@ -9,7 +10,7 @@ import { dLabel, tTime, type AEvent } from './api';
  * Hours count from shifts.confirm_sent_at (migration 039). Nothing is auto-cancelled and the app never sends texts:
  * Text opens Ronnie's Messages with the reminder filled in.
  */
-type Row = { id: string; event_id: string; status: string; attendance: string | null; planned_start: string; confirm_sent_at?: string | null; time_tbc?: boolean | null;
+type Row = { id: string; event_id: string; staff_id?: string; status: string; attendance: string | null; planned_start: string; confirm_sent_at?: string | null; time_tbc?: boolean | null;
   staff: { full_name: string; nickname: string | null; phone: string | null } | null; events?: { details_pending?: boolean } | null };
 export type CState = 'ok' | 'grey' | 'gold' | 'red' | 'unsent' | 'pending';
 export const hoursSince = (iso: string) => Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 3600e3));
@@ -35,7 +36,7 @@ export function ConfirmTracker({ evs, venue }: { evs: AEvent[]; venue: string })
   const ids = evs.map((e) => e.id).join(',');
   useEffect(() => {
     const q = (cols: string) => supabase.from('shifts').select(cols).in('event_id', evs.map((e) => e.id)).neq('status', 'declined').is('attendance', null).order('planned_start');
-    const base = 'id,event_id,status,attendance,planned_start,time_tbc,events(details_pending),staff:staff!shifts_staff_id_fkey(full_name,nickname,phone)';
+    const base = 'id,event_id,staff_id,status,attendance,planned_start,time_tbc,events(details_pending),staff:staff!shifts_staff_id_fkey(full_name,nickname,phone)';
     q(base + ',confirm_sent_at').then(async (r) => {
       const res = r.error ? await q(base) : r; // migration 039 not applied yet → no hours, only confirmed / waiting
       setRows(((res.data ?? []) as unknown as Row[]).filter((x) => x.staff));
@@ -62,6 +63,7 @@ export function ConfirmTracker({ evs, venue }: { evs: AEvent[]; venue: string })
         return (
           <div key={r.id} className="ct-row">
             <b className="grow">{r.staff!.full_name}</b>
+            {r.staff_id && <Link className="abtn sm" to={`/admin/messages?staff=${r.staff_id}`} title={`Message ${r.staff!.full_name}`} aria-label={`Message ${r.staff!.full_name}`}>✉</Link>}
             {st === 'ok' ? <span className="ct-tag ok">✓ Confirmed</span>
               : st === 'red' ? <span className="ct-tag red">Overdue · {h} h</span>
               : st === 'gold' ? <span className="ct-tag gold">Waiting · {h} h</span>

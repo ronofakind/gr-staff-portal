@@ -38,6 +38,8 @@ import { loadSettings, onSettings } from './lib/settings';
 import { Venues } from './admin/Venues';
 import { Settings } from './admin/Settings';
 import { Go } from './pages/Go';
+import { Messages as StaffMessages } from './pages/Messages';
+import { MgrMessages } from './pages/MgrMessages';
 
 export function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
@@ -135,6 +137,8 @@ export function App() {
         <Route path="/hours" element={<HoursPage me={me} />} />
         <Route path="/availability" element={<StaffAvail me={me} />} />
         <Route path="/manage/:eventId" element={<Manage me={me} />} />
+        <Route path="/manage/:eventId/messages" element={<MgrMessages me={me} />} />
+        <Route path="/messages" element={<StaffMessages me={me} />} />
         <Route path="/profile" element={<Profile me={me} />} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>

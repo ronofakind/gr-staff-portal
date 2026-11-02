@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { supabase, type Staff } from '../lib/supabase';
 import { TabBar } from '../components/TabBar';
 import { PageHead } from '../components/ProfileMenu';
@@ -28,6 +28,7 @@ export function Hours({ me }: { me: Staff }) {
   const [teams, setTeams] = useState<Team[] | null>(null); const [team, setTeam] = useState<Team | null>(null);
   const yearStart = `${today.slice(0, 4)}-01-01`;
   const isMgr = me.role === 'manager' || me.role === 'admin';
+  const nav = useNavigate();
 
   const load = async () => {
     const from = per.start < yearStart ? per.start : yearStart;
@@ -67,7 +68,7 @@ export function Hours({ me }: { me: Staff }) {
 
   const tag = (r: Row) => { const q = qs[r.id];
     if (q?.status === 'open') return <span className="hz-tag red">QUESTION SENT</span>;
-    if (q?.status === 'fixed') return <span className="hz-tag ok">✓ FIXED</span>;
+    if (q?.status === 'fixed') return <span className="hz-tag ok">✓ FIXED BY RONNIE</span>;
     if (q?.status === 'correct') return <span className="hz-tag grey">CHECKED</span>;
     return r.events.hours_submitted_at ? <span className="hz-tag ok">APPROVED</span> : <span className="hz-tag gold">WAITING</span>; };
   const special = (r: Row) => { const w = workedHours(r.punches!.punch_in!, r.punches!.punch_out!);
@@ -78,8 +79,9 @@ export function Hours({ me }: { me: Staff }) {
     return ''; };
   const qLine = (r: Row) => { const q = qs[r.id]; if (!q) return null;
     const said = q.kind === 'other' ? (q.note ?? '') : `You said you ${q.kind === 'start' ? 'started' : 'ended'} at ${q.claimed_at ? t12(q.claimed_at) : '?'}${q.note ? ` · “${q.note}”` : ''}`;
-    if (q.status === 'open') return <div className="hz-q red">{said}<small>Sent {t12(q.created_at)} · Ronnie will check</small></div>;
-    return <div className={'hz-q ' + (q.status === 'fixed' ? 'ok' : 'grey')}>{q.status === 'fixed' ? '✓ Fixed by Ronnie' : 'Checked · your hours are correct as recorded.'}{q.answer_note && <i>“{q.answer_note}”</i>}</div>; };
+    if (q.status === 'open') return <div className="hz-q red">{said}<small>Sent {t12(q.created_at)} · Ronnie will check · <Link to="/messages?c=ronnie" onClick={(e) => e.stopPropagation()}>See the conversation ›</Link></small></div>;
+    return <div className={'hz-q ' + (q.status === 'fixed' ? 'ok' : 'grey')}>{q.status === 'fixed' ? '✓ Fixed by Ronnie' : 'Checked · your hours are correct as recorded.'}{q.answer_note && <i>“{q.answer_note}”</i>}
+      <Link to="/messages?c=ronnie" className="hz-conv" onClick={(e) => e.stopPropagation()}>See the conversation ›</Link></div>; };
   const dow = (iso: string) => D(iso).toLocaleDateString('en-CA', { weekday: 'short' }).replace('.', '').toUpperCase();
 
   return (
@@ -166,8 +168,8 @@ export function Hours({ me }: { me: Staff }) {
           </div>
           {!r.events.hours_submitted_at && <div className="hz-wait">⏳ Waiting for your manager to submit the team’s hours. They lock once submitted.</div>}
           {qLine(r)}
-          {!q || q.status !== 'open' ? <button className="btn-ghost" style={{ height: 48 }} onClick={() => { setAsk(r); setOpen(null); }}>Something wrong with these hours?</button> : null}
-          <div className="muted sm" style={{ textAlign: 'center' }}>Goes to Ronnie.</div>
+          {!q || q.status !== 'open' ? <button className="btn-ghost" style={{ height: 48 }} onClick={() => { setOpen(null); nav(`/messages?hours=${r.id}`); }}>Something wrong with these hours?</button> : null}
+          <div className="muted sm" style={{ textAlign: 'center' }}>Goes to Ronnie, in your conversation with him.</div>
         </div>
       </>); })()}
 

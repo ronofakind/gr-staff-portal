@@ -8,6 +8,7 @@ import { UniformIcon, uniformFor, uniformLabel, PantsIcon, ShoesIcon, ApronIcon,
 import { Status, isBar } from './Home';
 import { GettingThere } from '../components/GettingThere';
 import { PinnedAnnouncements } from '../components/Announce';
+import { MessageRonnieLink } from '../components/MessageCard';
 import { NeedChange, CancelSheet, ChangeSheet, ChangeCard, CancelledCard, useShiftChanges } from '../components/ShiftChange';
 
 export function Shift({ backTo = '/' }: { backTo?: string }) {
@@ -186,6 +187,7 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team }: { s:
         </section>
         {leadPhoto && <PhotoViewer name={lead.full_name} url={lead.photo_url} sub="Manager On-Site · find them when you arrive" onClose={() => setLeadPhoto(false)} />}
       </>}
+      {!preview && <div style={{ marginTop: 14 }}><MessageRonnieLink shiftId={s.id} label="✉ Question about this shift? Message Ronnie" /></div>}
       <div style={{ height: 24 }} />
     </main>
   );

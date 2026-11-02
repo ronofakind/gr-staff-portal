@@ -8,9 +8,14 @@ import { useLang } from '../lib/i18n';
 import { time } from '../lib/format';
 import { Avatar, PhotoViewer } from '../components/Avatar';
 import { DriveFiles } from '../components/DriveFiles';
-import { AnnounceComposer, AnnounceSent } from '../components/Announce';
-/** Manager "Message your team" is off until push 24 (texts + phone buzz) is live. */
-const ANNOUNCE_ON = false;
+import { AnnounceComposer } from '../components/Announce';
+import { useInboxCount } from '../lib/messages';
+
+/** push 36e · event screen entry to the manager's Messages (replaces the push-25e inline composer, which was switched off). */
+function MgrMessagesEntry({ eventId }: { eventId: string }) {
+  const n = useInboxCount(eventId);
+  return <Link className="ann-open mm-entry" to={`/manage/${eventId}/messages`}>💬 Messages{n > 0 ? <i className="msg-n">{n}</i> : <span className="muted"> · message my team</span>}<span className="grow" />›</Link>;
+}
 /** Push 27 rollout: manager feedback (★ tile + new-staff check) only for these managers (full name or staff id) while Settings → Managers
  *  says "Benjamin only" (default); "All managers" turns it on for everyone who manages an event (push 32). */
 export const FEEDBACK_MANAGERS: string[] = ['Benjamin Outre'];
@@ -387,9 +392,8 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
         )}
         {ev.drive_folder_url && <a className="folder-link" href={ev.drive_folder_url} target="_blank" rel="noreferrer">Event folder · floor plan, run of show ›</a>}
         {ev.drive_folder_url && <DriveFiles eventId={ev.id} admin={false} />}
-        {(() => { const td = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' }); const prev = new Date(ev.event_date + 'T12:00:00'); prev.setDate(prev.getDate() - 1);
-          return ANNOUNCE_ON && td >= prev.toLocaleDateString('en-CA') && td <= ev.event_date ? <button className="ann-open" onClick={() => setAnnOpen(true)}>📣 Message your team</button> : null; })()}
-        <AnnounceSent eventId={ev.id} reload={annTick} />
+        {/* push 36e · Messages: 📣 Message my team, what he sent (Seen n of N), replies (REPLY / ✓ DONE) */}
+        <MgrMessagesEntry eventId={ev.id} />
       </div>
 
       {banner.map((r) => { const n = lateOf(r)!; const tel = r.staff?.phone?.replace(/[^\d+]/g, ''); return (

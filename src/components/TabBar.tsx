@@ -1,9 +1,10 @@
 import { useEffect } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useToAnswerCount } from '../lib/myDates';
+import { useMessagesBadge } from '../lib/messages';
 
-// push 35a · Home · My dates · (Messages, soon) · Availability · Hours. Profile is on the photo, not a tab.
-const ORDER = ['/me', '/my-dates', '/availability', '/hours'];
+// push 35a · Home · My dates · Messages (live since push 36) · Availability · Hours. Profile is on the photo, not a tab.
+const ORDER = ['/me', '/my-dates', '/messages', '/availability', '/hours'];
 
 /** Swipe left/right anywhere on a main staff screen to move between tabs. */
 function useSwipeTabs(enabled: boolean) {
@@ -51,13 +52,15 @@ export function TabBar({ base = '', badge }: { base?: string; badge?: number }) 
   useSwipeTabs(!base);
   const own = useToAnswerCount(!!base || badge !== undefined);
   const n = badge ?? own;
+  const msgN = useMessagesBadge(!!base); // push 36 · unread conversations + updates
   const cls = ({ isActive }: { isActive: boolean }) => (isActive ? 'on' : '');
   return (
     <nav className="tabbar" aria-label="Main">
       <div className="in">
         <NavLink to={base || '/me'} end className={cls}><svg {...ic}><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" /></svg>Home</NavLink>
         <NavLink to={`${base}/my-dates`} className={cls}><span className="tb-ic"><svg {...ic}><rect x="3" y="4.5" width="18" height="16" rx="3" /><path d="M3 9.5h18M8 2.5v4M16 2.5v4" /></svg>{n > 0 && <i className="tb-badge">{n}</i>}</span>My dates</NavLink>
-        <span className="tb-soon" aria-disabled="true" title="Coming soon"><span className="tb-ic"><svg {...ic}><path d="M4 5.5h16a1 1 0 0 1 1 1V16a1 1 0 0 1-1 1h-9l-4.5 3.5V17H4a1 1 0 0 1-1-1V6.5a1 1 0 0 1 1-1z" /></svg><i className="tb-soon-tag">SOON</i></span>Messages</span>
+        {base ? <span className="tb-soon" aria-disabled="true" title="Not in the preview"><span className="tb-ic"><svg {...ic}><path d="M4 5.5h16a1 1 0 0 1 1 1V16a1 1 0 0 1-1 1h-9l-4.5 3.5V17H4a1 1 0 0 1-1-1V6.5a1 1 0 0 1 1-1z" /></svg></span>Messages</span>
+          : <NavLink to="/messages" className={cls}><span className="tb-ic"><svg {...ic}><path d="M4 5.5h16a1 1 0 0 1 1 1V16a1 1 0 0 1-1 1h-9l-4.5 3.5V17H4a1 1 0 0 1-1-1V6.5a1 1 0 0 1 1-1z" /></svg>{msgN > 0 && <i className="tb-badge">{msgN > 99 ? '99+' : msgN}</i>}</span>Messages</NavLink>}
         {!base && <NavLink to="/availability" className={cls}><svg {...ic}><rect x="3" y="4.5" width="18" height="16" rx="3" /><path d="M8 2.5v4M16 2.5v4M8.5 14l2.5 2.5 4.5-5" /></svg>Availability</NavLink>}
         {!base && <NavLink to="/hours" className={cls}><svg {...ic}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>Hours</NavLink>}
       </div>
