@@ -98,7 +98,7 @@ const isBar = (code: string | null, detail: string | null) =>
 /** What the person does tonight: the detail set on the shift, else a label from the position code. */
 function roleLabel(code: string | null, detail: string | null) {
   if (detail) return detail.replace(/^bar\s*-\s*/i, ''); // the BAR / FLOOR tag already says the department
-  const map: Record<string, string> = { MD: 'MD', BM: 'Bar manager', BT: 'Bartender', BB: 'Barback', BUS: 'Busboy' };
+  const map: Record<string, string> = { MD: 'MD', W: 'Waiter', BM: 'Bar manager', BT: 'Bartender', BB: 'Barback', BUS: 'Busboy' };
   return code ? (map[code] ?? (/^\d+$/.test(code) ? 'Waiter' : code)) : 'Waiter';
 }
 const fmt12 = (t: string) => { const [h, m] = t.split(':').map(Number); return `${((h + 11) % 12) + 1}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`; };

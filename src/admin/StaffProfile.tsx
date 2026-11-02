@@ -298,7 +298,7 @@ function EmergencyCard({ s }: { s: AStaff }) {
   );
 }
 
-type About = { experience: 'SENIOR' | 'MID' | 'JUNIOR' | null; experience_note: string | null; knows_staff_id: string | null; knows_text: string | null; languages: Record<string, number> | null; manager_note: string | null };
+type About = { veteran: boolean | null; experience: 'SENIOR' | 'MID' | 'JUNIOR' | null; experience_note: string | null; knows_staff_id: string | null; knows_text: string | null; languages: Record<string, number> | null; manager_note: string | null };
 const EXP: ['JUNIOR' | 'MID' | 'SENIOR', string][] = [['JUNIOR', 'Junior'], ['MID', 'Mid'], ['SENIOR', 'Senior']];
 const LV: [number, string][] = [[1, 'Basic'], [2, 'Good'], [3, 'Fluent']];
 
@@ -308,10 +308,10 @@ function AboutCard({ s, people }: { s: AStaff; people: AStaff[] }) {
   const [q, setQ] = useState(''); const [pickOpen, setPickOpen] = useState(false);
   const [expNote, setExpNote] = useState(''); const [rel, setRel] = useState(''); const [mnote, setMnote] = useState('');
   useEffect(() => {
-    supabase.from('staff_private').select('experience,experience_note,knows_staff_id,knows_text,languages,manager_note').eq('staff_id', s.id).maybeSingle().then(({ data, error }) => {
+    supabase.from('staff_private').select('veteran,experience,experience_note,knows_staff_id,knows_text,languages,manager_note').eq('staff_id', s.id).maybeSingle().then(({ data, error }) => {
       if (error) { setErr(/column|schema/i.test(error.message) ? 'Needs migration 032 (not applied yet).' : error.message); return; }
       const d = (data ?? {}) as Partial<About>;
-      const v: About = { experience: d.experience ?? null, experience_note: d.experience_note ?? null, knows_staff_id: d.knows_staff_id ?? null, knows_text: d.knows_text ?? null,
+      const v: About = { veteran: d.veteran ?? null, experience: d.experience ?? null, experience_note: d.experience_note ?? null, knows_staff_id: d.knows_staff_id ?? null, knows_text: d.knows_text ?? null,
         languages: d.languages && typeof d.languages === 'object' && !Array.isArray(d.languages) ? d.languages : {}, manager_note: d.manager_note ?? null };
       setA(v); setExpNote(v.experience_note ?? ''); setRel(v.knows_text ?? ''); setMnote(v.manager_note ?? '');
     });
@@ -330,6 +330,11 @@ function AboutCard({ s, people }: { s: AStaff; people: AStaff[] }) {
     <div className="pcard ab-card">
       <div className="row" style={{ justifyContent: 'space-between' }}><span className="kick">ABOUT · MANAGERS SEE THIS</span>{ok && <span className="ab-saved">{ok}</span>}</div>
       {!a ? <div className="muted sm">{err || 'Loading…'}</div> : <>
+        <div className="ab-sec">
+          <div className="ab-h"><span>WITH G&amp;R</span><i className="ab-badge you">YOU · 1 TAP</i></div>
+          <div className="seg"><button className={a.veteran ? 'on' : ''} onClick={() => save({ veteran: true })}>Regular</button><button className={a.veteran === false || a.veteran === null ? 'on' : ''} onClick={() => save({ veteran: false })}>New</button></div>
+          <div className="muted sm">New = managers see a NEW tag and the “new staff” check for their first 3 app shifts. Regular turns that off.</div>
+        </div>
         <div className="ab-sec">
           <div className="ab-h"><span>EXPERIENCE</span><i className="ab-badge you">YOU · 1 TAP</i></div>
           <div className="seg">{EXP.map(([k, l]) => <button key={k} className={a.experience === k ? 'on' : ''} onClick={() => save({ experience: a.experience === k ? null : k })}>{l}</button>)}</div>
