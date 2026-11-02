@@ -2394,3 +2394,5 @@ a.d37-where, a.d37-addr { color: inherit; text-decoration: none; -webkit-tap-hig
 /* Profile · Your [logo] calendar sheet title */
 .cal-title { font-size: 24px; display: flex; align-items: center; gap: 8px; justify-content: center; }
 .cal-title img { height: 34px; width: auto; display: block; mix-blend-mode: multiply; }
+/* mini calendar date: Fraunces uses old-style figures (the 3 drops below the line) → plain lining figures, centred */
+.mini-cal b, .d3-where .mini-cal b { font-family: Inter, system-ui, sans-serif; font-weight: 700; font-size: 15px; font-variant-numeric: lining-nums tabular-nums; line-height: 1; padding-bottom: 1px; color: var(--ink); }
