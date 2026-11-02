@@ -3,7 +3,6 @@ import { Link, useParams } from 'react-router-dom';
 import { supabase, SHIFT_SELECT, isSetup, type ShiftRow } from '../lib/supabase';
 import { useT } from '../lib/i18n';
 import { minus, mapsUrl } from '../lib/format';
-import { isIOS } from '../lib/install';
 import { Avatar, PhotoViewer } from '../components/Avatar';
 import { UniformIcon, uniformFor, uniformLabel, PantsIcon, ShoesIcon, ApronIcon, TieIcon, WineKeyIcon, isBarPos, lineKey, PIECE } from '../components/Uniform';
 import { Status, isBar, StartPos } from './Home';
@@ -42,9 +41,9 @@ type Face = { full_name: string; photo_url: string | null };
 type TeamGroup = { start: string; label: string; n: number; faces?: Face[] };
 type Piece = { key: string; icon: (sz: number) => JSX.Element; name: string; no?: string; extra?: boolean };
 
-// push 37 · Directions = Apple Maps on iPhone, Google Maps otherwise. The map tile opens the place itself.
-const dirUrl = (a: string) => isIOS() ? `https://maps.apple.com/?daddr=${encodeURIComponent(a)}` : `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(a)}`;
-const placeUrl = (a: string) => isIOS() ? `https://maps.apple.com/?q=${encodeURIComponent(a)}` : mapsUrl(a);
+// Directions and the map tile always open Google Maps (app if installed, else the website), on iPhone too (Ronnie, Nov 2).
+const dirUrl = (a: string) => `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(a)}`;
+const placeUrl = (a: string) => mapsUrl(a);
 const MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY as string | undefined;
 
 export function ShiftView({ s, lead, backTo = '/', preview = false, team }: { s: ShiftRow; lead: Lead; backTo?: string; preview?: boolean; team?: TeamGroup[] }) {
