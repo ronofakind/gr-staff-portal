@@ -133,15 +133,15 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team }: { s:
           </div>
         )}
         {address && (
-          <div className="d37-where">
+          <a className="d37-where" href={dirUrl(address)} target="_blank" rel="noreferrer" aria-label="Open in Google Maps">
             <div className="grow" style={{ minWidth: 0 }}>
               <b>📍 {street.trim()}</b>
               {area && <span>{area}</span>}
             </div>
-            <a className="d37-go" href={dirUrl(address)} target="_blank" rel="noreferrer" aria-label="Directions">
+            <span className="d37-go" aria-hidden="true">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 11 21 3l-8 18-2-8z" /></svg>
-            </a>
-          </div>
+            </span>
+          </a>
         )}
         {lead_ && !preview && <Link className="d3-team" to={`/manage/${ev.id}`}>My team{team ? ` · ${team.reduce((n, g) => n + g.n, 0)}` : ''} ›</Link>}
         {canChange && <>
@@ -158,9 +158,9 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team }: { s:
       <SecTitle icon="pin">Where</SecTitle>
       <section className="d3-card d3-where d37-wcard">
         {address && <MapTile address={address} />}
-        <div className="d37-addr">
+        <a className="d37-addr" href={address ? placeUrl(address) : undefined} target="_blank" rel="noreferrer">
           <b>{street.trim()}</b>{city && <span>{city}</span>}
-        </div>
+        </a>
         {staffNotes && <div className="d37-door">🚪 {staffNotes}</div>}
         {vx.photos.length > 0 && <div className="d3-vphotos">{vx.photos.map((u, i) => <button key={u} type="button" aria-label={`Venue photo ${i + 1} of ${vx.photos.length}`} onClick={() => setVPhoto(i)}><img src={u} alt="" loading="lazy" /></button>)}</div>}
         <div className="row2" style={{ gap: 8 }}>
