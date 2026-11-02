@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { supabase, type Staff } from '../lib/supabase';
 import { setting } from '../lib/settings';
 import { uploadPhoto } from '../lib/photo';
@@ -20,9 +21,12 @@ export function Profile({ me }: { me: Staff }) {
   const [url, setUrl] = useState(me.photo_url);
   const [x, setX] = useState<Extra | null>(null);
   const [msg, setMsg] = useState('');
-  const [edit, setEdit] = useState<null | 'phone' | 'pin'>(null);
+  // push 35a · the photo menu opens these directly: /profile?open=pin · /profile?open=cal
+  const [params, setParams] = useSearchParams(); const opening = params.get('open');
+  const [edit, setEdit] = useState<null | 'phone' | 'pin'>(opening === 'pin' ? 'pin' : null);
   const [nick, setNick] = useState(me.nickname ?? null); const [nickOpen, setNickOpen] = useState(false); // push 33d
-  const { cal, setCal } = useMyCalendar(); const [calOpen, setCalOpen] = useState(false); // push 33b
+  const { cal, setCal } = useMyCalendar(); const [calOpen, setCalOpen] = useState(opening === 'cal'); // push 33b
+  useEffect(() => { if (opening) setParams((p) => { p.delete('open'); return p; }, { replace: true }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [phone, setPhone] = useState(me.phone ?? '');
   const [pinLen, setPinLen] = useState<PinLen | null>(null);
   useEffect(() => { if (me.email) resolvePinLen(me.email).then((r) => setPinLen(r.known ? r.len : null)); }, [me.email]);

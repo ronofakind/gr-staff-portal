@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Link, Route, Routes, useParams } from 'react-router-dom';
+import { Link, Navigate, Route, Routes, useParams } from 'react-router-dom';
 import { supabase, type Staff } from '../lib/supabase';
 import { LangContext } from '../lib/i18n';
 import { Home } from '../pages/Home';
 import { Shift } from '../pages/Shift';
-import { Schedule } from '../pages/Schedule';
+import { MyDates } from '../pages/MyDates';
 import { EventPlan } from '../pages/EventPlan';
 
 /** Admin preview: the staff app exactly as this person sees it. Read-only. */
@@ -26,7 +26,8 @@ export function ViewAs() {
       <div className="preview-phone">
         <Routes>
           <Route index element={<Home me={who} base={base} preview />} />
-          <Route path="schedule" element={<Schedule me={who} base={base} preview />} />
+          <Route path="my-dates" element={<MyDates me={who} base={base} preview />} />
+          <Route path="schedule" element={<Navigate to={`${base}/my-dates`} replace />} />
           <Route path="shift/:id" element={<Shift backTo={base} />} />
           <Route path="shift/:id/plan" element={<EventPlan />} />
         </Routes>

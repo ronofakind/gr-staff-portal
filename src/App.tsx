@@ -19,7 +19,7 @@ import { Staff as StaffAdmin } from './admin/Staff';
 import { ViewAs } from './admin/ViewAs';
 import { Manage } from './pages/Manage';
 import { Profile } from './pages/Profile';
-import { Schedule } from './pages/Schedule';
+import { MyDates } from './pages/MyDates';
 import { Availability as StaffAvail } from './pages/Availability';
 import { EventPlan } from './pages/EventPlan';
 import { Availability as AdminAvail } from './admin/Availability';
@@ -128,7 +128,8 @@ export function App() {
           </Route>
         )}
         {me.role === 'admin' && <Route path="/admin/view/:staffId/*" element={<ViewAs />} />}
-        <Route path="/schedule" element={<Schedule me={me} />} />
+        <Route path="/my-dates" element={<MyDates me={me} />} />
+        <Route path="/schedule" element={<Navigate to="/my-dates" replace />} />{/* push 35a · old Schedule tab */}
         <Route path="/shift/:id" element={<Shift />} />
         <Route path="/shift/:id/plan" element={<EventPlan />} />
         <Route path="/hours" element={<HoursPage me={me} />} />

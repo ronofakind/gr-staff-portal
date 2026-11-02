@@ -5,9 +5,10 @@ import { supabase, SHIFT_SELECT, isSetup, type ShiftRow, type Staff } from '../l
 import { setting, useSettings } from '../lib/settings';
 import { useLang } from '../lib/i18n';
 import { time, longDate, dayBadge, minus, mapsUrl } from '../lib/format';
-import { Avatar } from '../components/Avatar';
+import { ProfileButton } from '../components/ProfileMenu';
 import { TabBar } from '../components/TabBar';
-import { useAsks } from '../components/AskCards';
+import { useMyDates, toAnswer, latestKnows, dayLabel } from '../lib/myDates';
+import { KnowsSheet } from './MyDates';
 import { ConfirmThanks, CalIcon } from '../components/ConfirmThanks';
 import { useMyCalendar } from '../lib/calendar';
 import { callName } from '../lib/nickname';
@@ -95,7 +96,8 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
       .then(({ data }) => setAlerts((data ?? []) as typeof alerts));
   }, [me.id]);
   const gotIt = async (id: string) => { setAlerts(alerts.filter((a) => a.id !== id)); if (!preview) await supabase.rpc('alert_seen', { p_id: id }); };
-  const { asks } = useAsks(me.id); // push 33c · only the count (answered in Availability)
+  const { dates: myDates, reload: reloadDates } = useMyDates(me.id, preview); // push 35 · My dates (count, reminder, said yes)
+  const [notSure, setNotSure] = useState(false);
   const upcomingIds = (shifts ?? []).filter((s) => !(s.punches?.punch_out && new Date(s.punches.punch_out).getTime() <= Date.now())).map((s) => s.id);
   const chg = useShiftChanges(preview ? [] : upcomingIds);
   const mgrGotIt = async (id: string) => { setMgrLate((v) => v.filter((x) => x.id !== id)); if (!preview) await supabase.rpc('late_notice_seen', { p_id: id }); };
@@ -126,10 +128,14 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
   const soon = (s: ShiftRow) => !!s.events.details_pending || (!!s.time_tbc && s.status === 'booked');
   const pending = shifts.filter((s) => s.status === 'booked' && !notFinal(s) && s !== next); // the next shift confirms on its own card
   const changed = (s: ShiftRow) => { const x = x33[s.id]; return s.status === 'confirmed' && x?.change_prev && !x.change_seen_at ? x.change_prev : null; };
-  const waitingAsks = (asks ?? []).filter((a) => a.status === 'asked').length;
+  const toAns = (myDates ?? []).filter((d) => toAnswer(d));
+  // push 35d · Maybe reminder: on (or after) the knows-by day, a gold card instead of the red bubble for those dates
+  const dueMaybes = toAns.filter((d) => d.status === 'maybe');
+  const waitingAsks = toAns.length - dueMaybes.length;
   // Dates they said yes to that G&R hasn't booked (yet)
   const bookedDates = new Set(shifts.map((s) => s.events.event_date));
-  const saidYes = (asks ?? []).filter((a) => a.status === 'yes' && a.for_date >= todayIso() && !bookedDates.has(a.for_date));
+  const saidYes = (myDates ?? []).filter((a) => a.status === 'yes' && !a.booked && a.for_date >= todayIso() && !bookedDates.has(a.for_date));
+  const myDatesTo = (q: string) => `${preview ? base : ''}/my-dates?tab=${q}`;
   const first = callName(me);
   const today = todayIso();
 
@@ -147,7 +153,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
       <header className="v2-head">
         <img className="logo" src="/logo-mark.png" alt="G&R" />
         <div className="hello"><b>Hi {first}</b><span>{longDate(today, lang)}</span></div>
-        {!preview ? <Link to="/profile" aria-label="My profile"><Avatar name={me.full_name} url={me.photo_url} size={38} /></Link> : <Avatar name={me.full_name} url={me.photo_url} size={38} />}
+        <ProfileButton me={me} preview={preview} />
       </header>
 
       {alerts.map((a) => (
@@ -331,15 +337,29 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
               <span className="row-wear"><UniformIcon kind={uniformFor(mini)} size={30} /></span>
             </Link>
           ); })()}
+          {dueMaybes.length > 0 && (() => {
+            const months = [...new Set(dueMaybes.map((d) => new Date(d.for_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'long' })))];
+            const by = dueMaybes.map((d) => d.answer_by).filter(Boolean).sort()[0];
+            const n = dueMaybes.length;
+            return (
+              <section className="md-remind">
+                <small>TODAY · {dayLabel(today).toUpperCase()}</small>
+                <div className="serif">Do you know your {months.length === 1 ? months[0] + ' ' : ''}schedule yet?</div>
+                <span>{n} date{n > 1 ? 's are' : ' is'} waiting on you{by ? ` · answer by ${dayLabel(new Date(by).toLocaleDateString('en-CA', { timeZone: 'America/Toronto' }))}` : ''}</span>
+                <Link to={myDatesTo('answer')} className="md-remind-go">Answer my {n === 1 ? 'date' : `${n} dates`} ›</Link>
+                <button className="link-btn" onClick={() => setNotSure(true)}>Still not sure</button>
+              </section>
+            );
+          })()}
           {waitingAsks > 0 && (
-            <Link to={preview ? `${base}/schedule` : '/availability'} className="dates-pill">
+            <Link to={myDatesTo('answer')} className="dates-pill">
               <CalIcon /><b className="grow">{waitingAsks} date{waitingAsks > 1 ? 's' : ''} to answer</b><span className="dp-go">Answer ›</span>
             </Link>
           )}
           {list.filter((s) => s !== next && changed(s)).map((s) => <ChangedBox key={s.id} prev={changed(s)!} s={s} role={role(s)} calOn={!!cal?.added_at} onSeen={() => changeSeen(s)} standalone />)}
           {list.length > 0 && (
             <>
-              <div className="sec-head"><span className="serif">Coming up</span><Link to={`${base}/schedule`}>Full schedule ›</Link></div>
+              <div className="sec-head"><span className="serif">Coming up</span><Link to={myDatesTo('booked')}>All my dates ›</Link></div>
               <section className="agenda">
                 {list.slice(0, 5).map((s) => {
                   const b = dayBadge(s.events.event_date, lang);
@@ -365,7 +385,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
       {sheet?.kind === 'late' && <LateSheet s={sheet.s} mgr={sheet.s.events.manager?.full_name ?? null} again={chg.late[sheet.s.id] ?? null} preview={preview} onClose={() => setSheet(null)}
         onSent={(n: LateNotice) => { chg.setLate({ ...chg.late, [n.shift_id]: n }); setSheet(null); if (!preview) chg.reload(); }} />}
       {saidYes.length > 0 && (
-        <Link to={`${base}/schedule`} className="said-yes">
+        <Link to={myDatesTo('answered')} className="said-yes">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="m8 12 3 3 5-6" /></svg>
           <span className="grow"><b>You said yes to {saidYes.length} date{saidYes.length > 1 ? 's' : ''}</b> · {saidYes.slice(0, 3).map((a) => new Date(a.for_date + 'T12:00:00').toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })).join(', ')}{saidYes.length > 3 ? '…' : ''} · waiting for G&R to book</span>
           <span>›</span>
@@ -374,7 +394,10 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
       {askQ && <AskHours s={askQ} onClose={() => setAskQ(null)} onSent={() => { setQs({ ...qs, [askQ.id]: 'open' }); setAskQ(null); }} />}
       {thanks && <ConfirmThanks name={first} cal={preview ? null : cal} onCal={setCal} onClose={() => setThanks(null)}
         line={`${thanks.events.venues?.name ?? thanks.events.title} · ${new Date(thanks.events.event_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).replace(',', '')} · ${t12(thanks.planned_start)}`} />}
-      <TabBar base={base} />
+      {notSure && <KnowsSheet title="When will you know?" latest={latestKnows(dueMaybes)} oneTap
+        sub="Pick a new day. It can't be after the answer-by date." onClose={() => setNotSure(false)}
+        onPick={async (by) => { setNotSure(false); if (preview) return; await supabase.rpc('dont_know_yet', { p_knows_by: by, p_note: null, p_ids: dueMaybes.map((d) => d.id) }); reloadDates(); }} />}
+      <TabBar base={base} badge={toAns.length} />
     </main>
   );
 }

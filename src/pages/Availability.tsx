@@ -4,16 +4,16 @@ import { TabBar } from '../components/TabBar';
 import { todayIso } from './Home';
 import { SwipeSheet } from '../components/SwipeSheet';
 import { useUsualWeek, UsualWeekList, DAYS } from '../components/UsualWeek';
-import { AskCards, useAsks, ampm } from '../components/AskCards';
+import { PageHead } from '../components/ProfileMenu';
+import { ampm } from '../lib/myDates';
 export { ampm };
 
 type Off = { id: string; from_date: string; to_date: string; reason: string | null };
 
 const D = (iso: string) => new Date(iso + 'T12:00:00');
 
-/** Staff: answer availability asks, set the usual week, add days off. */
+/** Staff: usual week + days off. (push 35a: the per-date asks moved to My dates.) */
 export function Availability({ me, preview = false }: { me: Staff; preview?: boolean }) {
-  const { asks, reload: reloadAsks } = useAsks(me.id);
   const { week, setDay, err: wkErr } = useUsualWeek(me.id, preview); // push 31: shared with the profile check-up (step 5)
   const [off, setOff] = useState<Off[]>([]);
   const [adding, setAdding] = useState(false);
@@ -33,25 +33,18 @@ export function Availability({ me, preview = false }: { me: Staff; preview?: boo
   };
   const delOff = async (id: string) => { if (preview) return; await supabase.from('days_off').delete().eq('id', id); load(); };
 
-  const waiting = (asks ?? []).filter((a) => a.status === 'asked');
   const freeDays = DAYS.filter((_, d) => week[d] && week[d].status !== 'no').length;
   const comingOff = off.filter((o) => o.to_date >= today).length;
   const short = (iso: string) => D(iso).toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' }).replace(/\./g, '');
 
   return (
     <main className="page v2">
-      <div style={{ padding: '18px 6px 0' }}>
-        <div className="kicker">Availability</div>
-        <div className="serif" style={{ fontSize: 30, lineHeight: 1.05 }}>Are you available?</div>
-      </div>
+      <PageHead me={me} preview={preview} kicker="Availability" title="When can you work?" />
       <div className="sumbar">
-        <div className={waiting.length ? 'red' : ''}><b>{waiting.length}</b><span>date{waiting.length === 1 ? '' : 's'} waiting</span></div>
         <div><b>{freeDays}</b><span>usual days free</span></div>
         <div><b>{comingOff}</b><span>day{comingOff === 1 ? '' : 's'} off coming</span></div>
       </div>
       {(err || wkErr) && <p className="error">{err || wkErr}</p>}
-
-      <AskCards asks={asks} week={week} preview={preview} onAnswered={reloadAsks} />
 
       <div className="sec-head"><span className="serif">My usual week</span></div>
       <UsualWeekList week={week} setDay={setDay} />
@@ -66,7 +59,7 @@ export function Availability({ me, preview = false }: { me: Staff; preview?: boo
           </div>
         ))}
         {!off.length && <div className="card muted sm">No days off added.</div>}
-        <p className="muted sm" style={{ margin: '2px 6px' }}>Days off win over your usual week. You can also add them from the Schedule calendar.</p>
+        <p className="muted sm" style={{ margin: '2px 6px' }}>Days off win over your usual week. Dates G&R sends you are answered in My dates.</p>
       </section>
       <div style={{ height: 90 }} />
 
@@ -85,7 +78,7 @@ export function Availability({ me, preview = false }: { me: Staff; preview?: boo
           </SwipeSheet>
         </>
       )}
-      <TabBar badge={waiting.length} />
+      <TabBar />
     </main>
   );
 }

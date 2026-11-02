@@ -518,7 +518,7 @@ function AskMore({ date, dept, events, staff, av, wk, off, conds, links, booked,
   const main = cands.filter((c) => !c.held); const held = cands.filter((c) => c.held);
   const [pick, setPick] = useState<Set<string>>(() => { const p = new Set<string>(); let sum = 0; for (const c of main) { if (sum >= need) break; p.add(c.s.id); sum += c.rate; } return p; });
   const [busy, setBusy] = useState(false); const [msg, setMsg] = useState('');
-  const text = `Hey! G&R has a new date for you: ${dLabel(date, { weekday: 'long', month: 'long', day: 'numeric' })}. Let me know in the app 👉 https://gr-staff-portal.vercel.app/availability`;
+  const text = `Hey! G&R has a new date for you: ${dLabel(date, { weekday: 'long', month: 'long', day: 'numeric' })}. Let me know in the app (My dates) 👉 https://gr-staff-portal.vercel.app/my-dates`;
   const ask = async () => {
     if (practice) return;
     setBusy(true); setMsg('');

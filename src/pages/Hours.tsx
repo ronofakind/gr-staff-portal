@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase, type Staff } from '../lib/supabase';
 import { TabBar } from '../components/TabBar';
+import { PageHead } from '../components/ProfileMenu';
 import { AskHours, todayIso } from './Home';
 import { payPeriod, shiftPeriod, payDay, payDayLabel, periodLabel, paidHours, workedHours } from '../lib/hours';
 
@@ -83,11 +84,9 @@ export function Hours({ me }: { me: Staff }) {
 
   return (
     <main className="page v2 hz">
-      <div style={{ padding: '18px 6px 0' }}>
-        <div className="kicker">My hours{view === 'teams' ? ' · manager' : ''}</div>
-        <div className="serif" style={{ fontSize: 30, lineHeight: 1.05 }}>{view === 'past' ? 'Past pay periods' : 'Hours'}</div>
+      <PageHead me={me} kicker={`My hours${view === 'teams' ? ' · manager' : ''}`} title={view === 'past' ? 'Past pay periods' : 'Hours'}>
         {view === 'past' && <div className="muted sm">{today.slice(0, 4)} so far · {fmtH(year)} h · {yearN} shifts</div>}
-      </div>
+      </PageHead>
       {isMgr && view !== 'past' && <div className="seg"><button className={view === 'mine' ? 'on' : ''} onClick={() => setView('mine')}>My hours</button><button className={view === 'teams' ? 'on' : ''} onClick={() => setView('teams')}>Teams I managed</button></div>}
 
       {view !== 'past' && <div className="hz-per">

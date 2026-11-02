@@ -3,10 +3,12 @@ import { supabase } from '../lib/supabase';
 import { tiersForCount } from '../lib/settings';
 import { allStaff, eventsBetween, isoDay, startIso, type AEvent, type AStaff } from './api';
 import { ampm } from '../pages/Availability';
+import { defaultAnswerBy, toLocalInput, fromLocalInput } from '../lib/myDates';
 
 type Tier = 'A' | 'B' | 'C';
 type Ask = { id: string; for_date: string; department: string; label: string; approx_start: string | null; staff_needed: number; tiers_sent: Tier[]; created_at: string };
-type Row = { id: string; staff_id: string; for_date: string; status: string; tier: string | null; from_time: string | null; until_time: string | null; ask_id: string | null; note?: string | null };
+type Row = { id: string; staff_id: string; for_date: string; status: string; tier: string | null; from_time: string | null; until_time: string | null; ask_id: string | null; note?: string | null;
+  answer_by?: string | null; knows_by?: string | null; knows_note?: string | null };
 type Weekly = { staff_id: string; dow: number; status: 'yes' | 'from' | 'no'; from_time: string | null };
 type Off = { staff_id: string; from_date: string; to_date: string; reason: string | null; every_dow: number | null };
 
@@ -15,6 +17,8 @@ const TIERS: Tier[] = ['A', 'B', 'C'];
 export const tiersFor = (n: number): Tier[] => tiersForCount(n);
 const D = (iso: string) => new Date(iso + 'T12:00:00');
 const dow = (iso: string) => (D(iso).getDay() + 6) % 7;
+const awayText = (iso: string) => { const n = Math.round((D(iso).getTime() - D(isoDay(new Date())).getTime()) / 864e5); return n <= 0 ? 'today' : n === 1 ? 'tomorrow' : `${n} days away`; };
+const abText = (ts: string) => new Date(ts).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' });
 const fmt = (iso: string) => D(iso).toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' }).replace(/\./g, '');
 
 export function Availability() {
@@ -30,6 +34,8 @@ export function Availability() {
   const [sel, setSel] = useState<Record<string, Tier[]>>({});
   const [include, setInclude] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false); const [msg, setMsg] = useState(''); const [err, setErr] = useState('');
+  // push 35c · answer-by per date: automatic from how far away the date is, ✎ to change before sending / after
+  const [abSel, setAbSel] = useState<Record<string, string>>({}); const [abEdit, setAbEdit] = useState<Record<string, string>>({});
   const today = isoDay(new Date());
 
   const first = D(month); const last = isoDay(new Date(first.getFullYear(), first.getMonth() + 1, 0));
@@ -39,7 +45,7 @@ export function Availability() {
       supabase.from('staff_weekly').select('staff_id,dow,status,from_time'),
       supabase.from('days_off').select('staff_id,from_date,to_date,reason,every_dow').gte('to_date', today),
       supabase.from('avail_asks').select('*').gte('for_date', today).order('for_date'),
-      supabase.from('availability').select('id,staff_id,for_date,status,tier,from_time,until_time,ask_id,note').not('ask_id', 'is', null).gte('for_date', today),
+      supabase.from('availability').select('id,staff_id,for_date,status,tier,from_time,until_time,ask_id,note,answer_by,knows_by,knows_note').not('ask_id', 'is', null).gte('for_date', today),
       supabase.from('avail_exceptions').select('staff_id,for_date').gte('for_date', today),
     ]);
     setOpened(new Set(((x.data ?? []) as { staff_id: string; for_date: string }[]).map((e) => `${e.staff_id}|${e.for_date}`)));
@@ -103,12 +109,20 @@ export function Availability() {
       if (people.length) {
         const { error: e2 } = await supabase.from('availability').upsert(people.map((s) => ({
           staff_id: s.id, for_date: d, part: 'evening', status: 'asked', ask_id: ask.id, tier: tierOf(s), asked_at: new Date().toISOString(),
+          answer_by: abSel[d] ? fromLocalInput(abSel[d]) : defaultAnswerBy(d).toISOString(),
         })), { onConflict: 'staff_id,for_date,part' });
         if (e2) { setErr(e2.message); break; }
         n += people.length;
       }
     }
-    setBusy(false); setSel({}); setMsg(`${n} people asked. They see it in the app under Availability.`); load();
+    setBusy(false); setSel({}); setAbSel({}); setMsg(`${n} people asked. They see it in the app under My dates.`); load();
+  };
+  /** ✎ on a date already sent: every row of that ask gets the new answer-by. */
+  const saveAb = async (askId: string) => {
+    setErr('');
+    const { error } = await supabase.from('availability').update({ answer_by: fromLocalInput(abEdit[askId]) }).eq('ask_id', askId);
+    if (error) { setErr(error.message); return; }
+    const x = { ...abEdit }; delete x[askId]; setAbEdit(x); load();
   };
   const nextTier = (a: Ask) => { const nt = TIERS.find((t) => !a.tiers_sent.includes(t)); if (nt) send([{ d: a.for_date, tiers: [nt] }]); };
   const book = async (r: Row, e: AEvent) => {
@@ -116,7 +130,7 @@ export function Availability() {
     const { error } = await supabase.from('shifts').insert({ event_id: e.id, staff_id: r.staff_id, planned_start: startIso(e.event_date, e.start_time) });
     if (error) setErr(error.message.includes('duplicate') ? 'Already on that event.' : error.message); load();
   };
-  const textMsg = 'Hi! G&R is asking for your availability. Open the staff app and tap Availability to answer: https://gr-staff-portal.vercel.app/availability';
+  const textMsg = 'Hi! G&R is asking for your availability. Open the staff app and tap My dates to answer: https://gr-staff-portal.vercel.app/my-dates';
 
   // Calendar grid (Sunday first, like the mockup)
   const startPad = first.getDay(); const days = Number(last.slice(8));
@@ -158,7 +172,8 @@ export function Availability() {
           <b>{selDates.length ? `${selDates.length} date${selDates.length > 1 ? 's' : ''} selected` : 'Tap dates to ask'}</b>
           {selDates.map((d) => (
             <div key={d} className="ask-date">
-              <div className="grow"><b>{fmt(d)}</b><small>Need {need(d)} · ask ~{Math.ceil(need(d) * 1.5)}</small></div>
+              <div className="grow"><b>{fmt(d)}</b><small>Need {need(d)} · ask ~{Math.ceil(need(d) * 1.5)} · {awayText(d)}</small>
+                <label className="ab-line">Answer by <input type="datetime-local" value={abSel[d] ?? toLocalInput(defaultAnswerBy(d))} onChange={(e) => setAbSel({ ...abSel, [d]: e.target.value })} /> ✎</label></div>
               <div className="tier-pick">{TIERS.map((t) => <button key={t} className={'tier-dot ' + t + (sel[d].includes(t) ? '' : ' off')} onClick={() => setTiers(d, t)}>{t}</button>)}</div>
               {skipped(d, sel[d]).length > 0 && (
                 <details className="skipped"><summary>{skipped(d, sel[d]).length} skipped automatically</summary>
@@ -182,20 +197,36 @@ export function Availability() {
           const rs = rows.filter((r) => r.ask_id === a.id).map((r) => ({ r, s: name(r.staff_id) }))
             .sort((x, y) => (x.r.tier ?? 'Z').localeCompare(y.r.tier ?? 'Z') || (x.r.status === 'yes' ? 0 : x.r.status === 'asked' ? 1 : 2) - (y.r.status === 'yes' ? 0 : y.r.status === 'asked' ? 1 : 2) || (x.s ? rank(x.s) : 9999) - (y.s ? rank(y.s) : 9999));
           const yes = rs.filter((x) => x.r.status === 'yes').length; const waiting = rs.filter((x) => x.r.status === 'asked').length;
+          const no = rs.filter((x) => x.r.status === 'no').length; const maybes = rs.filter((x) => x.r.status === 'maybe');
+          const late = rs.filter((x) => x.r.status === 'asked' && x.r.answer_by && new Date(x.r.answer_by).getTime() <= Date.now()).length;
+          const ab = rs.map((x) => x.r.answer_by).filter(Boolean).sort().pop() ?? null; // newest wave's answer-by
           const evs = evOn(a.for_date); const bk = booked(a.for_date);
           const nt = TIERS.find((t) => !a.tiers_sent.includes(t));
           return (
             <section key={a.id} className="ans-card">
               <header>
-                <div className="grow"><b>{fmt(a.for_date)}</b> {a.tiers_sent.map((t) => <i key={t} className={'tier-dot ' + t}>{t}</i>)}
-                  <div className="sm muted"><b className={yes >= a.staff_needed ? 'okc' : ''}>{yes} yes</b> of {a.staff_needed} needed · {waiting} no answer{yes >= a.staff_needed ? ' · Full ✓' : ''}</div></div>
+                <div className="grow"><b>{fmt(a.for_date)}</b> {a.tiers_sent.map((t) => <i key={t} className={'tier-dot ' + t}>{t}</i>)} <span className="sm muted">· {awayText(a.for_date)}</span>
+                  <div className="sm muted"><b className={yes >= a.staff_needed ? 'okc' : ''}>{yes} yes</b> of {a.staff_needed} needed{yes >= a.staff_needed ? ' · Full ✓' : ''}</div>
+                  <div className="ab-counts"><span className="y">Yes {yes}</span><span className="m">Maybe {maybes.length}</span><span className="n">No {no}</span><span className={'w' + (late ? ' late' : '')}>Waiting {waiting}{late && late < waiting ? ` (${late} past answer-by)` : ''}</span></div>
+                  <div className="ab-line">{abEdit[a.id] !== undefined ? <>
+                    Answer by <input type="datetime-local" value={abEdit[a.id]} onChange={(e) => setAbEdit({ ...abEdit, [a.id]: e.target.value })} />
+                    <button className="btn sm" disabled={!abEdit[a.id]} onClick={() => saveAb(a.id)}>Save</button>
+                    <button className="btn sm" onClick={() => { const x = { ...abEdit }; delete x[a.id]; setAbEdit(x); }}>Cancel</button>
+                  </> : <>Answer by <b className={ab && new Date(ab).getTime() <= Date.now() ? 'red-b' : ''}>{ab ? abText(ab) : '—'}</b> <button className="link-btn" aria-label="Change the answer-by" onClick={() => setAbEdit({ ...abEdit, [a.id]: toLocalInput(ab ?? defaultAnswerBy(a.for_date)) })}>✎</button></>}</div></div>
               </header>
+              {maybes.length > 0 && (
+                <div className="ab-maybes"><b>{fmt(a.for_date)} · Maybe {maybes.length}</b>
+                  {maybes.map(({ r, s: who }) => <div key={r.id}><span className="grow">{who?.full_name ?? '—'}</span><span className="gold">knows by {r.knows_by ? fmt(r.knows_by) : '—'}{r.knows_note ? ` · “${r.knows_note}”` : ''}</span></div>)}
+                </div>
+              )}
               {rs.map(({ r, s }) => (
                 <div key={r.id} className={'ans-row ' + r.status}>
                   <i className={'tier-dot ' + (r.tier ?? '')}>{r.tier ?? '–'}</i>
                   <span className="rk">#{s ? rank(s) : '?'}</span>
                   <span className="grow strong">{s?.full_name ?? '—'}</span>
-                  <span className="sm">{r.status === 'yes' ? <>Yes · {r.from_time ? `from ${ampm(r.from_time)}` : 'any time'}{r.note && <i className="av-note-adm"> “{r.note}”</i>}</> : r.status === 'no' ? 'No' : '—'}
+                  <span className="sm">{r.status === 'yes' ? <>Yes · {r.from_time ? `from ${ampm(r.from_time)}` : 'any time'}{r.note && <i className="av-note-adm"> “{r.note}”</i>}</> : r.status === 'no' ? 'No'
+                    : r.status === 'maybe' ? <span className="gold">Maybe · knows by {r.knows_by ? fmt(r.knows_by) : '—'}</span>
+                    : r.answer_by && new Date(r.answer_by).getTime() <= Date.now() ? <b className="red-b">Waiting</b> : '—'}
                     {r.status === 'asked' && s && freeFrom(s, a.for_date) && <small className="muted"> (usually from {ampm(freeFrom(s, a.for_date))})</small>}</span>
                   {r.status === 'yes' && (bk.has(r.staff_id) ? <span className="pill ok">Booked</span>
                     : evs.length === 1 ? <button className="btn sm" onClick={() => book(r, evs[0])}>Add ›</button>
