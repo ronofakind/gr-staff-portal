@@ -388,11 +388,14 @@ function CalendarStep({ me, cal, onCal, head, required = false, onDone }: { me: 
 }
 
 // ───────── A note from Ronnie (push 33h, after the last step, before Done) ─────────
+/** Ronnie's own staff photo (public avatars bucket, same path his Profile photo upload overwrites). */
+const RONNIE_PHOTO = 'https://oigqdecyhmeuvrpoikdv.supabase.co/storage/v1/object/public/avatars/13791946-d8df-4146-b51e-0963f0324499.jpg';
+
 export function RonnieNote({ name, onNext }: { name: string; onNext: () => void }) {
   return (
     <main className="v2 cu">
       <div className="cu-head"><span className="cu-kick">A NOTE FROM RONNIE</span>
-        <div className="row" style={{ gap: 12, alignItems: 'center', marginTop: 6 }}><Avatar name="Ronnie" size={48} /><div><b>Ronnie</b><div className="cu-sub" style={{ marginTop: 0 }}>G&amp;R à votre service</div></div></div>
+        <div className="row" style={{ gap: 12, alignItems: 'center', marginTop: 6 }}><Avatar name="Ronnie" url={RONNIE_PHOTO} size={56} /><div><b>Ronnie</b><div className="cu-sub" style={{ marginTop: 0 }}>G&amp;R à votre service</div></div></div>
       </div>
       <div className="cu-body">
         <div className="ronnie-note">
