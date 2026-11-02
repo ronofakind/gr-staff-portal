@@ -13,7 +13,7 @@ import { ConfirmThanks, CalIcon } from '../components/ConfirmThanks';
 import { useMyCalendar } from '../lib/calendar';
 import { callName } from '../lib/nickname';
 import { UniformIcon, uniformFor, uniformLabel } from '../components/Uniform';
-import { AnnounceCards } from '../components/Announce';
+import { MessageCard, MessageRonnieLink, MgrRepliesLine } from '../components/MessageCard';
 import { useCheckup } from '../lib/checkup';
 import { EmergencyForm, UsualWeekScreen } from './Checkup';
 import { SwipeSheet } from '../components/SwipeSheet';
@@ -165,7 +165,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
 
       {gone.filter((g) => !okd.includes(g.id)).map((g) => <CancelledCard key={g.id} title={g.title} date={g.date} late={g.late} onOk={() => okGone(g.id)} />)}
 
-      {!preview && <AnnounceCards meId={me.id} />}
+      {!preview && me.role !== 'admin' && <MessageCard meId={me.id} />}
 
 
       {!preview && cu?.done_at && !cu.emergency_phone && (
@@ -235,7 +235,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
                 {st === 'open' ? <span className="gold">Question sent ✓ · waiting</span>
                   : st === 'fixed' ? <span className="okc">Fixed ✓</span>
                   : st === 'correct' ? <span className="muted">Checked, it’s correct</span>
-                  : <button className="done-link" onClick={() => !preview && setAskQ(s)}>Something wrong? ›</button>}
+                  : <button className="done-link" onClick={() => !preview && nav(`/messages?hours=${s.id}`)}>Something wrong? ›</button>}
                 <Link to={`${base}/shift/${s.id}`} className="done-link">Details ›</Link></div>
             </div>
           </div>
@@ -303,6 +303,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
               <div key={a.id} className="mgr-late"><span className="grow">⏱ <b>{a.name.split(' ')[0]} running late</b> · ~{t12c(a.eta).replace(/\s?[AP]M$/, '')}{a.reason ? ` · ${a.reason.toLowerCase()}` : ''}{a.note ? ` · “${a.note}”` : ''}</span>
                 <button onClick={() => mgrGotIt(a.id)}>Got it ✓</button></div>
             ))}
+            {managesIt && <MgrRepliesLine eventId={next.events.id} />}
             {lateOn && <LateBlock notice={chg.late[next.id] ?? null} mgr={mgrName} mgrPhone={next.events.manager?.phone} onOpen={() => setSheet({ kind: 'late', s: next })} />}
             {waiting && <>
               <button className="confirm-glow" onClick={() => respond(next.id, 'confirmed')}>Confirm my shift</button>
@@ -384,6 +385,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
       {sheet?.kind === 'change' && <ChangeSheet s={sheet.s} preview={preview} onClose={() => setSheet(null)} onSent={() => { setSheet(null); chg.reload(); }} />}
       {sheet?.kind === 'late' && <LateSheet s={sheet.s} mgr={sheet.s.events.manager?.full_name ?? null} again={chg.late[sheet.s.id] ?? null} preview={preview} onClose={() => setSheet(null)}
         onSent={(n: LateNotice) => { chg.setLate({ ...chg.late, [n.shift_id]: n }); setSheet(null); if (!preview) chg.reload(); }} />}
+      {!preview && me.role !== 'admin' && <MessageRonnieLink />}
       {saidYes.length > 0 && (
         <Link to={myDatesTo('answered')} className="said-yes">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="m8 12 3 3 5-6" /></svg>
@@ -403,7 +405,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
 }
 
 /** push 33a · Shift starts + Your position in one light row (position centred under its label). */
-function StartPos({ start, role }: { start: string | null; role: string }) {
+export function StartPos({ start, role }: { start: string | null; role: string }) {
   return (
     <div className="start-pos">
       <div><small>Shift starts</small>{start ? <BigTime iso={start} small /> : <span className="big serif sm-big">TBC</span>}</div>

@@ -95,9 +95,10 @@ export function StaffProfile({ s, onClose, onEdit, all }: { s: AStaff; onClose: 
         <div className="row sm" style={{ gap: 8 }}><span className="muted">Uniform line</span>
           <div className="seg">{([['m', 'Men'], ['f', 'Women']] as const).map(([k, l]) => <button key={k} className={sex === k ? 'on' : ''} onClick={async () => { setSex(k); await supabase.from('staff').update({ sex: k }).eq('id', s.id); }}>{l}</button>)}</div>
           {!sex && <span className="accent">not set · they see the men's line</span>}</div>
-        <div className="grid-3btn">
+        <div className="grid-3btn" style={{ gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' }}>
           {tel ? <a className="abtn ok" href={`tel:${tel}`}>Call</a> : <span className="abtn" aria-disabled>No phone</span>}
           {tel ? <a className="abtn dark" href={`sms:${tel}`}>Text</a> : <span />}
+          <Link className="abtn dark" to={`/admin/messages?staff=${s.id}`}>✉ Message</Link>
           <Link className="abtn" to={`/admin/view/${s.id}`}>View as</Link>
         </div>
         {inv !== undefined && (() => { const ap = appStatus(s, inv); return (

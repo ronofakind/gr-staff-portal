@@ -164,6 +164,9 @@ export function Today() {
         n.unshift({ key: 'ir' + r.id, red: true, title: `${st.full_name.split(' ')[0]}'s invite link expired`, sub: `Asked for a new link ${dLabel(isoDay(new Date(r.created_at)), { month: 'short', day: 'numeric' })} ${tTime(r.created_at)}`,
           action: 'Resend', to: `/admin/staff?invite=${st.id}` });
       }
+      // push 36d · staff messages waiting on Ronnie (no email: the count lives here + on the Messages nav item)
+      const { data: nr, error: nrErr } = await supabase.rpc('inbox_count');
+      if (!nrErr && typeof nr === 'number' && nr > 0) n.unshift({ key: 'msgs', red: true, title: `${nr} staff message${nr > 1 ? 's' : ''} need${nr > 1 ? '' : 's'} a reply`, sub: 'Messages · Needs reply', action: 'Open', to: '/admin/messages' });
       setNeeds(n);
     })();
   }, [tick]);
