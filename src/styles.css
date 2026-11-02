@@ -2332,7 +2332,7 @@ div.avatar { color: var(--accent); background: var(--accent-bg); }
 .d37 .d3-hero .start-pos .big em { font: 700 13px Inter, system-ui, sans-serif; font-style: normal; }
 .d37 .d3-hero .start-pos .sp-pos { padding: 0 0 2px 12px; }
 .d37 .d3-hero .pos-pill-dark { height: auto; min-height: 28px; max-width: 100%; padding: 5px 14px; line-height: 1.15; white-space: normal; text-align: center; justify-content: center; overflow-wrap: anywhere; border-radius: 12px; }
-.d37-uni { display: flex; align-items: center; gap: 8px; background: #2A2521; border-radius: 14px; padding: 8px 10px; }
+.d37-uni { cursor: pointer; -webkit-tap-highlight-color: transparent; display: flex; align-items: center; gap: 8px; background: #2A2521; border-radius: 14px; padding: 8px 10px; }
 .d37-uni-ics { flex: 1 1 auto; display: flex; gap: 6px; flex-wrap: wrap; min-width: 0; }
 .d37-uni-ics > span { width: 32px; height: 32px; border-radius: 16px; background: #F6F2EC; display: flex; align-items: center; justify-content: center; overflow: hidden; }
 .d37-uni-ics img { max-width: 22px; max-height: 22px; }

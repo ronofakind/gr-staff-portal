@@ -124,12 +124,12 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team }: { s:
         <div><div className="serif d3-venue">{venueName}</div>{(facts || ev.description) && <div className="d3-sub">{facts || ev.description}</div>}</div>
         <StartPos start={s.time_tbc ? null : s.planned_start} role={role} />
         {!setup && (
-          <div className="d37-uni">
+          <div className="d37-uni" role="button" tabIndex={0} onClick={seeUniform} onKeyDown={(e) => { if (e.key === 'Enter') seeUniform(); }}>
             <div className="d37-uni-ics">
               <span title={shirtLabel}><UniformIcon kind={kind} size={22} /></span>
               {tiles.filter((x) => !x.extra).map((x) => <span key={x.key} title={x.name}>{x.icon(20)}</span>)}
             </div>
-            <button type="button" className="d37-see" onClick={seeUniform}>See ↓</button>
+            <span className="d37-see">See ↓</span>
           </div>
         )}
         {address && (
