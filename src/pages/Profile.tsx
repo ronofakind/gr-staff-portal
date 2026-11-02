@@ -5,6 +5,7 @@ import { setting } from '../lib/settings';
 import { uploadPhoto } from '../lib/photo';
 import { PhotoPicker } from '../components/Avatar';
 import { TabBar } from '../components/TabBar';
+import { SwipeSheet } from '../components/SwipeSheet';
 import { LenSeg } from '../components/PinPad';
 import { pinPassword, resolvePinLen, saveMyPinLen, type PinLen } from '../lib/pin';
 import { NICK_ERROR, cleanNick, nickState } from '../lib/nickname';
@@ -116,11 +117,11 @@ export function Profile({ me }: { me: Staff }) {
       {nickOpen && <NickSheet me={me} nick={nick} onClose={() => setNickOpen(false)} onSaved={(v) => { setNick(v); me.nickname = v; setMsg('✓ Saved'); setNickOpen(false); }} />}
       {calOpen && cal && <>
         <div className="scrim" onClick={() => setCalOpen(false)} />
-        <div className="sheet" role="dialog" aria-label="Add my G&R calendar">
-          <div className="grab" />
-          <div className="spread" style={{ alignItems: 'center' }}><span className="serif" style={{ fontSize: 24 }}>Your G&amp;R calendar</span><button className="btn link" onClick={() => setCalOpen(false)}>Close</button></div>
+        {/* Ronnie, Nov 2: logo instead of "G&R" in the title, swipe down / scroll like the other sheets, ‹ and ✕ on top instead of Close */}
+        <SwipeSheet onClose={() => setCalOpen(false)} label="Add my G&R calendar" back>
+          <div className="cal-title serif">Your <img src="/logo-mark.png" alt="G&R" /> calendar</div>
           <div className="cu-body"><CalendarBody me={me} cal={cal} onCal={setCal} /></div>
-        </div>
+        </SwipeSheet>
       </>}
       {edit && <EditSheet kind={edit} me={me} phone={phone} pinLen={pinLen} onPinLen={setPinLen} onClose={() => setEdit(null)} onPhone={(v) => { setPhone(v); setMsg('✓ Saved'); }} />}
     </main>
