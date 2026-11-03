@@ -7,6 +7,7 @@ import {
   type AEvent, type AStaff, type AShift,
 } from './api';
 import { ChangeSheet, FillSheet, AskTracker, trackerGroups, type ChangeKind } from './AskChange';
+import { AlsoWorking, otherShifts } from './alsoWorking';
 import { adminAsks, leftText, shortName, type AdminAsk, type Spot } from '../lib/shiftAsks';
 
 type Av = { status: string; from: string | null; until: string | null };
@@ -113,7 +114,7 @@ export function Day() {
   const reloadAsks = () => adminAsks(day, day).then(setAsks);
   const team = (e: AEvent) => e.shifts.filter((s) => s.status !== 'declined');
   const placed = useMemo(() => new Set(evs.flatMap((e) => team(e).map((s) => s.staff_id))), [events]);
-  const bench = useMemo(() => staff.filter((s) => s.active && s.department !== 'bar' && !placed.has(s.id))
+  const bench = useMemo(() => staff.filter((s) => s.active && s.department !== 'bar' && (!placed.has(s.id) || q.trim().length > 1))
     .filter((s) => (q ? s.full_name.toLowerCase().includes(q.toLowerCase()) : ['yes', 'maybe'].includes(avail[s.id]?.status ?? '')))
     .sort((a, b) => Number(avail[b.id]?.status === 'yes') - Number(avail[a.id]?.status === 'yes') || (a.staff_private?.ranking ?? 999) - (b.staff_private?.ranking ?? 999)), [staff, placed, avail, q]);
   const pending = (e: AEvent) => team(e).filter((s) => !s.notified_at || s.changed_at > s.notified_at).length;
@@ -166,6 +167,7 @@ export function Day() {
             {bench.slice(0, 40).map((s) => { const a = avail[s.id]; return (
               <button key={s.id} className="dv-bp" draggable onDragStart={() => setDrag({ kind: 'staff', staff: s })} onDragEnd={() => { setDrag(null); setOver(null); }} onClick={() => setMenu({ staff: s })}>
                 <b>{s.full_name}</b><small>{s.staff_private?.tier ?? '?'} · {a?.status === 'yes' ? (a.from ? `from ${t12(a.from)}` : a.until ? `until ${t12(a.until)}` : 'all evening') : a?.status === 'maybe' ? 'not sure' : 'not asked'}</small>
+                {placed.has(s.id) && <AlsoWorking others={otherShifts(evs, s.id, null)} start={null} compact />}
               </button>
             ); })}
             {!bench.length && <span className="muted sm">{q ? 'No match.' : 'Nobody waiting. Search to add anyone.'}</span>}
@@ -200,14 +202,15 @@ export function Day() {
                       onDragOver={(ev) => { if (canDrop) { ev.preventDefault(); ev.stopPropagation(); setOver(k); } }}
                       onDrop={(ev) => { ev.stopPropagation(); drop(e, st); }}>
                       <div className="dv-gh"><span>START {t12(st)}</span><span>{ppl.filter((s) => !s.attendance).length}{need ? ` / ${need}` : ''}</span></div>
-                      {shown.map((s) => { const L = lead(s.position_code); const num = L || isBar(e) ? null : ++n; const oa = openAsk(s.id); return (
-                        <button key={s.id} className={'dv-row' + (s.attendance ? ' gone' : '') + (oa ? ' asking' : '')} draggable onDragStart={() => setDrag({ kind: 'shift', shift: s, from: e })} onDragEnd={() => { setDrag(null); setOver(null); }} onClick={() => setMenu({ shift: s, ev: e })}>
+                      {shown.map((s) => { const L = lead(s.position_code); const num = L || isBar(e) ? null : ++n; const oa = openAsk(s.id); const also = s.attendance ? [] : otherShifts(evs, s.staff_id, e.id); return (
+                        <button key={s.id} className={'dv-row' + (s.attendance ? ' gone' : '') + (oa ? ' asking' : '') + (also.length ? ' has-also' : '')} draggable onDragStart={() => setDrag({ kind: 'shift', shift: s, from: e })} onDragEnd={() => { setDrag(null); setOver(null); }} onClick={() => setMenu({ shift: s, ev: e })}>
                           <i className={L ? 'lead' : isBar(e) ? 'role' : ''}>{L || isBar(e) ? s.position_code ?? '·' : num}</i>
                           <span className="dv-name">{s.staff?.full_name}</span>
                           {flagsOf(s).map((f) => <span key={f.flag} className={'ftag ' + f.flag}>{flagText(f)}</span>)}
                           {s.leave_by && <span className="dv-leave">leaves ~{t12(hm(s.leave_by))}</span>}
                           {oa && <span className="dv-asked">{oa.kind === 'move' ? `asked to move · ${oa.meta.new.venue}` : oa.kind === 'position' ? `asked · ${oa.meta.new.position}` : `asked · ${t12(hm(oa.meta.new.start))}`}</span>}
                           {s.status === 'confirmed' ? <span className="dv-dot ok" title="Confirmed" /> : <span className="dv-dot" title="Not confirmed yet" />}
+                          {also.length > 0 && <AlsoWorking others={also} start={s.planned_start} compact />}
                         </button>
                       ); })}
                       {folded && <button className="dv-more" onClick={() => setOpen(new Set([...open, k]))}>+ {ppl.length - 3} more at {t12(st)} <span>Show ›</span></button>}
@@ -246,7 +249,8 @@ export function Day() {
             <div className="grab" />
             {'shift' in menu ? (() => { const { shift: s, ev } = menu; const others = evs.filter((x) => isBar(x) === isBar(ev)); return (
               <>
-                <div><div className="kicker">{ev.title} · starts {t12(hm(s.planned_start))}</div><div className="serif" style={{ fontSize: 24 }}>{s.staff?.full_name}</div></div>
+                <div><div className="kicker">{ev.title} · starts {t12(hm(s.planned_start))}</div><div className="serif" style={{ fontSize: 24 }}>{s.staff?.full_name}</div>
+                  <AlsoWorking others={otherShifts(evs, s.staff_id, ev.id)} start={s.planned_start} /></div>
                 <b className="sm">Move to…</b>
                 {others.map((x) => x.id === ev.id ? startsOf(x).filter((st) => st !== hm(s.planned_start)).map((st) => (
                   <button key={x.id + st} className="opt" onClick={() => moveTo(x, s, ev, st)}><span><b>Same event · start {t12(st)}</b></span></button>
@@ -256,6 +260,9 @@ export function Day() {
                 <button className="opt" onClick={() => { setMenu(null); setAsk({ kind: 'start', shift: s, ev }); }}><span><b>Change start…</b><small>Later = changes now · earlier = ask first</small></span></button>
                 <button className="opt" onClick={() => { setMenu(null); setAsk({ kind: 'position', shift: s, ev }); }}><span><b>Change position…</b><small>{s.status === 'confirmed' ? 'Confirmed: asks first' : 'Not confirmed yet: changes what they confirm'}</small></span></button>
                 {openAsk(s.id) && <button className="opt" onClick={() => run(async () => { const { error } = await supabase.rpc('admin_stop_ask', { p_ask: openAsk(s.id)!.id }); if (error) throw error; })}><span><b>Stop asking</b><small>The question to {s.staff?.full_name?.split(' ')[0]} is withdrawn · nothing changes</small></span></button>}
+                {(() => { const who = staff.find((x) => x.id === s.staff_id); const free = others.filter((x) => x.id !== ev.id && !team(x).some((y) => y.staff_id === s.staff_id));
+                  return who && free.length > 0 && <><b className="sm">Also add to… · 2nd shift that day</b>{free.map((x) => (
+                    <button key={'2' + x.id} className="opt" onClick={() => addTo(x, who)}><span><b>{x.title}</b><small>{team(x).filter((y) => !y.attendance).length} / {x.staff_needed} · starts {t12(landing(x, avail[s.staff_id]?.from))} · stays on {ev.title}</small></span></button>))}</>; })()}
                 <button className="opt" onClick={() => toBench(s, ev)}><span><b>Back to bench</b><small>Removes them from {ev.title}</small></span></button>
                 <label className="row sm" style={{ gap: 8 }}>Needs to leave around <input type="time" step={900} defaultValue={s.leave_by ? hm(s.leave_by) : ''} onBlur={(x) => x.target.value !== (s.leave_by ? hm(s.leave_by) : '') && setLeave(ev, s, x.target.value)} /></label>
               </>
@@ -263,7 +270,8 @@ export function Day() {
               <>
                 <div><div className="kicker">Bench</div><div className="serif" style={{ fontSize: 24 }}>{menu.staff.full_name}</div></div>
                 <b className="sm">Add to…</b>
-                {evs.filter((x) => !isBar(x)).map((x) => <button key={x.id} className="opt" onClick={() => addTo(x, menu.staff)}><span><b>{x.title}</b><small>{team(x).filter((y) => !y.attendance).length} / {x.staff_needed} · starts {t12(landing(x, avail[menu.staff.id]?.from))}</small></span></button>)}
+                {evs.filter((x) => !isBar(x) && !team(x).some((y) => y.staff_id === menu.staff.id)).map((x) => <button key={x.id} className="opt" onClick={() => addTo(x, menu.staff)}><span><b>{x.title}</b><small>{team(x).filter((y) => !y.attendance).length} / {x.staff_needed} · starts {t12(landing(x, avail[menu.staff.id]?.from))}</small>
+                  <AlsoWorking others={otherShifts(evs, menu.staff.id, x.id)} start={startIso(x.event_date, landing(x, avail[menu.staff.id]?.from))} compact /></span></button>)}
               </>
             )}
             <button className="abtn" onClick={() => setMenu(null)}>Close</button>

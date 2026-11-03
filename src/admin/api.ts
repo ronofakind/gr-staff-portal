@@ -9,7 +9,7 @@ export type AStaff = {
 
 export type AShift = {
   id: string; event_id: string; staff_id: string; position_code: string | null; position_detail: string | null;
-  planned_start: string; status: 'booked' | 'confirmed' | 'declined'; changed_at: string; notified_at: string | null; attendance: 'no_show' | 'cancelled' | null; left_early?: boolean; attendance_reason?: string | null; leave_by: string | null;
+  planned_start: string; planned_end?: string | null; status: 'booked' | 'confirmed' | 'declined'; changed_at: string; notified_at: string | null; attendance: 'no_show' | 'cancelled' | null; left_early?: boolean; attendance_reason?: string | null; leave_by: string | null;
   punches: { punch_in: string | null; punch_out: string | null } | null; manager_note?: string | null; note_archived_at?: string | null; note_archived_by?: string | null;
   staff: { full_name: string; phone?: string | null } | null;
   /** push 28 (migration 034; undefined until it is applied) */
@@ -28,7 +28,7 @@ export type AEvent = {
 
 const EVENT_SELECT_T = `id,event_date,title,address,department,description,dress_code,bring,start_time,end_time,
   staff_needed,manager_id,hours_submitted_at,hours_submitted_by,venue_id,timeline,event_private(client,client_id,punch_code,pay_method,qb_doc_type,qb_doc_number,cash_received_at,qb_removed_at),guests,event_type,extras,extras_billing,transport,travel_min,paid_travel_min,gas_per_car,transport_billing,rides,ends_label,staffing,notes,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,drive_folder_url,
-  shifts(id,event_id,staff_id,position_code,position_detail,planned_start,status,changed_at,notified_at,attendance,left_early,attendance_reason,leave_by,manager_note,note_archived_at,note_archived_by,responded_at,punches(punch_in,punch_out),staff:staff!shifts_staff_id_fkey(full_name,phone)P28)`;
+  shifts(id,event_id,staff_id,position_code,position_detail,planned_start,planned_end,status,changed_at,notified_at,attendance,left_early,attendance_reason,leave_by,manager_note,note_archived_at,note_archived_by,responded_at,punches(punch_in,punch_out),staff:staff!shifts_staff_id_fkey(full_name,phone)P28)`;
 /** push 28 shift columns (migration 034). */
 export const P28_SHIFT_COLS = ',cancelled_at,cancel_reason,cancel_note,cancel_self,cancel_late,cancel_sent_to_manager,replacement_for';
 export const EVENT_SELECT = EVENT_SELECT_T.replace('P28', '');

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { AlsoWorking, otherShifts } from './alsoWorking';
 import { eventsBetween, allStaff, isoDay, addDays, dLabel, ap12, startIso, bookingChange, confirmationsSent, type AEvent, type AStaff } from './api';
 
 type Av = { staff_id: string; status: string; from_time: string | null; until_time: string | null; note?: string | null };
@@ -117,10 +118,13 @@ export function Free() {
                   {g.map((a) => {
                     const s = byId[a.staff_id]; const at = placedAt(a.staff_id); const ev = defaultTarget; const slot = ev ? slotFor(ev, a) : null;
                     const fits = ev && !tooShort(ev, a);
+                    // push 46 · already works another event that day → info note (never blocks)
+                    const onEv = ev ? booked(ev).find((x) => x.staff_id === a.staff_id) : undefined;
+                    const others = ev && at ? otherShifts(events ?? [], a.staff_id, ev.id) : [];
                     return (
                       <div key={a.staff_id} className={'fr-row' + (at && tab !== 'placed' ? ' placed' : '')}>
                         <span className="muted sm fr-rank">#{s?.staff_private?.ranking ?? '–'}</span>
-                        <span className="grow"><b>{s?.full_name}</b>{a.note && <i className="av-note-adm">“{a.note}”</i>}</span>
+                        <span className="grow"><b>{s?.full_name}</b>{a.note && <i className="av-note-adm">“{a.note}”</i>}{others.length > 0 && ev && <AlsoWorking others={others} start={onEv?.planned_start ?? (slot ? startIso(ev.event_date, slot.start) : null)} compact />}</span>
                         <span className={'sm strong ' + (a.status === 'yes' ? (a.from_time || a.until_time ? 'amberc' : 'okc') : 'muted')}>{a.status === 'yes' ? timeText(a) : a.status === 'no' ? "can't" : 'no answer yet'}</span>
                         <div className="fr-act">
                           {at ? <>
@@ -134,7 +138,8 @@ export function Free() {
                             </> : <span className="accent sm">too short for {short(ev.title)}{floorEvs.length > 1 ? <button className="lnk" onClick={() => setMenu(menu === a.staff_id ? null : a.staff_id)}> other ▾</button> : null}</span>
                           ) : null}
                           {menu === a.staff_id && (
-                            <div className="fr-menu">{floorEvs.filter((e) => e.id !== at?.id).map((e) => <button key={e.id} onClick={() => (at ? move(a, e) : add(a, e))}>{at ? 'Move to' : 'Add to'} {e.title} <small>{booked(e).length} / {e.staff_needed}</small></button>)}</div>
+                            <div className="fr-menu">{floorEvs.filter((e) => e.id !== at?.id).map((e) => <button key={e.id} onClick={() => (at ? move(a, e) : add(a, e))}>{at ? 'Move to' : 'Add to'} {e.title} <small>{booked(e).length} / {e.staff_needed}</small></button>)}
+                              {at && floorEvs.filter((e) => !booked(e).some((x) => x.staff_id === a.staff_id)).map((e) => <button key={'2' + e.id} onClick={() => add(a, e)}>Also add to {e.title} <small>2nd shift that day</small></button>)}</div>
                           )}
                         </div>
                       </div>

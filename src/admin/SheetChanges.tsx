@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { addDays, isoDay, dLabel, startIso, endIso, bookingChange, roleName, ap12, ROLES } from './api';
+import { AlsoWorking, otherShifts } from './alsoWorking';
 import { diff, norm, mtlHm, dateOf, type Change, type DEvent, type DStaff, type SheetEvent } from './sheetDiff';
 
 /**
@@ -10,7 +11,7 @@ import { diff, norm, mtlHm, dateOf, type Change, type DEvent, type DStaff, type 
  * Ignore = admin_archive (same key + signature as Needs you): the card comes back if that cell changes again.
  */
 type Arch = { key: string; sig: string };
-const EV_COLS = 'id,event_date,title,department,address,venue_id,sheet_ref,end_time,event_private(client),shifts(id,event_id,staff_id,position_code,planned_start,status,attendance,notified_at,cancelled_at,punches(punch_in))';
+const EV_COLS = 'id,event_date,title,department,address,venue_id,sheet_ref,end_time,event_private(client),shifts(id,event_id,staff_id,position_code,planned_start,planned_end,status,attendance,notified_at,cancelled_at,punches(punch_in))';
 const DAYS = 60;
 const TAG: Record<Change['kind'], [string, string]> = {
   added: ['STAFF ADDED', 'ok'], removed: ['STAFF REMOVED', 'red'], time: ['TIME', 'amber'], new_event: ['NEW EVENT', 'blue'], check_name: ['CHECK NAME', 'purple'],
@@ -139,6 +140,7 @@ function Card({ c, app, staff, onDone, onIgnore }: { c: Change; app: (DEvent & {
       <div className="sc-top"><span className={'sc-tag ' + cls}>{tag}</span><b className="sm">{evName} · {dLabel(dateOf(c))}</b><span className="grow" />{ev && <Link className="sm" to={`/admin/event/${ev.id}`}>Event ›</Link>}</div>
       <div className="sc-what">{what}</div>
       <div className="muted sm">{sub}</div>
+      {c.kind === 'added' && <AlsoWorking others={otherShifts(app, c.staffId, c.e.id, c.e.event_date).filter((o) => !c.from || o.start !== c.from.s.planned_start)} start={startIso(c.e.event_date, c.start)} />}
       <div className="sc-act">
         {c.kind === 'check_name' && (
           <select className="sc-pick" value={pick} onChange={(e) => setPick(e.target.value)} aria-label="Who is this?">

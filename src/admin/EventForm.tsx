@@ -10,6 +10,7 @@ import { tiersFor } from './Availability';
 import { AddressInput, type AddressParts } from '../components/AddressInput';
 import { defaultPieces, defaultItems, type UniItems, type UniItemsMap, type UniLineKey } from '../components/Uniform';
 import { setting, autoExtras } from '../lib/settings';
+import { AlsoWorking, type OtherShift } from './alsoWorking';
 
 export const MEN: [string, string][] = [['white_shirt', 'White dress shirt'], ['black_shirt', 'Black dress shirt'], ['black_tshirt', 'Black T-shirt']];
 export const WOMEN: [string, string][] = [['white_shirt', 'White dress shirt'], ['black_shirt', 'Black dress shirt'], ['dress', 'Black cocktail dress'], ['black_tshirt', 'Black T-shirt']];
@@ -90,7 +91,7 @@ type Ev = { id: string; department: 'floor' | 'bar' | 'kitchen'; staffing: Omit<
 type Sh = { id: string; event_id: string; staff_id: string; position_code: string | null; planned_start: string; attendance: string | null; notified_at?: string | null; punches: { punch_in: string | null } | null };
 type DayInfo = {
   avail: Record<string, { status: string; from: string | null; until: string | null }>;
-  booked: Record<string, string>;   // staff_id → other event title
+  booked: Record<string, OtherShift[]>;   // staff_id → their shifts on other events that day (push 46: info, never blocks)
   off: Set<string>;
   weeklyNo: Set<string>;
 };
@@ -211,7 +212,7 @@ export function EventForm() {
     const dow = (new Date(date + 'T12:00:00').getDay() + 6) % 7;
     Promise.all([
       supabase.from('availability').select('staff_id,status,from_time,until_time').eq('for_date', date),
-      supabase.from('shifts').select('staff_id,event_id,events!inner(title,event_date)').eq('events.event_date', date).neq('status', 'declined'),
+      supabase.from('shifts').select('staff_id,event_id,planned_start,planned_end,attendance,events!inner(title,event_date)').eq('events.event_date', date).neq('status', 'declined'),
       supabase.from('days_off').select('staff_id,from_date,to_date,every_dow').lte('from_date', date).gte('to_date', date),
       supabase.from('staff_weekly').select('staff_id,status').eq('dow', dow).eq('status', 'no'),
       supabase.from('avail_exceptions').select('staff_id').eq('for_date', date),
@@ -220,8 +221,9 @@ export function EventForm() {
       for (const r of (a.data ?? []) as { staff_id: string; status: string; from_time: string | null; until_time: string | null }[]) {
         const cur = avail[r.staff_id]; if (!cur || r.status === 'yes') avail[r.staff_id] = { status: r.status, from: r.from_time, until: r.until_time };
       }
-      const mine = new Set(existing.map((e) => e.id)); const booked: Record<string, string> = {};
-      for (const r of (b.data ?? []) as unknown as { staff_id: string; event_id: string; events: { title: string } }[]) if (!mine.has(r.event_id)) booked[r.staff_id] = r.events.title;
+      const mine = new Set(existing.map((e) => e.id)); const booked: DayInfo['booked'] = {};
+      for (const r of (b.data ?? []) as unknown as { staff_id: string; event_id: string; planned_start: string; planned_end: string | null; attendance: string | null; events: { title: string } }[])
+        if (!mine.has(r.event_id) && !r.attendance) (booked[r.staff_id] ??= []).push({ venue: r.events.title, start: r.planned_start, end: r.planned_end });
       const off = new Set(((o.data ?? []) as { staff_id: string; every_dow: number | null }[]).filter((r) => r.every_dow == null || r.every_dow === dow).map((r) => r.staff_id));
       const opened = new Set(((x.data ?? []) as { staff_id: string }[]).map((r) => r.staff_id));
       setDay({ avail, booked, off, weeklyNo: new Set(((w.data ?? []) as { staff_id: string }[]).map((r) => r.staff_id).filter((s) => !opened.has(s))) });
@@ -518,7 +520,7 @@ export function EventForm() {
 
       <Fold n={3} title="Staffing" open={isOpen(3)} setOpen={(o) => setFold(3, o)}
         summary={(() => { const t = lines.reduce((x, l) => x + l.count, 0); const nm = lines.reduce((x, l) => x + l.names.length, 0); return `${floorN} floor · ${t - floorN} bar · ${t} total · ${nm} of ${t} named`; })()}>
-        <Grid lines={lines} setLines={setLines} staff={staff} day={day} mode={mode} />
+        <Grid date={date} lines={lines} setLines={setLines} staff={staff} day={day} mode={mode} />
       </Fold>
 
       <Fold n={4} title="Event folder" open={isOpen(4)} setOpen={(o) => setFold(4, o)} summary={folder.trim() ? 'Google Drive · folder linked' : `Google Drive · ${driveWanted ? 'create on Save' : 'off'}${drive ? '' : ' · not connected'}`}>
@@ -662,7 +664,7 @@ function VenuePicker({ venues, privates, value, venue, privateId, onPick, onPriv
 const ROLE_KEYS: Record<string, string> = { md: 'MD', w: 'W', waiter: 'W', waiters: 'W', bus: 'BUS', busboy: 'BUS', bm: 'BM', 'bar manager': 'BM', bt: 'BT', bartender: 'BT', bartenders: 'BT', bb: 'BB', barback: 'BB', barbacks: 'BB' };
 
 /** The staffing grid: one line per role + start time. */
-function Grid({ lines, setLines, staff, day, mode }: { lines: Line[]; setLines: (l: Line[]) => void; staff: AStaff[]; day: DayInfo; mode: Mode }) {
+function Grid({ date, lines, setLines, staff, day, mode }: { date: string; lines: Line[]; setLines: (l: Line[]) => void; staff: AStaff[]; day: DayInfo; mode: Mode }) {
   const wrap = useRef<HTMLDivElement>(null);
   const upd = (i: number, p: Partial<Line>) => setLines(lines.map((l, k) => (k === i ? { ...l, ...p } : l)));
   const focusRow = (i: number) => setTimeout(() => wrap.current?.querySelector<HTMLElement>(`[data-row="${i}"] select`)?.focus(), 0);
@@ -715,7 +717,7 @@ function Grid({ lines, setLines, staff, day, mode }: { lines: Line[]; setLines: 
             <TimeCell value={l.start} onChange={(v) => upd(i, { start: v })} />
             <TimeCell value={l.end ?? ''} optional onChange={(v) => upd(i, { end: v || null })} />
             <input aria-label="How many" type="number" min={0} value={l.count} onChange={(e) => upd(i, { count: Math.max(0, Number(e.target.value)) })} className={l.count >= 10 ? 'strong' : ''} />
-            <NamePicker line={l} staff={staff} day={day} taken={lines.flatMap((x, k) => (k === i ? [] : x.names))} onChange={(names) => upd(i, { names, count: Math.max(l.count, names.length) })} />
+            <NamePicker line={l} date={date} staff={staff} day={day} taken={lines.flatMap((x, k) => (k === i ? [] : x.names))} onChange={(names) => upd(i, { names, count: Math.max(l.count, names.length) })} />
             <button type="button" className="sg-x" aria-label="Remove line" onClick={() => setLines(lines.filter((_, k) => k !== i))}>×</button>
           </div>
         ))}
@@ -744,7 +746,8 @@ function TimeCell({ value, onChange, optional = false }: { value: string; onChan
 }
 
 /** Type-to-add names; MD and BM lines only list people who can lead. */
-function NamePicker({ line, staff, day, taken, onChange }: { line: Line; staff: AStaff[]; day: DayInfo; taken: string[]; onChange: (ids: string[]) => void }) {
+function NamePicker({ line, date, staff, day, taken, onChange }: { line: Line; date: string; staff: AStaff[]; day: DayInfo; taken: string[]; onChange: (ids: string[]) => void }) {
+  const lineStart = line.start ? startIso(date, line.start) : null;
   const [q, setQ] = useState(''); const [open, setOpen] = useState(false); const [hi, setHi] = useState(0);
   const isBar = line.dept === 'bar';
   const pool = useMemo(() => staff.filter((s) => {
@@ -754,7 +757,6 @@ function NamePicker({ line, staff, day, taken, onChange }: { line: Line; staff: 
   }), [staff, line.code, isBar, q]);
   const info = (s: AStaff) => {
     if (day.off.has(s.id)) return { t: 'off that day', cls: 'grey', block: true };
-    if (day.booked[s.id]) return { t: `booked at ${day.booked[s.id]} that day`, cls: 'grey', block: true };
     if (taken.includes(s.id)) return { t: 'on another line', cls: 'grey', block: true };
     const a = day.avail[s.id];
     if (a?.status === 'yes') return { t: 'said yes' + (a.from ? ` · from ${ap12(a.from.slice(0, 5)).replace(':00', '')}` : '') + (a.until ? ` · until ${ap12(a.until.slice(0, 5)).replace(':00', '')}` : ''), cls: 'ok', block: false, w: 0 };
@@ -783,14 +785,16 @@ function NamePicker({ line, staff, day, taken, onChange }: { line: Line; staff: 
           }} />
         {line.count > 0 && !lead && <small className="np-n">{line.names.length} of {line.count} named</small>}
       </div>
+      {line.names.some((id) => day.booked[id]) && <div className="np-also">{line.names.filter((id) => day.booked[id]).map((id) => <div key={id}><b className="sm">{staff.find((x) => x.id === id)?.full_name.split(' ')[0]}</b> <AlsoWorking others={day.booked[id]} start={lineStart} compact /></div>)}</div>}
       {open && matches.length > 0 && (
         <div className="np-list">
           {matches.map(({ s, i }, k) => (
             <button type="button" key={s.id} disabled={i.block} className={'np-opt' + (k === hi ? ' hi' : '') + (i.block ? ' off' : '')} onMouseDown={(e) => e.preventDefault()} onClick={() => add(s.id)}>
               <b>{s.full_name}</b>{tierOf(s) && <i className={'tier-dot ' + tierOf(s)}>{tierOf(s)}</i>}<span className={'np-st ' + i.cls}>{i.t}</span>
+              {day.booked[s.id] && !i.block && <span className="np-opt-also"><AlsoWorking others={day.booked[s.id]} start={lineStart} compact /></span>}
             </button>
           ))}
-          <div className="np-hint">Enter adds · type more letters to narrow · people who are off or booked that day are greyed out</div>
+          <div className="np-hint">Enter adds · type more letters to narrow · people who are off that day are greyed out · 🕐 = also working another event that day</div>
         </div>
       )}
     </div>

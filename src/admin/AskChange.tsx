@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { smsMany } from '../lib/messages';
 import { adminAsks, byText, dayShort, leftText, shortName, t12, waitingOf, type AdminAsk, type AskTarget, type Spot } from '../lib/shiftAsks';
+import { AlsoWorking, otherShifts, type OtherShift } from './alsoWorking';
 import { allStaff, ap12, bookingChange, confirmationsSent, eventsBetween, roleName, startIso, ROLES, type AEvent, type AShift, type AStaff } from './api';
 
 /* Push 40 · admin side of "ask first" and "fill one spot":
@@ -126,7 +127,7 @@ export function ChangeSheet({ kind, shift, ev, to, toStart, preset, onClose, onD
 }
 
 /* ───────── fill one spot · ask several people ───────── */
-type Cand = { s: AStaff; tier: string | null; free: string; yes: boolean };
+type Cand = { s: AStaff; tier: string | null; free: string; yes: boolean; also: OtherShift[] };
 export function FillSheet({ spot, replaceFor, onClose, onDone }: { spot: Spot; replaceFor?: string | null; onClose: () => void; onDone: (msg: string) => void }) {
   const [ev, setEv] = useState<AEvent | null>(null); const [cands, setCands] = useState<Cand[] | null>(null);
   const [picked, setPicked] = useState<string[]>([]);
@@ -139,15 +140,15 @@ export function FillSheet({ spot, replaceFor, onClose, onDone }: { spot: Spot; r
         supabase.from('availability').select('staff_id,status,from_time,until_time').eq('for_date', spot.date)]);
       const e = evs.find((x) => x.id === spot.event_id) ?? null; setEv(e);
       const bar = e?.department === 'bar' || isBarCode(spot.code);
-      const busyIds = new Set(evs.flatMap((x) => x.shifts.filter((s) => s.status !== 'declined' && !s.attendance).map((s) => s.staff_id)));
+      // push 46 · people working another event that day stay in the list (after the free ones) with a 🕐 note; never pre-ticked
       const onEv = new Set((e?.shifts ?? []).map((s) => s.staff_id));
       const avm = Object.fromEntries(((av.data ?? []) as { staff_id: string; status: string; from_time: string | null; until_time: string | null }[]).map((a) => [a.staff_id, a]));
-      const list = st.filter((s) => s.active && s.role !== 'admin' && (bar ? s.department === 'bar' || s.positions.some(isBarCode) : s.department !== 'bar') && !busyIds.has(s.id) && !onEv.has(s.id))
-        .map((s) => { const a = avm[s.id]; return { s, tier: s.staff_private?.tier ?? null, yes: a?.status === 'yes',
+      const list = st.filter((s) => s.active && s.role !== 'admin' && (bar ? s.department === 'bar' || s.positions.some(isBarCode) : s.department !== 'bar') && !onEv.has(s.id))
+        .map((s) => { const a = avm[s.id]; return { s, tier: s.staff_private?.tier ?? null, yes: a?.status === 'yes', also: otherShifts(evs, s.id, spot.event_id),
           free: a?.status === 'yes' ? (a.from_time ? `free from ${ap12(a.from_time.slice(0, 5))}` : a.until_time ? `free until ${ap12(a.until_time.slice(0, 5))}` : 'free all day') : a?.status === 'maybe' ? 'said maybe' : '' }; })
         .filter((c) => c.free)
-        .sort((a, b) => Number(b.yes) - Number(a.yes) || (a.tier ?? 'Z').localeCompare(b.tier ?? 'Z') || (a.s.staff_private?.ranking ?? 999) - (b.s.staff_private?.ranking ?? 999));
-      setCands(list); setPicked(list.filter((c) => c.yes).slice(0, 3).map((c) => c.s.id));
+        .sort((a, b) => Number(!!a.also.length) - Number(!!b.also.length) || Number(b.yes) - Number(a.yes) || (a.tier ?? 'Z').localeCompare(b.tier ?? 'Z') || (a.s.staff_private?.ranking ?? 999) - (b.s.staff_private?.ranking ?? 999));
+      setCands(list); setPicked(list.filter((c) => c.yes && !c.also.length).slice(0, 3).map((c) => c.s.id));
     })();
   }, [spot.date, spot.event_id, spot.code]);
   const byId = useMemo(() => Object.fromEntries((cands ?? []).map((c) => [c.s.id, c])), [cands]);
@@ -174,7 +175,7 @@ export function FillSheet({ spot, replaceFor, onClose, onDone }: { spot: Spot; r
           {cands === null ? <div className="muted sm">Loading…</div> : !cands.length ? <div className="muted sm">Nobody said yes or maybe for that day and isn’t booked. <Link to={`/admin/availability`}>Ask availability ›</Link></div>
             : cands.slice(0, 30).map((c) => (
               <button key={c.s.id} className={'as-person' + (picked.includes(c.s.id) ? ' on' : '')} onClick={() => toggle(c.s.id)}>
-                <span className="grow"><b>{c.s.full_name}</b><small>{c.tier ? `${c.tier} tier` : 'no tier'} · {c.free}</small></span><i aria-hidden="true">{picked.includes(c.s.id) ? '✓' : ''}</i>
+                <span className="grow"><b>{c.s.full_name}</b><small>{c.tier ? `${c.tier} tier` : 'no tier'} · {c.free}</small><AlsoWorking others={c.also} start={spot.start} compact /></span><i aria-hidden="true">{picked.includes(c.s.id) ? '✓' : ''}</i>
               </button>))}
         </div>
         <small className="as-lbl">HOW</small>

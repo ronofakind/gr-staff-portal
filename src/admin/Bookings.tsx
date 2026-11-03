@@ -3,7 +3,8 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { setting, autoExtras } from '../lib/settings';
 import { DeptTag } from './DeptTag';
-import { eventsBetween, allStaff, addDays, isoDay, dLabel, ap12, startIso, roleName, bookingChange, confirmationsSent, type AEvent, type AStaff, type Client, type Venue } from './api';
+import { AlsoWorking, type OtherShift } from './alsoWorking';
+import { eventsBetween, allStaff, addDays, isoDay, dLabel, ap12, startIso, endIso, roleName, bookingChange, confirmationsSent, type AEvent, type AStaff, type Client, type Venue } from './api';
 import { misfits, linksOf, other, condShort, RuleIcons, type SLink, type SCond } from './rules';
 import { loadScoreData, scoreOf, type ScoreData } from './score';
 
@@ -288,16 +289,23 @@ export function Bookings() {
   const extrasOf = (d: string, e: AEvent) => cur(d).extras[e.id] ?? e.extras ?? defaultExtras(e);
   const onDrop = (d: string, to: { event_id: string; start: string; extra?: boolean }) => { const g = dragRef.current; setDrag(null); if (!g) return; place(d, g.staff_id, to, g.key); };
   const dropAvail = (d: string) => { const g = dragRef.current; setDrag(null); if (g?.key) remove(d, g.key); };
+  /** push 46 · the person's other placements that day (another event) → gold info note on the chip, never blocks. */
+  const othersOf = (d: string, p: Pl): OtherShift[] => plOf(d).filter((x) => x.staff_id === p.staff_id && x.event_id !== p.event_id && !x.suggested).map((x) => {
+    const e = evById[x.event_id]; const sh = x.shift_id ? e?.shifts.find((y) => y.id === x.shift_id) : undefined;
+    return { venue: e?.title ?? '?', start: startIso(d, x.start), end: sh?.planned_end ?? (e?.end_time ? endIso(d, x.start, e.end_time.slice(0, 5)) : null) };
+  });
   const Chip = ({ p, n, d }: { p: Pl; n?: number; d: string }) => {
+    const also = othersOf(d, p);
     const locked = cur(d).locks.includes(p.staff_id); const t = tier(p.staff_id); const part = partnerOf(p.staff_id).find((x) => plOf(d).some((q2) => q2.staff_id === x));
     return (
-      <div className={'bk-chip' + (p.suggested ? ' sug' : '') + (!p.shift_id && !p.suggested ? ' added' : '')} draggable onDragStart={() => setDrag({ staff_id: p.staff_id, key: p.key })} onClick={() => setPhone(p)}>
+      <div className={'bk-chip' + (p.suggested ? ' sug' : '') + (!p.shift_id && !p.suggested ? ' added' : '') + (also.length ? ' has-also' : '')} draggable onDragStart={() => setDrag({ staff_id: p.staff_id, key: p.key })} onClick={() => setPhone(p)}>
         {n != null && <span className="bk-n">{n}</span>}<i className={'bk-t t' + (t ?? 'x')} />
         <span className="grow">{name(p.staff_id)}{part && <small> 🔗 {name(part).split(' ')[0]}</small>}{p.extra && <small className="bk-x"> EXTRA</small>}
           {p.shift_id && asksBy[p.shift_id] && <small className="bk-asks" title="Waiting for your answer (Today → Needs you)">{asksBy[p.shift_id].kind === 'later' ? 'asks' : 'leaves'} {t12(hm(asksBy[p.shift_id].new_time))}</small>}</span>
         {p.suggested ? <span className="bk-sug">suggested</span> : <>
           <button className={'bk-lock' + (locked ? ' on' : '')} title={locked ? 'Locked · auto-fill never moves them' : 'Lock'} onClick={(ev) => { ev.stopPropagation(); toggleLock(d, p.staff_id); }}>{locked ? '🔒' : '🔓'}</button>
           <button className="bk-del" aria-label="Remove" onClick={(ev) => { ev.stopPropagation(); remove(d, p.key); }}>×</button></>}
+        {also.length > 0 && <AlsoWorking others={also} start={startIso(d, p.start)} compact />}
       </div>
     );
   };
