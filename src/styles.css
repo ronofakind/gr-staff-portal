@@ -2750,3 +2750,7 @@ textarea.mtg-in { padding: 10px 12px; resize: vertical; }
 .sc-act { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; align-items: center; }
 .sc-pick { height: 34px; border-radius: 10px; border: 1.5px solid #DCD3C7; padding: 0 8px; font: 500 13px Inter, system-ui, sans-serif; max-width: 100%; }
 .sc-foot { padding-top: 8px; border-top: 1px solid var(--line); margin-top: 4px; }
+
+/* push 45 · venue rule (no outside food) */
+.venue-rule { display: flex; align-items: center; gap: 12px; } .venue-rule img { flex: 0 0 auto; } .venue-rule b { font-size: 15px; }
+div.venue-rule { background: #fff; border-radius: 14px; padding: 10px 14px; margin: 8px 0; }

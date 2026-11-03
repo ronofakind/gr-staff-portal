@@ -14,11 +14,11 @@ import type { UniItems, UniItemsMap, UniLineKey } from '../components/Uniform';
  */
 type Tab = 'venues' | 'clients' | 'homes';
 type RateSet = Client['rate_sets'][number];
-type V = Venue & { staff_notes?: string | null; venue_notes?: string | null; photos?: string[] | null; always_offer_rides?: boolean };
+type V = Venue & { staff_notes?: string | null; venue_notes?: string | null; photos?: string[] | null; always_offer_rides?: boolean; no_outside_food?: boolean };
 type C = Client & { qb_customer?: string | null; extras_billing?: 'gr' | 'client'; transport_billing?: 'client' | 'gr'; admin_fee_pct?: number | null };
 type Count = { n: number; last: string | null; next: string | null; bar: boolean; floor: boolean };
 
-const V_COLS = 'id,name,address,street,unit,city,province,postal_code,usual_client_id,staff_notes,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,uniform_items,always_offer_rides';
+const V_COLS = 'id,name,address,street,unit,city,province,postal_code,usual_client_id,staff_notes,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,uniform_items,always_offer_rides,no_outside_food';
 const C_COLS = 'id,name,qb_customer,rate_sets,kind,address,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,uniform_items,drive_folder_default,extras_billing';
 /** 038 columns; read in a second pass so the page works before the migration is applied. */
 const V_038 = ',venue_notes,photos'; const C_038 = ',admin_fee_pct,transport_billing';
@@ -109,7 +109,7 @@ export function Venues() {
           {venues === null && <div className="muted sm">Loading…</div>}
           {tab === 'venues' ? (list as V[]).map((x) => {
             const c = counts.v[x.id];
-            const bits = [lastLabel(c), c?.bar && c?.floor ? 'floor + bar' : c?.bar ? 'bar' : '', x.always_offer_rides ? '🚗 rides' : ''].filter(Boolean).join(' · ');
+            const bits = [lastLabel(c), c?.bar && c?.floor ? 'floor + bar' : c?.bar ? 'bar' : '', x.always_offer_rides ? '🚗 rides' : '', x.no_outside_food ? 'no outside food' : ''].filter(Boolean).join(' · ');
             return (
               <button key={x.id} className={'vc-row' + (sel === x.id ? ' on' : '')} onClick={() => setSel(x.id)}>
                 <span className="spread"><b>{x.name}</b><small>{bits}</small></span>
@@ -196,7 +196,7 @@ function VenueCard({ v, clients, count, has038, onSaved, onClient }: { v: V | nu
   const [name, setName] = useState(v?.name ?? ''); const [clientId, setClientId] = useState(v?.usual_client_id ?? '');
   const [address, setAddress] = useState(v?.address ?? ''); const [parts, setParts] = useState<AddressParts | null>(null);
   const [parking, setParking] = useState(v?.staff_notes ?? ''); const [notes, setNotes] = useState(v?.venue_notes ?? '');
-  const [rides, setRides] = useState(!!v?.always_offer_rides); const [u, setU] = useState<Uni>(() => uniOf(v));
+  const [rides, setRides] = useState(!!v?.always_offer_rides); const [noFood, setNoFood] = useState(!!v?.no_outside_food); const [u, setU] = useState<Uni>(() => uniOf(v));
   const [busy, setBusy] = useState(false); const [err, setErr] = useState(''); const [saved, setSaved] = useState<string | null>(null);
   const client = clients.find((c) => c.id === clientId) ?? null;
   const far = setting('transport.far_min');
@@ -205,7 +205,7 @@ function VenueCard({ v, clients, count, has038, onSaved, onClient }: { v: V | nu
     if (!name.trim()) return setErr('Give the venue a name (what staff see).');
     setBusy(true); setErr('');
     const row: Record<string, unknown> = {
-      name: name.trim(), usual_client_id: clientId || null, address: address.trim() || null, staff_notes: parking.trim() || null, always_offer_rides: rides, ...uniRow(u),
+      name: name.trim(), usual_client_id: clientId || null, address: address.trim() || null, staff_notes: parking.trim() || null, always_offer_rides: rides, no_outside_food: noFood, ...uniRow(u),
       ...(parts ? { street: parts.street, unit: parts.unit || null, city: parts.city, province: parts.province, postal_code: parts.postal_code } : {}),
       ...(has038 ? { venue_notes: notes.trim() || null } : {}),
     };
@@ -245,6 +245,7 @@ function VenueCard({ v, clients, count, has038, onSaved, onClient }: { v: V | nu
           <Sec title="USUAL UNIFORMS" sub="pre-filled on New event"><Uniforms u={u} set={setU} /></Sec>
           <Sec title="TRANSPORT">
             <Sw on={rides} set={setRides} label="Always offer rides" sub="turn on for hard-to-reach venues (e.g. Le Andover) · New event suggests Transport ON" />
+            <Sw on={noFood} set={setNoFood} label="No outside food" sub="synagogues / Chabad · staff see the no-outside-food icon on every event here" />
             <small className="muted">Far event = {far} min+ drive from the office (<Link to="/admin/settings">Settings</Link>). Drive time from the office isn’t stored on venues yet (needs the Google Maps key), so it isn’t shown here.</small>
           </Sec>
           <Sec title="FROM THE CLIENT" sub={client ? undefined : 'pick a usual client'}>

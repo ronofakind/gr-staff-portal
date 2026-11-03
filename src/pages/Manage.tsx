@@ -79,7 +79,7 @@ const fullT = (iso: string) => new Date(iso).toLocaleTimeString('en-US', { hour:
 const shortT = (iso: string) => fullT(iso).replace(/\s?[AP]M$/, '');
 type Ev = { id: string; title: string; event_date: string };
 type EvFull = Ev & { staffing?: { start: string; end?: string | null }[] | null; drive_folder_url?: string | null; address: string | null; start_time: string | null; end_time: string | null; description: string | null;
-  dress_code: string | null; hours_submitted_at: string | null; venues: { address: string | null; staff_notes: string | null } | null;
+  dress_code: string | null; hours_submitted_at: string | null; venues: { address: string | null; staff_notes: string | null; no_outside_food?: boolean } | null;
   /** push 39 · lead + co-managers (migration 037) for the "Benjamin · Isaac" line */
   manager_id?: string | null; co_manager_ids?: string[] | null; manager?: { full_name: string; nickname?: string | null } | null };
 
@@ -237,7 +237,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
 
   const load = async () => {
     const [e, s] = await Promise.all([
-      supabase.from('events').select('id,title,event_date,address,start_time,end_time,description,dress_code,hours_submitted_at,drive_folder_url,staffing,venues(address,staff_notes),manager_id,co_manager_ids,manager:staff!events_manager_id_fkey(full_name,nickname)').eq('id', eventId!).single(),
+      supabase.from('events').select('id,title,event_date,address,start_time,end_time,description,dress_code,hours_submitted_at,drive_folder_url,staffing,venues(address,staff_notes,no_outside_food),manager_id,co_manager_ids,manager:staff!events_manager_id_fkey(full_name,nickname)').eq('id', eventId!).single(),
       (async () => {
         const q = (cols: string) => supabase.from('shifts').select(cols).eq('event_id', eventId!).neq('status', 'declined').order('planned_start');
         const r = await q(ROW_COLS + ',cancel_self,cancel_sent_to_manager,replacement_for');
@@ -396,6 +396,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
           <div className="inc-sent"><span className="inc-bang">!</span><div className="grow"><b>{incidents.length === 1 ? 'Incident report sent' : `${incidents.length} incident reports sent`}</b>
             <small>{incidents.map((x) => `${kindLabel(x.kind)}${x.involved_staff.length ? ' · ' + x.involved_staff.map((id) => first(rows.find((r) => r.staff && (r as unknown as { staff_id?: string }).staff_id === id)?.staff?.full_name) || '').filter(Boolean).join(', ') : ''}${x.audio_sec ? ` · 🎙 ${Math.floor(x.audio_sec / 60)}:${String(x.audio_sec % 60).padStart(2, '0')}` : ''} · ${time(x.created_at, lang)}`).join('  |  ')}</small></div></div>
         )}
+        {ev.venues?.no_outside_food && <div className="venue-rule"><img src="/rules/no-outside-food.png" alt="" width={40} height={40} /><b>No outside food or drinks at this venue</b></div>}
         {ev.drive_folder_url && <a className="folder-link" href={ev.drive_folder_url} target="_blank" rel="noreferrer">Event folder · floor plan, run of show ›</a>}
         {ev.drive_folder_url && <DriveFiles eventId={ev.id} admin={false} />}
         {/* push 36e · Messages: 📣 Message my team, what he sent (Seen n of N), replies (REPLY / ✓ DONE) */}

@@ -203,6 +203,11 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team }: { s:
         </section>
       </>}
 
+      {ev.venues?.no_outside_food && <>
+        <SecTitle icon="pin">At this venue</SecTitle>
+        <section className="d3-card venue-rule"><img src="/rules/no-outside-food.png" alt="" width={52} height={52} /><b>No outside food or drinks</b></section>
+      </>}
+
       {lead_ && team && team.length > 0 && <>
         <SecTitle icon="people">Your team</SecTitle>
         <section className="d3-card d37-team">
