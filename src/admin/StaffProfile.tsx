@@ -271,10 +271,12 @@ function MgrFeedback({ sid, d }: { sid: string; d: ScoreData }) {
 
 /** EMERGENCY CONTACT · admin only (push 31): from the profile check-up, + neighbourhood and when the check-up was done. */
 function EmergencyCard({ s }: { s: AStaff }) {
-  type Em = { emergency_name: string | null; emergency_relation: string | null; emergency_phone: string | null; neighbourhood: string | null; checkup_done_at: string | null; checkup_step: number | null };
+  type Em = { emergency_name: string | null; emergency_relation: string | null; emergency_phone: string | null; neighbourhood: string | null; checkup_done_at: string | null; checkup_step: number | null; emergency_snooze_until?: string | null; emergency_declined_at?: string | null };
   const [e, setE] = useState<Em | null>(null); const [err, setErr] = useState('');
   useEffect(() => {
-    supabase.from('staff_private').select('emergency_name,emergency_relation,emergency_phone,neighbourhood,checkup_done_at,checkup_step').eq('staff_id', s.id).maybeSingle().then(({ data, error }) => {
+    const cols = 'emergency_name,emergency_relation,emergency_phone,neighbourhood,checkup_done_at,checkup_step';
+    (async () => { const r = await supabase.from('staff_private').select(cols + ',emergency_snooze_until,emergency_declined_at').eq('staff_id', s.id).maybeSingle();
+      return r.error ? await supabase.from('staff_private').select(cols).eq('staff_id', s.id).maybeSingle() : r; })().then(({ data, error }: { data: unknown; error: { message: string } | null }) => {
       if (error) { setErr(/column|schema/i.test(error.message) ? 'Needs migration 036 (not applied yet).' : error.message); return; }
       setE((data ?? { emergency_name: null, emergency_relation: null, emergency_phone: null, neighbourhood: null, checkup_done_at: null, checkup_step: null }) as Em);
     });
@@ -291,7 +293,9 @@ function EmergencyCard({ s }: { s: AStaff }) {
             <div className="grow"><b>{e.emergency_name ?? '—'}</b>{e.emergency_relation && <span className="muted"> · {e.emergency_relation}</span>}<div className="sm">{e.emergency_phone}</div></div>
             {tel && <a className="abtn sm ok" href={`tel:${tel}`}>Call</a>}
           </div>
-        ) : <div className="muted sm">{done ? 'Skipped in the check-up · they see a reminder on their Home.' : 'Not given yet.'}</div>}
+        ) : <div className="muted sm">{e.emergency_declined_at ? `No emergency contact · chose not to add (${dLabel(isoDay(new Date(e.emergency_declined_at)), { month: 'short', day: 'numeric' })})`
+          : e.emergency_snooze_until && new Date(e.emergency_snooze_until).getTime() > Date.now() ? `No emergency contact · asked to be reminded later (back ${dLabel(isoDay(new Date(e.emergency_snooze_until)), { month: 'short', day: 'numeric' })})`
+          : done ? 'Skipped in the check-up · they see a reminder on their Home.' : 'Not given yet.'}</div>}
         <div className="sm"><span className="muted">Neighbourhood </span><b>{e.neighbourhood ?? '—'}</b></div>
         <div className="muted sm">Never shown to managers or other staff.</div>
       </>}

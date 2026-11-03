@@ -10,7 +10,8 @@ import { LenSeg } from '../components/PinPad';
 import { pinPassword, resolvePinLen, saveMyPinLen, type PinLen } from '../lib/pin';
 import { NICK_ERROR, cleanNick, nickState } from '../lib/nickname';
 import { useMyCalendar } from '../lib/calendar';
-import { CalendarBody } from './Checkup';
+import { CalendarBody, EmergencyForm } from './Checkup';
+import { useCheckup, setEmergencyReminder } from '../lib/checkup';
 import { AlertsProfileRow } from '../components/Alerts';
 
 type Extra = { transport: string | null; positions: string[] | null; shirt_size: string | null; pants_size: string | null; dress_size: string | null };
@@ -30,6 +31,7 @@ export function Profile({ me }: { me: Staff }) {
   const { cal, setCal } = useMyCalendar(); const [calOpen, setCalOpen] = useState(opening === 'cal'); // push 33b
   useEffect(() => { if (opening) setParams((p) => { p.delete('open'); return p; }, { replace: true }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [phone, setPhone] = useState(me.phone ?? '');
+  const { info: cu, reload: reloadCu } = useCheckup(); const [emOpen, setEmOpen] = useState(false);
   const [pinLen, setPinLen] = useState<PinLen | null>(null);
   useEffect(() => { if (me.email) resolvePinLen(me.email).then((r) => setPinLen(r.known ? r.len : null)); }, [me.email]);
 
@@ -75,6 +77,7 @@ export function Profile({ me }: { me: Staff }) {
       <section className="sizes">
         <div className="size-row"><span className="muted sm" style={{ width: 70 }}>Email</span><span className="grow strong" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{me.email}</span></div>
         <button className="size-row edit-row" onClick={() => setEdit('phone')}><span className="muted sm" style={{ width: 70 }}>Phone</span><span className="grow strong">{phone || '—'}</span><span className="strong sm">Edit ›</span></button>
+        {me.role !== 'admin' && cu && <button className="size-row edit-row" onClick={() => setEmOpen(true)}><span className="muted sm" style={{ width: 70 }}>Emergency</span><span className="grow strong" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cu.emergency_phone ? `${cu.emergency_name ?? ''}${cu.emergency_relation ? ` · ${cu.emergency_relation}` : ''}` : <span className="muted">Not added</span>}</span><span className="strong sm">{cu.emergency_phone ? 'Edit ›' : 'Add ›'}</span></button>}
         <button className="size-row edit-row" onClick={() => setEdit('pin')}><span className="muted sm" style={{ width: 70 }}>Code</span><span className="grow strong">{pinLen === 4 ? '••••' : '••••••'}</span><span className="strong sm">Change your code ›</span></button>
       </section>
 
@@ -124,6 +127,13 @@ export function Profile({ me }: { me: Staff }) {
         <SwipeSheet onClose={() => setCalOpen(false)} label="Add my G&R calendar" back>
           <div className="cal-title serif">Your <img src="/logo-mark.png" alt="G&R" /> calendar</div>
           <div className="cu-body"><CalendarBody me={me} cal={cal} onCal={setCal} /></div>
+        </SwipeSheet>
+      </>}
+      {emOpen && cu && <>
+        <div className="scrim" onClick={() => setEmOpen(false)} />
+        <SwipeSheet onClose={() => setEmOpen(false)} label="Emergency contact">
+          <div><div className="kicker">ONLY RONNIE SEES THIS</div><div className="serif" style={{ fontSize: 26 }}>Emergency contact</div></div>
+          <EmergencyForm info={{ ...cu }} saveLabel="Save" onSaved={() => { setEmOpen(false); setEmergencyReminder('clear'); reloadCu(); setMsg('✓ Saved'); }} />
         </SwipeSheet>
       </>}
       {edit && <EditSheet kind={edit} me={me} phone={phone} pinLen={pinLen} onPinLen={setPinLen} onClose={() => setEdit(null)} onPhone={(v) => { setPhone(v); setMsg('✓ Saved'); }} />}

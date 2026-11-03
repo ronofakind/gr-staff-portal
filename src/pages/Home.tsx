@@ -14,7 +14,7 @@ import { useMyCalendar } from '../lib/calendar';
 import { callName } from '../lib/nickname';
 import { UniformIcon, uniformFor, uniformLabel } from '../components/Uniform';
 import { MessageCard, MessageRonnieLink, MgrRepliesLine } from '../components/MessageCard';
-import { useCheckup } from '../lib/checkup';
+import { useCheckup, setEmergencyReminder } from '../lib/checkup';
 import { EmergencyForm, UsualWeekScreen } from './Checkup';
 import { SwipeSheet } from '../components/SwipeSheet';
 import { useMyMeetings, dayOfMtl, todayMtl } from '../lib/meetings';
@@ -57,6 +57,14 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
   const [mgrLate, setMgrLate] = useState<MgrLate[]>([]);
   // push 31 · emergency contact skipped in the check-up → small reminder until it's filled
   const { info: cu, reload: reloadCu } = useCheckup(); const [emOpen, setEmOpen] = useState(false);
+  const [emToast, setEmToast] = useState<null | 'later' | 'never'>(null);
+  const emChoose = async (c: 'later' | 'never' | 'clear') => {
+    if (preview) return;
+    setEmToast(c === 'clear' ? null : c);
+    const { error } = await setEmergencyReminder(c); if (error) { setEmToast(null); return; }
+    reloadCu();
+    if (c !== 'clear') setTimeout(() => setEmToast((t) => (t === c ? null : t)), 6000);
+  };
   const [wkOpen, setWkOpen] = useState(false); // push 34d · usual week skipped in the check-up
   // push 33
   const [x33, setX33] = useState<Record<string, P33>>({});
@@ -204,13 +212,20 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
       {!preview && <AlertsCard me={me} />}
 
 
-      {!preview && cu?.done_at && !cu.emergency_phone && (
-        <button className="em-card" onClick={() => setEmOpen(true)}>
-          <span className="em-ic" aria-hidden="true">＋</span>
-          <span className="grow"><b>Add an emergency contact · 1 min</b><span>Only Ronnie sees it. Used only if something happens at an event.</span></span>
-          <span className="em-go">Add ›</span>
-        </button>
+      {!preview && cu?.done_at && !cu.emergency_phone && !cu.emergency_declined_at && !(cu.emergency_snooze_until && new Date(cu.emergency_snooze_until).getTime() > Date.now()) && (
+        <div className="em-wrap">
+          <button className="em-card" onClick={() => setEmOpen(true)}>
+            <span className="em-ic" aria-hidden="true">＋</span>
+            <span className="grow"><b>Add an emergency contact · 1 min</b><span>Only Ronnie sees it. Used only if something happens at an event.</span></span>
+            <span className="em-go">Add ›</span>
+          </button>
+          <div className="em-later">
+            <button onClick={() => emChoose('later')}>Remind me later</button>
+            <button onClick={() => emChoose('never')}>I’d rather not</button>
+          </div>
+        </div>
       )}
+      {emToast && <div className="em-toast"><span className="grow">{emToast === 'later' ? 'Okay, we’ll remind you in 2 weeks.' : 'Okay, we won’t ask again. You can add one any time in Profile.'}</span><button onClick={() => emChoose('clear')}>Undo</button></div>}
       {!preview && cu?.done_at && cu.usual_week_skipped_at && (
         <button className="em-card wk-card" onClick={() => setWkOpen(true)}>
           <span className="em-ic" aria-hidden="true">🗓</span>
@@ -223,7 +238,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
         <div className="scrim" onClick={() => setEmOpen(false)} />
         <SwipeSheet onClose={() => setEmOpen(false)} label="Emergency contact">
           <div><div className="kicker">ONLY RONNIE SEES THIS</div><div className="serif" style={{ fontSize: 26 }}>Emergency contact</div></div>
-          <EmergencyForm info={{ ...cu }} saveLabel="Save" onSaved={() => { setEmOpen(false); reloadCu(); }} />
+          <EmergencyForm info={{ ...cu }} saveLabel="Save" onSaved={() => { setEmOpen(false); setEmergencyReminder('clear'); reloadCu(); }} />
         </SwipeSheet>
       </>}
 

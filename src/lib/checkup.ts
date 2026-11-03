@@ -8,6 +8,8 @@ export type CheckupInfo = {
   neighbourhood: string | null; languages: Record<string, number>;
   /** push 34d · "Skip for now" on step 5 → gold "Set your usual week" card on Home until a day is set. */
   usual_week_skipped_at?: string | null;
+  /** Fixes chat Nov 3 · Home emergency card: Remind me later (14 days) / I'd rather not. Migration 049. */
+  emergency_snooze_until?: string | null; emergency_declined_at?: string | null;
 };
 export const RELATIONS = ['Parent', 'Partner', 'Sibling', 'Friend', 'Other'] as const;
 
@@ -23,6 +25,7 @@ export async function loadCheckup(): Promise<CheckupInfo | null> {
       neighbourhood: d.neighbourhood ?? null,
       languages: d.languages && typeof d.languages === 'object' && !Array.isArray(d.languages) ? d.languages : {},
       usual_week_skipped_at: d.usual_week_skipped_at ?? null,
+      emergency_snooze_until: d.emergency_snooze_until ?? null, emergency_declined_at: d.emergency_declined_at ?? null,
     };
   } catch { return null; }
 }
@@ -32,6 +35,7 @@ export const saveMyProfile = (fields: Partial<Pick<CheckupInfo, 'neighbourhood' 
 /** push 34d · true = skipped (Skip for now) · false = answered (Next / Done, even with all days off). Migration 040. */
 export const setUsualWeekSkipped = (skipped: boolean) =>
   supabase.rpc('set_usual_week_skipped', { p_skipped: skipped }).then(({ error }) => { if (error) console.warn('[usual week]', error.message); });
+export const setEmergencyReminder = (choice: 'later' | 'never' | 'clear') => supabase.rpc('set_emergency_reminder', { p_choice: choice });
 export const setCheckupStep = (step: number, done = false) => supabase.rpc('set_checkup_step', { p_step: step, p_done: done });
 
 /** Home reads it for the "Add an emergency contact" reminder. */
