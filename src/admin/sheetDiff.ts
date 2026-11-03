@@ -26,7 +26,7 @@ export type Change =
 
 /** Upper case, no accents, letters and spaces only. */
 export const norm = (s: string | null | undefined) =>
-  (s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z ]+/g, ' ').replace(/\s+/g, ' ').trim();
+  (s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/['’]/g, '').replace(/[^A-Z ]+/g, ' ').replace(/\s+/g, ' ').trim();
 
 /** "HH:MM" Montreal time of an ISO timestamp. */
 export const mtlHm = (iso: string) => new Date(iso).toLocaleTimeString('en-GB', { timeZone: 'America/Toronto', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
@@ -44,7 +44,7 @@ export function sim(a: string | null | undefined, b: string | null | undefined) 
 export function staffMatcher(staff: DStaff[], aliases: { alias: string; staff_id: string }[]) {
   const by = new Map<string, string | null>(); // null = ambiguous
   const put = (k: string, id: string) => { if (!k) return; by.set(k, by.has(k) && by.get(k) !== id ? null : id); };
-  const act = staff.filter((s) => s.active);
+  const act = [...staff.filter((s) => s.active), ...staff.filter((s) => !s.active)]; // inactive people still match (active wins)
   for (const s of act) put(norm(s.full_name), s.id);
   const firstLast = (n: string) => { const w = n.split(' '); return w.length > 1 ? w[0] + ' ' + w[w.length - 1] : ''; };
   const fl = new Map<string, string | null>();
@@ -55,7 +55,11 @@ export function staffMatcher(staff: DStaff[], aliases: { alias: string; staff_id
   return {
     match(name: string): string | null {
       const n = norm(name);
-      return al.get(n) ?? by.get(n) ?? fl.get(firstLast(n)) ?? nick.get(n) ?? null;
+      const hit = al.get(n) ?? by.get(n) ?? fl.get(firstLast(n)) ?? nick.get(n);
+      if (hit !== undefined) return hit;
+      // one-letter spelling difference in the whole name (Savana / Savanna, Morea / Moreau), only when exactly one person is that close
+      const c = n.replace(/ /g, ''); const near = act.filter((s) => lev1(norm(s.full_name).replace(/ /g, ''), c));
+      return near.length === 1 ? near[0].id : null;
     },
     suggest(name: string): DStaff[] {
       const n = norm(name);
@@ -63,6 +67,13 @@ export function staffMatcher(staff: DStaff[], aliases: { alias: string; staff_id
         .filter((x) => x.v > 0.2).sort((a, b) => b.v - a.v).slice(0, 3).map((x) => x.s);
     },
   };
+}
+
+/** True when a and b differ by at most one letter (added, removed or changed). */
+function lev1(a: string, b: string) {
+  if (a === b) return true; if (Math.abs(a.length - b.length) > 1 || a.length < 6) return false;
+  let i = 0; while (i < a.length && i < b.length && a[i] === b[i]) i++;
+  return a.slice(i + 1) === b.slice(i + 1) || a.slice(i) === b.slice(i + 1) || a.slice(i + 1) === b.slice(i);
 }
 
 const live = (s: DShift) => s.status !== 'declined' && !s.attendance && !s.cancelled_at;
