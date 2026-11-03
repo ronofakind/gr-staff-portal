@@ -2,6 +2,7 @@
 //
 //   GET  /api/alerts?key=1     → { key }   public VAPID key, or null while alerts are not set up (the app then shows nothing)
 //   GET  /api/alerts?status=1  → { keys: 'missing'|'ready'|'invalid', service, subject }   admin Settings → Phone alerts
+//   GET  /api/alerts?tick=<token> → Supabase timer every 5 min (migration 047)
 //   GET  /api/alerts?cron=1    → Vercel cron (vercel.json, once a day): reminders + anything held by quiet hours
 //   POST /api/alerts {do:'run'}  (signed-in user's Supabase token) → reminders + send what's waiting
 //   POST /api/alerts {do:'test'} (signed-in user's Supabase token) → "Send me a test" to that person's phones
@@ -155,6 +156,15 @@ export default async function handler(req, res) {
   }
 
   if (!URL_ || !SERVICE) { res.status(200).json({ ok: false, setup: 'service' }); return; } // dormant
+
+  if (req.method === 'GET' && req.query.tick) {
+    // Supabase timer (migration 047, pg_cron every 5 min) — one-time token it just wrote, checked with the service key.
+    let ok = false;
+    try { ok = await rpc('alerts_claim_tick', { p_token: String(req.query.tick) }); } catch { ok = false; }
+    if (ok !== true) { res.status(401).json({ error: 'tick only' }); return; }
+    try { res.status(200).json({ ok: true, ...(await run(origin)) }); } catch (e) { console.error('[alerts] tick', e.message); res.status(502).json({ error: 'failed' }); }
+    return;
+  }
 
   if (req.method === 'GET' && req.query.cron) {
     const secret = process.env.CRON_SECRET;
