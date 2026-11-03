@@ -6,6 +6,8 @@ import {
   eventsBetween, allStaff, addDays, isoDay, startIso, endIso, flagsOf, flagText, ap12, bookingChange, confirmationsSent, UNIFORMS,
   type AEvent, type AStaff, type AShift,
 } from './api';
+import { ChangeSheet, FillSheet, AskTracker, trackerGroups, type ChangeKind } from './AskChange';
+import { adminAsks, leftText, shortName, type AdminAsk, type Spot } from '../lib/shiftAsks';
 
 type Av = { status: string; from: string | null; until: string | null };
 type Drag = { kind: 'shift'; shift: AShift; from: AEvent } | { kind: 'staff'; staff: AStaff };
@@ -39,6 +41,14 @@ export function Day() {
   const [menu, setMenu] = useState<{ shift: AShift; ev: AEvent } | { staff: AStaff } | null>(null);
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [q, setQ] = useState(''); const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
+  // push 40 · ask first / fill a spot
+  const [asks, setAsks] = useState<AdminAsk[]>([]);
+  const [ask, setAsk] = useState<{ kind: ChangeKind; shift: AShift; ev: AEvent; to?: AEvent; toStart?: string; preset?: string } | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 5000); return () => clearTimeout(t); }, [toast]);
+  const fillP = params.get('fill');
+  const fillSpot: Spot | null = fillP ? { event_id: fillP, start: params.get('at') ?? '', code: params.get('code') ?? 'W', detail: null, date: day } : null;
+  const closeFill = () => { const p = new URLSearchParams(params); ['fill', 'at', 'code', 'replace'].forEach((k) => p.delete(k)); setParams(p, { replace: true }); };
 
   const load = async () => {
     const [evs, st, av] = await Promise.all([
@@ -46,6 +56,7 @@ export function Day() {
       supabase.from('availability').select('staff_id,status,from_time,until_time').eq('for_date', day),
     ]);
     setEvents(evs); setStaff(st);
+    adminAsks(day, day).then(setAsks);
     setAvail(Object.fromEntries(((av.data ?? []) as { staff_id: string; status: string; from_time: string | null; until_time: string | null }[]).map((a) => [a.staff_id, { status: a.status, from: a.from_time, until: a.until_time }])));
   };
   useEffect(() => { setEvents(null); load(); }, [day]);
@@ -60,15 +71,22 @@ export function Day() {
     if (error) throw new Error(error.message.includes('duplicate') ? 'Already on that event.' : error.message);
     await bookingChange('booked', { staff_id: s.id, shift_id: data.id, to: info(e, st) });
   });
-  const moveTo = (to: AEvent, sh: AShift, from: AEvent, start?: string) => run(async () => {
-    if (sh.punches?.punch_in) throw new Error(`${sh.staff?.full_name} already started. Change it from the event.`);
+  /** push 40 rules: later start → change now (+ note) · earlier start (sent) → ask first · other event once confirmed → ask first. */
+  const moveTo = (to: AEvent, sh: AShift, from: AEvent, start?: string) => {
+    if (sh.punches?.punch_in) { setErr(`${sh.staff?.full_name} already started. Change it from the event.`); return; }
     const st = start ?? (to.id === from.id ? hm(sh.planned_start) : landing(to, avail[sh.staff_id]?.from));
     if (to.id === from.id && st === hm(sh.planned_start)) return;
+    const iso = startIso(to.event_date, st);
+    if (to.id === from.id && sh.notified_at && new Date(iso).getTime() < new Date(sh.planned_start).getTime()) { setMenu(null); setAsk({ kind: 'start', shift: sh, ev: from, preset: iso }); return; }
+    if (to.id !== from.id && sh.status === 'confirmed') { setMenu(null); setAsk({ kind: 'move', shift: sh, ev: from, to, toStart: st }); return; }
+    run(() => moveRaw(to, sh, from, st));
+  };
+  const moveRaw = async (to: AEvent, sh: AShift, from: AEvent, st: string) => {
     const keep = to.id === from.id || lead(sh.position_code) || isBar(to) === isBar(from);
     const { error } = await supabase.from('shifts').update({ event_id: to.id, planned_start: startIso(to.event_date, st), planned_end: to.end_time ? endIso(to.event_date, st, to.end_time.slice(0, 5)) : null, ...(keep && to.id === from.id ? {} : { position_code: isBar(to) ? 'BT' : 'W', position_detail: isBar(to) ? null : 'Waiter' }) }).eq('id', sh.id);
     if (error) throw error;
     await bookingChange('moved', { staff_id: sh.staff_id, shift_id: sh.id, from: info(from, hm(sh.planned_start)), to: info(to, st) });
-  });
+  };
   const toBench = (sh: AShift, from: AEvent) => run(async () => {
     if (sh.punches?.punch_in) throw new Error(`${sh.staff?.full_name} already started. Change it from the event.`);
     const { error } = await supabase.from('shifts').delete().eq('id', sh.id); if (error) throw error;
@@ -88,6 +106,11 @@ export function Day() {
   };
 
   const evs = events ?? [];
+  const openAsk = (shiftId: string) => asks.find((a) => a.shift_id === shiftId && a.status === 'open');
+  const movesIn = (e: AEvent) => asks.filter((a) => a.kind === 'move' && a.status === 'open' && a.event_id === e.id);
+  const fillsOn = (e: AEvent) => asks.filter((a) => a.kind === 'fill' && a.status === 'open' && a.event_id === e.id);
+  const groups = trackerGroups(asks);
+  const reloadAsks = () => adminAsks(day, day).then(setAsks);
   const team = (e: AEvent) => e.shifts.filter((s) => s.status !== 'declined');
   const placed = useMemo(() => new Set(evs.flatMap((e) => team(e).map((s) => s.staff_id))), [events]);
   const bench = useMemo(() => staff.filter((s) => s.active && s.department !== 'bar' && !placed.has(s.id))
@@ -129,6 +152,9 @@ export function Day() {
       </div>
       {err && <p className="error">{err}</p>}
       {!events && <div className="muted">Loading…</div>}
+
+      {groups.length > 0 && <div className="at-list">{groups.map(([k, l]) => <AskTracker key={k} asks={l} onChanged={reloadAsks} />)}</div>}
+      {toast && <div className="undo-bar" role="status"><span className="grow">{toast}</span></div>}
 
       <div className="dv-cols" style={{ gridTemplateColumns: `200px repeat(${Math.max(1, evs.length)}, minmax(250px, 1fr))` }}>
         <section className={'dv-col dv-bench' + (drag?.kind === 'shift' ? ' drop' : '') + (over === 'bench' ? ' over' : '')}
@@ -174,12 +200,13 @@ export function Day() {
                       onDragOver={(ev) => { if (canDrop) { ev.preventDefault(); ev.stopPropagation(); setOver(k); } }}
                       onDrop={(ev) => { ev.stopPropagation(); drop(e, st); }}>
                       <div className="dv-gh"><span>START {t12(st)}</span><span>{ppl.filter((s) => !s.attendance).length}{need ? ` / ${need}` : ''}</span></div>
-                      {shown.map((s) => { const L = lead(s.position_code); const num = L || isBar(e) ? null : ++n; return (
-                        <button key={s.id} className={'dv-row' + (s.attendance ? ' gone' : '')} draggable onDragStart={() => setDrag({ kind: 'shift', shift: s, from: e })} onDragEnd={() => { setDrag(null); setOver(null); }} onClick={() => setMenu({ shift: s, ev: e })}>
+                      {shown.map((s) => { const L = lead(s.position_code); const num = L || isBar(e) ? null : ++n; const oa = openAsk(s.id); return (
+                        <button key={s.id} className={'dv-row' + (s.attendance ? ' gone' : '') + (oa ? ' asking' : '')} draggable onDragStart={() => setDrag({ kind: 'shift', shift: s, from: e })} onDragEnd={() => { setDrag(null); setOver(null); }} onClick={() => setMenu({ shift: s, ev: e })}>
                           <i className={L ? 'lead' : isBar(e) ? 'role' : ''}>{L || isBar(e) ? s.position_code ?? '·' : num}</i>
                           <span className="dv-name">{s.staff?.full_name}</span>
                           {flagsOf(s).map((f) => <span key={f.flag} className={'ftag ' + f.flag}>{flagText(f)}</span>)}
                           {s.leave_by && <span className="dv-leave">leaves ~{t12(hm(s.leave_by))}</span>}
+                          {oa && <span className="dv-asked">{oa.kind === 'move' ? `asked to move · ${oa.meta.new.venue}` : oa.kind === 'position' ? `asked · ${oa.meta.new.position}` : `asked · ${t12(hm(oa.meta.new.start))}`}</span>}
                           {s.status === 'confirmed' ? <span className="dv-dot ok" title="Confirmed" /> : <span className="dv-dot" title="Not confirmed yet" />}
                         </button>
                       ); })}
@@ -188,7 +215,11 @@ export function Day() {
                     </div>
                   );
                 })}
-                {short > 0 && !isBar(e) && <div className="dv-open">{drag ? '+ Drop here' : '+ Drag from the bench'} · {short} open spot{short > 1 ? 's' : ''}</div>}
+                {movesIn(e).map((a) => <div key={a.id} className="dv-row ghost asking"><i>→</i><span className="dv-name">{a.targets[0]?.full_name}</span><span className="dv-asked">asked to move here · {t12(hm(a.meta.new.start))}</span></div>)}
+                {fillsOn(e).map((a) => { const w = a.targets.find((t) => t.asked_at && !t.answer && !t.removed_at); return (
+                  <div key={a.id} className="dv-fill">🙋 Asking for 1 spot · {a.mode === 'chain' ? (w ? `${shortName(w.full_name)} · ${leftText(w.due_at).toLowerCase()}` : 'next…') : `${a.targets.filter((t) => t.asked_at && !t.answer && !t.removed_at).length} waiting`}</div>); })}
+                {short > 0 && !isBar(e) && <div className="dv-open">{drag ? '+ Drop here' : '+ Drag from the bench'} · {short} open spot{short > 1 ? 's' : ''}
+                  {!drag && <button className="dv-ask" onClick={() => setParams({ d: day, fill: e.id, at: startIso(e.event_date, landing(e)), code: 'W' })}>Ask several people ›</button>}</div>}
               </div>
               <div className="dv-foot">
                 {p ? <button className="abtn sm dark grow" disabled={busy || (short > 0 && !isBar(e))} onClick={() => sendFor([e])}>{short > 0 && !isBar(e) ? 'Confirmations · fill first' : `Send confirmations · ${p}`}</button>
@@ -201,7 +232,12 @@ export function Day() {
         })}
       </div>
       {events && !evs.length && <p className="muted">No events this day. <Link to={`/admin/event/new?d=${day}`}>Create one ›</Link></p>}
-      <div className="muted sm">Drag a name between events, from the bench, or back to the bench. On the phone, tap a name. If that event's confirmations were already sent, the person gets an alert on their Home screen; if not, it's silent until confirmations go out.</div>
+      <div className="muted sm">Drag a name between events, from the bench, or back to the bench. On the phone, tap a name. If that event's confirmations were already sent, the person gets an alert on their Home screen and a note in their conversation with you; if not, it's silent until confirmations go out. Moving someone who confirmed to another event, or an earlier start, asks them first (“now without asking” is always there).</div>
+
+      {ask && <ChangeSheet kind={ask.kind} shift={ask.shift} ev={ask.ev} to={ask.to} toStart={ask.toStart} preset={ask.preset} onClose={() => setAsk(null)}
+        onDirect={ask.to ? async (st) => { await moveRaw(ask.to!, ask.shift, ask.ev, st); } : undefined}
+        onDone={(m) => { setAsk(null); setToast(m); load(); }} />}
+      {fillSpot && fillSpot.start && <FillSheet spot={fillSpot} replaceFor={params.get('replace')} onClose={closeFill} onDone={(m) => { closeFill(); setToast(m); load(); }} />}
 
       {menu && (
         <>
@@ -217,6 +253,9 @@ export function Day() {
                 )) : (
                   <button key={x.id} className="opt" onClick={() => moveTo(x, s, ev)}><span><b>{x.title}</b><small>{team(x).filter((y) => !y.attendance).length} / {x.staff_needed} · lands at {t12(landing(x, avail[s.staff_id]?.from))}</small></span></button>
                 ))}
+                <button className="opt" onClick={() => { setMenu(null); setAsk({ kind: 'start', shift: s, ev }); }}><span><b>Change start…</b><small>Later = changes now · earlier = ask first</small></span></button>
+                <button className="opt" onClick={() => { setMenu(null); setAsk({ kind: 'position', shift: s, ev }); }}><span><b>Change position…</b><small>{s.status === 'confirmed' ? 'Confirmed: asks first' : 'Not confirmed yet: changes what they confirm'}</small></span></button>
+                {openAsk(s.id) && <button className="opt" onClick={() => run(async () => { const { error } = await supabase.rpc('admin_stop_ask', { p_ask: openAsk(s.id)!.id }); if (error) throw error; })}><span><b>Stop asking</b><small>The question to {s.staff?.full_name?.split(' ')[0]} is withdrawn · nothing changes</small></span></button>}
                 <button className="opt" onClick={() => toBench(s, ev)}><span><b>Back to bench</b><small>Removes them from {ev.title}</small></span></button>
                 <label className="row sm" style={{ gap: 8 }}>Needs to leave around <input type="time" step={900} defaultValue={s.leave_by ? hm(s.leave_by) : ''} onBlur={(x) => x.target.value !== (s.leave_by ? hm(s.leave_by) : '') && setLeave(ev, s, x.target.value)} /></label>
               </>

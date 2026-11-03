@@ -19,6 +19,8 @@ import { EmergencyForm, UsualWeekScreen } from './Checkup';
 import { SwipeSheet } from '../components/SwipeSheet';
 import { useMyMeetings, dayOfMtl, todayMtl } from '../lib/meetings';
 import { MeetingCard } from '../components/Meeting';
+import { AskCard } from '../components/ShiftNotes';
+import { useMyAsks } from '../lib/shiftAsks';
 import { NeedChange, CancelSheet, ChangeSheet, LateSheet, LateBlock, ChangeCard, CancelledCard, useShiftChanges, t12 as t12c, type LateNotice } from '../components/ShiftChange';
 
 type MgrLate = { id: string; shift_id: string; event_id: string; name: string; eta: string; reason: string | null; note?: string | null };
@@ -101,6 +103,8 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
   }, [me.id]);
   // push 38 · meetings: today's at the top, then unanswered ones + the next 14 days above the next shift
   const { meetings, setMeetings } = useMyMeetings(me.id, preview);
+  // push 40 · "Can you do a new time?" / "Can you work this event instead?" / "Can you work this shift?" (gold cards, also in Messages)
+  const { asks, reload: reloadAsks } = useMyAsks(preview || me.role === 'admin');
   const gotIt = async (id: string) => { setAlerts(alerts.filter((a) => a.id !== id)); if (!preview) await supabase.rpc('alert_seen', { p_id: id }); };
   const { dates: myDates, reload: reloadDates } = useMyDates(me.id, preview); // push 35 · My dates (count, reminder, said yes)
   const [notSure, setNotSure] = useState(false);
@@ -189,6 +193,8 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
           <button className="pill-red" onClick={() => gotIt(a.id)}>Got it</button>
         </div>
       ))}
+
+      {asks.map((a) => <AskCard key={a.ask_id} a={a} home preview={preview} onAnswered={(st) => { if (st !== 'gone') load(); setTimeout(reloadAsks, st === 'gone' ? 4000 : 2500); }} />)}
 
       {gone.filter((g) => !okd.includes(g.id)).map((g) => <CancelledCard key={g.id} title={g.title} date={g.date} late={g.late} onOk={() => okGone(g.id)} />)}
 
@@ -428,7 +434,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
       {notSure && <KnowsSheet title="When will you know?" latest={latestKnows(dueMaybes)} oneTap
         sub="Pick a new day. It can't be after the answer-by date." onClose={() => setNotSure(false)}
         onPick={async (by) => { setNotSure(false); if (preview) return; await supabase.rpc('dont_know_yet', { p_knows_by: by, p_note: null, p_ids: dueMaybes.map((d) => d.id) }); reloadDates(); }} />}
-      <TabBar base={base} badge={toAns.length} />
+      <TabBar base={base} badge={toAns.length + asks.filter((a) => a.kind === 'fill').length} />
     </main>
   );
 }

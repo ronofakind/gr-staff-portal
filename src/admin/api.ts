@@ -152,6 +152,7 @@ const aDate = (iso: string) => new Date(iso + 'T12:00:00').toLocaleDateString('e
 export async function bookingChange(kind: 'booked' | 'moved' | 'removed', p: {
   staff_id: string; shift_id?: string | null; to?: { id: string; event_date: string; title: string; sent: boolean; start: string };
   from?: { id: string; event_date: string; title: string; sent: boolean; start: string };
+  /** push 40 · position before → after (for the "Your shift changed" note) */ pos?: { old: string; new: string } | null; position?: string | null;
 }) {
   await supabase.from('change_log').insert({ entity: 'shift', entity_id: p.shift_id ?? null, change: { kind, staff: p.staff_id, from: p.from?.id ?? null, to: p.to?.id ?? null, start: p.to?.start ?? null } });
   const t = (x: { start: string }) => tTime(x.start);
@@ -159,5 +160,20 @@ export async function bookingChange(kind: 'booked' | 'moved' | 'removed', p: {
   if (kind === 'booked' && p.to?.sent) alert = { title: "You're booked", body: `${aDate(p.to.event_date)} · ${p.to.title} · starts ${t(p.to)}`, event_id: p.to.id };
   if (kind === 'moved' && p.to && (p.to.sent || p.from?.sent)) alert = { title: 'Your shift changed', body: `Now ${aDate(p.to.event_date)} · ${p.to.title} · starts ${t(p.to)}${p.from ? ` (was ${p.from.title} · ${t(p.from)})` : ''}`, event_id: p.to.id };
   if (kind === 'removed' && p.from?.sent) alert = { title: `You're no longer on ${aDate(p.from.event_date)}`, body: `${p.from.title} · that shift was removed. Questions? Text Ronnie.`, event_id: null };
-  if (alert) await supabase.from('staff_alerts').insert({ staff_id: p.staff_id, kind, ...alert });
+  if (kind === 'moved' && p.pos && p.to && (p.to.sent || p.from?.sent) && !alert) alert = { title: 'Your shift changed', body: `${aDate(p.to.event_date)} · ${p.to.title} · now ${p.pos.new} (was ${p.pos.old})`, event_id: p.to.id };
+  if (!alert) return;
+  const { data: al } = await supabase.from('staff_alerts').insert({ staff_id: p.staff_id, kind, ...alert }).select('id').maybeSingle();
+  // push 40 · the same change as a note in their conversation with Ronnie (Got it / Can't make it). Errors (044 not applied) are ignored.
+  const lines: { label: string; old: string | null; new: string | null }[] = [];
+  if (kind === 'moved' && p.from && p.to) {
+    if (p.from.id !== p.to.id) lines.push({ label: 'Place', old: p.from.title, new: p.to.title });
+    if (p.pos && p.pos.old !== p.pos.new) lines.push({ label: 'Position', old: p.pos.old, new: p.pos.new });
+    if (new Date(p.from.start).getTime() !== new Date(p.to.start).getTime()) lines.push({ label: 'Start', old: t(p.from), new: t(p.to) });
+  }
+  const at = kind === 'removed' ? p.from : p.to;
+  if (at) await supabase.rpc('admin_shift_note', {
+    p_staff: p.staff_id, p_kind: kind === 'moved' ? 'changed' : kind === 'booked' ? 'new' : 'removed', p_shift: kind === 'removed' ? null : p.shift_id ?? null,
+    p_alert: (al as { id: string } | null)?.id ?? null,
+    p_meta: { date: at.event_date, venue: at.title, start: at.start, position: p.position ?? null, lines },
+  }).then(() => {}, () => {});
 }

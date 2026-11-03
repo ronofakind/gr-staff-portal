@@ -60,7 +60,21 @@ export function Messages() {
   );
 }
 
+/** push 40 · shift notes / asks: what they are + where they stand (in All, never Needs reply). */
+const CARD_LABEL: Record<string, string> = { shift_changed: 'Shift changed', new_shift: 'New shift', shift_removed: 'Shift removed', ask: 'Asked first', ask_result: 'Answered' };
+function noteTag(r: InboxRow) {
+  const m = (r.last_meta ?? {}) as Record<string, unknown>; const card = m.card as string | undefined;
+  if (r.last_from !== 'system' || !card) return null;
+  const seen = !!r.staff_seen_at && r.staff_seen_at >= r.last_message_at;
+  if (card === 'shift_changed') return typeof m.got_it_at === 'string' ? <i className="ib-tag ok">✓ GOT IT {t12(m.got_it_at).toUpperCase()}</i> : seen ? <i className="ib-tag">SEEN · NO ANSWER</i> : <i className="ib-tag red">NOT OPENED</i>;
+  if (card === 'ask') return m.state === 'yes' ? <i className="ib-tag ok">✓ YES</i> : m.state === 'no' ? <i className="ib-tag red">NO</i> : m.state === 'expired' ? <i className="ib-tag">NO ANSWER</i> : <i className="ib-tag gold">WAITING{seen ? ' · SEEN' : ''}</i>;
+  if (card === 'ask_result') return m.answer === 'yes' ? <i className="ib-tag ok">✓ YES</i> : m.answer === 'no' ? <i className="ib-tag red">NO</i> : null;
+  return seen ? <i className="ib-tag">SEEN</i> : <i className="ib-tag red">NOT OPENED</i>;
+}
 function subOf(r: InboxRow) {
+  const card = (r.last_meta as Record<string, unknown> | null)?.card as string | undefined;
+  if (r.last_from === 'system' && card && CARD_LABEL[card]) { const m = r.last_meta as Record<string, unknown>; const d = (m.date as string | undefined) ?? ((m.new as { date?: string } | undefined)?.date);
+    return `🗓 ${CARD_LABEL[card]}${d ? ` · ${shortDate(d)}` : ''}`; }
   if (r.kind === 'manager') return `${r.event_title ?? ''}${r.event_date ? ` · ${shortDate(r.event_date)}` : ''}${r.re ? ` · Re: ${r.re}` : ''}`;
   const m = r.last_meta ?? {};
   if (m.hours && m.shift) return `🕒 Hours · ${shortDate(m.shift.date)} · ${m.shift.title}`;
@@ -99,7 +113,7 @@ function InboxItem({ r, onOpen, onUnread, onDone }: { r: InboxRow; onOpen: () =>
               {r.needs_reply && <i className="ib-tag red">REPLY</i>}
               {r.admin_unread && <i className="ib-tag gold">● UNREAD</i>}
               {r.status === 'done' && <i className="ib-tag">✓ DONE</i>}
-              {mgrTag}{r.kind === 'ronnie' && seenTag}
+              {mgrTag}{r.kind === 'ronnie' && seenTag}{noteTag(r)}
             </span>
           </span>
         </button>

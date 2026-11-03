@@ -12,6 +12,8 @@ import {
   useMyDates, toAnswer, isOpen, urgent, latestKnows, answerByText, whereText, dayLabel, monDay, mtlToday, addDays, D,
   type MyDate,
 } from '../lib/myDates';
+import { AskCard } from '../components/ShiftNotes';
+import { useMyAsks } from '../lib/shiftAsks';
 import { useMyMeetings, dayOfMtl, t12 as mt12, type MyMeeting } from '../lib/meetings';
 
 /** Booked tab rows (shifts from today on). confirm_by is push 33 (039). */
@@ -41,6 +43,9 @@ export function MyDates({ me, base = '', preview = false }: { me: Staff; base?: 
   const [thanks, setThanks] = useState<Shift | null>(null);
   const { cal, setCal } = useMyCalendar(preview);
   const { meetings } = useMyMeetings(me.id, preview); // push 38 · meetings in Booked (MEETING tag)
+  // push 40 · "Can you work this shift?" asks sit on top of Answer (same card as Home and Messages)
+  const { asks: allAsks, reload: reloadAsks } = useMyAsks(preview || me.role === 'admin');
+  const fills = allAsks.filter((a) => a.kind === 'fill');
 
   const loadShifts = () => supabase.from('shifts')
     .select('id,status,attendance,planned_start,time_tbc,confirm_by,events!inner(id,event_date,title,details_pending,venues(name))')
@@ -72,7 +77,7 @@ export function MyDates({ me, base = '', preview = false }: { me: Staff; base?: 
   const [tab, setTabState] = useState<Tab | null>(tabParam);
   useEffect(() => { if (tabParam) setTabState(tabParam); }, [tabParam]);
   // Opens on Answer when something waits, otherwise on Booked (decided once, so answering the last date doesn't jump tabs).
-  useEffect(() => { if (tab === null && dates !== null) setTabState(waiting.length ? 'answer' : 'booked'); }, [dates === null]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (tab === null && dates !== null) setTabState(waiting.length || fills.length ? 'answer' : 'booked'); }, [dates === null]); // eslint-disable-line react-hooks/exhaustive-deps
   const curTab: Tab = tab ?? (dates === null || waiting.length ? 'answer' : 'booked');
   const setTab = (t: Tab) => { setTabState(t); setParams((p) => { p.set('tab', t); p.delete('view'); return p; }, { replace: true }); };
   const setView = (v: 'list' | 'cal') => setParams((p) => { if (v === 'cal') p.set('view', 'cal'); else p.delete('view'); return p; }, { replace: true });
@@ -120,13 +125,14 @@ export function MyDates({ me, base = '', preview = false }: { me: Staff; base?: 
 
       {view === 'list' ? <>
         <div className="md-tabs" role="tablist">
-          <button className={curTab === 'answer' ? 'on' : ''} onClick={() => setTab('answer')}>Answer <i className={'n' + (waiting.length ? ' red' : '')}>{waiting.length}</i></button>
+          <button className={curTab === 'answer' ? 'on' : ''} onClick={() => setTab('answer')}>Answer <i className={'n' + (waiting.length + fills.length ? ' red' : '')}>{waiting.length + fills.length}</i></button>
           <button className={curTab === 'booked' ? 'on' : ''} onClick={() => setTab('booked')}>Booked <i className={'n' + (curTab === 'booked' && bookedRows.length ? ' green' : '')}>{bookedRows.length}</i></button>
           <button className={curTab === 'answered' ? 'on' : ''} onClick={() => setTab('answered')}>Answered <i className={'n' + (curTab === 'answered' && answered.length ? ' dark' : '')}>{answered.length}</i></button>
         </div>
 
         {dates === null || shifts === null ? <div className="loading" style={{ minHeight: 240 }} /> : curTab === 'answer' ? (
           <section className="md-list">
+            {fills.map((a) => <AskCard key={a.ask_id} a={a} preview={preview} onAnswered={(st) => { if (st === 'booked') loadShifts(); setTimeout(reloadAsks, st === 'gone' ? 4000 : 2500); }} />)}
             {dky && (
               <div className="md-dky done">
                 <span className="md-dky-ic" aria-hidden="true">⏳</span>
@@ -144,7 +150,7 @@ export function MyDates({ me, base = '', preview = false }: { me: Staff; base?: 
             {answerList.map((d) => justDone.has(d.id) && !toAnswer(d, today)
               ? <AnsweredRow key={d.id} d={d} onTap={() => setSheet({ d, mode: 'pick' })} />
               : <AnswerRow key={d.id} d={d} onYes={() => setSheet({ d, mode: 'yes' })} onMaybe={() => setSheet({ d, mode: 'maybe' })} onNo={() => save(d, 'no')} />)}
-            {!answerList.length && !dky && <div className="md-empty"><b className="serif">All answered, thanks!</b><span>When G&amp;R sends you new dates, they show up here.</span></div>}
+            {!answerList.length && !dky && !fills.length && <div className="md-empty"><b className="serif">All answered, thanks!</b><span>When G&amp;R sends you new dates, they show up here.</span></div>}
             {answerList.length > 0 && <p className="md-foot">Answer any date, in any order. Saying yes doesn’t book you yet.</p>}
           </section>
         ) : curTab === 'booked' ? (
@@ -175,7 +181,7 @@ export function MyDates({ me, base = '', preview = false }: { me: Staff; base?: 
       {thanks && <ConfirmThanks name={callName(me)} cal={preview ? null : cal} onCal={setCal} onClose={() => setThanks(null)}
         line={`${thanks.events.venues?.name ?? thanks.events.title} · ${dayLabel(thanks.events.event_date)} · ${t12(thanks.planned_start)}`} />}
       <div style={{ height: 90 }} />
-      <TabBar base={base} badge={waiting.length} />
+      <TabBar base={base} badge={waiting.length + fills.length} />
     </main>
   );
 }

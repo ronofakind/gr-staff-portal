@@ -4,6 +4,7 @@ import { LastMinute, ChangeAnswer, CHANGE_COLS, replaceUrl, isSelfCancel, isEven
 import { summaryOf } from './Extras';
 import { lateConfirmations, NicknameCards } from './Confirmations';
 import { MeetingsStrip } from './Meetings';
+import { AskNeed, useAskNeeds } from './AskChange';
 import { DeleteEvent } from './DeleteEvent';
 import { DeptTag } from './DeptTag';
 import { hoursBetween } from './api';
@@ -172,6 +173,7 @@ export function Today() {
     })();
   }, [tick]);
 
+  const askNeeds = useAskNeeds(addDays(today, -1), addDays(today, 90), tick); // push 40 · No / no answer / nobody took the spot
   const tonight = (week ?? []).filter((e) => e.event_date === today);
   const hidden = (n: Need) => arch.some((a) => a.key === n.key && a.sig === sigOf(n));
   const shown = needs.filter((n) => !hidden(n));
@@ -227,7 +229,8 @@ export function Today() {
         <section className="stack">
           <NicknameCards />
           {lm.map(({ e, s }) => <LastMinute key={s.id} e={e} s={s} mgr={e.manager_id ? mgrs[e.manager_id] ?? null : null} onSent={() => setTick((t) => t + 1)} />)}
-          <div className="sec"><span className="serif">Needs you <b className="accent sm">{shown.length || ''}</b></span>{shown.length > 0 && <button className="abtn sm" onClick={() => archive(shown)}>{ARCH_ICON} Archive all</button>}</div>
+          {askNeeds.map((a) => <AskNeed key={a.id} a={a} onChanged={() => setTick((t) => t + 1)} />)}
+          <div className="sec"><span className="serif">Needs you <b className="accent sm">{shown.length + askNeeds.length || ''}</b></span>{shown.length > 0 && <button className="abtn sm" onClick={() => archive(shown)}>{ARCH_ICON} Archive all</button>}</div>
           <div className="adm-card" style={{ padding: '4px 16px' }}>
             {!shown.length && <div className="muted sm" style={{ padding: '12px 0' }}>All clear.</div>}
             {shown.slice(0, 14).map((x) => <NeedRow key={x.key} x={x} onArchive={() => archive([x])} />)}
