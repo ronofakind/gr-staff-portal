@@ -11,6 +11,7 @@ import { pinPassword, resolvePinLen, saveMyPinLen, type PinLen } from '../lib/pi
 import { NICK_ERROR, cleanNick, nickState } from '../lib/nickname';
 import { useMyCalendar } from '../lib/calendar';
 import { CalendarBody } from './Checkup';
+import { AlertsProfileRow } from '../components/Alerts';
 
 type Extra = { transport: string | null; positions: string[] | null; shirt_size: string | null; pants_size: string | null; dress_size: string | null };
 const POSITIONS = ['Waiter', 'Bartender', 'Barback'];
@@ -111,6 +112,8 @@ export function Profile({ me }: { me: Staff }) {
       {cal && me.role !== 'admin' && <section className="sizes">
         <button className="size-row edit-row" onClick={() => setCalOpen(true)}><span className="grow">{cal.added_at ? 'My G&R calendar' : 'Add my G&R calendar'}</span><span className="muted sm">{cal.added_at ? 'Added · add again ›' : '›'}</span></button>
       </section>}
+
+      {me.role !== 'admin' && <AlertsProfileRow me={me} />}
 
       <button className="btn" onClick={() => supabase.auth.signOut().then(() => window.location.replace('/'))}>Log out</button>
       <TabBar />

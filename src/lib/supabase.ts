@@ -3,10 +3,23 @@ import { createClient } from '@supabase/supabase-js';
 // Arriving from an emailed sign-in link: ask the person to choose their PIN next.
 if (/[?&#](code|access_token)=/.test(window.location.href)) localStorage.setItem('gr_needs_pin', '1');
 
+// push 42 · phone alerts: every successful write (insert / update / delete / RPC) lets lib/alerts.ts send what's waiting.
+const writeHooks = new Set<(url: string) => void>();
+export function onDbWrite(f: (url: string) => void) { writeHooks.add(f); return () => { writeHooks.delete(f); }; }
+const watchedFetch: typeof fetch = async (input, init) => {
+  const res = await fetch(input, init);
+  try {
+    const method = (init?.method || (input instanceof Request ? input.method : 'GET')).toUpperCase();
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    if (res.ok && method !== 'GET' && method !== 'HEAD' && url.includes('/rest/v1/')) writeHooks.forEach((f) => f(url));
+  } catch { /* never in the way */ }
+  return res;
+};
+
 export const supabase = createClient(
   import.meta.env.VITE_SUPABASE_URL as string,
   import.meta.env.VITE_SUPABASE_KEY as string,
-  { auth: { persistSession: true, autoRefreshToken: true } }
+  { auth: { persistSession: true, autoRefreshToken: true }, global: { fetch: watchedFetch } }
 );
 
 export type Staff = {

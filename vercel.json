@@ -2,5 +2,9 @@
   "framework": "vite",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "rewrites": [{ "source": "/((?!assets/|api/|.*\\..*).*)", "destination": "/index.html" }]
+  "rewrites": [{ "source": "/((?!assets/|api/|.*\\..*).*)", "destination": "/index.html" }],
+  "crons": [
+    { "path": "/api/alerts?cron=7am", "schedule": "0 12 * * *" },
+    { "path": "/api/alerts?cron=8am", "schedule": "0 13 * * *" }
+  ]
 }

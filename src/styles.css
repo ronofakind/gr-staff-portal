@@ -2676,3 +2676,49 @@ textarea.mtg-in { padding: 10px 12px; resize: vertical; }
 .tc-grp { font-size: 11px; letter-spacing: .12em; font-weight: 800; color: var(--muted); padding: 10px 12px 4px; background: #fff; border-bottom: 1px solid var(--line); }
 .tc-admin .tc-pin { top: 0; }
 .tc-admin .ch-head { position: static; margin: 0 -16px; }
+
+/* ───────── push 42 · phone alerts ───────── */
+.al-card { background: var(--ok-bg, #E3F2EA); border: 1.5px solid #B7E1CB; border-radius: 20px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.al-card.on { flex-direction: row; align-items: center; gap: 12px; }
+.al-top { display: flex; gap: 12px; align-items: flex-start; }
+.al-card b { display: block; font-size: 15px; color: var(--ink); }
+.al-card .grow > span { display: block; font-size: 13px; color: #4A4540; margin-top: 2px; line-height: 1.35; }
+.al-ic { width: 36px; height: 36px; border-radius: 18px; background: var(--ok); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 17px; flex: 0 0 auto; }
+.al-btns { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.al-btns .btn-go { height: 42px; border-radius: 21px; padding: 0 18px; font-size: 14px; font-weight: 700; }
+.al-btns .link-btn { align-self: center; padding: 0; }
+.al-err { margin: 0; font-size: 13px; color: var(--accent); }
+.al-sheet { display: flex; flex-direction: column; gap: 14px; padding: 4px 2px 18px; }
+.al-h { font-size: 26px; }
+.al-state { background: #F6F2EC; border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #4A4540; }
+.al-state.on { background: var(--ok-bg, #E3F2EA); }
+.al-state b { font-size: 15px; color: var(--ink); }
+.al-state .al-btns { margin-top: 6px; }
+.al-msg { font-weight: 600; color: var(--ink); }
+.al-list { background: #fff; border-radius: 16px; border: 1px solid var(--line); }
+.al-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; }
+.al-row + .al-row { border-top: 1px solid var(--line); }
+.al-row b { display: block; font-size: 14px; }
+.al-row small { display: block; font-size: 12px; color: var(--muted); margin-top: 1px; }
+.al-always { font-size: 12px; font-weight: 700; color: var(--ok); white-space: nowrap; }
+.al-quiet { margin: 0; }
+.al-banner { position: fixed; z-index: 90; left: 10px; right: 10px; top: calc(env(safe-area-inset-top, 0px) + 10px); max-width: 520px; margin: 0 auto;
+  display: flex; align-items: flex-start; gap: 12px; text-align: left; background: #fff; border: 0; border-left: 4px solid var(--accent); border-radius: 18px;
+  padding: 12px 14px; box-shadow: 0 10px 30px rgba(26,23,20,.22); font: 14px Inter, system-ui, sans-serif; color: var(--ink); cursor: pointer; animation: al-in .25s ease-out; }
+.al-banner img { width: 34px; height: 34px; border-radius: 9px; border: 1px solid var(--line); background: #fff; object-fit: contain; flex: 0 0 auto; }
+.al-banner b { display: block; font-size: 15px; }
+.al-banner .grow > span { display: block; font-size: 13px; color: #4A4540; margin-top: 2px; white-space: pre-line; }
+.al-banner em { display: block; font-style: normal; font-weight: 700; font-size: 13px; color: var(--accent); margin-top: 4px; } /* red "👉 Tap to…" (Ronnie, Nov 2) */
+.al-x { font-size: 14px; color: var(--muted); padding: 2px 4px; }
+@keyframes al-in { from { transform: translateY(-16px); opacity: 0; } to { transform: none; opacity: 1; } }
+/* admin Settings → Phone alerts */
+.pa-card { display: flex; flex-direction: column; gap: 12px; }
+.pa-status { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.pa-status b.ok { color: var(--ok); } .pa-status b.no { color: var(--accent); }
+.pa-keys { display: flex; flex-direction: column; gap: 10px; background: #F6F2EC; border-radius: 14px; padding: 12px; }
+.pa-key { display: flex; flex-direction: column; gap: 4px; }
+.pa-key code { font: 12px ui-monospace, Menlo, monospace; word-break: break-all; background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 8px; user-select: all; }
+.pa-key .spread { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.pa-steps { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.5; }
+.pa-warn { font-size: 12px; color: var(--accent); margin: 0; }
+.pa-who { font-size: 13px; columns: 2; margin: 0; padding-left: 18px; }

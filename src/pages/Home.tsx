@@ -21,6 +21,7 @@ import { useMyMeetings, dayOfMtl, todayMtl } from '../lib/meetings';
 import { MeetingCard } from '../components/Meeting';
 import { AskCard } from '../components/ShiftNotes';
 import { useMyAsks } from '../lib/shiftAsks';
+import { AlertsCard } from '../components/Alerts';
 import { NeedChange, CancelSheet, ChangeSheet, LateSheet, LateBlock, ChangeCard, CancelledCard, useShiftChanges, t12 as t12c, type LateNotice } from '../components/ShiftChange';
 
 type MgrLate = { id: string; shift_id: string; event_id: string; name: string; eta: string; reason: string | null; note?: string | null };
@@ -199,6 +200,8 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
       {gone.filter((g) => !okd.includes(g.id)).map((g) => <CancelledCard key={g.id} title={g.title} date={g.date} late={g.late} onOk={() => okGone(g.id)} />)}
 
       {!preview && me.role !== 'admin' && <MessageCard meId={me.id} />}
+
+      {!preview && <AlertsCard me={me} />}
 
 
       {!preview && cu?.done_at && !cu.emergency_phone && (

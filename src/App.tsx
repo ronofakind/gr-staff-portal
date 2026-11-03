@@ -43,6 +43,8 @@ import { MgrMessages } from './pages/MgrMessages';
 import { Meeting } from './pages/Meeting';
 import { Meetings, MeetingForm, MeetingAdmin } from './admin/Meetings';
 import { AdminTeamChat } from './admin/TeamChatCard';
+import { AlertLayer } from './components/Alerts';
+import { startAlerts } from './lib/alerts';
 
 export function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
@@ -78,6 +80,7 @@ export function App() {
     if (!meId) { setCheckup(undefined); return; }
     loadCheckup().then(setCheckup);
     supabase.rpc('touch_last_seen').then(() => {}, () => {}); // "last opened" for the admin check-up tracker
+    if (me) startAlerts(me.role); // push 42 · send what's waiting on open / after writes, app icon number, keep this phone's alerts current
   }, [meId]);
 
   useEffect(() => {
@@ -105,6 +108,7 @@ export function App() {
   else if (calAgain) body = <CalendarAgain me={me} cal={calAgain} onClose={() => setCalAgain(null)} />;
   else body = (
     <BrowserRouter>
+      <AlertLayer />
       <Routes>
         <Route path="/" element={me.role === 'admin' ? <Navigate to="/admin" /> : <Home me={me} />} />
         <Route path="/me" element={<Home me={me} />} />

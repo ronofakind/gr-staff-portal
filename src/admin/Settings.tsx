@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { DEFAULTS, saveSetting, savedAt, useSettings, type SettingKey, type Settings as S } from '../lib/settings';
 import { signed } from './score';
+import { PhoneAlertsCard } from './PhoneAlerts';
 
 /*
  * Push 32b · Admin → More → Settings. Tap a value to change it; it saves right away and applies to new events and
@@ -48,11 +49,15 @@ const SECTIONS: Section[] = [
     { label: 'Gas per car', sub: 'New event → Transport', show: () => 'set on each event' },
     { label: 'Client pays transport by default', sub: 'new clients and new events', k: 'transport.client_pays', kind: 'bool', show: ((v: boolean) => (v ? 'On' : 'Off')) as (v: never) => string },
   ] },
-  { title: 'Messages to staff', off: 'not live yet (push 24)', rows: [
-    { label: 'Quiet hours', sub: 'today / tomorrow changes still go out', show: () => '11 PM – 7 AM' },
-    { label: 'Reminder before reply-by', show: () => '3 h' },
-    { label: 'Max ask notifications', show: () => '1 per person per day' },
-    { label: 'Personal link expires', show: () => '3 days or after the shift' },
+  { title: 'Phone alerts', sub: 'rules', rows: [
+    { label: 'Nothing buzzes until', show: () => 'you press Send / Ask' },
+    { label: 'Buzzes per send', sub: 'everything waiting for a person goes in one alert', show: () => '1 per person' },
+    { label: 'Quiet hours', sub: 'today / tomorrow still go out', show: () => '11 PM – 7 AM' },
+    { label: 'Confirm reminders', sub: 'before the confirm-by', show: () => '6 h + 2 h' },
+    { label: 'Dates to answer reminder', sub: 'before the answer-by', show: () => '3 h' },
+    { label: 'Meeting reminder', show: () => '8 AM that day' },
+    { label: 'Manager on the night', sub: 'running late · replies · not started 15 min after call · submit hours', show: () => 'always on' },
+    { label: 'No alerts on their phone', sub: 'asks, confirms, changes, Ronnie’s messages', show: () => 'text from the Mac mini' },
   ] },
   { title: 'Hours & pay', rows: [
     { label: 'Minimum paid', sub: 'except LEFT EARLY', k: 'hours.min', kind: 'num', unit: 'h', min: 0, max: 8, step: 0.5, show: ((v: number) => `${v} h`) as (v: never) => string },
@@ -125,6 +130,7 @@ export function Settings() {
             })}
           </section>
         ))}
+        <PhoneAlertsCard />
       </div>
       <p className="muted sm">Defaults are today’s values; a setting that was never changed keeps them. Staff and managers only read the settings their screens need.</p>
     </div>
