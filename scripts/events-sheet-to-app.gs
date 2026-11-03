@@ -7,7 +7,7 @@
  * and this file never writes anything to the sheet.
  *
  * Lives in the same Apps Script project as events-sheet-app-hours.gs (uses its SUPABASE_URL, TZ and the
- * SUPABASE_KEY / SHEET_TOKEN saved by "G&R app → Connect the app"). Turn it on once: run startSheetChanges.
+ * SUPABASE_KEY / SHEET_TOKEN saved by "G&R app → Connect the app"). Turn it on once: G&R app menu → "Send events to the app now" (also turns on the 10-minute timer), or run startSheetChanges.
  *
  * Reading rules (EVENTS tab, see the G&R reference doc):
  *  - a block = a date row ("Saturday, November 07, 2026") → a name row → the header row (DETAILS … STAFF NAMES …);
@@ -44,6 +44,8 @@ function postEventsToApp() {
   });
   if (res.getResponseCode() !== 200) throw new Error('Sheet changes post failed (' + res.getResponseCode() + '): ' + res.getContentText());
   Logger.log('Sent ' + events.length + ' event blocks (' + from + ' → ' + to + ')');
+  // first run (from the G&R app menu) also turns on the 10-minute timer
+  if (!ScriptApp.getProjectTriggers().some((t) => t.getHandlerFunction() === 'postEventsToApp')) ScriptApp.newTrigger('postEventsToApp').timeBased().everyMinutes(10).create();
   return events.length;
 }
 
