@@ -234,6 +234,8 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
   const [seen, setSeen] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('gr-notice-seen') || '[]'); } catch { return []; } });
   const [reason, setReason] = useState(''); const [why, setWhy] = useState(''); const [leftAt, setLeftAt] = useState('');
   const [lateN, setLateN] = useState<Record<string, Late>>({});
+  // push 46 · the person's other G&R shift that day (venue + planned times only; migration 052 · errors → nothing shown)
+  const [otherSh, setOtherSh] = useState<Record<string, { venue: string; start_at: string; end_at: string | null }[]>>({});
 
   const load = async () => {
     const [e, s] = await Promise.all([
@@ -250,6 +252,11 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
       const m: Record<string, Info> = {};
       if (Array.isArray(data)) for (const x of data as Info[]) if (x && typeof x === 'object' && typeof x.staff_id === 'string') m[x.staff_id] = { ...x, done_before: typeof x.done_before === 'number' ? x.done_before : 0, is_new: x.is_new === true, fb_ratings: x.fb_ratings && typeof x.fb_ratings === 'object' && !Array.isArray(x.fb_ratings) ? x.fb_ratings : null, fb_stars: starOk(x.fb_stars) ? x.fb_stars : null };
       setInfo(m);
+    });
+    supabase.rpc('manager_other_shifts', { p_event: eventId! }).then(({ data, error }) => {
+      if (error || !Array.isArray(data)) return; const m: typeof otherSh = {};
+      for (const x of data as { staff_id: string; venue: string; start_at: string; end_at: string | null }[]) if (x && typeof x.staff_id === 'string' && typeof x.start_at === 'string') (m[x.staff_id] ??= []).push(x);
+      setOtherSh(m);
     });
     supabase.from('event_notices').select('id,body,created_at').eq('event_id', eventId!).order('created_at', { ascending: false }).then(({ data }) => setNotices((data ?? []) as { id: string; body: string; created_at: string }[]));
     // Within each call time: lead (MD / bar manager) first, then everyone A–Z by first name.
@@ -503,6 +510,16 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
                     {ln && lnPassed && <span><i className="p28-tag red">~{shortT(ln.eta)} PASSED · NOT IN YET</i></span>}
                     {ln && pin && <span><i className="p28-tag green">IN {fullT(r.punches?.arrived_at ?? pin)} · TOLD AHEAD</i></span>}
                     <span className="rl">{roleLabel(r.position_code, r.position_detail)}{r.manager_note ? ' · 📝 note' : ''}{fbOn && inf?.fb_stars ? ` · ★ ${inf.fb_stars}` : ''}</span>
+                    {!r.attendance && (() => {
+                      // push 46 · two shifts the same day: LEAVES <end> (another shift later) / COMING FROM <venue> (earlier shift)
+                      const os = r.staff_id ? otherSh[r.staff_id] ?? [] : []; const me0 = new Date(r.planned_start).getTime();
+                      const later = os.find((o) => new Date(o.start_at).getTime() > me0); const before = [...os].reverse().find((o) => new Date(o.start_at).getTime() < me0);
+                      const endIso = r.planned_end ?? (ev.end_time ? toIso(ev.event_date, ev.end_time.slice(0, 5), r.planned_start) : null);
+                      return <>
+                        {later && !ended && <><span><i className="p28-tag leaves">{endIso ? `LEAVES ${fullT(endIso)}` : 'ANOTHER SHIFT LATER'}</i></span><span className="two-line">Has another G&amp;R shift at {fullT(later.start_at)}.</span></>}
+                        {before && !pin && <><span><i className="p28-tag from">COMING FROM {before.venue.toUpperCase()}</i></span><span className="two-line">If their first shift runs late, you’ll see it here.</span></>}
+                      </>;
+                    })()}
                     {fromRonnie ? <span className="st muted-st">Don’t wait for {first(r.staff?.full_name)}{r.attendance_reason ? ` · ${r.attendance_reason}` : ''}</span>
                       : r.attendance ? <span className="st muted-st">{r.attendance === 'no_show' ? 'No-show' : 'Cancelled'}{r.attendance_reason ? ` · ${r.attendance_reason}` : ''}</span>
                       : r.left_early && pin && pout ? <span className="st gold">{time(pin, lang)} → {time(pout, lang)} · {hours(pin, pout)} {t.hours}<i className="st-tag gold">LEFT EARLY</i></span>

@@ -99,12 +99,14 @@ export function diff(sheet: SheetEvent[], app: DEvent[], staff: DStaff[], aliase
   const pairs = pairEvents(sheet, app, m.match);
   const out: Change[] = [];
   // who the sheet puts where, per date (to tell a move from an add + a remove)
-  const sheetDay = new Map<string, Map<string, SheetEvent>>(); // date → staffId → block
+  const sheetDay = new Map<string, Map<string, SheetEvent[]>>(); // date → staffId → blocks (push 46: two shifts the same day = 2 blocks)
   for (const se of sheet) for (const p of se.staff) {
     const id = m.match(p.name); if (!id) continue;
     if (!sheetDay.has(se.event_date)) sheetDay.set(se.event_date, new Map());
-    if (!sheetDay.get(se.event_date)!.has(id)) sheetDay.get(se.event_date)!.set(id, se);
+    const d = sheetDay.get(se.event_date)!; const l = d.get(id) ?? []; if (!l.includes(se)) l.push(se); d.set(id, l);
   }
+  /** The sheet also lists this person on that app event (same day) → a second shift, not a move. */
+  const sheetHas = (date: string, id: string, appEventId: string) => (sheetDay.get(date)?.get(id) ?? []).some((b) => pairs.get(b.id)?.id === appEventId);
   const appDay = new Map<string, { e: DEvent; s: DShift }[]>(); // date → live shifts
   for (const e of app) for (const s of e.shifts) if (live(s)) { if (!appDay.has(e.event_date)) appDay.set(e.event_date, []); appDay.get(e.event_date)!.push({ e, s }); }
 
@@ -127,15 +129,16 @@ export function diff(sheet: SheetEvent[], app: DEvent[], staff: DStaff[], aliase
     // added (or moved here from another event the same day)
     for (const { id, p } of want) {
       if (mine.some((s) => s.staff_id === id)) continue;
-      const other = (appDay.get(e.event_date) ?? []).find((x) => x.s.staff_id === id && x.e.id !== e.id);
+      const other = (appDay.get(e.event_date) ?? []).find((x) => x.s.staff_id === id && x.e.id !== e.id && !sheetHas(e.event_date, id, x.e.id));
       const start = p.start ?? mtlHm(mine[0]?.planned_start ?? new Date().toISOString());
       out.push({ kind: 'added', key: `sheet:add:${e.id}:${id}`, sig: p.code + start + (other?.e.id ?? ''), e, staffId: id, name: nameOf.get(id) ?? p.name, code: p.code, start, from: other });
     }
     // removed (not when the sheet has them on another event that day: that's the move above)
     for (const s of mine) {
       if (seen.has(s.staff_id) || s.punches?.punch_in) continue;
-      const elsewhere = sheetDay.get(e.event_date)?.get(s.staff_id);
-      if (elsewhere && elsewhere.id !== se.id && pairs.get(elsewhere.id)) continue;
+      // moving to another event the sheet pairs (where the app doesn't have them yet) → that's the move above
+      const moveTo = (sheetDay.get(e.event_date)?.get(s.staff_id) ?? []).find((b) => b.id !== se.id && pairs.get(b.id) && !pairs.get(b.id)!.shifts.some((x) => live(x) && x.staff_id === s.staff_id));
+      if (moveTo) continue;
       out.push({ kind: 'removed', key: `sheet:rm:${e.id}:${s.staff_id}`, sig: s.id, e, s, name: nameOf.get(s.staff_id) ?? '?' });
     }
     // start time changed, grouped by old → new

@@ -2754,3 +2754,44 @@ textarea.mtg-in { padding: 10px 12px; resize: vertical; }
 /* push 45 · venue rule (no outside food) */
 .venue-rule { display: flex; align-items: center; gap: 12px; } .venue-rule img { flex: 0 0 auto; } .venue-rule b { font-size: 15px; }
 div.venue-rule { background: #fff; border-radius: 14px; padding: 10px 14px; margin: 8px 0; }
+
+/* push 46 · two shifts the same day */
+.also-note { display: block; margin-top: 6px; background: #FBF1DC; color: #4A3A12; border-radius: 10px; padding: 7px 10px; font-size: 12.5px; font-weight: 500; line-height: 1.4; text-align: left; white-space: normal; }
+.also-note b { font-weight: 700; color: #1A1714; }
+.also-note.sm { margin-top: 4px; padding: 4px 8px; font-size: 11.5px; border-radius: 8px; }
+.np-opt { flex-wrap: wrap; } .np-opt-also { flex: 1 0 100%; } .np-also { padding: 0 10px 8px; display: flex; flex-direction: column; gap: 4px; }
+.np-also > div { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; } .np-also .also-note { margin-top: 0; flex: 1 1 200px; }
+.dv-row.has-also { flex-wrap: wrap; } .dv-row.has-also .also-note { flex: 1 0 100%; margin-top: 2px; }
+.bk-chip.has-also { flex-wrap: wrap; } .bk-chip.has-also .also-note { flex: 1 0 100%; }
+.fr-row .grow .also-note { max-width: 520px; }
+.crew .p28-tag.leaves { background: #B8892A; color: #fff; } .crew .p28-tag.from { background: #EFE8DC; color: #4A433C; }
+.crew .two-line { font-size: 12px; color: #4A433C; line-height: 1.35; }
+
+/* Home · compact card on a double day */
+.next.dbl { gap: 12px; padding: 18px; }
+.next.dbl .top-line { gap: 8px; }
+.next.dbl .top-line .day-word { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.dbl-pill { flex: 0 1 auto; min-width: 0; height: 24px; padding: 0 10px; border-radius: 12px; background: #2A2521; color: #E9E2D8; font-size: 11px; font-weight: 600; letter-spacing: 0; display: inline-flex; align-items: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.next.dbl .venue { font-size: 26px; line-height: 1.05; }
+.dbl-times { display: grid; grid-template-columns: 1fr 1fr; background: #2A2521; border-radius: 14px; padding: 10px 0; }
+.dbl-times > div { display: flex; flex-direction: column; gap: 3px; padding: 0 14px; min-width: 0; }
+.dbl-times > div + div { border-left: 1px solid #3A342E; }
+.dbl-times small { font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: var(--dim); }
+.next.dbl .dbl-times .big.sm-big { font-size: 22px; }
+.next.working.dbl .dbl-times .mint { color: #9FD8B8; }
+.dbl-then-gold { background: #3A3122; color: #E0C27A; border-radius: 12px; padding: 10px 12px; font-size: 13px; line-height: 1.4; }
+.dbl-then-gold b { color: #F0D48A; font-weight: 700; }
+.dbl-then { display: flex; flex-direction: column; margin-top: -6px; }
+.dbl-then-line { position: relative; height: 30px; margin-left: 22px; border-left: 2px dotted #C9BFB2; }
+.dbl-then-line span { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 12px; color: var(--muted); }
+.next-mini.dbl-card { box-shadow: inset 4px 0 0 #C9BFB2; padding: 12px 14px; }
+.next-mini.dbl-card.ok { box-shadow: inset 4px 0 0 var(--ok); }
+.dbl-t { display: flex; flex-direction: column; align-items: center; width: 44px; flex: 0 0 auto; }
+.dbl-t b { font: 500 20px Fraunces, Georgia, serif; line-height: 1; } .dbl-t small { font-size: 10px; font-weight: 700; color: var(--soft); margin-top: 2px; }
+.dbl-t b.tbc { font: 700 12px Inter, system-ui, sans-serif; color: var(--muted); }
+.dbl-done { display: flex; align-items: center; gap: 12px; background: #fff; border-radius: 18px; padding: 10px 14px; }
+.dbl-done .ck { width: 28px; height: 28px; border-radius: 14px; background: var(--ok); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; flex: 0 0 auto; }
+.dbl-done .grow { display: flex; flex-direction: column; gap: 1px; min-width: 0; text-decoration: none; color: inherit; }
+.dbl-done .grow b { font-size: 14px; } .dbl-done .grow span { font-size: 12px; color: var(--muted); }
+.dbl-done-go { font-size: 12px; font-weight: 700; color: #9A7413; white-space: nowrap; text-decoration: none; }
+.next.dbl.is-confirmed .top-line .day-word { color: #E0C27A; }

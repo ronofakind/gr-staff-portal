@@ -72,12 +72,14 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
   const { cal, setCal } = useMyCalendar(preview);
 
   const load = async () => {
-    const since = new Date(Date.now() - 12 * 3600e3).toISOString();
+    // push 46 · read 24 h back so a double day keeps its first shift (the "done" line) until midnight; other days stay at 12 h
+    const since = new Date(Date.now() - 24 * 3600e3).toISOString(); const since12 = Date.now() - 12 * 3600e3;
     const { data } = await supabase.from('shifts').select(SHIFT_SELECT + ',punches(punch_in,punch_out)')
       .eq('staff_id', me.id).neq('status', 'declined').gte('planned_start', since)
       .order('planned_start').limit(30);
-    const all = (data as unknown as ShiftRow[]) ?? [];
-    const rows = all.filter((r) => r.attendance !== 'cancelled'); // push 28: a cancelled shift is off Home
+    const all = ((data as unknown as ShiftRow[]) ?? []).filter((r) => r.attendance !== 'cancelled'); // push 28: a cancelled shift is off Home
+    const td = todayIso(); const nToday = all.filter((r) => r.events.event_date === td).length;
+    const rows = all.filter((r) => new Date(r.planned_start).getTime() >= since12 || (r.events.event_date === td && nToday >= 2));
     setShifts(rows);
     if (rows.length) supabase.from('shifts').select('id,confirm_sent_at,confirm_by,change_prev,change_seen_at').in('id', rows.map((r) => r.id))
       .then(({ data: d, error }) => { if (!error && Array.isArray(d)) setX33(Object.fromEntries((d as (P33 & { id: string })[]).map((x) => [x.id, x]))); });
@@ -144,6 +146,14 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
   const isDone = (s: ShiftRow) => !!s.punches?.punch_in && !!s.punches.punch_out && new Date(s.punches.punch_out).getTime() <= Date.now();
   const doneToday = shifts.filter((s) => isDone(s) && s.events.event_date === todayIso());
   const [next, ...rest] = shifts.filter((s) => !isDone(s));
+  // push 46 · two shifts the same day (not declined / cancelled): compact card + "then" card; normal days unchanged
+  const dayShifts = (d: string) => shifts.filter((s) => s.events.event_date === d);
+  const dbl = next ? dayShifts(next.events.event_date) : [];
+  const isDbl = dbl.length >= 2;
+  const ofN = (s: ShiftRow) => `${dbl.indexOf(s) + 1} of ${dbl.length}`;
+  const laterSame = isDbl ? rest.filter((s) => s.events.event_date === next!.events.event_date) : [];
+  const restAfter = isDbl ? rest.filter((s) => s.events.event_date !== next!.events.event_date) : rest;
+  const todayDbl = dayShifts(todayIso()).length >= 2;
   // push 33e · not final = details pending or time TBC: "Details coming", never a Confirm button
   const notFinal = (s: ShiftRow) => !!s.events.details_pending || !!s.time_tbc;
   const soon = (s: ShiftRow) => !!s.events.details_pending || (!!s.time_tbc && s.status === 'booked');
@@ -257,6 +267,18 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
 
       {doneToday.map((s) => {
         const team = teams[s.events.id];
+        if (todayDbl) {
+          // push 46 · double day: one small line per finished shift (replaces the done card until midnight)
+          const m = Math.max(0, Math.round((new Date(s.punches!.punch_out!).getTime() - new Date(s.punches!.punch_in!).getTime()) / 60000));
+          const mgrTodo = !!team && !preview && !s.events.hours_submitted_at;
+          return (
+            <div key={s.id} className="dbl-done">
+              <span className="ck" aria-hidden="true">✓</span>
+              <Link to={`${base}/shift/${s.id}`} className="grow"><b>{s.events.title} · done</b><span>Ended {t12(s.punches!.punch_out!)} · {Math.floor(m / 60)} h {String(m % 60).padStart(2, '0')}{team && !preview && s.events.hours_submitted_at ? ' · hours submitted' : ''}</span></Link>
+              {mgrTodo && <Link to={`/manage/${s.events.id}`} className="dbl-done-go">Team · submit ›</Link>}
+            </div>
+          );
+        }
         if (team && !preview) {
           const ended = team.every((m) => m.punches?.punch_out && new Date(m.punches.punch_out).getTime() <= Date.now());
           const total = team.reduce((n, m) => n + (m.punches?.punch_in && m.punches.punch_out ? hrs(m.punches.punch_in, m.punches.punch_out) : 0), 0);
@@ -328,6 +350,71 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
         const confirmed = !working && next.status === 'confirmed';
         const by = x33[next.id]?.confirm_by ?? null;
         const prev = changed(next);
+        if (isDbl) {
+          // push 46 · compact card: position in the pill, STARTS | ENDS on one row, then the next shift that day
+          const nx = laterSame[0];
+          return <>
+            <section className={'next dbl' + (working ? ' working' : '') + (waiting ? ' to-confirm' : '') + (confirmed ? ' is-confirmed' : '')}>
+              <div className="top-line">
+                <span className="day-word">{working ? <><i className="live-dot" aria-hidden="true" />WORKING NOW</> : waiting ? <ConfirmPill by={by} />
+                  : next.events.event_date === today && !next.time_tbc ? <Countdown iso={minus(next.planned_start, next.arrive_before_min)} start={next.planned_start} plain /> : dayWord.toUpperCase()}</span>
+                <span className={'dbl-pill' + (coMgr(next) ? ' mgr' : '')}>{pos(next)} · {ofN(next)}</span>
+              </div>
+              <div className="spread" style={{ alignItems: 'center', gap: 12 }}>
+                <div style={{ minWidth: 0 }}>
+                  <div className="venue serif">{next.events.title}</div>
+                  {addr && <div className="sub" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{addr.split(',').slice(0, 2).join(' ·')}</div>}
+                </div>
+                {!isSetup(next.events) && <span className="wear-tile" style={{ width: 46, height: 46, borderRadius: 12 }} title={uniformLabel(uniformFor(next))}><UniformIcon kind={uniformFor(next)} size={34} /></span>}
+              </div>
+              <div className="dbl-times">
+                {working ? <>
+                  <div><small>Started</small><BigTime iso={next.punches!.punch_in!} small /></div>
+                  <div><small>On the clock</small><span className="big serif sm-big mint"><Elapsed iso={next.punches!.punch_in!} /></span></div>
+                </> : <>
+                  <div><small>Starts</small>{next.time_tbc ? <span className="big serif sm-big">TBC</span> : <BigTime iso={next.planned_start} small />}</div>
+                  <div><small>Ends</small>{next.planned_end && !next.time_tbc ? <BigTime iso={next.planned_end} small /> : <span className="big serif sm-big">TBC</span>}</div>
+                </>}
+              </div>
+              {prev && <ChangedBox prev={prev} s={next} role={role(next)} calOn={!!cal?.added_at} onSeen={() => changeSeen(next)} />}
+              {myAlerts.map((a) => (
+                <div key={a.id} className="mgr-late"><span className="grow">⏱ <b>{a.name.split(' ')[0]} running late</b> · ~{t12c(a.eta).replace(/\s?[AP]M$/, '')}{a.reason ? ` · ${a.reason.toLowerCase()}` : ''}{a.note ? ` · “${a.note}”` : ''}</span>
+                  <button onClick={() => mgrGotIt(a.id)}>Got it ✓</button></div>
+              ))}
+              {managesIt && <MgrRepliesLine eventId={next.events.id} />}
+              {lateOn && <LateBlock notice={chg.late[next.id] ?? null} mgr={mgrName} mgrPhone={next.events.manager?.phone} onOpen={() => setSheet({ kind: 'late', s: next })} />}
+              {working && nx && <div className="dbl-then-gold">Then <b>{nx.events.title} · {nx.time_tbc ? 'time TBC' : t12(nx.planned_start)}</b> · head over when you’re done here</div>}
+              {waiting && <>
+                <button className="confirm-glow" onClick={() => respond(next.id, 'confirmed')}>Confirm my shift</button>
+                {by && <div className="confirm-by">{new Date(by).getTime() > Date.now() ? 'Confirm within 24 h' : 'Please confirm now'} · by {byLabel(by)}</div>}
+              </>}
+              <div className="row2">
+                <Link className="light-btn" style={{ height: 46, borderRadius: 14 }} to={`${base}/shift/${next.id}`}>Details</Link>
+                {team && !preview && !waiting
+                  ? <Link className="team-btn" to={`/manage/${next.events.id}`}>My team · {team.length} ›</Link>
+                  : addr ? <a className="dir-btn" href={mapsUrl(addr)} target="_blank" rel="noreferrer">Directions</a>
+                  : <span className="dir-btn" aria-disabled>Directions</span>}
+              </div>
+              {needChange}
+            </section>
+            {laterSame.map((s) => {
+              const ok = s.status === 'confirmed'; const tm = time(s.planned_start, 'en'); const mm = tm.match(/^(.*?)\s*([ap])\.?\s?m\.?$/i);
+              const kick = s.events.event_date === today ? 'TODAY' : s.events.event_date === addDay(today, 1) ? 'TOMORROW' : dayBadge(s.events.event_date, lang).dow.toUpperCase();
+              return (
+                <div key={s.id} className="dbl-then">
+                  <div className="dbl-then-line" aria-hidden="true"><span>then</span></div>
+                  <Link to={`${base}/shift/${s.id}`} className={'next-mini dbl-card' + (ok ? ' ok' : '')}>
+                    <div className="dbl-t">{soon(s) || s.time_tbc ? <b className="tbc">TBC</b> : <><b className="serif">{mm ? mm[1] : tm}</b><small>{mm ? mm[2].toUpperCase() + 'M' : ''}</small></>}</div>
+                    <div className="grow"><small>{kick} · {soon(s) ? 'DETAILS COMING' : ok ? '✓ CONFIRMED' : 'TO CONFIRM'}</small><b>{soon(s) ? 'You’re booked' : s.events.title}</b>
+                      <span>{pos(s)} · {ofN(s)}</span></div>
+                    {!isSetup(s.events) && <span className="row-wear"><UniformIcon kind={uniformFor(s)} size={30} /></span>}
+                  </Link>
+                  {changed(s) && <ChangedBox prev={changed(s)!} s={s} role={role(s)} calOn={!!cal?.added_at} onSeen={() => changeSeen(s)} standalone />}
+                </div>
+              );
+            })}
+          </>;
+        }
         return (
           <section className={'next' + (working ? ' working' : '') + (waiting ? ' to-confirm' : '') + (confirmed ? ' is-confirmed' : '')} style={{ gap: 14, padding: 18 }}>
             <div className="top-line">
@@ -380,8 +467,9 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
       {(() => {
         // push 33c · while on shift: the next shift shrinks to one line, then the red pill, then Coming up
         const working = !!next?.punches?.punch_in && new Date(next.punches.punch_in).getTime() <= Date.now();
-        const mini = working ? rest[0] : undefined;
-        const list = mini ? rest.slice(1) : rest;
+        // push 46 · double day: the following day's NEXT card always stays under the two shifts
+        const mini = isDbl ? restAfter[0] : working ? rest[0] : undefined;
+        const list = isDbl ? restAfter.slice(1) : mini ? rest.slice(1) : rest;
         return <>
           {mini && (() => { const b = dayBadge(mini.events.event_date, lang); const ok = mini.status === 'confirmed'; return (
             <Link to={`${base}/shift/${mini.id}`} className={'next-mini' + (ok ? ' ok' : '')}>
@@ -548,7 +636,7 @@ function Elapsed({ iso }: { iso: string }) {
   const m = Math.max(0, Math.floor((now - new Date(iso).getTime()) / 60000));
   return <>{Math.floor(m / 60)} h {String(m % 60).padStart(2, '0')}</>;
 }
-function Countdown({ iso, start }: { iso: string; start: string }) {
+function Countdown({ iso, start, plain = false }: { iso: string; start: string; plain?: boolean }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const id = setInterval(() => setNow(Date.now()), 30000); return () => clearInterval(id); }, []);
   const ms = new Date(iso).getTime() - now;
@@ -559,6 +647,7 @@ function Countdown({ iso, start }: { iso: string; start: string }) {
     const m = Math.floor(ms / 60000); const d = Math.floor(m / 1440); const h = Math.floor((m % 1440) / 60); const mm = m % 60;
     label = d > 0 ? `in ${d} d ${h} h` : h > 0 ? `in ${h} h ${mm} min` : `in ${mm} min`;
   }
+  if (plain) return <>{label.toUpperCase()}</>; // push 46 · compact card kicker ("IN 45 MIN")
   return <span className="countdown"><i />{label}</span>;
 }
 
