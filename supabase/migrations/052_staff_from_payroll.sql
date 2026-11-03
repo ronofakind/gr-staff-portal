@@ -71,6 +71,9 @@ select x.n, coalesce((select case when bool_and(se.department='bar') then 'bar' 
 -- Reactivate the 6 (Ronnie, Nov 3)
 update staff set active = true where full_name in ('Alicia Gonthier','Elodie Theriault','Kiara Petit--Erskine','Liza Charbonnier','Samantha Van Wingen','Tess Crombeen');
 
+-- Lea Moreau: inactive (Ronnie, Nov 3) — kept for her past shifts and hours, hidden everywhere
+update staff set active = false where full_name = 'Lea Morea';
+
 select (select count(*) from staff) as staff_now, (select count(*) from staff where active) as active_now,
        (select count(*) from staff where created_at > now() - interval '5 minutes') as added_now,
        (select count(*) from staff where created_at > now() - interval '5 minutes' and department='bar') as added_bar;
