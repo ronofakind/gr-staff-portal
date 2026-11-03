@@ -25,6 +25,8 @@ export type MyTeamChat = {
   last_at: string | null; last_body: string | null; last_photos: number; last_deleted: boolean; last_sender_id: string | null; last_sender_name: string | null; unread: number;
 };
 
+export type AdminTeamChat = MyTeamChat & { venue: string | null; last_admin: boolean };
+
 export const TEAM_MSG_COLS = MSG_COLS + ',reply_to,removed_role';
 export const TEAM_QUICK = ['👍', 'On my way', 'Thanks!'];
 
@@ -44,6 +46,13 @@ export async function saveTeamChat(eventId: string, v: { enabled: boolean; who: 
 export async function myTeamChats(): Promise<MyTeamChat[]> {
   const { data, error } = await supabase.rpc('my_team_chats');
   return error ? [] : ((data ?? []) as MyTeamChat[]);
+}
+
+/** Admin Messages → Team chats tab (push 43). [] until migration 048 is applied. */
+export async function adminTeamChats(): Promise<AdminTeamChat[]> {
+  const { data, error } = await supabase.rpc('admin_team_chats');
+  if (error) throw error;
+  return (data ?? []) as AdminTeamChat[];
 }
 
 /** "Fri 5:00 PM" */

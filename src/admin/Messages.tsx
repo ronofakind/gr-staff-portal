@@ -1,18 +1,20 @@
 import { useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { AnnounceComposer, AnnounceSent, type Target } from '../components/Announce';
 import { Avatar } from '../components/Avatar';
 import { Chat } from '../components/Chat';
 import { first, shiftLine, shortDate, t12, topicLabel, whenShort, MSG_COLS, type Conv, type InboxRow, type Msg } from '../lib/messages';
 import { eventsBetween, allStaff, isoDay, addDays, dLabel, ap12, type AEvent, type AStaff } from './api';
+import { adminTeamChats, dayTime, teamWhen, type AdminTeamChat } from '../lib/teamChat';
 
 const hm = (iso: string) => new Date(iso).toLocaleTimeString('en-GB', { timeZone: 'America/Toronto', hour: '2-digit', minute: '2-digit' });
 
 /** Admin → Messages (push 36d): Needs reply · All · Sent + New message (the push-25e composer). Inbox is admins only; no email. */
 export function Messages() {
   const [sp, setSp] = useSearchParams();
-  const tab = (sp.get('tab') as 'needs' | 'all' | 'sent' | null) ?? 'needs';
+  const tab = (sp.get('tab') as 'needs' | 'all' | 'sent' | 'team' | null) ?? 'needs';
+  const [teams, setTeams] = useState<AdminTeamChat[] | null>(null); // push 43 · Team chats tab (red count = chats with new messages)
   const cId = sp.get('c'); const staffId = sp.get('staff');
   const [rows, setRows] = useState<InboxRow[] | null>(null); const [err, setErr] = useState('');
   const [compose, setCompose] = useState(false); const [tick, setTick] = useState(0);
@@ -23,6 +25,7 @@ export function Messages() {
   useEffect(() => {
     supabase.rpc('inbox').then(({ data, error }) => { if (error) { setErr(/inbox/.test(error.message) ? 'Messages need migration 042 (apply it in the Supabase SQL editor).' : error.message); setRows([]); } else setRows((data ?? []) as InboxRow[]); });
   }, [tick, cId]);
+  useEffect(() => { adminTeamChats().then(setTeams).catch(() => setTeams([])); }, [tick, cId, tab]);
   // ✉ Message from a staff profile / team list → their conversation (created if needed)
   useEffect(() => {
     if (!staffId) return;
@@ -35,6 +38,7 @@ export function Messages() {
   if (cId) return <AdminConversation id={cId} row={rows?.find((r) => r.id === cId) ?? null} onBack={() => go({ c: null })} onUnread={unreadIt} onDone={doneIt} toast={toast} />;
 
   const needs = (rows ?? []).filter((r) => r.needs_reply);
+  const teamNew = (teams ?? []).filter((t) => t.unread > 0).length;
   const list = tab === 'needs' ? needs : rows ?? [];
   return (
     <div className="stack-lg">
@@ -44,9 +48,10 @@ export function Messages() {
         <button className={tab === 'needs' ? 'on' : ''} onClick={() => go({ tab: null })}>Needs reply{needs.length ? <b className="accent"> {needs.length}</b> : ''}</button>
         <button className={tab === 'all' ? 'on' : ''} onClick={() => go({ tab: 'all' })}>All</button>
         <button className={tab === 'sent' ? 'on' : ''} onClick={() => go({ tab: 'sent' })}>Sent</button>
+        <button className={tab === 'team' ? 'on' : ''} onClick={() => go({ tab: 'team' })}>Team chats{teamNew ? <b className="accent"> {teamNew}</b> : ''}</button>
       </div>
       {err && <p className="error">{err}</p>}
-      {tab === 'sent' ? <div className="adm-card" style={{ maxWidth: 760, padding: '6px 16px' }}><AnnounceSent reload={tick} /></div> : (
+      {tab === 'team' ? <TeamChatsTab list={teams} /> : tab === 'sent' ? <div className="adm-card" style={{ maxWidth: 760, padding: '6px 16px' }}><AnnounceSent reload={tick} /></div> : (
         <div className="adm-card ib-list" style={{ maxWidth: 760, padding: 0 }}>
           {rows === null ? <div className="muted" style={{ padding: 16 }}>Loading…</div>
             : !list.length ? <div className="muted sm" style={{ padding: 16 }}>{tab === 'needs' ? 'Nothing waiting on you. ✓' : 'No conversations yet.'}</div>
@@ -56,6 +61,36 @@ export function Messages() {
       )}
       {compose && <NewMessage onClose={() => setCompose(false)} onSent={() => { setCompose(false); setTick((t) => t + 1); go({ tab: 'sent' }); }} />}
       {toast && <div className="undo-bar" role="status"><span className="ib-dot" /><span className="grow">{toast}</span></div>}
+    </div>
+  );
+}
+
+/** push 43 · Team chats tab: OPEN NOW (open + opening soon) then CLOSED · READ ONLY 7 DAYS. Tap → the admin team chat page. */
+function TeamChatsTab({ list }: { list: AdminTeamChat[] | null }) {
+  const nav = useNavigate();
+  const open = (list ?? []).filter((t) => t.state !== 'readonly'); const closed = (list ?? []).filter((t) => t.state === 'readonly');
+  const preview = (t: AdminTeamChat) => !t.last_at ? 'No messages yet' : `${t.last_admin ? 'You' : first(t.last_sender_name) || 'Ronnie'}: ${t.last_deleted ? 'Message deleted' : t.last_body || (t.last_photos ? '📷 Photo' : '')}`;
+  const Row = ({ t }: { t: AdminTeamChat }) => (
+    <button className={'ib-row tc-trow' + (t.unread ? ' hot' : '') + (t.state === 'readonly' ? ' closed' : '')} onClick={() => nav(`/admin/team-chat/${t.event_id}?from=messages`)}>
+      <span className="tc-av">👥</span>
+      <span className="grow" style={{ minWidth: 0 }}>
+        <span className="spread"><b>{t.venue || t.title} team · {t.state === 'before' ? `opens ${dayTime(t.opens_at)}` : teamWhen(t.event_date)}</b>
+          <small className="muted nowrap">{t.state === 'readonly' ? 'closed' : t.last_at ? whenShort(t.last_at) : ''}</small></span>
+        <span className="ib-body">{preview(t)}</span>
+      </span>
+      {t.unread > 0 && <span className="tc-unread">{t.unread}</span>}
+    </button>
+  );
+  return (
+    <div className="adm-card ib-list" style={{ maxWidth: 760, padding: 0 }}>
+      {list === null ? <div className="muted" style={{ padding: 16 }}>Loading…</div> : !list.length ? <div className="muted sm" style={{ padding: 16 }}>No team chat is on right now. Turn one on from the event page.</div> : <>
+        <div className="tc-sect">OPEN NOW</div>
+        {!open.length && <div className="muted sm" style={{ padding: '8px 16px' }}>None open.</div>}
+        {open.map((t) => <Row key={t.event_id} t={t} />)}
+        {closed.length > 0 && <div className="tc-sect">CLOSED · READ ONLY 7 DAYS</div>}
+        {closed.map((t) => <Row key={t.event_id} t={t} />)}
+      </>}
+      <div className="muted sm ib-foot">Red number = new team messages since you last looked. Tap a chat to open it. Turning a chat on or off stays on the event page.</div>
     </div>
   );
 }

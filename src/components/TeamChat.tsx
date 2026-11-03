@@ -10,7 +10,7 @@ import { TEAM_MSG_COLS, TEAM_QUICK, dayOnly, dayTime, readOnlyUntil, teamInfo, t
    photos when allowed, quick replies. Press and hold: your own → Edit / Delete · manager / Ronnie → Pin for everyone · Reply ·
    Remove message ("Removed by the manager"). After closing: read-only for 7 days. Still no private staff-to-staff chat. */
 
-export function TeamChat({ eventId, meId, back = '/messages' }: { eventId: string; meId: string; back?: string }) {
+export function TeamChat({ eventId, meId, back = '/messages', eventLink }: { eventId: string; meId: string; back?: string; eventLink?: string }) {
   const [info, setInfo] = useState<TeamInfo | null | undefined>(undefined);
   const [msgs, setMsgs] = useState<TeamMsg[] | null>(null);
   const [text, setText] = useState(''); const [files, setFiles] = useState<File[]>([]);
@@ -47,7 +47,7 @@ export function TeamChat({ eventId, meId, back = '/messages' }: { eventId: strin
   const nameOf = (id: string | null) => { if (!id) return 'G&R'; const p = info.people[id]; return p?.admin ? 'Ronnie' : first(p?.name) || '…'; };
   const isMgr = (id: string | null) => !!id && info.managers.includes(id);
   const canWrite = me.can_write && !!conv;
-  const sub = info.state === 'open' ? `${me.manager ? 'You’re the manager' : `${info.n_members} people`} · open until ${dayTime(info.closes_at)}`
+  const sub = info.state === 'open' ? (me.admin ? `${info.n_members} people · closes ${dayTime(info.closes_at)}` : `${me.manager ? 'You’re the manager' : `${info.n_members} people`} · open until ${dayTime(info.closes_at)}`)
     : info.state === 'readonly' ? `Closed · read only until ${dayOnly(readOnlyUntil(info.closes_at))}`
     : info.state === 'before' ? `Opens ${dayTime(info.opens_at)} (day before)`
     : info.state === 'off' ? 'Off · only you can see this' : 'Closed · hidden from staff';
@@ -84,10 +84,11 @@ export function TeamChat({ eventId, meId, back = '/messages' }: { eventId: strin
         <Link to={back} className="back" aria-label="Back">‹</Link>
         <span className="tc-av">👥</span>
         <div className="grow" style={{ minWidth: 0 }}><b>{info.title} team</b><small>{sub}</small></div>
+        {eventLink && <Link className="tc-evlink" to={eventLink}>Event ›</Link>}
       </header>
       {info.pinned && (
         <button className="tc-pin" onClick={() => jump(info.pinned!.id)}>
-          <span>📌</span><span className="grow"><b>{nameOf(info.pinned.sender_id)}:</b> {info.pinned.body || (info.pinned.photos ? '📷 Photo' : '')}</span>
+          <span>📌</span><span className="grow"><b>Pinned</b> · {info.pinned.body || (info.pinned.photos ? '📷 Photo' : '')}</span>
         </button>
       )}
       <div className="ch-list" onClick={() => menu && setMenu(null)}>

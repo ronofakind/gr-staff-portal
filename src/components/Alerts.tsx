@@ -105,7 +105,7 @@ function AlertsSheetBody({ state, setState, prefs, setPrefs }: SheetProps) {
         <Row label="Messages from Ronnie or your manager" k="messages" />
         <Row label="Dates to answer" sub="+ a reminder 3 h before the answer-by" k="dates" />
         <Row label="Meetings" sub="+ 8 AM on the day" k="meetings" />
-        <Row label="Team chat" k="team_chat" />
+        <Row label="Team chat" sub="New messages when a team chat is open · pinned ones always buzz" k="team_chat" />
       </div>
       <p className="muted sm al-quiet">Quiet hours 11 PM – 7 AM. Anything about today or tomorrow still comes through. Never more than one buzz at a time.</p>
     </div>

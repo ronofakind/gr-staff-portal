@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { SwipeSheet } from '../components/SwipeSheet';
 import { Avatar } from '../components/Avatar';
@@ -117,14 +117,15 @@ function PickSheet({ info, busy, onClose, onSave }: { info: TeamInfo; busy: bool
 
 /** /admin/team-chat/:id · Ronnie reads, posts, pins and removes any message. */
 export function AdminTeamChat() {
-  const { id } = useParams(); const [meId, setMeId] = useState<string | null>(null);
+  const { id } = useParams(); const [sp] = useSearchParams(); const [meId, setMeId] = useState<string | null>(null);
+  const fromMessages = sp.get('from') === 'messages'; // push 43: opened from Messages → Team chats
   useEffect(() => { supabase.rpc('me').then(({ data }) => setMeId((data as string) ?? null)); }, []);
   return (
     <div className="stack ib-conv">
       <div className="adm-card ib-chat tc-admin">
-        {meId && id ? <TeamChat eventId={id} meId={meId} back={`/admin/event/${id}`} /> : <div className="loading" style={{ minHeight: 200 }} />}
+        {meId && id ? <TeamChat eventId={id} meId={meId} back={fromMessages ? '/admin/messages?tab=team' : `/admin/event/${id}`} eventLink={`/admin/event/${id}`} /> : <div className="loading" style={{ minHeight: 200 }} />}
       </div>
-      <small className="muted">Everyone in the team chat sees what you post here as “Ronnie”. Settings are on the event page.</small>
+      <small className="muted">Everyone in the team chat sees what you post here as “Ronnie”. Press and hold a message: Pin · Reply · Remove. Turning the chat on or off stays on the event page.</small>
     </div>
   );
 }

@@ -68,7 +68,7 @@ const fill = (s, a) => String(s || '').replace('{by}', a.data?.by ? rel(a.data.b
 
 // Most important first (the one that becomes the alert when several are waiting).
 const ORDER = ['ask', 'confirm', 'confirm_remind', 'changed', 'shift', 'mgr_late', 'mgr_not_started', 'mgr_hours', 'mgr_reply', 'message',
-  'meeting_today', 'meeting', 'dates_remind', 'dates', 'team_chat', 'test'];
+  'team_pin', 'meeting_today', 'meeting', 'dates_remind', 'dates', 'team_chat', 'test'];
 // Kinds that also go out as a text from the Mac mini when the person has no alert-enabled phone.
 const TEXT_KINDS = new Set(['ask', 'confirm', 'confirm_remind', 'changed', 'shift', 'message', 'meeting_today', 'dates_remind']);
 
