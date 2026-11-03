@@ -16,6 +16,7 @@
  *  - a staff line = a "4 Waiters" / "1 MD" / "1 Bar Manager" cell in C with its time in D; names in E, F, G on that row
  *    and the rows under it, until the next staff line; never column H (notes);
  *  - rows with BACKUP / BACKUPS in H are backups → not sent; red names (#ff0000) = cancelled → not sent; cooks are skipped;
+ *  - name colours (Ronnie, Nov 3): purple = placed (to book), green = confirmed, black = backup (not booked) → black not sent;
  *  - department per line: Bar manager / Bartender / Barback = bar, everything else floor. One block can give both.
  */
 const SC_DAYS = 60;
@@ -140,7 +141,8 @@ function parseEvents_(values, fonts, fromYmd, toYmd) {
         if (!name || !scIsName_(name)) continue;
         const col = String((fr[k] && fr[k][c]) || '').toLowerCase();
         if (col === '#ff0000') continue; // red = cancelled
-        get(scDept_(line.code)).staff.push({ name: name.replace(/\s+/g, ' '), code: line.code, start: line.start, row: dateRow + 1 + k });
+        if (col === '#000000' || col === '') continue; // black = backup, not booked (Ronnie, Nov 3)
+        get(scDept_(line.code)).staff.push({ name: name.replace(/\s+/g, ' '), code: line.code, start: line.start, row: dateRow + 1 + k, color: col });
       }
     }
     Object.keys(byDept).forEach((d) => { const e = byDept[d]; e.venue = venue; e.address = address; e.details = details; out.push(e); });
