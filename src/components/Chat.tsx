@@ -214,9 +214,11 @@ function HoursCard({ m, mine, side, draft, onAnswered }: { m: Msg; mine: boolean
   );
 }
 
-export function Composer({ value, onChange, files, onFiles, busy, err, placeholder, editing, onCancelEdit, quick, onQuick, onSend }: {
+export function Composer({ value, onChange, files, onFiles, busy, err, placeholder, editing, onCancelEdit, quick, onQuick, onSend, noPhotos, above }: {
   value: string; onChange: (v: string) => void; files: File[]; onFiles: (f: File[]) => void; busy: boolean; err?: string; placeholder: string;
   editing?: boolean; onCancelEdit?: () => void; quick?: string[]; onQuick?: (q: string) => void; onSend: () => void;
+  /** push 41 · team chat: no 📷 when photos are off · a bar above the box (Replying to …) */
+  noPhotos?: boolean; above?: ReactNode;
 }) {
   const ta = useRef<HTMLTextAreaElement>(null);
   useEffect(() => { const el = ta.current; if (!el) return; el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 120) + 'px'; }, [value]);
@@ -224,11 +226,12 @@ export function Composer({ value, onChange, files, onFiles, busy, err, placehold
   return (
     <div className="ch-comp">
       {err && <p className="error" style={{ padding: '0 6px' }}>{err}</p>}
+      {above}
       {editing && <div className="ch-editing"><span className="grow">Editing your message · others will see “edited”</span><button onClick={onCancelEdit}>Cancel</button></div>}
       {quick && <div className="ch-quick">{quick.map((q) => <button key={q} disabled={busy} onClick={() => onQuick?.(q)}>{q}</button>)}</div>}
       {files.length > 0 && <div className="ch-files">{files.map((f, i) => <span key={i}>📷 {f.name.slice(0, 16)}<button aria-label="Remove photo" onClick={() => onFiles(files.filter((_, k) => k !== i))}>×</button></span>)}</div>}
       <div className="ch-bar">
-        {!editing && <label className="ch-cam" aria-label="Add a photo">📷<input type="file" accept="image/*" multiple hidden onChange={(e) => { onFiles([...files, ...Array.from(e.target.files ?? []).filter((f) => f.type.startsWith('image/'))].slice(0, 6)); e.target.value = ''; }} /></label>}
+        {!editing && !noPhotos && <label className="ch-cam" aria-label="Add a photo">📷<input type="file" accept="image/*" multiple hidden onChange={(e) => { onFiles([...files, ...Array.from(e.target.files ?? []).filter((f) => f.type.startsWith('image/'))].slice(0, 6)); e.target.value = ''; }} /></label>}
         <textarea ref={ta} rows={1} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />
         <button className="ch-send" aria-label={editing ? 'Save' : 'Send'} disabled={busy || (!value.trim() && !files.length)} onClick={onSend}>{editing ? '✓' : '↑'}</button>
       </div>

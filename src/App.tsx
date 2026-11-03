@@ -42,6 +42,7 @@ import { Messages as StaffMessages } from './pages/Messages';
 import { MgrMessages } from './pages/MgrMessages';
 import { Meeting } from './pages/Meeting';
 import { Meetings, MeetingForm, MeetingAdmin } from './admin/Meetings';
+import { AdminTeamChat } from './admin/TeamChatCard';
 
 export function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
@@ -133,6 +134,7 @@ export function App() {
             <Route path="meeting/new" element={<MeetingForm />} />
             <Route path="meeting/:id" element={<MeetingAdmin />} />
             <Route path="meeting/:id/edit" element={<MeetingForm />} />
+            <Route path="team-chat/:id" element={<AdminTeamChat />} />
           </Route>
         )}
         {me.role === 'admin' && <Route path="/admin/view/:staffId/*" element={<ViewAs />} />}

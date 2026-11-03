@@ -5,6 +5,7 @@ import { TabBar } from '../components/TabBar';
 import { PageHead } from '../components/ProfileMenu';
 import { Avatar } from '../components/Avatar';
 import { Chat } from '../components/Chat';
+import { TeamChat } from '../components/TeamChat';
 import { TimeWheel, ampm15 } from '../components/TimeWheel';
 import { AnnounceView, ANN_SELECT, ANN_SELECT_36, wantsGotIt, type Ann } from '../components/Announce';
 import {
@@ -12,6 +13,7 @@ import {
   type Conv, type Msg, type Topic,
 } from '../lib/messages';
 import { meetingMorningCheck } from '../lib/meetings';
+import { myTeamChats, teamPreview, teamWhen, type MyTeamChat } from '../lib/teamChat';
 
 /* Push 36 · staff Messages tab: Ronnie pinned on top, tonight's manager thread, Updates (announcements, shift notices, rides, hours answers). */
 
@@ -36,6 +38,7 @@ export function Messages({ me }: { me: Staff }) {
   if (hours) return <MyHours me={me} pick={hours} />;
   if (c === 'ronnie' || nw) return <RonnieThread me={me} compose={!!nw} topicInit={(sp.get('topic') as Topic | null) ?? null} shiftInit={sp.get('shift')} />;
   if (c?.startsWith('mgr:')) return <MgrThread me={me} eventId={c.slice(4)} />;
+  if (c?.startsWith('team:')) return <main className="page v2 ch-page"><TeamChat eventId={c.slice(5)} meId={me.id} /></main>;
   return <Inbox me={me} />;
 }
 
@@ -50,6 +53,7 @@ function Inbox({ me }: { me: Staff }) {
   const [filter, setFilter] = useState<'all' | 'ronnie' | 'shifts'>('all');
   const [ron, setRon] = useState<{ conv: Conv | null; last: Msg | null } | null>(null);
   const [mgr, setMgr] = useState<MgrRow[]>([]);
+  const [teams, setTeams] = useState<MyTeamChat[]>([]); // push 41 · team chats open (or read-only) for my event
   const [ups, setUps] = useState<Upd[] | null>(null);
   const [ann, setAnn] = useState<{ a: Ann; acked: boolean } | null>(null);
   const [alert, setAlert] = useState<(AlertRow & { shift: string | null }) | null>(null);
@@ -63,6 +67,7 @@ function Inbox({ me }: { me: Staff }) {
       let rLast: Msg | null = null;
       if (rc) { const { data } = await supabase.from('messages').select(MSG_COLS).eq('conversation_id', (rc as Conv).id).order('created_at', { ascending: false }).limit(1); rLast = ((data ?? []) as Msg[])[0] ?? null; }
       setRon({ conv: (rc as Conv | null) ?? null, last: rLast });
+      myTeamChats().then(setTeams);
 
       // announcements to me (90 days)
       const reads = async (cols: string) => supabase.from('announcement_reads').select(`opened_at,ack_at,announcements!inner(${cols})`).eq('staff_id', me.id).gte('announcements.created_at', cut);
@@ -151,6 +156,18 @@ function Inbox({ me }: { me: Staff }) {
       </button>
       <button className="msg-big" onClick={() => nav('/messages?new=1')}>✉ Message Ronnie</button>
 
+      {teams.map((t) => (
+        <button key={t.event_id} className={'msg-ron mgr' + (t.unread ? ' unread' : '')} onClick={() => nav(`/messages?c=team:${t.event_id}`)}>
+          <span className="tc-av big">👥</span>
+          <span className="grow">
+            <span className="spread"><b>{t.title} team · {teamWhen(t.event_date)}</b>{t.last_at && <small>{whenShort(t.last_at)}</small>}</span>
+            {t.last_at ? <span className="msg-prev">{teamPreview(t, me.id)}</span> : <small className="muted">{t.n_members} people · until 12 h after the event</small>}
+            {t.state === 'readonly' && <small className="muted">closed · read only</small>}
+          </span>
+          {t.unread > 0 && <i className="msg-n">{t.unread > 99 ? '99+' : t.unread}</i>}
+        </button>
+      ))}
+
       {mgr.map((r) => (
         <section key={r.event_id} className="stack" style={{ gap: 6 }}>
           <div className="msg-sec">{r.date === today ? 'TONIGHT' : shortDate(r.date).toUpperCase()} · {r.title.toUpperCase()}</div>
@@ -183,7 +200,7 @@ function Inbox({ me }: { me: Staff }) {
               {u.unread && <i className="msg-dot" />}
             </button>))}
       </section>
-      <p className="muted sm" style={{ margin: '2px 6px', textAlign: 'center' }}>Only Ronnie and your manager write here. No chats between staff.</p>
+      <p className="muted sm" style={{ margin: '2px 6px', textAlign: 'center' }}>{teams.length ? 'Team chats are for your event’s team only. No private chats between staff.' : 'Only Ronnie and your manager write here. No chats between staff.'}</p>
 
       {ann && <AnnounceView a={ann.a} acked={ann.acked} onClose={() => { setAnn(null); setTick((t) => t + 1); }} onAck={() => { setAnn(null); setTick((t) => t + 1); }} />}
       {alert && (<>
