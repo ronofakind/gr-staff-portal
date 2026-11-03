@@ -36,6 +36,7 @@ function onOpen() {
     .addItem('Update today now', 'syncToday')
     .addItem('Redo yesterday (day tab + payroll)', 'syncYesterday')
     .addItem('Send extras & cancellations to EXTRAS LOG', 'syncExtrasLog')
+    .addItem('Send events to the app now (Sheet changes)', 'postEventsToApp')
     .addToUi();
 }
 
@@ -54,6 +55,7 @@ function setup() {
   ScriptApp.getProjectTriggers().forEach((t) => ScriptApp.deleteTrigger(t));
   ScriptApp.newTrigger('buildTomorrow').timeBased().atHour(11).nearMinute(30).everyDays(1).inTimezone(TZ).create();
   ScriptApp.newTrigger('refresh').timeBased().everyMinutes(15).create();
+  if (typeof postEventsToApp === 'function') ScriptApp.newTrigger('postEventsToApp').timeBased().everyMinutes(10).create(); // push 44 · events-sheet-to-app.gs
   buildTomorrow();
   refresh();
 }

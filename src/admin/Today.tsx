@@ -7,6 +7,7 @@ import { MeetingsStrip } from './Meetings';
 import { AskNeed, useAskNeeds } from './AskChange';
 import { DeleteEvent } from './DeleteEvent';
 import { DeptTag } from './DeptTag';
+import { SheetChanges } from './SheetChanges';
 import { hoursBetween } from './api';
 import { supabase } from '../lib/supabase';
 import { eventsBetween, addDays, isoDay, flagsOf, flagText, periodOf, dLabel, tTime, type AEvent, type AShift } from './api';
@@ -242,6 +243,7 @@ export function Today() {
             </div>
           )}
           <div className="muted sm" style={{ padding: '0 6px' }}>Archiving only hides it here. It comes back if something new happens on it. On the phone, swipe a row left.</div>
+          <SheetChanges arch={arch} onArchived={loadArch} />
           <div className="sec"><span className="serif">This week</span><Link to="/admin/week">Week ›</Link></div>
           <div className="strip">
             {weekDays.map((d) => {

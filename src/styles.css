@@ -2738,3 +2738,15 @@ textarea.mtg-in { padding: 10px 12px; resize: vertical; }
 .em-later button + button { border-left: 1px solid #EED9A8; }
 .em-toast { display: flex; align-items: center; gap: 10px; background: #fff; border-radius: 14px; padding: 10px 14px; font-size: 13px; color: #4A433C; box-shadow: 0 2px 10px rgba(26,23,20,.08); }
 .em-toast button { border: 0; background: none; font: 700 13px Inter, system-ui, sans-serif; color: var(--ink); cursor: pointer; }
+
+/* push 44 · Sheet changes (Events sheet → app) */
+.sc-box { padding: 6px 16px 12px; }
+.sc-card { padding: 12px 0; display: flex; flex-direction: column; gap: 4px; } .sc-card + .sc-card { border-top: 1px solid var(--line); }
+.sc-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; } .sc-top .grow { flex: 1; }
+.sc-tag { font-size: 10px; font-weight: 800; letter-spacing: .06em; border-radius: 5px; padding: 2px 6px; }
+.sc-tag.ok { background: var(--ok-bg); color: var(--ok); } .sc-tag.red { background: var(--accent-bg); color: var(--accent); }
+.sc-tag.amber { background: var(--amber-bg, #FBEBD3); color: var(--amber, #8A4B0F); } .sc-tag.blue { background: #EAF1FA; color: #1F5FA8; } .sc-tag.purple { background: #F0E9F8; color: #5E3591; }
+.sc-what { font-size: 14px; }
+.sc-act { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; align-items: center; }
+.sc-pick { height: 34px; border-radius: 10px; border: 1.5px solid #DCD3C7; padding: 0 8px; font: 500 13px Inter, system-ui, sans-serif; max-width: 100%; }
+.sc-foot { padding-top: 8px; border-top: 1px solid var(--line); margin-top: 4px; }
