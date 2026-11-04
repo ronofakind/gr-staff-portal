@@ -453,7 +453,7 @@ async function approve(c: Change, ctx: Ctx, pick?: string) {
     const lines = se.lines.filter((l) => l.count > 0);
     const start = lines.map((l) => l.start).filter(Boolean).sort()[0] ?? c.staff.map((s) => s.start).filter(Boolean).sort()[0] ?? '17:00';
     const lead = c.staff.find((s) => s.code === (se.department === 'bar' ? 'BM' : 'MD'));
-    const uni = venue ? Object.fromEntries(['uniform_floor', 'uniform_bar', 'uniform_floor_w', 'uniform_bar_w', 'uniform_items'].filter((k) => k in venue).map((k) => [k, venue[k]])) : {};
+    const uni = venue ? Object.fromEntries(['uniform_floor', 'uniform_bar', 'uniform_floor_w', 'uniform_bar_w', 'uniform_items'].filter((k) => venue[k] != null).map((k) => [k, venue[k]])) : {};
     const row = {
       event_date: se.event_date, title: venue?.name ?? (venueName(se) || 'Details to come'), venue_id: venue?.id ?? null, address: se.address || venue?.address || null,
       department: se.department, start_time: start, staff_needed: lines.reduce((n, l) => n + l.count, 0) || c.staff.length,
