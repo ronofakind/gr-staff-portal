@@ -297,6 +297,10 @@ function HomeScreenStep({ head, onDone }: { head: ReactNode; onDone: () => void 
     <>
       {head}
       <div className="cu-body">
+        <div className="seg cu-os">
+          <button className={os === 'ios' ? 'on' : ''} onClick={() => setOs('ios')}><AppleIcon /> iPhone</button>
+          <button className={os === 'android' ? 'on' : ''} onClick={() => setOs('android')}><DroidIcon /> Android</button>
+        </div>
         {inApp && (
           <div className="cu-box amber">
             <b>Open this page in {os === 'ios' ? 'Safari' : 'Chrome'} first</b>
@@ -326,7 +330,6 @@ function HomeScreenStep({ head, onDone }: { head: ReactNode; onDone: () => void 
       <Foot>
         <button className={'cu-btn ' + (oneTap && os === 'android' ? 'line' : 'green')} onClick={() => { clearHomeSkip(); onDone(); }}>Done · I added it</button>
         {setting('checkup.home_screen') !== 'required' && <button className="cu-skip" onClick={() => { setHomeSkip(); onDone(); }}><span>Skip for now</span></button>}
-        <button type="button" className="cu-os-link" onClick={() => setOs(os === 'ios' ? 'android' : 'ios')}>{os === 'ios' ? 'On Android?' : 'On iPhone?'} <u>Show me</u></button>
       </Foot>
     </>
   );

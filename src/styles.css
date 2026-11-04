@@ -3027,3 +3027,4 @@ div.venue-rule { background: #fff; border-radius: 14px; padding: 10px 14px; marg
 /* Ronnie, Nov 4 · photo shows right away, "Saving…" while it uploads */
 .cu-photo { position: relative; }
 .cu-saving { position: absolute; left: 0; right: 0; bottom: 0; padding: 6px 0 10px; background: rgba(26,23,20,.55); color: #fff; font: 600 12px Inter, system-ui, sans-serif; font-style: normal; text-align: center; }
+.cu-tile span { width: 76px; height: 76px; } .cu-tile img { width: 70px; height: 70px; } .cu-tile { margin-top: 10px; }
