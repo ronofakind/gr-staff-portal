@@ -225,8 +225,8 @@ export function Day() {
                   {!drag && <button className="dv-ask" onClick={() => setParams({ d: day, fill: e.id, at: startIso(e.event_date, landing(e)), code: 'W' })}>Ask several people ›</button>}</div>}
               </div>
               <div className="dv-foot">
-                {p ? <button className="abtn sm dark grow" disabled={busy || (short > 0 && !isBar(e))} onClick={() => sendFor([e])}>{short > 0 && !isBar(e) ? 'Confirmations · fill first' : `Send confirmations · ${p}`}</button>
-                  : <span className="abtn sm grow" aria-disabled>✓ Confirmations sent</span>}
+                {p ? <button className={'abtn sm grow ' + (short > 0 && !isBar(e) ? 'dark' : 'red')} disabled={busy || (short > 0 && !isBar(e))} onClick={() => sendFor([e])}>{short > 0 && !isBar(e) ? 'Confirmations · fill first' : `Send confirmations · ${p}`}</button>
+                  : (() => { const w = team(e).filter((s) => s.status === 'booked').length; return <Link className="abtn sm ok grow" to={`/admin/event/${e.id}`}>✓ Sent{w ? ` · ${w} to confirm` : ' · all confirmed'}</Link>; })()}
                 <Link className="abtn sm" to={`/admin/event/${e.id}/edit`} aria-label="Edit event">✎</Link>
                 <Link className="abtn sm" to={`/manage/${e.id}`}>Check-in</Link>
               </div>
