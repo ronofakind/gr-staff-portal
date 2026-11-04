@@ -46,7 +46,7 @@ export async function eventsBetween(from: string, to: string) {
 
 export async function allStaff() {
   const { data, error } = await supabase.from('staff')
-    .select('id,full_name,nickname,email,phone,language,department,role,positions,md_rank,active,photo_url,created_at,sex,staff_private(ranking,notes,tier)')
+    .select('id,full_name,nickname,email,phone,language,department,role,positions,md_rank,active,photo_url,created_at,sex,staff_private!staff_private_staff_id_fkey(ranking,notes,tier)')
     .order('full_name');
   if (error) throw error;
   return (data ?? []) as unknown as AStaff[];
