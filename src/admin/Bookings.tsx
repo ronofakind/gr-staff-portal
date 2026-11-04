@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { setting, autoExtras } from '../lib/settings';
 import { DeptTag } from './DeptTag';
-import { AlsoWorking, type OtherShift } from './alsoWorking';
+import { BoardAlso, type OtherShift } from './alsoWorking';
 import { eventsBetween, allStaff, addDays, isoDay, dLabel, ap12, startIso, endIso, roleName, bookingChange, confirmationsSent, type AEvent, type AStaff, type Client, type Venue } from './api';
 import { misfits, linksOf, other, condShort, RuleIcons, type SLink, type SCond } from './rules';
 import { loadScoreData, scoreOf, type ScoreData } from './score';
@@ -54,7 +54,10 @@ export function Bookings() {
   const [draft, setDraft] = useState<Record<string, Draft>>({});
   const [hist, setHist] = useState<Record<string, Draft>[]>([]);
   const [tab, setTab] = useState<'yes' | 'wait' | 'not'>('yes'); const [q, setQ] = useState('');
-  const [drag, setDrag] = useState<{ staff_id: string; key?: string } | null>(null);
+  // push 49 · add = dragged from "Already placed today" → a 2nd shift that day (not a move)
+  const [drag, setDrag] = useState<{ staff_id: string; key?: string; add?: boolean } | null>(null);
+  /** push 49 · a placed chip dropped on ANOTHER event → "Add a 2nd shift · keep both" / "Move · off <event 1>" / Cancel */
+  const [dropAsk, setDropAsk] = useState<{ p: Pl; to: { event_id: string; start: string; extra?: boolean } } | null>(null);
   const [hint, setHint] = useState<string>('');
   const [pair, setPair] = useState<{ moving: Pl; partner: Pl; to: { event_id: string; start: string } } | null>(null);
   const [auto, setAuto] = useState<{ open: boolean; skipped: { name: string; why: string }[] } | null>(null);
@@ -64,7 +67,8 @@ export function Bookings() {
   const spots = params.get('spots') ? Math.max(1, Number(params.get('spots')) || 1) : undefined;
   const replaceId = params.get('replace'); const replaceAt = params.get('at');
   const [asksBy, setAsksBy] = useState<Record<string, { kind: string; new_time: string }>>({});
-  const [phone, setPhone] = useState<Pl | null>(null);
+  /** chip menu (phone + click): Move to… · Also add to… (2nd shift that day) · Remove. No `p` = from the side list "+ 2nd shift". */
+  const [phone, setPhone] = useState<{ sid: string; p?: Pl; step: 'menu' | 'move' | 'add' } | null>(null);
   const [msg, setMsg] = useState(''); const [busy, setBusy] = useState(false);
   const dragRef = useRef(drag); dragRef.current = drag;
 
@@ -154,11 +158,15 @@ export function Bookings() {
   const nChanges = allChanges.reduce((n, c) => n + c.added.length + c.removed.length + c.moved.length, 0);
 
   // ── placing ─────────────────────────────────────────────────────
-  const place = (d: string, sid: string, to: { event_id: string; start: string; extra?: boolean }, fromKey?: string, both = false) => {
+  /** push 49 · is the person already (really) placed on this event that day? (one shift per person per event) */
+  const onEvent = (d: string, sid: string, eventId: string, exceptKey?: string) => plOf(d).some((p) => p.staff_id === sid && p.event_id === eventId && !p.suggested && p.key !== exceptKey);
+  const place = (d: string, sid: string, to: { event_id: string; start: string; extra?: boolean }, fromKey?: string, both = false, add = false) => {
     const c = cur(d); let pl = [...c.pl];
     const a = avOf(sid); let start = to.start;
     if (a?.from_time && toMin(a.from_time) > toMin(to.start) + 15) start = q15(a.from_time); // can only start 15+ min later → own time group
-    const existing = fromKey ? pl.find((p) => p.key === fromKey) : pl.find((p) => p.staff_id === sid);
+    // push 49 · add = a 2nd shift that day: never moves the first one (info only, no gap rule, never blocks)
+    if (add && onEvent(d, sid, to.event_id)) { setHint(`${name(sid).split(' ')[0]} is already on ${evById[to.event_id]?.title ?? 'this event'}`); return; }
+    const existing = add ? undefined : fromKey ? pl.find((p) => p.key === fromKey) : pl.find((p) => p.staff_id === sid);
     if (existing) {
       if (!both) { const partner = pl.find((p) => p.event_id === existing.event_id && partnerOf(sid).includes(p.staff_id) && p.key !== existing.key);
         if (partner && existing.event_id !== to.event_id) { setPair({ moving: existing, partner, to: { event_id: to.event_id, start } }); return; } }
@@ -287,25 +295,45 @@ export function Bookings() {
     return starts.map((st) => { const ls = lines.filter((l) => l.start === st); return { start: st, end: ls.find((l) => l.end)?.end ?? null, need: ls.reduce((n, l) => n + l.count, 0), people: pl.filter((p) => p.start === st && !p.extra).sort((a, b) => rank(a.staff_id) - rank(b.staff_id)), isNew: !ls.length }; });
   };
   const extrasOf = (d: string, e: AEvent) => cur(d).extras[e.id] ?? e.extras ?? defaultExtras(e);
-  const onDrop = (d: string, to: { event_id: string; start: string; extra?: boolean }) => { const g = dragRef.current; setDrag(null); if (!g) return; place(d, g.staff_id, to, g.key); };
+  const onDrop = (d: string, to: { event_id: string; start: string; extra?: boolean }) => {
+    const g = dragRef.current; setDrag(null); if (!g) return;
+    if (g.add) { place(d, g.staff_id, to, undefined, false, true); return; }
+    const p = g.key ? cur(d).pl.find((x) => x.key === g.key) : undefined;
+    if (p && !p.suggested && p.event_id !== to.event_id) { // push 49 · placed chip → another event: ask
+      if (onEvent(d, p.staff_id, to.event_id, p.key)) { setHint(`${name(p.staff_id).split(' ')[0]} is already on ${evById[to.event_id]?.title ?? 'that event'}`); return; }
+      setDropAsk({ p, to }); return;
+    }
+    place(d, g.staff_id, to, g.key);
+  };
   const dropAvail = (d: string) => { const g = dragRef.current; setDrag(null); if (g?.key) remove(d, g.key); };
   /** push 46 · the person's other placements that day (another event) → gold info note on the chip, never blocks. */
   const othersOf = (d: string, p: Pl): OtherShift[] => plOf(d).filter((x) => x.staff_id === p.staff_id && x.event_id !== p.event_id && !x.suggested).map((x) => {
     const e = evById[x.event_id]; const sh = x.shift_id ? e?.shifts.find((y) => y.id === x.shift_id) : undefined;
     return { venue: e?.title ?? '?', start: startIso(d, x.start), end: sh?.planned_end ?? (e?.end_time ? endIso(d, x.start, e.end_time.slice(0, 5)) : null) };
   });
+  /** push 49 · planned end (HH:MM) of a placement: the shift's own end, else its time group's end, else the event end. */
+  const endHm = (p: Pl): string | null => {
+    const e = evById[p.event_id]; const sh = p.shift_id ? e?.shifts.find((y) => y.id === p.shift_id) : undefined;
+    if (sh?.planned_end) return hm(sh.planned_end);
+    return (e?.staffing ?? []).find((l) => l.start === p.start && l.end)?.end ?? e?.end_time?.slice(0, 5) ?? null;
+  };
+  const span12 = (p: Pl) => { const en = endHm(p); return en ? `${t12(p.start)} – ${t12(en)}` : t12(p.start); };
+  /** push 49 · the person's real placements that day, earliest first ("1 OF 2" / "2 OF 2"). */
+  const dayOf = (d: string, sid: string) => plOf(d).filter((x) => x.staff_id === sid && !x.suggested).sort((a, b) => toMin(a.start) - toMin(b.start) || a.key.localeCompare(b.key));
+  const pron = (sid: string) => (byId[sid]?.sex === 'f' ? 'her' : byId[sid]?.sex === 'm' ? 'him' : 'them');
   const Chip = ({ p, n, d }: { p: Pl; n?: number; d: string }) => {
-    const also = othersOf(d, p);
+    const also = othersOf(d, p); const mine = p.suggested ? [] : dayOf(d, p.staff_id); const nth = mine.findIndex((x) => x.key === p.key) + 1;
     const locked = cur(d).locks.includes(p.staff_id); const t = tier(p.staff_id); const part = partnerOf(p.staff_id).find((x) => plOf(d).some((q2) => q2.staff_id === x));
     return (
-      <div className={'bk-chip' + (p.suggested ? ' sug' : '') + (!p.shift_id && !p.suggested ? ' added' : '') + (also.length ? ' has-also' : '')} draggable onDragStart={() => setDrag({ staff_id: p.staff_id, key: p.key })} onClick={() => setPhone(p)}>
+      <div className={'bk-chip' + (p.suggested ? ' sug' : '') + (!p.shift_id && !p.suggested ? ' added' : '') + (also.length ? ' has-also' : '')} draggable onDragStart={() => setDrag({ staff_id: p.staff_id, key: p.key })} onClick={() => setPhone({ sid: p.staff_id, p, step: 'menu' })}>
         {n != null && <span className="bk-n">{n}</span>}<i className={'bk-t t' + (t ?? 'x')} />
         <span className="grow">{name(p.staff_id)}{part && <small> 🔗 {name(part).split(' ')[0]}</small>}{p.extra && <small className="bk-x"> EXTRA</small>}
           {p.shift_id && asksBy[p.shift_id] && <small className="bk-asks" title="Waiting for your answer (Today → Needs you)">{asksBy[p.shift_id].kind === 'later' ? 'asks' : 'leaves'} {t12(hm(asksBy[p.shift_id].new_time))}</small>}</span>
+        {mine.length > 1 && nth > 0 && <span className="bk-of" title="Two shifts this day">{nth} OF {mine.length}</span>}
         {p.suggested ? <span className="bk-sug">suggested</span> : <>
           <button className={'bk-lock' + (locked ? ' on' : '')} title={locked ? 'Locked · auto-fill never moves them' : 'Lock'} onClick={(ev) => { ev.stopPropagation(); toggleLock(d, p.staff_id); }}>{locked ? '🔒' : '🔓'}</button>
           <button className="bk-del" aria-label="Remove" onClick={(ev) => { ev.stopPropagation(); remove(d, p.key); }}>×</button></>}
-        {also.length > 0 && <AlsoWorking others={also} start={startIso(d, p.start)} compact />}
+        {also.length > 0 && <BoardAlso others={also} start={startIso(d, p.start)} />}
       </div>
     );
   };
@@ -341,6 +369,12 @@ export function Bookings() {
     );
   };
 
+  /** push 49 · people already placed today (this dept's events) stay in the side list, at the bottom, with "+ 2nd shift". */
+  const placedList = (() => { if (view !== 'board' || !events) return [];
+    const ids = new Set(dayEvs(date).map((e) => e.id));
+    const sids = [...new Set(plOf(date).filter((p) => !p.suggested && ids.has(p.event_id)).map((p) => p.staff_id))]
+      .filter((sid) => !q || name(sid).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').includes(q.toLowerCase()));
+    return sids.sort(byScore).map((sid) => ({ sid, mine: dayOf(date, sid) })); })();
   // ── render ─────────────────────────────────────────────────────
   const strip = Array.from({ length: 7 }, (_, i) => addDays(date, i - ((new Date(date + 'T12:00:00').getDay() + 6) % 7)));
   return (
@@ -410,6 +444,15 @@ export function Bookings() {
                   </div>); })}
               </div>); })}
             {tab === 'yes' && !counts.yes && <div className="muted sm" style={{ padding: 10 }}>Nobody said yes yet for this date.</div>}
+            {placedList.length > 0 && (
+              <div className="bk-tier bk-placed"><div className="kick">ALREADY PLACED TODAY · {placedList.length}</div>
+                {placedList.map(({ sid, mine }) => (
+                  <div key={sid} className="bk-av" draggable={mine.length < 2} onDragStart={() => setDrag({ staff_id: sid, add: true })} title={mine.length < 2 ? 'Drag onto another event = a 2nd shift that day' : undefined}>
+                    <i className={'bk-t t' + (tier(sid) ?? 'x')} />
+                    <div className="grow"><b>{name(sid)}</b><small>{mine.length > 1 ? mine.map((x) => evById[x.event_id]?.title ?? '?').join(' + ') : `${evById[mine[0].event_id]?.title ?? '?'} ${span12(mine[0])}`}</small></div>
+                    {mine.length > 1 ? <span className="muted sm bk-2n">{mine.length} shifts</span> : <button className="bk-2nd" onClick={() => setPhone({ sid, step: 'add' })}>+ 2nd shift</button>}
+                  </div>))}
+              </div>)}
             <button className="link-btn" style={{ margin: 10 }} onClick={() => setAskMore(true)}>Ask more people for {dLabel(date, { month: 'short', day: 'numeric' })} ›</button>
           </aside>
           <div className="bk-cols">{dayEvs(date).length ? dayEvs(date).map((e) => <Column key={e.id} e={e} d={date} />) : <div className="adm-card muted">No {dept} events on this day. <Link to={`/admin/event/new?d=${date}`}>+ New event</Link></div>}</div>
@@ -468,15 +511,37 @@ export function Bookings() {
         </div></div>
       )}
 
-      {phone && (
-        <div className="bk-modal" onClick={() => setPhone(null)}><div className="adm-card" onClick={(e) => e.stopPropagation()}>
-          <b>Move {name(phone.staff_id)} to…</b>
-          {dayEvs(date).flatMap((e) => groupsOf(date, e).map((g) => (
-            <button key={e.id + g.start} className="abtn" disabled={phone.event_id === e.id && phone.start === g.start} onClick={() => { place(date, phone.staff_id, { event_id: e.id, start: g.start }, phone.key); setPhone(null); }}>{e.title} · {t12(g.start)}</button>)))}
-          <button className="abtn" onClick={() => { remove(date, phone.key); setPhone(null); }}>Back to available</button>
-          <button className="abtn" onClick={() => setPhone(null)}>Close</button>
-        </div></div>
-      )}
+      {phone && (() => { const { sid, p, step } = phone; const first = name(sid).split(' ')[0]; const close = () => setPhone(null);
+        const groups = dayEvs(date).flatMap((e) => groupsOf(date, e).map((g) => ({ e, g })));
+        const addable = groups.filter(({ e }) => !onEvent(date, sid, e.id));
+        return (
+        <div className="bk-modal" onClick={close}><div className="adm-card bk-menu" onClick={(e) => e.stopPropagation()}>
+          {step === 'menu' && p ? <>
+            <div><b>{name(sid)} · {evById[p.event_id]?.title}</b><div className="muted sm">{roleName(p.code)} · {t12(p.start)}</div></div>
+            <button className="bk-mrow" onClick={() => setPhone({ ...phone, step: 'move' })}><b>Move to…</b></button>
+            {!p.suggested && <button className="bk-mrow" onClick={() => setPhone({ ...phone, step: 'add' })}><b>Also add to…</b> <span className="muted">2nd shift that day</span></button>}
+            <button className="bk-mrow red" onClick={() => { remove(date, p.key); close(); }}>Remove</button>
+          </> : step === 'move' && p ? <>
+            <b>Move {name(sid)} to…</b>
+            {groups.map(({ e, g }) => (
+              <button key={e.id + g.start} className="abtn" disabled={(p.event_id === e.id && p.start === g.start) || (p.event_id !== e.id && onEvent(date, sid, e.id, p.key))} onClick={() => { place(date, sid, { event_id: e.id, start: g.start }, p.key); close(); }}>{e.title} · {t12(g.start)}</button>))}
+          </> : <>
+            <div><b>Add {first} to… · 2nd shift that day</b><div className="muted sm">Now on {dayOf(date, sid).map((x) => `${evById[x.event_id]?.title ?? '?'} ${span12(x)}`).join(' + ')}</div></div>
+            {addable.length ? addable.map(({ e, g }) => (
+              <button key={e.id + g.start} className="abtn" onClick={() => { place(date, sid, { event_id: e.id, start: g.start }, undefined, false, true); close(); }}>{e.title} · {t12(g.start)}</button>))
+              : <span className="muted sm">No other {dept} event this day.</span>}
+          </>}
+          <button className="abtn" onClick={close}>{step === 'menu' ? 'Close' : 'Cancel'}</button>
+        </div></div>); })()}
+
+      {dropAsk && (() => { const { p, to } = dropAsk; const e1 = evById[p.event_id]; const e2 = evById[to.event_id]; const first = name(p.staff_id).split(' ')[0]; const close = () => setDropAsk(null); return (
+        <div className="bk-modal" onClick={close}><div className="adm-card bk-dropask" onClick={(e) => e.stopPropagation()}>
+          <b className="bk-dah">{first} is already on {e1?.title}</b>
+          <div className="sm">{e1?.title} · {roleName(p.code)} · {span12(p)}<br />You dropped {pron(p.staff_id)} on <b>{e2?.title} · {t12(to.start)}</b>.</div>
+          <button className="abtn dark" autoFocus onClick={() => { close(); place(date, p.staff_id, to, undefined, false, true); }}>Add a 2nd shift · keep both</button>
+          <button className="abtn" onClick={() => { close(); place(date, p.staff_id, to, p.key); }}>Move · off {e1?.title}</button>
+          <button className="lnk" onClick={close}>Cancel</button>
+        </div></div>); })()}
 
       {review && (
         <div className="bk-modal" onClick={() => setReview(false)}><div className="adm-card bk-review" onClick={(e) => e.stopPropagation()}>

@@ -2896,3 +2896,17 @@ div.venue-rule { background: #fff; border-radius: 14px; padding: 10px 14px; marg
 .wk-add { border: 1.5px dashed #D8CFC2; border-radius: 8px; padding: 4px; text-align: center; font-size: 11px; color: var(--muted); text-decoration: none; }
 .wk-none { padding: 4px 2px; } .wk-meet { background: #fff; border-radius: 8px; padding: 0 6px; font-size: 12px; }
 .wk-wait-row { display: flex; gap: 10px; align-items: baseline; padding: 8px 0; text-decoration: none; color: inherit; flex-wrap: wrap; } .wk-wait-row + .wk-wait-row { border-top: 1px solid var(--line); }
+
+/* Push 49 · Bookings: two shifts the same day */
+.bk-of { flex: 0 0 auto; background: #1A1714; color: #fff; font: 800 9.5px Inter, system-ui, sans-serif; letter-spacing: .05em; padding: 2px 6px; border-radius: 6px; white-space: nowrap; }
+.bk-placed { border-top: 1px solid #EFE9E0; margin-top: 6px; padding-top: 6px; }
+.bk-placed .bk-av { align-items: center; }
+.bk-placed .bk-av[draggable="false"] { cursor: default; }
+.bk-2nd { flex: 0 0 auto; border: 0; background: #EFE7DA; color: #1A1714; font: 700 12px Inter, system-ui, sans-serif; padding: 5px 9px; border-radius: 8px; cursor: pointer; white-space: nowrap; }
+.bk-2nd:hover { background: #E5DACA; }
+.bk-2n { white-space: nowrap; }
+.bk-modal > .adm-card.bk-menu, .bk-modal > .adm-card.bk-dropask { max-width: 400px; }
+.bk-mrow { display: block; width: 100%; text-align: left; background: none; border: 0; border-top: 1px solid #EFE9E0; padding: 12px 2px; font: 500 14px Inter, system-ui, sans-serif; color: var(--ink); cursor: pointer; }
+.bk-mrow.red { color: var(--accent); }
+.bk-dah { font-size: 16px; }
+.bk-dropask .abtn { justify-content: center; text-align: center; }

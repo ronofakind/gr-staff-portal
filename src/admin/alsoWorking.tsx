@@ -31,3 +31,14 @@ export function AlsoWorking({ others, start, compact = false }: { others: OtherS
   if (!others.length) return null;
   return <>{others.map((o, i) => { const head = `Also working ${o.venue}`; return <span key={i} className={'also-note' + (compact ? ' sm' : '')}>🕐 <b>{head}</b>{alsoText(o, start).slice(head.length)}</span>; })}</>;
 }
+
+/** Push 49 · Bookings board short line: "also Le Andover 7:00 PM" (other shift later) / "coming from Beth Chabad (ends 6:00 PM)" (earlier). */
+export function boardAlsoText(o: OtherShift, start: string | null) {
+  if (start && new Date(o.start).getTime() < new Date(start).getTime()) return `coming from ${o.venue}${o.end ? ` (ends ${t12(o.end)})` : ''}`;
+  return `also ${o.venue} ${t12(o.start)}`;
+}
+
+export function BoardAlso({ others, start }: { others: OtherShift[]; start: string | null }) {
+  if (!others.length) return null;
+  return <>{others.map((o, i) => <span key={i} className="also-note sm">🕐 {boardAlsoText(o, start)}</span>)}</>;
+}
