@@ -153,8 +153,10 @@ export async function bookingChange(kind: 'booked' | 'moved' | 'removed', p: {
   staff_id: string; shift_id?: string | null; to?: { id: string; event_date: string; title: string; sent: boolean; start: string };
   from?: { id: string; event_date: string; title: string; sent: boolean; start: string };
   /** push 40 · position before → after (for the "Your shift changed" note) */ pos?: { old: string; new: string } | null; position?: string | null;
+  /** push 52 · Sheet changes "Approve quietly": log the change only (no Home alert, no conversation note → no push, no text). */ quiet?: boolean;
 }) {
-  await supabase.from('change_log').insert({ entity: 'shift', entity_id: p.shift_id ?? null, change: { kind, staff: p.staff_id, from: p.from?.id ?? null, to: p.to?.id ?? null, start: p.to?.start ?? null } });
+  await supabase.from('change_log').insert({ entity: 'shift', entity_id: p.shift_id ?? null, change: { kind, staff: p.staff_id, from: p.from?.id ?? null, to: p.to?.id ?? null, start: p.to?.start ?? null, ...(p.quiet ? { quiet: true } : {}) } });
+  if (p.quiet) return;
   const t = (x: { start: string }) => tTime(x.start);
   let alert: { title: string; body: string; event_id: string | null } | null = null;
   if (kind === 'booked' && p.to?.sent) alert = { title: "You're booked", body: `${aDate(p.to.event_date)} · ${p.to.title} · starts ${t(p.to)}`, event_id: p.to.id };

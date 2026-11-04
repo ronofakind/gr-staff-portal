@@ -264,7 +264,6 @@ export function Today() {
             </div>
           )}
           <div className="muted sm" style={{ padding: '0 6px' }}>Archiving only hides it here. It comes back if something new happens on it. On the phone, swipe a row left.</div>
-          <SheetChanges arch={arch} onArchived={loadArch} />
           <div className="sec"><span className="serif">This week</span><Link to="/admin/week">Week ›</Link></div>
           <div className="strip">
             {weekDays.map((d) => {
@@ -282,6 +281,8 @@ export function Today() {
           <div className="muted sm">events · floor staff booked, red = bar. Amber = still short.</div>
         </section>
       </div>
+      {/* push 52 · full width: filters + one row per event */}
+      <SheetChanges arch={arch} onArchived={loadArch} />
       {rep && <ReplaceSheet shift={rep.s} ev={rep.e} onClose={() => setRep(null)} onDone={(m) => { setRep(null); setToast(m); setTick((t) => t + 1); }} />}
       {toast && <div className="undo-bar" role="status"><span className="grow">{toast}</span></div>}
       {changeId && <ChangeAnswer id={changeId} onClose={() => { const p = new URLSearchParams(params); p.delete('change'); setParams(p, { replace: true }); }} onDone={() => { const p = new URLSearchParams(params); p.delete('change'); setParams(p, { replace: true }); setTick((t) => t + 1); }} />}
