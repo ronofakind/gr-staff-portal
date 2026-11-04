@@ -162,7 +162,8 @@ function Editor({ s, onDone }: { s?: AStaff; onDone: () => void }) {
       department: f.department, role: f.role, active: f.active,
       positions: f.positions.split(',').map((p) => p.trim().toUpperCase()).filter(Boolean),
     };
-    const res = s ? await supabase.from('staff').update(row).eq('id', s.id).select('id').single()
+    // 059 · edits go through admin_staff_update (column grants block a direct update)
+    const res = s ? await supabase.rpc('admin_staff_update', { p_id: s.id, p_patch: row }).then((r) => ({ error: r.error, data: { id: s.id } }))
       : await supabase.from('staff').insert(row).select('id').single();
     if (res.error) return setErr(res.error.message);
     const p = await supabase.from('staff_private').upsert({ staff_id: res.data.id, ranking: f.ranking ? Number(f.ranking) : null, notes: f.notes || null });

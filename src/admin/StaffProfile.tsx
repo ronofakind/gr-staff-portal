@@ -93,7 +93,7 @@ export function StaffProfile({ s, onClose, onEdit, all }: { s: AStaff; onClose: 
             <div className="row sm" style={{ gap: 6, marginTop: 4 }}>{s.staff_private?.tier && <i className={'tier-dot ' + s.staff_private.tier}>{s.staff_private.tier}</i>}{s.staff_private?.ranking != null && <b>#{s.staff_private.ranking}</b>}<span className="muted">· {s.language.toUpperCase()}</span></div></div>
         </div>
         <div className="row sm" style={{ gap: 8 }}><span className="muted">Uniform line</span>
-          <div className="seg">{([['m', 'Men'], ['f', 'Women']] as const).map(([k, l]) => <button key={k} className={sex === k ? 'on' : ''} onClick={async () => { setSex(k); await supabase.from('staff').update({ sex: k }).eq('id', s.id); }}>{l}</button>)}</div>
+          <div className="seg">{([['m', 'Men'], ['f', 'Women']] as const).map(([k, l]) => <button key={k} className={sex === k ? 'on' : ''} onClick={async () => { setSex(k); await supabase.rpc('admin_staff_update', { p_id: s.id, p_patch: { sex: k } }); }}>{l}</button>)}</div>
           {!sex && <span className="accent">not set · they see the men's line</span>}</div>
         <div className="grid-3btn" style={{ gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' }}>
           {tel ? <a className="abtn ok" href={`tel:${tel}`}>Call</a> : <span className="abtn" aria-disabled>No phone</span>}
@@ -168,7 +168,7 @@ export function StaffProfile({ s, onClose, onEdit, all }: { s: AStaff; onClose: 
           {!saved && <button className="abtn sm dark" onClick={saveNotes}>Save note</button>}
         </div>
         <div className="row wrap"><button className="abtn" onClick={onEdit}>Edit details</button><Link className="abtn" to="/admin/tiers">Change tier</Link></div>
-        {s.active && <button className="lnk accent" style={{ alignSelf: 'flex-start' }} onClick={async () => { if (confirm(`Mark ${s.full_name} inactive? They stay in the history.`)) { await supabase.from('staff').update({ active: false }).eq('id', s.id); onClose(); } }}>Mark inactive</button>}
+        {s.active && <button className="lnk accent" style={{ alignSelf: 'flex-start' }} onClick={async () => { if (confirm(`Mark ${s.full_name} inactive? They stay in the history.`)) { await supabase.rpc('admin_staff_update', { p_id: s.id, p_patch: { active: false } }); onClose(); } }}>Mark inactive</button>}
       </aside>
       {inviting && <InviteModal queue={[s]} onClose={() => { setInviting(false); loadInv(); }} onChanged={loadInv} onFix={() => { setInviting(false); onEdit(); }} />}
       {adding && <AddRule s={s} people={people} venues={venues} links={links} onClose={() => setAdding(false)} onSaved={() => { setAdding(false); reloadRules(); }} />}
