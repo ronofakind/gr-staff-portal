@@ -106,16 +106,18 @@ const Foot = ({ children }: { children: ReactNode }) => <div className="cu-foot"
 
 // ───────── 1 · Photo ─────────
 function PhotoStep({ me, photo, setPhoto, head, onNext }: { me: Staff; photo: string | null; setPhoto: (u: string) => void; head: ReactNode; onNext: () => void }) {
-  const [busy, setBusy] = useState(false); const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState(''); const [local, setLocal] = useState<string | null>(null);
+  // Show the picture right away; shrink + upload in the background (Ronnie, Nov 4: the wait after taking it felt slow).
   const pick = async (f?: File) => {
-    if (!f) return; setBusy(true); setErr('');
-    try { setPhoto(await uploadPhoto(me.id, f)); } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
+    if (!f) return; setBusy(true); setErr(''); const u = URL.createObjectURL(f); setLocal(u);
+    try { setPhoto(await uploadPhoto(me.id, f)); } catch (e) { setErr((e as Error).message); setLocal(null); } finally { setBusy(false); }
   };
+  const shown = (busy && local) || photo;
   return (
     <>
       {head}
       <div className="cu-body">
-        <div className="cu-photo">{photo ? <img src={photo} alt={me.full_name} /> : <span><CamIcon />{busy ? 'Uploading…' : 'No photo yet'}</span>}</div>
+        <div className="cu-photo">{shown ? <img src={shown} alt={me.full_name} /> : <span><CamIcon />No photo yet</span>}{busy && <i className="cu-saving">Saving…</i>}</div>
         <label className="cu-btn">{photo ? 'Take a new photo' : 'Take a photo'}<input type="file" accept="image/*" capture="user" hidden onChange={(e) => pick(e.target.files?.[0])} /></label>
         <label className="cu-btn line">Choose from my photos<input type="file" accept="image/*" hidden onChange={(e) => pick(e.target.files?.[0])} /></label>
         {err && <p className="error">{err}</p>}

@@ -3024,3 +3024,6 @@ div.venue-rule { background: #fff; border-radius: 14px; padding: 10px 14px; marg
 .cu-os-link.in { padding: 0; font-size: inherit; text-decoration: underline; }
 .cal-added { display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--green, #2E7D5B); font-weight: 800; font-size: 15px; padding: 6px 0; }
 .cal-added span { width: 24px; height: 24px; border-radius: 12px; background: var(--green, #2E7D5B); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; }
+/* Ronnie, Nov 4 · photo shows right away, "Saving…" while it uploads */
+.cu-photo { position: relative; }
+.cu-saving { position: absolute; left: 0; right: 0; bottom: 0; padding: 6px 0 10px; background: rgba(26,23,20,.55); color: #fff; font: 600 12px Inter, system-ui, sans-serif; font-style: normal; text-align: center; }

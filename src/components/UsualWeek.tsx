@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { FromPicker, ampm15 } from './TimeWheel';
-import { SwipeSheet } from './SwipeSheet';
+import { FixedSheet } from './SwipeSheet';
 
 export type WeekDay = { dow: number; status: 'yes' | 'from' | 'no'; from_time: string | null };
 export const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -46,7 +46,7 @@ export function UsualWeekList({ week, setDay, plural = false }: { week: Record<n
       {wkSheet !== null && (
         <>
           <div className="scrim" onClick={() => setWkSheet(null)} />
-          <SwipeSheet onClose={() => setWkSheet(null)} label="From what time can you usually start?">
+          <FixedSheet onClose={() => setWkSheet(null)} label="From what time can you usually start?" closeLabel={null}>{/* no swipe-to-close: scrolling the time wheel kept closing it (Ronnie, Nov 4) */}
             <div><div className="kicker">{DAYS[wkSheet].toUpperCase()}S · <span style={{ color: 'var(--ok)' }}>YES ✓</span></div>
               <div className="serif" style={{ fontSize: 26 }}>From what time can you usually start?</div></div>
             {/* Any time = one tap (saves + closes); Save = the time on the wheel (Ronnie, Nov 2). */}
@@ -55,7 +55,7 @@ export function UsualWeekList({ week, setDay, plural = false }: { week: Record<n
               <button type="button" className="big-btn wk-any" onClick={() => { setDay(wkSheet, 'yes', null); setWkSheet(null); }}>Any time</button>
               <button type="button" className="big-btn dark" disabled={!wkChoice || wkChoice === 'any'} onClick={() => { if (!wkChoice || wkChoice === 'any') return; setDay(wkSheet, 'yes', wkChoice); setWkSheet(null); }}>Save</button>
             </div>
-          </SwipeSheet>
+          </FixedSheet>
         </>
       )}
     </>
