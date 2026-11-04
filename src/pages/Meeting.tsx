@@ -6,6 +6,7 @@ import { JoinButton, MeetingNotes, PlaceBadge } from '../components/Meeting';
 import { SecTitle } from './Shift';
 import { useMyCalendar, addCalendar, defaultCalOs } from '../lib/calendar';
 import { answerMeeting, dayCaps, isOver, lengthLabel, placeName, t12, whenWord, dayShort, type MeetingPage } from '../lib/meetings';
+import { Brand } from '../components/Brand';
 
 /** Push 38 · staff meeting page: top card (Teams colour), Join, linked event, what it's about, who's invited, answer, notes. */
 export function Meeting({ backTo = '/' }: { backTo?: string }) {
@@ -51,7 +52,7 @@ export function Meeting({ backTo = '/' }: { backTo?: string }) {
         {!gone && p.my_answer !== 'cant' && <JoinButton m={m} light />}
         {m.place_kind !== 'in_person' && <div className="mtg-hero-sub">{placeName(m)}</div>}
       </section>
-      {gone && <div className="card"><b>This meeting is cancelled.</b><p className="muted sm" style={{ margin: '4px 0 0' }}>It’s off your G&amp;R calendar. Nothing to do.</p></div>}
+      {gone && <div className="card"><b>This meeting is cancelled.</b><p className="muted sm" style={{ margin: '4px 0 0' }}>It’s off your <Brand /> calendar. Nothing to do.</p></div>}
 
       {p.events.length > 0 && <>
         <div className="mtg-for">FOR THIS EVENT</div>
@@ -79,9 +80,9 @@ export function Meeting({ backTo = '/' }: { backTo?: string }) {
         </div>
         {err && <p className="error">{err}</p>}
         {p.my_answer === 'coming' && (cal?.added_at
-          ? <p className="muted sm mtg-center">In your G&amp;R calendar{m.place_kind === 'in_person' ? ' with the address' : ` with the ${m.place_kind === 'zoom' ? 'Zoom' : 'Teams'} link`}.</p>
-          : cal ? <button className="btn-ghost" style={{ height: 46 }} onClick={() => addCalendar(cal, defaultCalOs()).then(setCal)}>Add my G&amp;R calendar</button> : null)}
-        {p.my_answer !== 'coming' && <p className="muted sm mtg-center">Say Coming and it goes in your G&amp;R calendar with the link. Meetings are paid like a shift.</p>}
+          ? <p className="muted sm mtg-center">In your <Brand /> calendar{m.place_kind === 'in_person' ? ' with the address' : ` with the ${m.place_kind === 'zoom' ? 'Zoom' : 'Teams'} link`}.</p>
+          : cal ? <button className="btn-ghost" style={{ height: 46 }} onClick={() => addCalendar(cal, defaultCalOs()).then(setCal)}>Add my <Brand /> calendar</button> : null)}
+        {p.my_answer !== 'coming' && <p className="muted sm mtg-center">Say Coming and it goes in your <Brand /> calendar with the link. Meetings are paid like a shift.</p>}
       </>}
 
       <SecTitle>{`Notes${p.notes.filter((n) => !n.deleted_at).length ? ` · ${p.notes.filter((n) => !n.deleted_at).length}` : ''}`}</SecTitle>

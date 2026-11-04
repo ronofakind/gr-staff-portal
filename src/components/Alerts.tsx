@@ -7,6 +7,7 @@ import {
   useAlerts, nudgeDue, turnOnAlerts, turnOffAlerts, saveAlertPrefs, sendTestAlert, refreshBadge,
   type AlertPrefs, type DeviceState,
 } from '../lib/alerts';
+import { Brand } from './Brand';
 
 /* Push 42 · phone alerts on the staff side: Home card, Profile → Notifications, in-app banner + Android alert buttons. */
 
@@ -15,7 +16,7 @@ export function AlertsCard({ me }: { me: Staff }) {
   const { state, setState, prefs, setPrefs } = useAlerts();
   const [busy, setBusy] = useState(false); const [done, setDone] = useState(false); const [err, setErr] = useState('');
   if (me.role === 'admin' || !state || !prefs) return null;
-  if (done) return <div className="al-card on" role="status"><span className="al-ic" aria-hidden="true">✓</span><span className="grow"><b>Alerts are on</b><span>We’ll buzz you when G&amp;R needs you.</span></span></div>;
+  if (done) return <div className="al-card on" role="status"><span className="al-ic" aria-hidden="true">✓</span><span className="grow"><b>Alerts are on</b><span>We’ll buzz you when <Brand /> needs you.</span></span></div>;
   if ((state !== 'off' && state !== 'ios_browser') || !nudgeDue(prefs)) return null;
   const notNow = async () => { setPrefs({ ...prefs, nudge_skips: prefs.nudge_skips + 1, nudge_at: new Date().toISOString() }); try { await saveAlertPrefs({}, true); } catch { /* shows again next time */ } };
   const on = async () => {
@@ -31,7 +32,7 @@ export function AlertsCard({ me }: { me: Staff }) {
     <section className="al-card">
       <div className="al-top">
         <span className="al-ic" aria-hidden="true">🔔</span>
-        <span className="grow"><b>Get a buzz when G&amp;R needs you</b>
+        <span className="grow"><b>Get a buzz when <Brand /> needs you</b>
           <span>{state === 'ios_browser'
             ? 'On iPhone, alerts only work from the G&R app on your Home Screen. Tap Share, then Add to Home Screen, and open G&R from there.'
             : 'Shifts to confirm, changes and messages from Ronnie, right on your phone. Never more than one buzz at a time.'}</span>
@@ -93,10 +94,10 @@ function AlertsSheetBody({ state, setState, prefs, setPrefs }: SheetProps) {
       <div className="serif al-h">Notifications</div>
       <div className={'al-state ' + (state === 'on' ? 'on' : '')}>
         {state === 'on' && <><b>✓ Alerts are on for this phone</b><div className="al-btns"><button className="btn-go" disabled={busy} onClick={test}>Send me a test</button><button className="link-btn" disabled={busy} onClick={off}>Turn off for this phone</button></div></>}
-        {state === 'off' && <><b>Alerts are off on this phone</b><span>Get a buzz when G&amp;R needs you.</span><div className="al-btns"><button className="btn-go" disabled={busy} onClick={on}>{busy ? 'One sec…' : 'Turn on notifications'}</button></div></>}
-        {state === 'ios_browser' && <><b>Open G&amp;R from your Home Screen</b><span>On iPhone, alerts only work from the Home Screen app. Tap Share, then Add to Home Screen, open G&amp;R from there and turn them on.</span></>}
-        {state === 'denied' && <><b>Notifications are blocked for G&amp;R</b><span>Turn them on in your phone’s Settings (Notifications → G&amp;R), then come back here.</span></>}
-        {state === 'unsupported' && <><b>This browser can’t show G&amp;R alerts</b><span>Open G&amp;R in Chrome on Android, or from your Home Screen on iPhone.</span></>}
+        {state === 'off' && <><b>Alerts are off on this phone</b><span>Get a buzz when <Brand /> needs you.</span><div className="al-btns"><button className="btn-go" disabled={busy} onClick={on}>{busy ? 'One sec…' : 'Turn on notifications'}</button></div></>}
+        {state === 'ios_browser' && <><b>Open <Brand /> from your Home Screen</b><span>On iPhone, alerts only work from the Home Screen app. Tap Share, then Add to Home Screen, open <Brand /> from there and turn them on.</span></>}
+        {state === 'denied' && <><b>Notifications are blocked for <Brand /></b><span>Turn them on in your phone’s Settings (Notifications → <Brand />), then come back here.</span></>}
+        {state === 'unsupported' && <><b>This browser can’t show <Brand /> alerts</b><span>Open <Brand /> in Chrome on Android, or from your Home Screen on iPhone.</span></>}
         {msg && <span className="al-msg">{msg}</span>}
       </div>
       <div className="al-list">

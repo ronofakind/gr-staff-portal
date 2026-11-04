@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { addCalendar, defaultCalOs, type MyCal } from '../lib/calendar';
+import { Brand } from './Brand';
 
 /**
  * Push 33a/b · centred thank-you pop-up after "Confirm my shift".
@@ -17,7 +18,7 @@ export function ConfirmThanks({ name, line, cal, onCal, onClose }: { name: strin
         <span className="cu-check">✓</span>
         <div className="serif">Thanks for confirming, {name}!</div>
         <p>{line}</p>
-        {cal?.added_at && <b className="thanks-added">✓ Added to your G&amp;R calendar</b>}
+        {cal?.added_at && <b className="thanks-added">✓ Added to your <Brand /> calendar</b>}
         <div className="btns">
           {offer ? <>
             <button className="cu-btn" disabled={busy} onClick={add}><CalIcon /> Add to my calendar</button>

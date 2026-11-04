@@ -64,6 +64,7 @@ export function Stars({ value, onChange, size = 'md', label }: { value: number; 
 }
 import { IncidentSheet, kindLabel, type Incident } from '../components/IncidentReport';
 import { teamName } from '../lib/nickname';
+import { Brand } from '../components/Brand';
 
 type Row = {
   id: string; staff_id?: string; position_code: string | null; position_detail: string | null; planned_start: string; planned_end: string | null;
@@ -541,7 +542,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
                       const later = os.find((o) => new Date(o.start_at).getTime() > me0); const before = [...os].reverse().find((o) => new Date(o.start_at).getTime() < me0);
                       const endIso = r.planned_end ?? (ev.end_time ? toIso(ev.event_date, ev.end_time.slice(0, 5), r.planned_start) : null);
                       return <>
-                        {later && !ended && <><span><i className="p28-tag leaves">{endIso ? `LEAVES ${fullT(endIso)}` : 'ANOTHER SHIFT LATER'}</i></span><span className="two-line">Has another G&amp;R shift at {fullT(later.start_at)}.</span></>}
+                        {later && !ended && <><span><i className="p28-tag leaves">{endIso ? `LEAVES ${fullT(endIso)}` : 'ANOTHER SHIFT LATER'}</i></span><span className="two-line">Has another <Brand /> shift at {fullT(later.start_at)}.</span></>}
                         {before && !pin && <><span><i className="p28-tag from">COMING FROM {before.venue.toUpperCase()}</i></span><span className="two-line">If their first shift runs late, you’ll see it here.</span></>}
                       </>;
                     })()}

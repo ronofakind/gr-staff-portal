@@ -25,6 +25,7 @@ import { AlertsCard } from '../components/Alerts';
 import { PastStrips } from '../components/PastStrip';
 import { managesShift } from '../lib/pastEvents';
 import { NeedChange, CancelSheet, ChangeSheet, LateSheet, LateBlock, ChangeCard, CancelledCard, useShiftChanges, t12 as t12c, type LateNotice } from '../components/ShiftChange';
+import { Brand } from '../components/Brand';
 
 type MgrLate = { id: string; shift_id: string; event_id: string; name: string; eta: string; reason: string | null; note?: string | null };
 type Gone = { id: string; title: string; date: string; late: boolean };
@@ -583,7 +584,7 @@ function ChangedBox({ prev, s, role, calOn, onSeen, standalone = false }: { prev
       <div className="grow">
         <b>Your shift changed{standalone ? ` · ${new Date(s.events.event_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}` : ''}</b>
         {bits}
-        {calOn && <small>Your G&amp;R calendar updates by itself.</small>}
+        {calOn && <small>Your <Brand /> calendar updates by itself.</small>}
       </div>
       <button onClick={onSeen}>Got it</button>
     </div>

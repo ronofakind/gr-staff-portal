@@ -3005,3 +3005,7 @@ div.venue-rule { background: #fff; border-radius: 14px; padding: 10px 14px; marg
   .sc2-quiet { width: 100%; justify-content: space-between; }
   .sc2-head > .abtn.dark { width: 100%; }
 }
+/* Ronnie, Nov 4 · the G&R logo inline in text, wherever the brand shows */
+.brand-i { height: 1.15em; width: auto; vertical-align: -0.28em; mix-blend-mode: multiply; display: inline-block; margin: 0 0.06em; }
+/* Ronnie, Nov 4 · ‹ Back on check-up steps 2+ */
+.cu-back { background: none; border: 0; padding: 4px 0; font: inherit; font-size: 13px; font-weight: 600; color: var(--ink); cursor: pointer; }

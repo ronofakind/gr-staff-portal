@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase, type Staff } from '../lib/supabase';
 import { Avatar } from './Avatar';
+import { Brand } from './Brand';
 
 /** Push 35a · their photo (or initials) top right on every staff page. Tap → small menu (Profile is no longer a tab). */
 export function ProfileButton({ me, preview = false, size = 38 }: { me: Staff; preview?: boolean; size?: number }) {
@@ -22,7 +23,7 @@ export function ProfileButton({ me, preview = false, size = 38 }: { me: Staff; p
       {open && (
         <div className="pm-menu" role="menu">
           <button role="menuitem" className="first" onClick={() => go('/profile')}>My profile</button>
-          {me.role !== 'admin' && <button role="menuitem" onClick={() => go('/profile?open=cal')}>Add my G&amp;R calendar</button>}
+          {me.role !== 'admin' && <button role="menuitem" onClick={() => go('/profile?open=cal')}>Add my <Brand /> calendar</button>}
           <button role="menuitem" onClick={() => go('/profile?open=pin')}>Change my code</button>
           <button role="menuitem" onClick={() => supabase.auth.signOut().then(() => window.location.replace('/'))}>Log out</button>
         </div>

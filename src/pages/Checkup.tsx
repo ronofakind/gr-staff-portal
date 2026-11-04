@@ -11,6 +11,7 @@ import {
 } from '../lib/install';
 import { useMyCalendar, addCalendar, calendarPromptSeen, defaultCalOs, type MyCal, type CalOs } from '../lib/calendar';
 import { callName } from '../lib/nickname';
+import { Brand, brandify } from '../components/Brand';
 
 /**
  * Push 31a/b · Profile check-up. Full screen straight after sign-in until staff_private.checkup_done_at is set
@@ -54,9 +55,9 @@ export function Checkup({ me, info, onFinish }: { me: Staff; info: CheckupInfo; 
   const n = counted.indexOf(step) + 1;
   const head = (title: string, sub: string, skippable = false) => (
     <div className="cu-head">
-      <div className="spread" style={{ alignItems: 'center' }}><span className="cu-kick">PROFILE CHECK-UP · {n} OF {counted.length}</span><span className="cu-req">{skippable ? 'can skip' : 'required'}</span></div>
+      <div className="spread" style={{ alignItems: 'center' }}><span className="row" style={{ gap: 10, alignItems: 'center' }}>{n > 1 && <button type="button" className="cu-back" onClick={() => go(counted[n - 2])}>‹ Back</button>}<span className="cu-kick">PROFILE CHECK-UP · {n} OF {counted.length}</span></span><span className="cu-req">{skippable ? 'can skip' : 'required'}</span></div>
       <div className="cu-bar">{counted.map((x, i) => <span key={x} className={i < n ? 'on' : ''} />)}</div>
-      <div className="serif cu-title">{title}</div><div className="cu-sub">{sub}</div>
+      <div className="serif cu-title">{brandify(title)}</div><div className="cu-sub">{sub}</div>
     </div>
   );
   const nextOf = (s: number) => ids[ids.indexOf(s) + 1] ?? 7;
@@ -82,7 +83,7 @@ export function CalendarAgain({ me, cal, onClose }: { me: Staff; cal: MyCal; onC
   const head = (
     <div className="cu-head">
       <div className="spread" style={{ alignItems: 'center' }}><span className="cu-kick">ONE MORE THING</span><span className="cu-req">can skip</span></div>
-      <div className="serif cu-title">Add your G&amp;R calendar</div><div className="cu-sub">your confirmed shifts, right in your phone’s calendar</div>
+      <div className="serif cu-title">Add your <Brand /> calendar</div><div className="cu-sub">your confirmed shifts, right in your phone’s calendar</div>
     </div>
   );
   return <main className="v2 cu"><CalendarStep me={me} cal={c} onCal={setC} head={head} onDone={() => { window.scrollTo(0, 0); setNote(true); }} /></main>;
@@ -94,7 +95,7 @@ export function HomeScreenAgain({ onClose }: { onClose: () => void }) {
   const head = (
     <div className="cu-head">
       <div className="spread" style={{ alignItems: 'center' }}><span className="cu-kick">ONE MORE THING</span><span className="cu-req">can skip</span></div>
-      <div className="serif cu-title">Add G&amp;R to your Home Screen</div><div className="cu-sub">opens faster · lets your phone buzz for shifts</div>
+      <div className="serif cu-title">Add <Brand /> to your Home Screen</div><div className="cu-sub">opens faster · lets your phone buzz for shifts</div>
     </div>
   );
   return <main className="v2 cu"><HomeScreenStep head={head} onDone={onClose} /></main>;
@@ -181,6 +182,7 @@ export function EmergencyForm({ info, onSaved, onSkip, saveLabel = 'Next' }: { i
   const save = async () => {
     setBusy(true); setErr('');
     const { error } = await saveMyProfile({ emergency_name: name.trim(), emergency_relation: rel, emergency_phone: phone.trim() });
+    if (!error) Object.assign(info, { emergency_name: name.trim(), emergency_relation: rel, emergency_phone: phone.trim() }); // kept if they go ‹ Back
     setBusy(false);
     if (error) return setErr(error.message);
     Object.assign(info, { emergency_name: name.trim(), emergency_relation: rel, emergency_phone: phone.trim() });
@@ -298,7 +300,7 @@ function HomeScreenStep({ head, onDone }: { head: ReactNode; onDone: () => void 
         {inApp && (
           <div className="cu-box amber">
             <b>Open this page in {os === 'ios' ? 'Safari' : 'Chrome'} first</b>
-            <span>You opened G&amp;R inside another app (WhatsApp, Instagram, Messenger…). Adding to the Home Screen only works from {os === 'ios' ? 'Safari' : 'Chrome'}.</span>
+            <span>You opened <Brand /> inside another app (WhatsApp, Instagram, Messenger…). Adding to the Home Screen only works from {os === 'ios' ? 'Safari' : 'Chrome'}.</span>
             {os === 'android' && <a className="cu-btn" href={chromeIntentUrl()}>Open in Chrome</a>}
             <button className="cu-btn line" onClick={copy}>{copied ? '✓ Link copied' : 'Copy the link'}</button>
             <span>{os === 'ios' ? 'Then open Safari, paste it in the address bar and come back to this step. Or tap ⋯ / the compass and choose “Open in Safari”.' : 'Or tap ⋮ and choose “Open in Chrome”, or paste the link in Chrome.'}</span>
@@ -310,15 +312,15 @@ function HomeScreenStep({ head, onDone }: { head: ReactNode; onDone: () => void 
             <li><i>2</i><span>Tap <b>Share</b></span><em><ShareIcon /></em></li>
             <li><i>3</i><span>Tap <b>View More</b> (the arrow)</span><em><ChevronIcon /></em></li>
             <li><i>4</i><span>Scroll down, tap <b className="red-out">Add to Home Screen</b></span><em><PlusSqIcon /></em></li>
-            <li><i>5</i><span>Tap <b>Add</b>, then open <b>G&amp;R</b> from your Home Screen</span><em><img src="/apple-touch-icon.png" alt="" className="cu-app" /></em></li>
+            <li><i>5</i><span>Tap <b>Add</b>, then open <b><Brand /></b> from your Home Screen</span><em><img src="/apple-touch-icon.png" alt="" className="cu-app" /></em></li>
           </ol>
         ) : <>
-          {canPromptInstall() && !inApp && <><button className="cu-btn big" onClick={install}><PlusIcon /> Install G&amp;R</button><p className="cu-note">Most Android phones: one tap, then <b>Install</b>.</p></>}
+          {canPromptInstall() && !inApp && <><button className="cu-btn big" onClick={install}><PlusIcon /> Install <Brand /></button><p className="cu-note">Most Android phones: one tap, then <b>Install</b>.</p></>}
           <div className="cu-kick" style={{ marginTop: 6 }}>{canPromptInstall() && !inApp ? 'NO BUTTON? DO IT BY HAND' : 'DO IT BY HAND'}</div>
           <ol className="cu-steps">
             <li><i>1</i><span>Tap <b>⋮</b> at the top right of Chrome</span><em><DotsIcon /></em></li>
             <li><i>2</i><span>Tap <b>Add to Home screen</b> (or <b>Install app</b>)</span><em><PlusIcon /></em></li>
-            <li><i>3</i><span>Tap <b>Install</b> / <b>Add</b>, then open <b>G&amp;R</b> from your Home screen</span><em><img src="/icon-192.png" alt="" className="cu-app" /></em></li>
+            <li><i>3</i><span>Tap <b>Install</b> / <b>Add</b>, then open <b><Brand /></b> from your Home screen</span><em><img src="/icon-192.png" alt="" className="cu-app" /></em></li>
           </ol>
         </>}
       </div>
@@ -358,7 +360,7 @@ export function CalendarBody({ me, cal, onCal, onAdded }: { me: Staff; cal: MyCa
       <div className="cal-prev">
         <div className="cu-kick">IN YOUR PHONE’S CALENDAR{prev === SAMPLE ? ' · EXAMPLE' : ''}</div>
         {(prev ?? SAMPLE).map((p, i) => (
-          <div key={i} className="cal-prev-row"><span className="d"><small>{p.dow}</small><b>{p.day}</b></span><span className="ev"><b>{p.venue} · G&amp;R shift</b><small>{p.time}</small></span></div>
+          <div key={i} className="cal-prev-row"><span className="d"><small>{p.dow}</small><b>{p.day}</b></span><span className="ev"><b>{p.venue} · <Brand /> shift</b><small>{p.time}</small></span></div>
         ))}
       </div>
       <ul className="cal-checks">
@@ -367,7 +369,7 @@ export function CalendarBody({ me, cal, onCal, onAdded }: { me: Staff; cal: MyCa
         <li>Cancelled shifts disappear</li>
         <li>Reminders 1 day and 2 hours before</li>
       </ul>
-      {cal.added_at && <div className="cu-box ok"><b>✓ G&amp;R calendar added · you’re all set</b><span>Every shift you confirm shows up by itself. Didn’t see “Subscribe”? Tap the button again.</span></div>}
+      {cal.added_at && <div className="cu-box ok"><b>✓ <Brand /> calendar added · you’re all set</b><span>Every shift you confirm shows up by itself. Didn’t see “Subscribe”? Tap the button again.</span></div>}
       <button className={'cu-btn ' + (cal.added_at ? 'line' : 'green')} onClick={add}>{os === 'ios' ? 'Add to my iPhone calendar' : 'Add to my Google Calendar'}</button>
       <p className="cu-note" style={{ textAlign: 'center' }}>{os === 'ios' ? 'Your iPhone will ask “Subscribe?” · tap Subscribe' : 'Opens Google Calendar · tap Add · changes can take a few hours on Android'}</p>
     </>
@@ -395,13 +397,13 @@ export function RonnieNote({ name, onNext }: { name: string; onNext: () => void 
   return (
     <main className="v2 cu">
       <div className="cu-head"><span className="cu-kick">A NOTE FROM RONNIE</span>
-        <div className="row" style={{ gap: 12, alignItems: 'center', marginTop: 6 }}><Avatar name="Ronnie" url={RONNIE_PHOTO} size={56} /><div><b>Ronnie</b><div className="cu-sub" style={{ marginTop: 0 }}>G&amp;R à votre service</div></div></div>
+        <div className="row" style={{ gap: 12, alignItems: 'center', marginTop: 6 }}><Avatar name="Ronnie" url={RONNIE_PHOTO} size={56} /><div><b>Ronnie</b><div className="cu-sub" style={{ marginTop: 0 }}><Brand /> à votre service</div></div></div>
       </div>
       <div className="cu-body">
         <div className="ronnie-note">
           <p>Hi {name},</p>
           <p>I built this app myself so everything you need (your shifts, hours and event details) is in one place. It’s brand new, and I’m still learning as I go, so thank you for your patience.</p>
-          <p>If something looks off or doesn’t work, take a screenshot and send it to me. Ideas are welcome too. This app is for our G&amp;R familia, and your feedback makes it better.</p>
+          <p>If something looks off or doesn’t work, take a screenshot and send it to me. Ideas are welcome too. This app is for our <Brand /> familia, and your feedback makes it better.</p>
           <p>Thanks for being part of the team. ❤️</p>
           <p className="sig">- Ronnie</p>
         </div>

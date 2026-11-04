@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { pinPassword, saveMyPinLen, type PinLen } from '../lib/pin';
 import { ChooseCode } from '../components/PinPad';
 import { isInAppBrowser, isIOS, isAndroid, chromeIntentUrl } from '../lib/install';
+import { Brand } from '../components/Brand';
 
 type Peek = { state: 'ok' | 'expired' | 'used' | 'unknown' | 'setup' | 'error'; name?: string; email?: string };
 
@@ -77,7 +78,7 @@ export function Go({ token }: { token: string }) {
         {isInAppBrowser() && !stay ? (
           <div className="cu-box amber">
             <b>Open this page in {ios ? 'Safari' : 'Chrome'} first</b>
-            <span>You opened G&amp;R inside another app (WhatsApp, Instagram, Messenger…). It works best in {ios ? 'Safari' : 'Chrome'}, where you can also add it to your Home Screen.</span>
+            <span>You opened <Brand /> inside another app (WhatsApp, Instagram, Messenger…). It works best in {ios ? 'Safari' : 'Chrome'}, where you can also add it to your Home Screen.</span>
             {!ios && <a className="cu-btn" href={chromeIntentUrl()}>Open in Chrome</a>}
             <button className="cu-btn line" onClick={copy}>{copied ? '✓ Link copied' : 'Copy the link'}</button>
             <span>{ios ? 'Then open Safari and paste it in the address bar. Or tap ⋯ / the compass and choose “Open in Safari”.' : 'Or tap ⋮ and choose “Open in Chrome”, or paste the link in Chrome.'}</span>

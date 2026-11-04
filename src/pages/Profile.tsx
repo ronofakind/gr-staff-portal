@@ -13,6 +13,7 @@ import { useMyCalendar } from '../lib/calendar';
 import { CalendarBody, EmergencyForm } from './Checkup';
 import { useCheckup, setEmergencyReminder } from '../lib/checkup';
 import { AlertsProfileRow } from '../components/Alerts';
+import { Brand } from '../components/Brand';
 
 type Extra = { transport: string | null; positions: string[] | null; shirt_size: string | null; pants_size: string | null; dress_size: string | null };
 const POSITIONS = ['Waiter', 'Bartender', 'Barback'];
@@ -226,7 +227,7 @@ function NickSheet({ me, nick, onClose, onSaved }: { me: Staff; nick: string | n
       <div className="sheet nick-sheet" role="dialog" aria-label="What should we call you?">
         <div className="grab" />
         <div className="spread" style={{ alignItems: 'center' }}><span className="kicker">PROFILE</span><button className="btn link" onClick={onClose}>Cancel</button></div>
-        <div className="nick-full"><small>Full name (from G&amp;R)</small><b>{me.full_name}</b></div>
+        <div className="nick-full"><small>Full name (from <Brand />)</small><b>{me.full_name}</b></div>
         <div className="serif" style={{ fontSize: 24 }}>What should we call you?</div>
         <p className="muted sm" style={{ margin: 0 }}>The name you go by at work. Your manager and team will see it on sections, teams and in the app.</p>
         <div className={'nick-input' + (st === 'bad' ? ' bad' : st === 'ok' ? ' ok' : '')}>

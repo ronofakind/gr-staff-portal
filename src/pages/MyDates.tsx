@@ -18,6 +18,7 @@ import { useMyMeetings, dayOfMtl, t12 as mt12, type MyMeeting } from '../lib/mee
 import { useSettings } from '../lib/settings';
 import { feedbackOn } from './Manage';
 import { usePastEvents, managesShift, roleOf, type PastShift, type TeamSum } from '../lib/pastEvents';
+import { Brand, brandify } from '../components/Brand';
 
 /** Booked tab rows (shifts from today on). confirm_by is push 33 (039). */
 type Shift = { id: string; status: 'booked' | 'confirmed' | 'declined'; attendance: string | null; planned_start: string; time_tbc: boolean;
@@ -165,14 +166,14 @@ export function MyDates({ me, base = '', preview = false }: { me: Staff; base?: 
             {answerList.map((d) => justDone.has(d.id) && !toAnswer(d, today)
               ? <AnsweredRow key={d.id} d={d} onTap={() => setSheet({ d, mode: 'pick' })} />
               : <AnswerRow key={d.id} d={d} onYes={() => setSheet({ d, mode: 'yes' })} onMaybe={() => setSheet({ d, mode: 'maybe' })} onNo={() => save(d, 'no')} />)}
-            {!answerList.length && !dky && !fills.length && <div className="md-empty"><b className="serif">All answered, thanks!</b><span>When G&amp;R sends you new dates, they show up here.</span></div>}
+            {!answerList.length && !dky && !fills.length && <div className="md-empty"><b className="serif">All answered, thanks!</b><span>When <Brand /> sends you new dates, they show up here.</span></div>}
             {answerList.length > 0 && <p className="md-foot">Answer any date, in any order. Saying yes doesn’t book you yet.</p>}
           </section>
         ) : curTab === 'booked' ? (
           <section className="md-list">
             {bookedRows.map((r) => r.k === 's' ? <BookedRow key={r.s.id} s={r.s} base={base} onConfirm={() => confirm(r.s)} />
               : <MeetingRow key={r.m.id} m={r.m} to={preview ? `/admin/meeting/${r.m.id}` : `/meeting/${r.m.id}`} />)}
-            {!bookedRows.length && <div className="md-empty"><b className="serif">No shifts booked yet</b><span>Shifts G&amp;R books you on show up here.</span></div>}
+            {!bookedRows.length && <div className="md-empty"><b className="serif">No shifts booked yet</b><span>Shifts <Brand /> books you on show up here.</span></div>}
           </section>
         ) : (
           <section className="md-list">
@@ -320,7 +321,7 @@ function PickSheet({ d, onClose, onYes, onMaybe, onNo }: { d: MyDate; onClose: (
           <button className={'m' + (d.status === 'maybe' ? ' cur' : '')} disabled={!canMaybe} onClick={onMaybe}>Maybe</button>
           <button className={'n' + (d.status === 'no' ? ' cur' : '')} onClick={onNo}>No</button>
         </div>
-        <p className="muted sm" style={{ margin: 0 }}>{canMaybe ? 'Saying yes doesn’t book you yet. G&R confirms the team closer to the date.' : 'The answer-by date has passed: Yes or No only.'}</p>
+        <p className="muted sm" style={{ margin: 0 }}>{canMaybe ? brandify('Saying yes doesn’t book you yet. G&R confirms the team closer to the date.') : 'The answer-by date has passed: Yes or No only.'}</p>
       </SwipeSheet>
     </>
   );
@@ -474,7 +475,7 @@ function CalendarView({ me, today, dates, shifts, preview, onAnswer, onShift }:
           </div>
         ) : opened.has(sel) && usualNo.has(dowMon0(sel)) ? (
           <div className="card row" style={{ gap: 10 }}><span className="opened-tag">✓ Opened up</span><span className="grow muted sm">You can be asked and booked this {dowName(sel)}.</span><button className="link-btn" onClick={() => openDay(sel, false)}>Undo</button></div>
-        ) : <div className="card muted sm">{dayLabel(sel)} · nothing yet. G&amp;R’s dates show here when they’re sent.</div>
+        ) : <div className="card muted sm">{dayLabel(sel)} · nothing yet. <Brand />’s dates show here when they’re sent.</div>
       )}
     </>
   );
