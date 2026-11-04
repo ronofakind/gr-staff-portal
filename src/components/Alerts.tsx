@@ -55,8 +55,9 @@ export function AlertsProfileRow({ me }: { me: Staff }) {
     <div className="sec-head"><span className="serif">Notifications</span></div>
     <section className="sizes">
       <button className="size-row edit-row" onClick={() => setOpen(true)}>
-        <span className="grow">Phone alerts</span>
-        <span className={'sm strong' + (a.state === 'on' ? ' okc' : '')}>{a.state === 'on' ? 'On' : 'Off'} ›</span>
+        <span className="row-l">Phone alerts</span>
+        <span className={'row-v' + (a.state === 'on' ? ' ok' : ' empty')}>{a.state === 'on' ? '✓ On' : 'Off'}</span>
+        <span className="row-a">Change ›</span>
       </button>
     </section>
     {open && <>

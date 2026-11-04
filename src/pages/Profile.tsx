@@ -76,10 +76,10 @@ export function Profile({ me }: { me: Staff }) {
 
       <div className="sec-head"><span className="serif">Contact &amp; login</span></div>
       <section className="sizes">
-        <div className="size-row"><span className="muted sm" style={{ width: 70 }}>Email</span><span className="grow strong" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{me.email}</span></div>
-        <button className="size-row edit-row" onClick={() => setEdit('phone')}><span className="muted sm" style={{ width: 70 }}>Phone</span><span className="grow strong">{phone || '—'}</span><span className="strong sm">Edit ›</span></button>
-        {me.role !== 'admin' && cu && <button className="size-row edit-row" onClick={() => setEmOpen(true)}><span className="muted sm" style={{ width: 70 }}>Emergency</span><span className="grow strong" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cu.emergency_phone ? `${cu.emergency_name ?? ''}${cu.emergency_relation ? ` · ${cu.emergency_relation}` : ''}` : <span className="muted">Not added</span>}</span><span className="strong sm">{cu.emergency_phone ? 'Edit ›' : 'Add ›'}</span></button>}
-        <button className="size-row edit-row" onClick={() => setEdit('pin')}><span className="muted sm" style={{ width: 70 }}>Code</span><span className="grow strong">{pinLen === 4 ? '••••' : '••••••'}</span><span className="strong sm">Change your code ›</span></button>
+        <div className="size-row"><span className="row-l">Email</span><span className="row-v">{me.email}</span></div>
+        <button className="size-row edit-row" onClick={() => setEdit('phone')}><span className="row-l">Phone</span><span className="row-v">{phone || '—'}</span><span className="row-a">Edit ›</span></button>
+        {me.role !== 'admin' && cu && <button className="size-row edit-row" onClick={() => setEmOpen(true)}><span className="row-l">Emergency</span><span className={'row-v' + (cu.emergency_phone ? '' : ' empty')}>{cu.emergency_phone ? `${cu.emergency_name ?? ''}${cu.emergency_relation ? ` · ${cu.emergency_relation}` : ''}` : 'Not added'}</span><span className="row-a">{cu.emergency_phone ? 'Edit ›' : 'Add ›'}</span></button>}
+        <button className="size-row edit-row" onClick={() => setEdit('pin')}><span className="row-l">Code</span><span className="row-v">{pinLen === 4 ? '••••' : '••••••'}</span><span className="row-a">Change ›</span></button>
       </section>
 
       {x && <>
@@ -108,14 +108,15 @@ export function Profile({ me }: { me: Staff }) {
         <div className="sec-head"><span className="serif">Uniform sizes <button type="button" className="why-q" aria-label="Why we ask for your sizes" onClick={() => setWhyOpen(true)}>?</button></span></div>
         <section className="sizes">
           <SizeRow label="Shirt" hint="the letter on the tag" value={x.shirt_size} options={SHIRT} onChange={(v) => save({ shirt_size: v })} />
-          <SizeRow label="Pants (waist)" hint="jeans “W32 L30” → 32" value={x.pants_size} options={PANTS} onChange={(v) => save({ pants_size: v })} />
-          <SizeRow label="Dress" hint="between two sizes? pick the bigger one" value={x.dress_size} options={DRESS} none="Not needed" onChange={(v) => save({ dress_size: v })} />
+          <SizeRow label="Pants (waist)" hint="jeans tag W32 L30 → 32" value={x.pants_size} options={PANTS} onChange={(v) => save({ pants_size: v })} />
+          <SizeRow label="Dress" hint="between sizes? pick the bigger" value={x.dress_size} options={DRESS} none="Not needed" onChange={(v) => save({ dress_size: v })} />
         </section>
         <p className="size-count">{[x.shirt_size, x.pants_size, x.dress_size].filter(Boolean).length} of 3 filled{!x.dress_size ? ' · Dress: leave “Not needed” if it doesn’t apply' : ''}</p>
       </>}
 
+      {cal && me.role !== 'admin' && <div className="sec-head"><span className="serif"><Brand /> calendar</span></div>}
       {cal && me.role !== 'admin' && <section className="sizes">
-        <button className="size-row edit-row" onClick={() => setCalOpen(true)}><span className="grow">{cal.added_at ? 'My G&R calendar' : 'Add my G&R calendar'}</span><span className="muted sm">{cal.added_at ? 'Added · add again ›' : '›'}</span></button>
+        <button className="size-row edit-row" onClick={() => setCalOpen(true)}><span className="row-l">Calendar</span><span className={'row-v' + (cal.added_at ? ' ok' : ' empty')}>{cal.added_at ? '✓ Added' : 'Not added'}</span><span className="row-a">{cal.added_at ? 'Add again ›' : 'Add ›'}</span></button>
       </section>}
 
       {me.role !== 'admin' && <AlertsProfileRow me={me} />}
@@ -156,17 +157,16 @@ export function Profile({ me }: { me: Staff }) {
 }
 
 function SizeRow({ label, hint, value, options, onChange, none = 'Choose' }: { label: string; hint?: string; value: string | null; options: string[]; onChange: (v: string | null) => void; none?: string }) {
+  // Same look as the Contact rows: grey label (hint under it) · bold value · Change ›. The phone's own list opens on tap.
   return (
-    <label className={'size-row' + (hint ? ' has-hint' : '')}>
-      <span className="size-l">{label}{hint && <small>{hint}</small>}</span>
-      <span className={'size-val' + (value ? '' : ' empty')}>
-        {value ?? none}
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9A9187" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
-        <select aria-label={label} value={value ?? ''} onChange={(e) => onChange(e.target.value || null)}>
-          <option value="">{none}</option>
-          {options.map((o) => <option key={o} value={o}>{o}</option>)}
-        </select>
-      </span>
+    <label className="size-row edit-row pick-row">
+      <span className="row-l">{label}</span>
+      <span className="row-vh"><span className={'row-v' + (value ? '' : ' empty')}>{value ?? none}</span>{hint && <small>{hint}</small>}</span>
+      <span className="row-a">{value ? 'Change ›' : 'Pick ›'}</span>
+      <select aria-label={label} value={value ?? ''} onChange={(e) => onChange(e.target.value || null)}>
+        <option value="">{none}</option>
+        {options.map((o) => <option key={o} value={o}>{o}</option>)}
+      </select>
     </label>
   );
 }
