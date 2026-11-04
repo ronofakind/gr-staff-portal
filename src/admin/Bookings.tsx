@@ -7,6 +7,7 @@ import { BoardAlso, type OtherShift } from './alsoWorking';
 import { eventsBetween, allStaff, addDays, isoDay, dLabel, ap12, startIso, endIso, roleName, bookingChange, confirmationsSent, type AEvent, type AStaff, type Client, type Venue } from './api';
 import { misfits, linksOf, other, condShort, RuleIcons, type SLink, type SCond } from './rules';
 import { loadScoreData, scoreOf, type ScoreData } from './score';
+import { locksBetween, setLock, lockTitle, NO_LOCKS, type Locks } from './locks';
 
 /* Push 23 · Bookings (admin). Practice mode by default: every change lives in a draft (booking_drafts) layered
    over the real shifts; staff see nothing until Ronnie switches to Live and saves. */
@@ -16,6 +17,7 @@ type Av = { staff_id: string; status: string; from_time: string | null; note: st
 type Wk = { staff_id: string; dow: number; status: string; from_time: string | null };
 type Cond = SCond;
 type Warn = { key: string; cls: 'red' | 'gold' | 'ok'; text: React.ReactNode };
+/** locks (push 50): staff ids locked on a placement not saved yet; saved shifts use the real padlock (shifts.locked, migration 055). */
 type Draft = { pl: Pl[]; locks: string[]; extras: Record<string, number> };
 type View = 'board' | 'sheet' | 'list';
 
@@ -70,6 +72,7 @@ export function Bookings() {
   /** chip menu (phone + click): Move to… · Also add to… (2nd shift that day) · Remove. No `p` = from the side list "+ 2nd shift". */
   const [phone, setPhone] = useState<{ sid: string; p?: Pl; step: 'menu' | 'move' | 'add' } | null>(null);
   const [msg, setMsg] = useState(''); const [busy, setBusy] = useState(false);
+  const [locks, setLocks] = useState<Locks>(NO_LOCKS); // push 50 · padlock on saved shifts
   const dragRef = useRef(drag); dragRef.current = drag;
 
   const range = view === 'board' ? { from: date, to: date } : { from: date, to: addDays(date, (view === 'sheet' ? span : 14) - 1) };
@@ -104,6 +107,7 @@ export function Bookings() {
     const b: Record<string, Pl[]> = {};
     for (const e of evs) for (const s of e.shifts) if (s.status !== 'declined' && !s.attendance) (b[e.event_date] ??= []).push({ key: s.id, staff_id: s.staff_id, event_id: e.id, start: hm(s.planned_start), code: s.position_code ?? 'W', shift_id: s.id });
     setBase(b);
+    locksBetween(range.from, range.to, evs).then(setLocks);
     // push 28d · gold "asks 7:00 PM" tag on the name until Ronnie answers (table is new in 034: errors → no tags)
     const ids = evs.flatMap((e) => e.shifts.map((x) => x.id));
     if (ids.length) supabase.from('shift_change_requests').select('shift_id,kind,new_time').eq('status', 'pending').in('shift_id', ids)
@@ -168,7 +172,7 @@ export function Bookings() {
     if (add && onEvent(d, sid, to.event_id)) { setHint(`${name(sid).split(' ')[0]} is already on ${evById[to.event_id]?.title ?? 'this event'}`); return; }
     const existing = add ? undefined : fromKey ? pl.find((p) => p.key === fromKey) : pl.find((p) => p.staff_id === sid);
     if (existing) {
-      if (!both) { const partner = pl.find((p) => p.event_id === existing.event_id && partnerOf(sid).includes(p.staff_id) && p.key !== existing.key);
+      if (!both) { const partner = pl.find((p) => p.event_id === existing.event_id && partnerOf(sid).includes(p.staff_id) && p.key !== existing.key && !isLocked(d, p)); // push 50 · a locked partner stays
         if (partner && existing.event_id !== to.event_id) { setPair({ moving: existing, partner, to: { event_id: to.event_id, start } }); return; } }
       pl = pl.map((p) => (p.key === existing.key ? { ...p, event_id: to.event_id, start, extra: !!to.extra, suggested: false } : p));
     } else {
@@ -178,8 +182,23 @@ export function Bookings() {
     if (!existing || existing.event_id !== to.event_id) { const e = evById[to.event_id]; if (e) setWarns(warnFor(d, sid, e, pl)); }
     setCur(d, { ...c, pl });
   };
-  const remove = (d: string, key: string) => { const c = cur(d); setCur(d, { ...c, pl: c.pl.filter((p) => p.key !== key) }); };
-  const toggleLock = (d: string, sid: string) => { const c = cur(d); setCur(d, { ...c, locks: c.locks.includes(sid) ? c.locks.filter((x) => x !== sid) : [...c.locks, sid] }); };
+  const remove = (d: string, key: string) => { const c = cur(d); const p = c.pl.find((x) => x.key === key); if (p && !okLocked(d, p, 'remove')) return; setCur(d, { ...c, pl: c.pl.filter((x) => x.key !== key) }); };
+  /** push 50 · saved shift → the real padlock (admin only, staff never see it, written right away in both modes); not saved yet → kept in the draft and written on Live save. */
+  const isLocked = (d: string, p: Pl) => (p.suggested ? false : p.shift_id ? locks.ids.has(p.shift_id) : cur(d).locks.includes(p.staff_id));
+  const lockShift = async (id: string, on: boolean) => {
+    const now = await setLock(id, on);
+    setLocks((l) => { const ids = new Set(l.ids); const bd = new Set(l.byDefault); bd.delete(id); if (now) ids.add(id); else ids.delete(id); return { ...l, ids, byDefault: bd }; });
+  };
+  const toggleLock = async (d: string, p: Pl) => {
+    if (p.shift_id) {
+      if (!locks.ready) { setHint('The padlock needs migration 055. MDs and managers already count as locked.'); return; }
+      try { await lockShift(p.shift_id, !locks.ids.has(p.shift_id)); } catch (e) { setHint((e as Error).message); }
+      return;
+    }
+    const c = cur(d); const sid = p.staff_id; setCur(d, { ...c, locks: c.locks.includes(sid) ? c.locks.filter((x) => x !== sid) : [...c.locks, sid] });
+  };
+  /** Moving or removing a locked person by hand: ask first (suggestions never do it). */
+  const okLocked = (d: string, p: Pl, verb: 'move' | 'remove') => !isLocked(d, p) || confirm(`${name(p.staff_id)} is locked on ${evById[p.event_id]?.title ?? 'this event'}. ${verb === 'move' ? 'Move' : 'Remove'} anyway?`);
   const undo = () => { const h = hist[hist.length - 1]; if (!h) return; setDraft(h); setHist(hist.slice(0, -1)); };
 
   // ── save / reset / live apply ──────────────────────────────────
@@ -214,6 +233,7 @@ export function Bookings() {
           let { data: ins, error: insErr } = await supabase.from('shifts').insert(isRep ? { ...row, replacement_for: repFor } : row).select('id').single();
           if (insErr && isRep) ({ data: ins, error: insErr } = await supabase.from('shifts').insert(row).select('id').single()); // migration 034 not applied yet
           if (isRep && ins) repFor = null;
+          if (ins?.id && (draft[c.d]?.locks ?? []).includes(p.staff_id)) await setLock(ins.id, true).catch(() => {}); // push 50 · locked before it was saved
           await bookingChange('booked', { staff_id: p.staff_id, shift_id: ins?.id ?? null, to: { id: e.id, event_date: e.event_date, title: e.title, sent: confirmationsSent(e), start: startIso(e.event_date, p.start) } }); n++;
         }
         await supabase.from('booking_drafts').delete().eq('admin_id', me).eq('for_date', c.d);
@@ -249,7 +269,7 @@ export function Bookings() {
     const pl = c.pl.filter((p) => !p.suggested); const booked = new Set(pl.map((p) => p.staff_id));
     const big = isBig(d);
     const skipped: { name: string; why: string }[] = []; const out: Pl[] = [];
-    const pool = aList.filter(({ a }) => a?.status === 'yes').map(({ s, a }) => ({ s, from: a?.from_time ?? null })).filter(({ s }) => !c.locks.includes(s.id)).sort((x, y) => byScore(x.s.id, y.s.id));
+    const pool = aList.filter(({ a }) => a?.status === 'yes').map(({ s, a }) => ({ s, from: a?.from_time ?? null })).filter(({ s }) => !c.locks.includes(s.id) && !pl.some((p) => p.staff_id === s.id && isLocked(d, p))).sort((x, y) => byScore(x.s.id, y.s.id)); // push 50 · locked people never move
     const late: typeof pool = [];
     /** '' = fits. Skips misfits (venue, private houses only, weekday, old min guests) and never puts "keep apart" people together. */
     const ok = (sid: string, e: AEvent) => {
@@ -284,7 +304,15 @@ export function Bookings() {
   };
   const acceptAll = () => { const c = cur(date); setCur(date, { ...c, pl: c.pl.map((p) => ({ ...p, suggested: false })) }); setAuto(null); };
   const clearAuto = () => { const c = cur(date); setCur(date, { ...c, pl: c.pl.filter((p) => !p.suggested) }); setAuto(null); };
-  const lockAll = () => { const c = cur(date); setCur(date, { ...c, locks: [...new Set([...c.locks, ...c.pl.map((p) => p.staff_id)])] }); };
+  const lockAll = async () => {
+    const c = cur(date); const pl = c.pl.filter((p) => !p.suggested);
+    const unsaved = pl.filter((p) => !p.shift_id).map((p) => p.staff_id);
+    if (unsaved.length) setCur(date, { ...c, locks: [...new Set([...c.locks, ...unsaved])] });
+    const saved = pl.filter((p) => p.shift_id && !locks.ids.has(p.shift_id));
+    if (saved.length && !locks.ready) { setHint('The padlock needs migration 055.'); return; }
+    try { for (const p of saved) await lockShift(p.shift_id!, true); } catch (e) { setHint((e as Error).message); }
+  };
+  const nLocked = (d: string) => plOf(d).filter((p) => isLocked(d, p)).length;
 
   // ── board pieces ───────────────────────────────────────────────
   const dayEvs = (d: string) => (events ?? []).filter((e) => e.event_date === d && evDept(e) === dept);
@@ -323,7 +351,7 @@ export function Bookings() {
   const pron = (sid: string) => (byId[sid]?.sex === 'f' ? 'her' : byId[sid]?.sex === 'm' ? 'him' : 'them');
   const Chip = ({ p, n, d }: { p: Pl; n?: number; d: string }) => {
     const also = othersOf(d, p); const mine = p.suggested ? [] : dayOf(d, p.staff_id); const nth = mine.findIndex((x) => x.key === p.key) + 1;
-    const locked = cur(d).locks.includes(p.staff_id); const t = tier(p.staff_id); const part = partnerOf(p.staff_id).find((x) => plOf(d).some((q2) => q2.staff_id === x));
+    const locked = isLocked(d, p); const t = tier(p.staff_id); const part = partnerOf(p.staff_id).find((x) => plOf(d).some((q2) => q2.staff_id === x));
     return (
       <div className={'bk-chip' + (p.suggested ? ' sug' : '') + (!p.shift_id && !p.suggested ? ' added' : '') + (also.length ? ' has-also' : '')} draggable onDragStart={() => setDrag({ staff_id: p.staff_id, key: p.key })} onClick={() => setPhone({ sid: p.staff_id, p, step: 'menu' })}>
         {n != null && <span className="bk-n">{n}</span>}<i className={'bk-t t' + (t ?? 'x')} />
@@ -331,7 +359,7 @@ export function Bookings() {
           {p.shift_id && asksBy[p.shift_id] && <small className="bk-asks" title="Waiting for your answer (Today → Needs you)">{asksBy[p.shift_id].kind === 'later' ? 'asks' : 'leaves'} {t12(hm(asksBy[p.shift_id].new_time))}</small>}</span>
         {mine.length > 1 && nth > 0 && <span className="bk-of" title="Two shifts this day">{nth} OF {mine.length}</span>}
         {p.suggested ? <span className="bk-sug">suggested</span> : <>
-          <button className={'bk-lock' + (locked ? ' on' : '')} title={locked ? 'Locked · auto-fill never moves them' : 'Lock'} onClick={(ev) => { ev.stopPropagation(); toggleLock(d, p.staff_id); }}>{locked ? '🔒' : '🔓'}</button>
+          <button className={'bk-lock' + (locked ? ' on' : '')} title={lockTitle(locked, !!p.shift_id && locks.byDefault.has(p.shift_id))} aria-label={locked ? `Unlock ${name(p.staff_id)}` : `Lock ${name(p.staff_id)}`} aria-pressed={locked} onClick={(ev) => { ev.stopPropagation(); toggleLock(d, p); }}>{locked ? '🔒' : '🔓'}</button>
           <button className="bk-del" aria-label="Remove" onClick={(ev) => { ev.stopPropagation(); remove(d, p.key); }}>×</button></>}
         {also.length > 0 && <BoardAlso others={also} start={startIso(d, p.start)} />}
       </div>
@@ -415,7 +443,7 @@ export function Bookings() {
       {auto && !auto.open && view === 'board' && (
         <div className="adm-card bk-auto">
           <b>Auto-fill · {dLabel(date)}</b>
-          <span className="muted sm">{cur(date).locks.length} locked {cur(date).locks.length === 1 ? 'person never moves' : 'people never move'} · only fills empty spots · uses who said yes, their from time, rank, notes, linked pairs and conditions.</span>
+          <span className="muted sm">{nLocked(date)} locked {nLocked(date) === 1 ? 'person never moves' : 'people never move'} · only fills empty spots · uses who said yes, their from time, rank, notes, linked pairs and conditions.</span>
           <div className="row" style={{ gap: 8 }}><button className="abtn dark" onClick={runAuto}>Preview</button><button className="abtn" onClick={lockAll}>Lock all placed</button><button className="abtn" onClick={() => setAuto(null)}>Close</button></div>
         </div>
       )}
@@ -524,7 +552,7 @@ export function Bookings() {
           </> : step === 'move' && p ? <>
             <b>Move {name(sid)} to…</b>
             {groups.map(({ e, g }) => (
-              <button key={e.id + g.start} className="abtn" disabled={(p.event_id === e.id && p.start === g.start) || (p.event_id !== e.id && onEvent(date, sid, e.id, p.key))} onClick={() => { place(date, sid, { event_id: e.id, start: g.start }, p.key); close(); }}>{e.title} · {t12(g.start)}</button>))}
+              <button key={e.id + g.start} className="abtn" disabled={(p.event_id === e.id && p.start === g.start) || (p.event_id !== e.id && onEvent(date, sid, e.id, p.key))} onClick={() => { if (p.event_id !== e.id && !okLocked(date, p, 'move')) return; place(date, sid, { event_id: e.id, start: g.start }, p.key); close(); }}>{e.title} · {t12(g.start)}</button>))}
           </> : <>
             <div><b>Add {first} to… · 2nd shift that day</b><div className="muted sm">Now on {dayOf(date, sid).map((x) => `${evById[x.event_id]?.title ?? '?'} ${span12(x)}`).join(' + ')}</div></div>
             {addable.length ? addable.map(({ e, g }) => (
@@ -539,7 +567,7 @@ export function Bookings() {
           <b className="bk-dah">{first} is already on {e1?.title}</b>
           <div className="sm">{e1?.title} · {roleName(p.code)} · {span12(p)}<br />You dropped {pron(p.staff_id)} on <b>{e2?.title} · {t12(to.start)}</b>.</div>
           <button className="abtn dark" autoFocus onClick={() => { close(); place(date, p.staff_id, to, undefined, false, true); }}>Add a 2nd shift · keep both</button>
-          <button className="abtn" onClick={() => { close(); place(date, p.staff_id, to, p.key); }}>Move · off {e1?.title}</button>
+          <button className="abtn" onClick={() => { close(); if (okLocked(date, p, 'move')) place(date, p.staff_id, to, p.key); }}>Move · off {e1?.title}</button>
           <button className="lnk" onClick={close}>Cancel</button>
         </div></div>); })()}
 

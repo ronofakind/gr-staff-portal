@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { dayShort, shortName, t12, waitingOf, type AdminAsk } from '../lib/shiftAsks';
 import { AlsoWorking, otherShifts, type OtherShift } from './alsoWorking';
+import { locksBetween } from './locks';
 import { hoursBefore, isEventDayCancel, replacementOf } from './Changes';
 import { allStaff, addDays, ap12, eventsBetween, roleName, roleOfShift, tTime, type AEvent, type AShift, type AStaff } from './api';
 
@@ -81,6 +82,9 @@ export function ReplaceSheet({ shift, ev, onClose, onDone }: { shift: AShift; ev
   const bar = ev.department === 'bar' || isBarCode(shift.position_code);
   const name = shortName(shift.staff?.full_name);
   useEffect(() => { loadPool(ev.event_date).then(setPool).catch((e) => setErr((e as Error).message)); }, [ev.event_date]);
+  // push 50 · replacing someone locked: only ever by hand (suggestions never move them); they stay on until someone says yes
+  const [locked, setLocked] = useState(false);
+  useEffect(() => { locksBetween(ev.event_date, ev.event_date, [ev]).then((l) => setLocked(l.ids.has(shift.id))); }, [ev.id, shift.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const res = useMemo(() => (pool ? candidatesFor(pool, { eventId: ev.id, start: shift.planned_start, bar }) : null), [pool, ev.id, shift.planned_start, bar]);
   useEffect(() => { if (res) setPicked(res.list.filter((c) => !isTired(c.nth) && !c.also.length).slice(0, 2).map((c) => c.s.id)); }, [res]);
   const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
@@ -103,6 +107,7 @@ export function ReplaceSheet({ shift, ev, onClose, onDone }: { shift: AShift; ev
       <div className="spread"><div><div className="kick">YOUR ADMIN · FIND REPLACEMENT</div><div className="serif ca-h">Replace {name}</div>
         <div className="muted sm">{dayShort(ev.event_date)} · {ev.title} · {roleName(roleOfShift(shift.position_code))} {t12(shift.planned_start)}</div></div>
         <button className="abtn sm" aria-label="Close" onClick={onClose}>✕</button></div>
+      {locked && <div className="sc-locked" role="note">🔒 {name} is locked on {ev.title}. They stay on until someone says yes.</div>}
       <small className="as-lbl">SAID YES OR MAYBE · FREE AT {at.toUpperCase()}</small>
       <div className="as-people">
         {!res ? <div className="muted sm">{err || 'Loading…'}</div> : !res.list.length

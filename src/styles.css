@@ -2910,3 +2910,12 @@ div.venue-rule { background: #fff; border-radius: 14px; padding: 10px 14px; marg
 .bk-mrow.red { color: var(--accent); }
 .bk-dah { font-size: 16px; }
 .bk-dropask .abtn { justify-content: center; text-align: center; }
+
+/* push 50 · padlock */
+.sc-locked { margin-top: 6px; padding: 6px 8px; border-radius: 6px; background: var(--accent-bg); color: var(--accent); font-size: 13px; font-weight: 700; }
+.lk-row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.lk-row.on b { font-weight: 800; }
+.lk-lock { border: 1px solid var(--line); background: none; border-radius: 6px; cursor: pointer; font-size: 13px; padding: 2px 6px; opacity: .6; }
+.lk-lock.on { opacity: 1; border-color: currentColor; }
+.lk-add { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; }
+.lk-add input, .lk-add select { min-width: 0; flex: 1 1 160px; }

@@ -5,12 +5,13 @@ import { setting } from '../lib/settings';
 import { dayShort } from '../lib/shiftAsks';
 import { replaceUrl } from './Changes';
 import { ReplaceSheet, candidatesFor, initials, isTired, loadPool, minOf, tiredText, type Pool } from './Replace';
+import { locksBetween, NO_LOCKS, type Locks } from './locks';
 import { ENDS, addDays, ap12, bookingChange, endIso, isoDay, startIso, tTime, type AEvent, type AShift, type AStaff, type Line } from './api';
 
 /* Push 47 §C · Client changes after booking (admin event page → "Client change").
    1 one screen: floor staff · start · ends · address · notes (old → new), ‹ Prev / Next › through events in date order.
    2 fewer people → Suggested who comes off (rule-based: training extras, maybes, lowest rank on the event, most shifts this week;
-     MDs / managers never). "Keep as overbook" = nobody removed.
+     never anyone locked: push 50 padlock, MDs / managers locked by default). "Keep as overbook" = nobody removed.
    3 more people → Suggested from Yes / Maybe for that date, ranked, fits the new start. "Ask more people" = the Bookings ask flow.
    4 times changed → people whose answered time no longer fits: Keep / Swap (Swap opens Find replacement after saving).
    5 Save → before confirmations went out: silent. After: only the people it touches, one private message each.
@@ -19,7 +20,6 @@ import { ENDS, addDays, ap12, bookingChange, endIso, isoDay, startIso, tTime, ty
 const TZ = 'America/Toronto';
 const hmOf = (iso: string) => new Date(iso).toLocaleTimeString('en-GB', { timeZone: TZ, hour: '2-digit', minute: '2-digit' });
 const t12 = (hm: string | null | undefined) => (hm ? ap12(hm.slice(0, 5)) : '—');
-const lead = (s: AShift, st?: AStaff) => ['MD', 'BM'].includes(s.position_code ?? '') || st?.role === 'manager' || !!st?.positions.some((p) => p.toUpperCase() === 'MD');
 const addHm = (hm: string, d: number) => { const [h, m] = hm.split(':').map(Number); const t = (((h * 60 + m + d) % 1440) + 1440) % 1440; return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`; };
 const ord = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] ?? 'th'}`;
 const TIER_I: Record<string, number> = { A: 0, B: 1, C: 2 };
@@ -42,6 +42,7 @@ export function ClientChange() {
   const [ask, setAsk] = useState<string | null>(null); // unsaved → Save / Discard before going to this page
   const [busy, setBusy] = useState(false); const [err, setErr] = useState(''); const [msg, setMsg] = useState<string | null>(null);
   const [swapQ, setSwapQ] = useState<string[]>([]); const [tick, setTick] = useState(0);
+  const [locks, setLocks] = useState<Locks>(NO_LOCKS); // push 50 · locked people are never suggested to come off
 
   useEffect(() => {
     setPool(null); setD(null); setRm(null); setAdd(null); setOverbook(false); setSwap({}); setErr('');
@@ -49,7 +50,7 @@ export function ClientChange() {
       const { data: one } = await supabase.from('events').select('event_date,title').eq('id', id!).maybeSingle();
       if (!one) { setTitle(''); return; }
       const o = one as { event_date: string; title: string }; setTitle(o.title);
-      const p = await loadPool(o.event_date); setPool(p);
+      const p = await loadPool(o.event_date); setLocks(await locksBetween(o.event_date, o.event_date, p.evs)); setPool(p);
       const f = p.evs.filter((e) => e.title === o.title).sort((a) => (a.department === 'floor' ? -1 : 1))[0];
       if (f) setD(draftOf(f));
       const from = o.event_date < today ? o.event_date : today;
@@ -82,14 +83,14 @@ export function ClientChange() {
     if (!pool || !f) return [];
     const rankKey = (s: AStaff | undefined) => (TIER_I[s?.staff_private?.tier ?? ''] ?? 3) * 1000 + (s?.staff_private?.ranking ?? 999);
     const rows = team.map((s) => {
-      const st = byId[s.staff_id]; const locked = lead(s, st);
+      const st = byId[s.staff_id]; const locked = locks.ids.has(s.id);
       return { s, st, locked, isNew: (done[s.staff_id] ?? 0) < newUnder, maybe: pool.av[s.staff_id]?.status === 'maybe', rk: rankKey(st), nth: pool.week[s.staff_id] ?? 1 };
     });
     const free = rows.filter((r) => !r.locked).sort((a, b) => Number(b.isNew) - Number(a.isNew) || Number(b.maybe) - Number(a.maybe) || b.rk - a.rk || b.nth - a.nth);
     const lowest = free.filter((r) => !r.isNew && !r.maybe)[0]?.s.id;
     return [...free.map((r) => ({ ...r, why: r.isNew ? 'training extra' : r.maybe ? 'still a maybe' : r.s.id === lowest ? 'lowest rank on this event' : `${r.st?.staff_private?.ranking ? `#${r.st.staff_private.ranking} · ` : ''}${ord(r.nth)} shift this week` })),
-      ...rows.filter((r) => r.locked).map((r) => ({ ...r, why: 'MD / manager · never removed' }))];
-  }, [pool, f, team.length, done, byId]); // eslint-disable-line react-hooks/exhaustive-deps
+      ...rows.filter((r) => r.locked).map((r) => ({ ...r, why: locks.byDefault.has(r.s.id) ? 'locked · MD / manager' : 'locked by you' }))];
+  }, [pool, f, team.length, done, byId, locks]); // eslint-disable-line react-hooks/exhaustive-deps
   const sugOff = offList.filter((r) => !r.locked).slice(0, cut).map((r) => r.s.id);
   const offIds = overbook ? [] : rm ?? sugOff;
 
@@ -242,14 +243,14 @@ export function ClientChange() {
             return (
               <button key={r.s.id} className={'cc-p' + (on ? ' on' : '') + (r.locked ? ' locked' : '')} disabled={r.locked || overbook} aria-pressed={on}
                 onClick={() => setRm(on ? offIds.filter((x) => x !== r.s.id) : [...offIds, r.s.id])}>
-                <i aria-hidden="true">{on ? '✓' : ''}</i><span className="tierb">{r.locked ? 'MD' : r.st?.staff_private?.tier ?? '–'}</span>
+                <i aria-hidden="true">{on ? '✓' : ''}</i><span className="tierb" title={r.locked ? 'Locked' : undefined}>{r.locked ? '🔒' : r.st?.staff_private?.tier ?? '–'}</span>
                 <span className="grow"><b>{r.s.staff?.full_name ?? '?'} {r.isNew && !r.locked && <span className="newb">NEW</span>}</b><small>{r.why}{!r.locked && r.maybe && r.why !== 'still a maybe' ? ' · maybe' : ''}</small></span>
                 {sugOff.includes(r.s.id) && !overbook && <span className="cc-sug">SUGGESTED</span>}
               </button>);
           })}
           {!offList.length && <div className="muted sm">Nobody on the floor list yet.</div>}
         </div>
-        <small className="muted">MDs and managers are never picked. Tick someone else to swap.</small>
+        <small className="muted">Locked people are never picked (MDs and managers are locked unless you unlock them on the event page). Tick someone else to swap.</small>
         <label className="ca-sw"><input type="checkbox" checked={overbook} onChange={(e) => setOverbook(e.target.checked)} /><span><b>Keep them as overbook</b><small>nobody is removed · the list stays {team.length}, you release people later one at a time</small></span></label>
       </section>}
 
@@ -277,7 +278,8 @@ export function ClientChange() {
           <b>{noFit.length} {noFit.length === 1 ? 'person’s time doesn’t' : 'people’s times don’t'} fit</b>
           {noFit.map(({ s, why }) => (
             <div key={s.id} className="cc-fit"><span className="nx-av" aria-hidden="true">{initials(s.staff?.full_name)}</span><span className="grow"><b>{s.staff?.full_name}</b><small>{why}</small></span>
-              <div className="seg3"><button className={!swap[s.id] ? 'on' : ''} onClick={() => setSwap({ ...swap, [s.id]: false })}>Keep</button><button className={swap[s.id] ? 'on' : ''} onClick={() => setSwap({ ...swap, [s.id]: true })}>Swap</button></div></div>
+              {locks.ids.has(s.id) ? <span className="cc-tag">🔒 locked · stays</span>
+                : <div className="seg3"><button className={!swap[s.id] ? 'on' : ''} onClick={() => setSwap({ ...swap, [s.id]: false })}>Keep</button><button className={swap[s.id] ? 'on' : ''} onClick={() => setSwap({ ...swap, [s.id]: true })}>Swap</button></div>}</div>
           ))}
           <small className="muted">Everyone else’s time still fits. Swap opens Find replacement after you save; they stay on until someone says yes.</small>
         </> : <small className="muted">Everyone’s answered time still fits.</small>}

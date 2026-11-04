@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { addDays, isoDay, dLabel, startIso, endIso, bookingChange, roleName, ap12, ROLES } from './api';
 import { AlsoWorking, otherShifts } from './alsoWorking';
+import { locksBetween, NO_LOCKS, type Locks } from './locks';
 import { diff, norm, mtlHm, dateOf, type Change, type DEvent, type DStaff, type SheetEvent } from './sheetDiff';
 
 /**
@@ -11,7 +12,7 @@ import { diff, norm, mtlHm, dateOf, type Change, type DEvent, type DStaff, type 
  * Ignore = admin_archive (same key + signature as Needs you): the card comes back if that cell changes again.
  */
 type Arch = { key: string; sig: string };
-const EV_COLS = 'id,event_date,title,department,address,venue_id,sheet_ref,end_time,event_private(client),shifts(id,event_id,staff_id,position_code,planned_start,planned_end,status,attendance,notified_at,cancelled_at,punches(punch_in))';
+const EV_COLS = 'id,event_date,title,department,address,venue_id,sheet_ref,end_time,manager_id,event_private(client),shifts(id,event_id,staff_id,position_code,planned_start,planned_end,status,attendance,notified_at,cancelled_at,punches(punch_in))';
 const DAYS = 60;
 const TAG: Record<Change['kind'], [string, string]> = {
   added: ['STAFF ADDED', 'ok'], removed: ['STAFF REMOVED', 'red'], time: ['TIME', 'amber'], new_event: ['NEW EVENT', 'blue'], check_name: ['CHECK NAME', 'purple'],
@@ -24,6 +25,7 @@ export function SheetChanges({ arch, onArchived }: { arch: Arch[]; onArchived: (
   const [tick, setTick] = useState(0);
   const [more, setMore] = useState(false);
   const [busyAll, setBusyAll] = useState(false);
+  const [locks, setLocks] = useState<Locks>(NO_LOCKS); // push 50 · padlock
 
   useEffect(() => {
     (async () => {
@@ -37,6 +39,7 @@ export function SheetChanges({ arch, onArchived }: { arch: Arch[]; onArchived: (
       ]);
       if (sh.error) { setErr(/does not exist|schema cache/i.test(sh.error.message) ? 'off' : sh.error.message); return; }
       if (ev.error) { setErr(ev.error.message); return; }
+      setLocks(await locksBetween(today, to, (ev.data ?? []) as unknown as (DEvent & { manager_id: string | null })[]));
       setData({ sheet: (sh.data ?? []) as SheetEvent[], app: (ev.data ?? []) as unknown as (DEvent & { end_time: string | null })[], staff: (st.data ?? []) as DStaff[],
         aliases: (al.data ?? []) as { alias: string; staff_id: string }[], ran: (run.data?.[0] as { posted_at: string } | undefined)?.posted_at ?? null });
     })();
@@ -55,9 +58,13 @@ export function SheetChanges({ arch, onArchived }: { arch: Arch[]; onArchived: (
     await supabase.from('admin_archive').upsert(list.map((c) => ({ key: c.key, sig: c.sig, label: 'Sheet · ' + label(c), archived_at: new Date().toISOString() })));
     onArchived();
   };
+  const all = shown.filter((c) => c.kind !== 'check_name');
+  /** push 50 · Approve all never removes or moves a locked person (still approvable one by one, with a confirm). */
+  const list0 = all.filter((c) => !lockedOf(c, locks));
+  const skipped = all.length - list0.length;
   const approveAll = async () => {
-    const list = shown.filter((c) => c.kind !== 'check_name');
-    if (!list.length || !confirm(`Approve ${list.length} sheet change${list.length === 1 ? '' : 's'}?\n\n${sendsLine(list)}`)) return;
+    const list = list0;
+    if (!list.length || !confirm(`Approve ${list.length} sheet change${list.length === 1 ? '' : 's'}?${skipped ? `\n\n${skipped} locked ${skipped === 1 ? 'person is' : 'people are'} skipped (approve ${skipped === 1 ? 'it' : 'them'} one by one).` : ''}\n\n${sendsLine(list)}`)) return;
     setBusyAll(true);
     try { for (const c of list) await approve(c, data.app, data.staff); } catch (e) { alert((e as Error).message); }
     setBusyAll(false); reload();
@@ -68,10 +75,10 @@ export function SheetChanges({ arch, onArchived }: { arch: Arch[]; onArchived: (
   return (
     <>
       <div className="sec"><span className="serif">Sheet changes <b className="accent sm">{shown.length || ''}</b></span>
-        {shown.some((c) => c.kind !== 'check_name') && <button className="abtn sm dark" disabled={busyAll} onClick={approveAll}>{busyAll ? 'Approving…' : `Approve all ${shown.filter((c) => c.kind !== 'check_name').length}`}</button>}</div>
+        {list0.length > 0 && <button className="abtn sm dark" disabled={busyAll} onClick={approveAll} title={skipped ? `${skipped} locked skipped` : undefined}>{busyAll ? 'Approving…' : `Approve all ${list0.length}`}{skipped ? <small> · {skipped} locked skipped</small> : null}</button>}</div>
       <div className="adm-card sc-box">
         {!shown.length && <div className="muted sm" style={{ padding: '8px 0' }}>The app matches the Events sheet.</div>}
-        {list.map((c) => <Card key={c.key} c={c} app={data.app} staff={data.staff} onDone={reload} onIgnore={() => ignore([c])} />)}
+        {list.map((c) => <Card key={c.key} c={c} app={data.app} staff={data.staff} locked={lockedOf(c, locks)} onDone={reload} onIgnore={() => ignore([c])} />)}
         {shown.length > 8 && <button className="arch-toggle" onClick={() => setMore(!more)}>{more ? '▴ Show less' : `▾ Show all ${shown.length}`}</button>}
         <div className="muted sm sc-foot">Events sheet · next {DAYS} days{ago !== null ? ` · checked ${ago < 1 ? 'just now' : ago + ' min ago'}` : ''}. Nothing changes in the app until you approve.</div>
       </div>
@@ -90,6 +97,12 @@ function label(c: Change) {
 }
 
 const sent = (e: DEvent) => e.shifts.some((s) => s.notified_at);
+/** push 50 · the locked shift this change would remove or move (removed · added as a move from another event), or null. */
+function lockedOf(c: Change, locks: Locks): { title: string } | null {
+  if (c.kind === 'removed' && locks.ids.has(c.s.id)) return { title: c.e.title };
+  if (c.kind === 'added' && c.from && locks.ids.has(c.from.s.id)) return { title: c.from.e.title };
+  return null;
+}
 /** How many people approving this sends a message to (same rules as the rest of the app). */
 function sends(c: Change) {
   if (c.kind === 'added') return sent(c.e) || (c.from && sent(c.from.e)) ? 1 : 0;
@@ -99,7 +112,7 @@ function sends(c: Change) {
 }
 const sendsLine = (list: Change[]) => { const n = list.reduce((k, c) => k + sends(c), 0); return n ? `This sends ${n} ${n === 1 ? 'person' : 'people'} a message.` : 'Confirmations not sent yet → nobody gets a message.'; };
 
-function Card({ c, app, staff, onDone, onIgnore }: { c: Change; app: (DEvent & { end_time: string | null })[]; staff: DStaff[]; onDone: () => void; onIgnore: () => void }) {
+function Card({ c, app, staff, locked, onDone, onIgnore }: { c: Change; app: (DEvent & { end_time: string | null })[]; staff: DStaff[]; locked: { title: string } | null; onDone: () => void; onIgnore: () => void }) {
   const [busy, setBusy] = useState(false);
   const [pick, setPick] = useState(c.kind === 'check_name' ? c.suggest[0]?.id ?? '' : '');
   const [tag, cls] = TAG[c.kind];
@@ -132,6 +145,7 @@ function Card({ c, app, staff, onDone, onIgnore }: { c: Change; app: (DEvent & {
   }
   const go = async () => {
     if (c.kind === 'check_name' && !pick) return;
+    if (locked && 'name' in c && !confirm(`${c.name} is locked on ${locked.title}. ${c.kind === 'removed' ? 'Remove' : 'Move'} anyway?`)) return;
     setBusy(true);
     try { await approve(c, app, staff, pick); onDone(); } catch (e) { alert((e as Error).message); setBusy(false); }
   };
@@ -140,6 +154,7 @@ function Card({ c, app, staff, onDone, onIgnore }: { c: Change; app: (DEvent & {
       <div className="sc-top"><span className={'sc-tag ' + cls}>{tag}</span><b className="sm">{evName} · {dLabel(dateOf(c))}</b><span className="grow" />{ev && <Link className="sm" to={`/admin/event/${ev.id}`}>Event ›</Link>}</div>
       <div className="sc-what">{what}</div>
       <div className="muted sm">{sub}</div>
+      {locked && <div className="sc-locked" role="note">🔒 Locked by you{c.kind === 'added' ? ` on ${locked.title}` : ''} · Approve all skips this</div>}
       {c.kind === 'added' && <AlsoWorking others={otherShifts(app, c.staffId, c.e.id, c.e.event_date).filter((o) => !c.from || o.start !== c.from.s.planned_start)} start={startIso(c.e.event_date, c.start)} />}
       <div className="sc-act">
         {c.kind === 'check_name' && (
