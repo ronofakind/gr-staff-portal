@@ -12,7 +12,16 @@ import { locksBetween, setLock, lockTitle, NO_LOCKS, type Locks } from './locks'
 /* Push 23 · Bookings (admin). Practice mode by default: every change lives in a draft (booking_drafts) layered
    over the real shifts; staff see nothing until Ronnie switches to Live and saves. */
 
-type Pl = { key: string; staff_id: string; event_id: string; start: string; code: string; shift_id?: string | null; extra?: boolean; suggested?: boolean };
+type Pl = { key: string; staff_id: string; event_id: string; start: string; code: string; shift_id?: string | null; extra?: boolean; suggested?: boolean;
+  /** Nov 4 · the line (time group) they sit in when their own start differs ("starts 4:30 PM" tag). start = their real start. */
+  line?: string };
+/** Line start a time belongs to: the latest line at or before it, else the first line. null = it is a line start / no lines. */
+const lineFor = (starts: string[], t: string): string | undefined => {
+  if (!starts.length || starts.includes(t)) return undefined;
+  const m = (x: string) => { const [h, mi] = x.split(':').map(Number); return h * 60 + mi; };
+  const sorted = [...starts].sort((a, b) => m(a) - m(b));
+  return [...sorted].reverse().find((x) => m(x) <= m(t)) ?? sorted[0];
+};
 type Av = { staff_id: string; status: string; from_time: string | null; note: string | null; tier: string | null };
 type Wk = { staff_id: string; dow: number; status: string; from_time: string | null };
 type Cond = SCond;
@@ -70,7 +79,8 @@ export function Bookings() {
   const replaceId = params.get('replace'); const replaceAt = params.get('at');
   const [asksBy, setAsksBy] = useState<Record<string, { kind: string; new_time: string }>>({});
   /** chip menu (phone + click): Move to… · Also add to… (2nd shift that day) · Remove. No `p` = from the side list "+ 2nd shift". */
-  const [phone, setPhone] = useState<{ sid: string; p?: Pl; step: 'menu' | 'move' | 'add' } | null>(null);
+  const [phone, setPhone] = useState<{ sid: string; p?: Pl; step: 'menu' | 'move' | 'add' | 'time' } | null>(null);
+  const [ownT, setOwnT] = useState(''); // Nov 4 · Change start time (one person)
   const [msg, setMsg] = useState(''); const [busy, setBusy] = useState(false);
   const [locks, setLocks] = useState<Locks>(NO_LOCKS); // push 50 · padlock on saved shifts
   const dragRef = useRef(drag); dragRef.current = drag;
@@ -105,7 +115,9 @@ export function Bookings() {
     const yr: Record<string, [number, number]> = {}; for (const r of (hist90.data ?? []) as { staff_id: string; status: string }[]) { const x = (yr[r.staff_id] ??= [0, 0]); x[r.status === 'yes' ? 0 : 1]++; }
     setYesRate(Object.fromEntries(Object.entries(yr).map(([k, [y, n]]) => [k, y / (y + n)])));
     const b: Record<string, Pl[]> = {};
-    for (const e of evs) for (const s of e.shifts) if (s.status !== 'declined' && !s.attendance) (b[e.event_date] ??= []).push({ key: s.id, staff_id: s.staff_id, event_id: e.id, start: hm(s.planned_start), code: s.position_code ?? 'W', shift_id: s.id });
+    for (const e of evs) { const ls = [...new Set((e.staffing ?? []).filter((l) => !['MD', 'BM'].includes(l.code)).map((l) => l.start))];
+      for (const s of e.shifts) if (s.status !== 'declined' && !s.attendance) { const st = hm(s.planned_start); const line = ['MD', 'BM'].includes(s.position_code ?? '') ? undefined : lineFor(ls, st);
+        (b[e.event_date] ??= []).push({ key: s.id, staff_id: s.staff_id, event_id: e.id, start: st, code: s.position_code ?? 'W', shift_id: s.id, ...(line ? { line } : {}) }); } }
     setBase(b);
     locksBetween(range.from, range.to, evs).then(setLocks);
     // push 28d · gold "asks 7:00 PM" tag on the name until Ronnie answers (table is new in 034: errors → no tags)
@@ -174,11 +186,11 @@ export function Bookings() {
     if (existing) {
       if (!both) { const partner = pl.find((p) => p.event_id === existing.event_id && partnerOf(sid).includes(p.staff_id) && p.key !== existing.key && !isLocked(d, p)); // push 50 · a locked partner stays
         if (partner && existing.event_id !== to.event_id) { setPair({ moving: existing, partner, to: { event_id: to.event_id, start } }); return; } }
-      pl = pl.map((p) => (p.key === existing.key ? { ...p, event_id: to.event_id, start, extra: !!to.extra, suggested: false } : p));
+      pl = pl.map((p) => (p.key === existing.key ? { ...p, event_id: to.event_id, start, line: start !== to.start ? to.start : undefined, extra: !!to.extra, suggested: false } : p));
     } else {
-      const e = evById[to.event_id]; pl.push({ key: uid(), staff_id: sid, event_id: to.event_id, start, code: isBarEv(e) ? (byId[sid]?.positions.includes('BT') ? 'BT' : 'BB') : 'W', extra: !!to.extra });
+      const e = evById[to.event_id]; pl.push({ key: uid(), staff_id: sid, event_id: to.event_id, start, ...(start !== to.start ? { line: to.start } : {}), code: isBarEv(e) ? (byId[sid]?.positions.includes('BT') ? 'BT' : 'BB') : 'W', extra: !!to.extra });
     }
-    if (start !== to.start) setHint(`${name(sid).split(' ')[0]} can only start ${t12(start)} · new ${t12(start)} group`);
+    if (start !== to.start) setHint(`${name(sid).split(' ')[0]} can only start ${t12(start)} · gold “starts ${t12(start)}” tag on the name`);
     if (!existing || existing.event_id !== to.event_id) { const e = evById[to.event_id]; if (e) setWarns(warnFor(d, sid, e, pl)); }
     setCur(d, { ...c, pl });
   };
@@ -319,8 +331,9 @@ export function Bookings() {
   const groupsOf = (d: string, e: AEvent) => {
     const lines = (e.staffing ?? []).filter((l) => !['MD', 'BM'].includes(l.code));
     const pl = plOf(d).filter((p) => p.event_id === e.id && !['MD', 'BM'].includes(p.code));
-    const starts = [...new Set([...lines.map((l) => l.start), ...pl.map((p) => p.start)])].sort((a, b) => toMin(a) - toMin(b));
-    return starts.map((st) => { const ls = lines.filter((l) => l.start === st); return { start: st, end: ls.find((l) => l.end)?.end ?? null, need: ls.reduce((n, l) => n + l.count, 0), people: pl.filter((p) => p.start === st && !p.extra).sort((a, b) => rank(a.staff_id) - rank(b.staff_id)), isNew: !ls.length }; });
+    const gOf = (p: Pl) => p.line ?? p.start;
+    const starts = [...new Set([...lines.map((l) => l.start), ...pl.map(gOf)])].sort((a, b) => toMin(a) - toMin(b));
+    return starts.map((st) => { const ls = lines.filter((l) => l.start === st); return { start: st, end: ls.find((l) => l.end)?.end ?? null, need: ls.reduce((n, l) => n + l.count, 0), people: pl.filter((p) => gOf(p) === st && !p.extra).sort((a, b) => rank(a.staff_id) - rank(b.staff_id)), isNew: !ls.length }; });
   };
   const extrasOf = (d: string, e: AEvent) => cur(d).extras[e.id] ?? e.extras ?? defaultExtras(e);
   const onDrop = (d: string, to: { event_id: string; start: string; extra?: boolean }) => {
@@ -355,7 +368,7 @@ export function Bookings() {
     return (
       <div className={'bk-chip' + (p.suggested ? ' sug' : '') + (!p.shift_id && !p.suggested ? ' added' : '') + (also.length ? ' has-also' : '')} draggable onDragStart={() => setDrag({ staff_id: p.staff_id, key: p.key })} onClick={() => setPhone({ sid: p.staff_id, p, step: 'menu' })}>
         {n != null && <span className="bk-n">{n}</span>}<i className={'bk-t t' + (t ?? 'x')} />
-        <span className="grow">{name(p.staff_id)}{part && <small> 🔗 {name(part).split(' ')[0]}</small>}{p.extra && <small className="bk-x"> EXTRA</small>}
+        <span className="grow">{name(p.staff_id)}{part && <small> 🔗 {name(part).split(' ')[0]}</small>}{p.extra && <small className="bk-x"> EXTRA</small>}{p.line && p.line !== p.start && <small className="bk-own" title="Their own start time"> starts {t12(p.start)}</small>}
           {p.shift_id && asksBy[p.shift_id] && <small className="bk-asks" title="Waiting for your answer (Today → Needs you)">{asksBy[p.shift_id].kind === 'later' ? 'asks' : 'leaves'} {t12(hm(asksBy[p.shift_id].new_time))}</small>}</span>
         {mine.length > 1 && nth > 0 && <span className="bk-of" title="Two shifts this day">{nth} OF {mine.length}</span>}
         {p.suggested ? <span className="bk-sug">suggested</span> : <>
@@ -547,9 +560,22 @@ export function Bookings() {
           {step === 'menu' && p ? <>
             <div><b>{name(sid)} · {evById[p.event_id]?.title}</b><div className="muted sm">{roleName(p.code)} · {t12(p.start)}</div></div>
             <button className="bk-mrow" onClick={() => setPhone({ ...phone, step: 'move' })}><b>Move to…</b></button>
+            {!p.suggested && <button className="bk-mrow" onClick={() => { setOwnT(p.start); setPhone({ ...phone, step: 'time' }); }}><b>Change start time</b> <span className="muted">only for {first}</span></button>}
             {!p.suggested && <button className="bk-mrow" onClick={() => setPhone({ ...phone, step: 'add' })}><b>Also add to…</b> <span className="muted">2nd shift that day</span></button>}
             <button className="bk-mrow red" onClick={() => { remove(date, p.key); close(); }}>Remove</button>
-          </> : step === 'move' && p ? <>
+          </> : step === 'time' && p ? (() => { const lineT = p.line ?? p.start; const okT = /^\d{2}:\d{2}$/.test(ownT);
+            const bump = (m: number) => { const b = okT ? toMin(ownT) : toMin(p.start); const v = Math.max(0, Math.min(23 * 60 + 45, b + m)); setOwnT(`${String(Math.floor(v / 60)).padStart(2, '0')}:${String(v % 60).padStart(2, '0')}`); };
+            const apply = (t: string) => { const c = cur(date); setCur(date, { ...c, pl: c.pl.map((x) => (x.key === p.key ? { ...x, start: t, line: t === lineT ? undefined : lineT } : x)) }); setHint(t === lineT ? `${first} back to ${t12(t)}` : `${first} starts ${t12(t)} · Save to keep it`); close(); };
+            return <>
+            <div><b>{first}’s start time</b><div className="muted sm">{evById[p.event_id]?.title} · the line starts {t12(lineT)}</div></div>
+            <div className="bk-tq">{[[-60, '−1 h'], [-30, '−30 min'], [30, '+30 min'], [60, '+1 h']].map(([m, l]) => <button key={l} type="button" className="abtn" onClick={() => bump(m as number)}>{l}</button>)}</div>
+            <label className="bk-tin"><span className="muted sm">Starts at</span><input type="time" step={300} value={ownT} onChange={(ev) => setOwnT(ev.target.value)} /></label>
+            <span className="muted sm">Same end time. They stay in this line with a gold “starts …” tag. Nothing is sent until you Save (or Save + send).</span>
+            <div className="row" style={{ gap: 8 }}>
+              {p.start !== lineT && <button className="abtn" onClick={() => apply(lineT)}>Back to {t12(lineT)}</button>}
+              <button className="abtn dark" disabled={!okT || ownT === p.start} onClick={() => apply(ownT)}>Save time</button>
+            </div></>; })()
+          : step === 'move' && p ? <>
             <b>Move {name(sid)} to…</b>
             {groups.map(({ e, g }) => (
               <button key={e.id + g.start} className="abtn" disabled={(p.event_id === e.id && p.start === g.start) || (p.event_id !== e.id && onEvent(date, sid, e.id, p.key))} onClick={() => { if (p.event_id !== e.id && !okLocked(date, p, 'move')) return; place(date, sid, { event_id: e.id, start: g.start }, p.key); close(); }}>{e.title} · {t12(g.start)}</button>))}
