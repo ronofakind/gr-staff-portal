@@ -32,7 +32,7 @@ export function Profile({ me }: { me: Staff }) {
   const { cal, setCal } = useMyCalendar(); const [calOpen, setCalOpen] = useState(opening === 'cal'); // push 33b
   useEffect(() => { if (opening) setParams((p) => { p.delete('open'); return p; }, { replace: true }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [phone, setPhone] = useState(me.phone ?? '');
-  const { info: cu, reload: reloadCu } = useCheckup(); const [emOpen, setEmOpen] = useState(false);
+  const { info: cu, reload: reloadCu } = useCheckup(); const [emOpen, setEmOpen] = useState(false); const [whyOpen, setWhyOpen] = useState(false);
   const [pinLen, setPinLen] = useState<PinLen | null>(null);
   useEffect(() => { if (me.email) resolvePinLen(me.email).then((r) => setPinLen(r.known ? r.len : null)); }, [me.email]);
 
@@ -105,12 +105,13 @@ export function Profile({ me }: { me: Staff }) {
           ))}
         </div>
 
-        <div className="sec-head"><span className="serif">Uniform sizes</span></div>
+        <div className="sec-head"><span className="serif">Uniform sizes <button type="button" className="why-q" aria-label="Why we ask for your sizes" onClick={() => setWhyOpen(true)}>?</button></span></div>
         <section className="sizes">
-          <SizeRow label="Shirt" value={x.shirt_size} options={SHIRT} onChange={(v) => save({ shirt_size: v })} />
-          <SizeRow label="Pants (waist)" value={x.pants_size} options={PANTS} onChange={(v) => save({ pants_size: v })} />
-          <SizeRow label="Dress" value={x.dress_size} options={DRESS} none="Not needed" onChange={(v) => save({ dress_size: v })} />
+          <SizeRow label="Shirt" hint="the letter on the tag" value={x.shirt_size} options={SHIRT} onChange={(v) => save({ shirt_size: v })} />
+          <SizeRow label="Pants (waist)" hint="jeans “W32 L30” → 32" value={x.pants_size} options={PANTS} onChange={(v) => save({ pants_size: v })} />
+          <SizeRow label="Dress" hint="between two sizes? pick the bigger one" value={x.dress_size} options={DRESS} none="Not needed" onChange={(v) => save({ dress_size: v })} />
         </section>
+        <p className="size-count">{[x.shirt_size, x.pants_size, x.dress_size].filter(Boolean).length} of 3 filled{!x.dress_size ? ' · Dress: leave “Not needed” if it doesn’t apply' : ''}</p>
       </>}
 
       {cal && me.role !== 'admin' && <section className="sizes">
@@ -130,6 +131,18 @@ export function Profile({ me }: { me: Staff }) {
           <div className="cu-body"><CalendarBody me={me} cal={cal} onCal={setCal} /></div>
         </SwipeSheet>
       </>}
+      {whyOpen && <>
+        <div className="scrim" onClick={() => setWhyOpen(false)} />
+        <SwipeSheet onClose={() => setWhyOpen(false)} label="Why we ask for your sizes">
+          <div className="why-sheet">
+            <span className="why-ic" aria-hidden="true">👕</span>
+            <div className="serif" style={{ fontSize: 24 }}>Why we ask for your sizes</div>
+            <p>Some clients dress our team for themed events, like custom t-shirts or costumes, and need everyone’s sizes ahead of time. Fill these once and you’re ready for those events.</p>
+            <small>🔒 Only Ronnie sees them. Shared with a client only for a themed event you’re booked on.</small>
+            <button type="button" className="cu-btn green" onClick={() => setWhyOpen(false)}>Got it</button>
+          </div>
+        </SwipeSheet>
+      </>}
       {emOpen && cu && <>
         <div className="scrim" onClick={() => setEmOpen(false)} />
         <SwipeSheet onClose={() => setEmOpen(false)} label="Emergency contact">
@@ -142,10 +155,10 @@ export function Profile({ me }: { me: Staff }) {
   );
 }
 
-function SizeRow({ label, value, options, onChange, none = 'Choose' }: { label: string; value: string | null; options: string[]; onChange: (v: string | null) => void; none?: string }) {
+function SizeRow({ label, hint, value, options, onChange, none = 'Choose' }: { label: string; hint?: string; value: string | null; options: string[]; onChange: (v: string | null) => void; none?: string }) {
   return (
-    <label className="size-row">
-      <span>{label}</span>
+    <label className={'size-row' + (hint ? ' has-hint' : '')}>
+      <span className="size-l">{label}{hint && <small>{hint}</small>}</span>
       <span className={'size-val' + (value ? '' : ' empty')}>
         {value ?? none}
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9A9187" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
