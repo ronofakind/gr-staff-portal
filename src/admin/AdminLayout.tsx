@@ -1,4 +1,4 @@
-import { NavLink, Outlet, Link } from 'react-router-dom';
+import { NavLink, Outlet, Link, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useNewIncidents } from './Incidents';
@@ -23,17 +23,24 @@ export const ICONS = {
   meet: '<rect x="2.5" y="6" width="13" height="12" rx="2.5"/><path d="M15.5 10.5 21 7.5v9l-5.5-3"/>',
   gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
 };
-export const NAV: [string, string, keyof typeof ICONS][] = [
-  ['/admin', 'Today', 'today'], ['/admin/bookings', 'Bookings', 'book'], ['/admin/week', 'Week', 'week'], ['/admin/day', 'Day', 'day'], ['/admin/staff', 'Staff', 'staff'],
-  ['/admin/availability', 'Availability', 'avail'], ['/admin/tiers', 'Tiers', 'tiers'], ['/admin/ranking', 'Ranking', 'rank'], ['/admin/hours', 'Hours', 'hours'], ['/admin/reliability', 'Reliability', 'flag'],
-  ['/admin/messages', 'Messages', 'msg'], ['/admin/meetings', 'Meetings', 'meet'], ['/admin/incidents', 'Incidents', 'alert'], ['/admin/venues', 'Venues & clients', 'venue'], ['/admin/settings', 'Settings', 'gear'],
+/** push 47 · desktop left nav in 4 groups (Plan · People · Pay · Talk), setup pages greyed at the bottom. */
+export const NAV_GROUPS: { title: string; items: [string, string, keyof typeof ICONS][] }[] = [
+  { title: 'PLAN', items: [['/admin', 'Today', 'today'], ['/admin/bookings', 'Bookings', 'book'], ['/admin/week', 'Calendar', 'week']] },
+  { title: 'PEOPLE', items: [['/admin/staff', 'Staff', 'staff'], ['/admin/availability', 'Availability', 'avail'], ['/admin/tiers', 'Tiers & ranking', 'tiers'], ['/admin/reliability', 'Reliability', 'flag']] },
+  { title: 'PAY', items: [['/admin/hours', 'Hours', 'hours']] },
+  { title: 'TALK', items: [['/admin/messages', 'Messages', 'msg'], ['/admin/meetings', 'Meetings', 'meet'], ['/admin/incidents', 'Incidents', 'alert']] },
 ];
+const SETUP: [string, string, keyof typeof ICONS][] = [['/admin/venues', 'Venues & clients', 'venue'], ['/admin/settings', 'Settings', 'gear'], ['/me', 'My shifts', 'today']];
+export const NAV = [...NAV_GROUPS.flatMap((g) => g.items), ...SETUP.filter(([to]) => to !== '/me')];
+/** One nav line stands for several pages: Calendar = Week + Day, Tiers & ranking = Tiers + Ranking. */
+const ALSO: Record<string, string[]> = { '/admin/week': ['/admin/day', '/admin/calendar'], '/admin/tiers': ['/admin/ranking'] };
 const TABS: [string, string, keyof typeof ICONS][] = [
   ['/admin', 'Today', 'today'], ['/admin/week', 'Week', 'week'], ['/admin/availability', 'Availability', 'avail'], ['/admin/staff', 'Staff', 'staff'], ['/admin/more', 'More', 'more'],
 ];
 
 export function AdminLayout() {
   const newInc = useNewIncidents();
+  const loc = useLocation();
   const needsReply = useInboxCount(); // push 36d · Needs reply
   // Switch the page to the admin home-screen app (name, icon, start page) while on /admin.
   useEffect(() => { (window as unknown as { grAppMode?: () => void }).grAppMode?.(); return () => { setTimeout(() => (window as unknown as { grAppMode?: () => void }).grAppMode?.(), 0); }; }, []);
@@ -42,12 +49,19 @@ export function AdminLayout() {
       <nav className="adm-side" aria-label="Admin">
         <Link to="/admin" className="adm-brand" aria-label="Today"><img className="adm-logo" src="/logo-white.png" alt="G&amp;R" /><small>ADMIN</small></Link>
         <Link to="/admin/event/new" className="adm-new"><span>+</span>New event</Link>
-        {NAV.map(([to, label, ic]) => (
-          <NavLink key={to} to={to} end={to === '/admin'} className={({ isActive }) => 'adm-link' + (isActive ? ' on' : '')}>{I(ICONS[ic])}{label}{to === '/admin/incidents' && newInc > 0 && <span className="nav-badge">{newInc}</span>}{to === '/admin/messages' && needsReply > 0 && <span className="nav-badge">{needsReply}</span>}</NavLink>
+        {NAV_GROUPS.map((g) => (
+          <div key={g.title} className="adm-grp">
+            <div className="adm-grp-h">{g.title}</div>
+            {g.items.map(([to, label, ic]) => (
+              <NavLink key={to} to={to} end={to === '/admin'} className={({ isActive }) => 'adm-link' + (isActive || (ALSO[to] ?? []).some((p) => loc.pathname.startsWith(p)) ? ' on' : '')}>{I(ICONS[ic])}{label}{to === '/admin/incidents' && newInc > 0 && <span className="nav-badge">{newInc}</span>}{to === '/admin/messages' && needsReply > 0 && <span className="nav-badge">{needsReply}</span>}</NavLink>
+            ))}
+          </div>
         ))}
         <div className="grow" />
-        <Link to="/me" className="adm-link">My shifts</Link>
-        <button className="adm-link" onClick={() => supabase.auth.signOut().then(() => window.location.replace('/'))}>Log out</button>
+        <div className="adm-setup">
+          {SETUP.map(([to, label, ic]) => <NavLink key={to} to={to} className={({ isActive }) => 'adm-link sm' + (isActive ? ' on' : '')}>{I(ICONS[ic])}{label}</NavLink>)}
+          <button className="adm-link sm" onClick={() => supabase.auth.signOut().then(() => window.location.replace('/'))}>Log out</button>
+        </div>
       </nav>
       <main className="adm-main"><Link to="/admin" className="adm-mtop" aria-label="Today"><img src="/logo-mark.png" alt="G&amp;R" /><small>ADMIN</small></Link><Outlet /></main>
       <Link to="/admin/event/new" className="adm-fab" aria-label="New event">+</Link>

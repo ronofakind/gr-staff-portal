@@ -9,7 +9,8 @@ import { ConfirmTracker } from './Confirmations';
 import { RidesAdmin } from './Rides';
 import { ShiftView } from '../pages/Shift';
 import { UniformIcon, PantsIcon, ShoesIcon, ApronIcon, TieIcon, WineKeyIcon, PIECE, defaultItems, uniformLabel, type UniItemsMap, type UniLineKey, type UniformKind } from '../components/Uniform';
-import { EVENT_SELECT, ap12, dLabel, roleName, type AEvent } from './api';
+import { EVENT_SELECT, EVENT_SELECT_28, missing034, ap12, dLabel, roleName, type AEvent } from './api';
+import { ReplacedBanners } from './Replace';
 
 const FOLD_KEY = 'gr-ed-fold';
 const readFold = (): Record<string, boolean> => { try { return JSON.parse(localStorage.getItem(FOLD_KEY) || '{}'); } catch { return {}; } };
@@ -30,7 +31,9 @@ export function EventDetail() {
     (async () => {
       const { data: one } = await supabase.from('events').select('event_date,title,venue_id,uniform_items,venues(name,address,staff_notes),event_private(client_id,rate_set)').eq('id', id!).single();
       if (!one) { setEvs([]); return; }
-      const { data } = await supabase.from('events').select(EVENT_SELECT).eq('event_date', one.event_date).eq('title', one.title).order('department');
+      const q = (sel: string) => supabase.from('events').select(sel).eq('event_date', one.event_date).eq('title', one.title).order('department');
+      let { data, error } = await q(EVENT_SELECT_28); // push 47 · replacement_for for "✓ REPLACED"
+      if (error && missing034(error)) ({ data } = await q(EVENT_SELECT));
       const mine = ((data ?? []) as unknown as AEvent[]).sort((a) => (a.department === 'floor' ? -1 : 1));
       setEvs(mine);
       const o = one as unknown as { uniform_items: UniItemsMap | null; venues: Extra['venue']; event_private: { client_id: string | null; rate_set: string | null } | null };
@@ -79,6 +82,7 @@ export function EventDetail() {
         <div className="stack no-print" style={{ gap: 8, alignItems: 'flex-end' }}>
           <div className="row wrap" style={{ gap: 8, justifyContent: 'flex-end' }}>
             <Link className="abtn dark" to={`/admin/event/${e.id}/edit`}>Edit details</Link>
+            <Link className="abtn" to={`/admin/event/${(floor ?? e).id}/change`}>Client change</Link>
             <Link className="abtn" to={`/admin/event/${e.id}/edit?dup=1`}>Duplicate…</Link>
             <button className="abtn" onClick={() => window.print()}>Print / PDF</button>
             <DeleteEvent id={e.id} />
@@ -89,6 +93,8 @@ export function EventDetail() {
           </div>
         </div>
       </div>
+
+      <ReplacedBanners evs={evs} />
 
       <div className="ed2-grid">
         <Sec k="event" title="Event" open={isOpen('event')} setOpen={setFold} summary={[dLabel(e.event_date, { month: 'short', day: 'numeric' }), x?.venue?.name ?? e.title, e.guests ? `${e.guests} guests` : null].filter(Boolean).join(' · ')}>

@@ -83,7 +83,8 @@ export function ConfirmTracker({ evs, venue }: { evs: AEvent[]; venue: string })
 }
 
 /** Needs you: "2 people haven't confirmed after 6 h · 1 is overdue" (one line for all upcoming events). */
-export async function lateConfirmations(today: string): Promise<{ title: string; sub: string; to: string } | null> {
+/** skipOverdue (push 47): people past 24 h are on the NOT CONFIRMED card instead. */
+export async function lateConfirmations(today: string, skipOverdue = false): Promise<{ title: string; sub: string; to: string } | null> {
   const cut = new Date(Date.now() - 6 * 3600e3).toISOString();
   const { data, error } = await supabase.from('shifts')
     .select('id,event_id,confirm_sent_at,staff:staff!shifts_staff_id_fkey(full_name),events!inner(title,event_date,details_pending)')
@@ -91,7 +92,7 @@ export async function lateConfirmations(today: string): Promise<{ title: string;
     .gte('events.event_date', today).order('confirm_sent_at');
   if (error || !Array.isArray(data) || !data.length) return null; // 039 not applied → nothing
   type R = { event_id: string; confirm_sent_at: string; staff: { full_name: string } | null; events: { title: string; event_date: string; details_pending?: boolean } };
-  const rows = (data as unknown as R[]).filter((r) => r.events && !r.events.details_pending);
+  const rows = (data as unknown as R[]).filter((r) => r.events && !r.events.details_pending && !(skipOverdue && hoursSince(r.confirm_sent_at) >= 24));
   if (!rows.length) return null;
   const over = rows.filter((r) => hoursSince(r.confirm_sent_at) >= 24).length;
   const names = rows.slice(0, 4).map((r) => `${(r.staff?.full_name ?? '?').split(' ')[0]} (${r.events.title} ${dLabel(r.events.event_date)})`).join(', ');

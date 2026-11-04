@@ -10,8 +10,7 @@ import { AdminLayout, More } from './admin/AdminLayout';
 import { Today } from './admin/Today';
 import { Hours } from './admin/Hours';
 import { Reliability } from './admin/Reliability';
-import { Week } from './admin/Week';
-import { Day } from './admin/Day';
+import { Calendar, CalendarRedirect } from './admin/Calendar';
 import { EventForm } from './admin/EventForm';
 import { EventDetail } from './admin/EventDetail';
 import { Free } from './admin/Free';
@@ -23,8 +22,8 @@ import { MyDates } from './pages/MyDates';
 import { Availability as StaffAvail } from './pages/Availability';
 import { EventPlan } from './pages/EventPlan';
 import { Availability as AdminAvail } from './admin/Availability';
-import { Tiers } from './admin/Tiers';
-import { Ranking } from './admin/Ranking';
+import { TiersRanking } from './admin/TiersRanking';
+import { ClientChange } from './admin/ClientChange';
 import { Incidents } from './admin/Incidents';
 import { Bookings } from './admin/Bookings';
 import { Messages } from './admin/Messages';
@@ -115,22 +114,24 @@ export function App() {
         {me.role === 'admin' && (
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<Today />} />
-            <Route path="week" element={<Week />} />
+            <Route path="week" element={<Calendar view="week" />} />
+            <Route path="calendar" element={<CalendarRedirect />} />
             <Route path="bookings" element={<Bookings />} />
             <Route path="messages" element={<Messages />} />
             <Route path="hours" element={<Hours />} />
             <Route path="reliability" element={<Reliability />} />
             <Route path="incidents" element={<Incidents />} />
             <Route path="more" element={<More />} />
-            <Route path="day" element={<Day />} />
+            <Route path="day" element={<Calendar view="day" />} />
             <Route path="event/new" element={<EventForm />} />
             <Route path="event/:id" element={<EventDetail />} />
             <Route path="event/:id/edit" element={<EventForm />} />
+            <Route path="event/:id/change" element={<ClientChange />} />
             <Route path="free" element={<Free />} />
             <Route path="staff" element={<StaffAdmin />} />
             <Route path="availability" element={<AdminAvail />} />
-            <Route path="tiers" element={<Tiers />} />
-            <Route path="ranking" element={<Ranking />} />
+            <Route path="tiers" element={<TiersRanking tab="tiers" />} />
+            <Route path="ranking" element={<TiersRanking tab="ranking" />} />
             <Route path="extras/:id" element={<Extras />} />
             <Route path="venues" element={<Venues />} />
             <Route path="settings" element={<Settings />} />

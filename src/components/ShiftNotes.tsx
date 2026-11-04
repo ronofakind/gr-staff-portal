@@ -16,6 +16,8 @@ export type NoteMeta = {
   lines?: { label: string; old: string | null; new: string | null }[]; got_it_at?: string;
   ask_id?: string; kind?: MyAsk['kind']; answer?: 'yes' | 'no' | 'keep'; state?: string; note?: string | null; due_at?: string;
   old?: Card; new?: Card;
+  /** push 47 (054) · shift_removed with its own words: "Thanks for telling us, you're off …" / "You're no longer needed …" */
+  line?: string;
 };
 
 /** Who sees what changed: "Start ~~5:45 PM~~ → 6:15 PM". */
@@ -123,7 +125,7 @@ export function ShiftNote({ m, side, ask, staffSeenAt, onChanged }: { m: Msg; si
     <div className="ch-row"><div className="sn sn-red">
       <small className="sn-k red">🗓 SHIFT REMOVED</small>
       <b>{n.date ? dayShort(n.date) : ''}{n.venue ? ` · ${n.venue}` : ''}</b>
-      <span>You’re no longer on this event. Questions? Reply here.</span>
+      <span>{meta.line || 'You’re no longer on this event. Questions? Reply here.'}</span>
       {!staff && <span>{seenTag ? <i className="ib-tag">SEEN</i> : <i className="ib-tag red">NOT OPENED</i>}</span>}
       <div className="ch-meta">{t12(m.created_at)}</div>
     </div></div>

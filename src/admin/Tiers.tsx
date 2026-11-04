@@ -6,7 +6,7 @@ type T = 'A' | 'B' | 'C' | null;
 const COLS: { t: T; label: string }[] = [{ t: 'A', label: 'Tier A' }, { t: 'B', label: 'Tier B' }, { t: 'C', label: 'Tier C' }, { t: null, label: 'Not in a tier' }];
 
 /** Admin only: drag to rank, drag between columns to change tier. Saves on drop. */
-export function Tiers() {
+export function Tiers({ inPage = false }: { inPage?: boolean }) {
   const [list, setList] = useState<AStaff[] | null>(null);
   const [dept, setDept] = useState<'floor' | 'bar'>('floor');
   const [q, setQ] = useState('');
@@ -61,7 +61,7 @@ export function Tiers() {
   return (
     <div className="stack-lg">
       <div className="toolbar">
-        <div><div className="muted sm strong">ADMIN ONLY</div><h1>Tiers &amp; ranking</h1></div>
+        {inPage ? <div className="muted sm strong">Drag to set tier and order</div> : <div><div className="muted sm strong">ADMIN ONLY</div><h1>Tiers &amp; ranking</h1></div>}
         <div className="row">
           <div className="seg-a">{(['floor', 'bar'] as const).map((d) => <button key={d} className={dept === d ? 'on' : ''} onClick={() => setDept(d)}>{d === 'floor' ? 'Floor' : 'Bar'}</button>)}</div>
           <input className="search" placeholder="Search…" value={q} onChange={(e) => setQ(e.target.value)} />

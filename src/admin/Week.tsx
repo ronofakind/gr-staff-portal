@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { DeleteEvent } from './DeleteEvent';
 import { DeptTag } from './DeptTag';
 import { eventsBetween, addDays, isoDay, hhmm, type AEvent } from './api';
@@ -11,7 +11,10 @@ const monday = (iso: string) => {
 };
 
 export function Week() {
-  const [start, setStart] = useState(monday(isoDay(new Date())));
+  // push 47 · ?d= keeps the week when switching Week ↔ Day in Calendar
+  const [params, setParams] = useSearchParams();
+  const [start, setStart0] = useState(() => monday(/^\d{4}-\d{2}-\d{2}$/.test(params.get('d') ?? '') ? params.get('d')! : isoDay(new Date())));
+  const setStart = (d: string) => { setStart0(d); const p = new URLSearchParams(params); p.set('d', d); setParams(p, { replace: true }); };
   const [events, setEvents] = useState<AEvent[] | null>(null);
   const [meetings, setMeetings] = useState<AMeeting[]>([]); // push 38
   useEffect(() => { setEvents(null); eventsBetween(start, addDays(start, 6)).then(setEvents); meetingsBetween(start, addDays(start, 6)).then(setMeetings); }, [start]);

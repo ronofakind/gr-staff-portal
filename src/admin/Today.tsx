@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { LastMinute, ChangeAnswer, CHANGE_COLS, replaceUrl, isSelfCancel, isEventDayCancel, replacementOf, hoursBefore, type ChangeRow } from './Changes';
+import { ChangeAnswer, CHANGE_COLS, isSelfCancel, isEventDayCancel, replacementOf, type ChangeRow } from './Changes';
+import { CantMakeIt, NotConfirmed, ReplaceSheet, type Late } from './Replace';
+import { adminAsks, type AdminAsk } from '../lib/shiftAsks';
 import { summaryOf } from './Extras';
 import { lateConfirmations, NicknameCards } from './Confirmations';
 import { MeetingsStrip } from './Meetings';
@@ -31,6 +33,11 @@ export function Today() {
   const [lm, setLm] = useState<{ e: AEvent; s: AShift }[]>([]); const [mgrs, setMgrs] = useState<Record<string, string>>({});
   const [lateBy, setLateBy] = useState<Record<string, { eta: string; reason: string | null }>>({});
   const [tick, setTick] = useState(0);
+  // push 47 · Can't make it / Not confirmed → Find replacement
+  const [late, setLate] = useState<Late[]>([]); const [seen, setSeen] = useState<Record<string, string | null>>({}); const [nudged, setNudged] = useState<Record<string, string>>({});
+  const [asks, setAsks] = useState<AdminAsk[]>([]);
+  const [rep, setRep] = useState<{ s: AShift; e: AEvent } | null>(null); const [toast, setToast] = useState<string | null>(null);
+  useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 5000); return () => clearTimeout(t); }, [toast]);
   const loadArch = () => supabase.from('admin_archive').select('key,sig,label,archived_at').order('archived_at', { ascending: false }).then(({ data }) => setArch((data ?? []) as Arch[]));
 
   useEffect(() => {
@@ -65,7 +72,7 @@ export function Today() {
         if (booked && unsent && e.event_date <= addDays(today, 7)) n.push({ key: e.id + 'send', title: `${e.title} · ${dLabel(e.event_date)}`, sub: `${unsent} not sent details yet`, action: 'Send', to: `/admin/day?d=${e.event_date}` });
       }
       // push 33g · booked, asked to confirm 6 h+ ago (red once past 24 h)
-      const lc = await lateConfirmations(today);
+      const lc = await lateConfirmations(today, true); // push 47: past 24 h → NOT CONFIRMED card
       if (lc) n.unshift({ key: 'confirm6h', red: lc.title.includes('overdue'), title: lc.title, sub: lc.sub, action: 'View', to: lc.to });
       if (miss.length) n.push({ key: 'miss', title: `Pay period ${dLabel(cur.start, { month: 'short', day: 'numeric' })} – ${dLabel(cur.end, { day: 'numeric' })}`, sub: `${miss.length} missing end time${miss.length > 1 ? 's' : ''}`, action: 'Fix', to: '/admin/hours' });
       const { data: hq } = await supabase.from('hours_questions').select('id,kind,claimed_at,shifts!inner(event_id,staff:staff!shifts_staff_id_fkey(full_name),events(title))').eq('status', 'open');
@@ -106,22 +113,35 @@ export function Today() {
         n.push({ key: 'fb' + f.id, red: true, title: `${fn(f.by)}: ${fn(f.who)} · ${bits.filter(Boolean).join(' · ')}`,
           sub: `${f.events ? `${f.events.title} · ${dLabel(f.events.event_date)}` : 'Manager feedback'}${f.note ? ` · “${f.note}”` : ''}`, action: 'View', to: `/admin/staff?open=${f.staff_id}` });
       }
-      // ── push 28 ──
-      // b/c · staff cancels: event-day → red LAST-MINUTE card; earlier → Needs you "Find a replacement ›" (until someone replaces them)
+      // ── push 28 / 47 ──
+      // staff cancels → red CAN'T MAKE IT card (until someone replaces them; event-day ones also until sent to the manager)
       const mids = [...new Set(ahead.map((e) => e.manager_id).filter(Boolean))] as string[];
       if (mids.length) supabase.from('staff').select('id,full_name').in('id', mids).then(({ data }) => setMgrs(Object.fromEntries(((data ?? []) as { id: string; full_name: string }[]).map((x) => [x.id, x.full_name]))));
       const lmList: { e: AEvent; s: AShift }[] = [];
       for (const e of ahead) for (const s of e.shifts) {
         if (!isSelfCancel(s)) continue;
-        const rep = replacementOf(e, s);
-        if (isEventDayCancel(e, s)) { if (!(rep && s.cancel_sent_to_manager)) lmList.push({ e, s }); continue; }
-        if (rep || s.attendance !== 'cancelled') continue;
-        const fn = (s.staff?.full_name ?? '?').split(' ')[0];
-        n.unshift({ key: 'cx' + s.id, red: true, title: `${fn} cancelled · ${e.title} ${e.event_date === today ? 'today' : e.event_date === addDays(today, 1) ? 'tomorrow' : dLabel(e.event_date)}`,
-          sub: [s.cancel_reason ?? 'no reason', s.cancelled_at ? hoursBefore(s.cancelled_at, s.planned_start) : '', s.cancel_late ? 'LATE (had confirmed)' : 'before confirming · not counted'].filter(Boolean).join(' · '),
-          action: 'Find a replacement', to: replaceUrl(e, { replace: s.id, at: new Date(s.planned_start).toLocaleTimeString('en-GB', { timeZone: 'America/Toronto', hour: '2-digit', minute: '2-digit' }) }) });
+        const rp = replacementOf(e, s);
+        if (isEventDayCancel(e, s)) { if (!(rp && s.cancel_sent_to_manager)) lmList.push({ e, s }); continue; }
+        if (rp || s.attendance !== 'cancelled') continue;
+        lmList.push({ e, s });
       }
-      setLm(lmList);
+      setLm(lmList.sort((a, b) => a.s.planned_start.localeCompare(b.s.planned_start)));
+      adminAsks(addDays(today, -1), addDays(today, 30)).then(setAsks);
+      // push 47 · NOT CONFIRMED: booked, confirm window (24 h) passed, shift not started. Nothing is cancelled by itself.
+      const { data: lt, error: ltErr } = await supabase.from('shifts').select('id,event_id,staff_id,confirm_sent_at,confirm_by,status,planned_start,events!inner(event_date,details_pending)')
+        .eq('status', 'booked').is('attendance', null).not('confirm_sent_at', 'is', null).lte('confirm_sent_at', new Date(Date.now() - 24 * 3600e3).toISOString())
+        .gt('planned_start', new Date().toISOString()).gte('events.event_date', today).order('planned_start');
+      if (!ltErr && Array.isArray(lt)) {
+        const byId = Object.fromEntries(ahead.flatMap((e) => e.shifts.map((s) => [s.id, { e, s }])));
+        const rows = (lt as unknown as { id: string; confirm_sent_at: string; confirm_by: string | null; events: { details_pending?: boolean } | null }[])
+          .filter((r) => byId[r.id] && !r.events?.details_pending).map((r) => ({ e: byId[r.id].e, s: { ...byId[r.id].s, confirm_sent_at: r.confirm_sent_at, confirm_by: r.confirm_by } }));
+        setLate(rows);
+        if (rows.length) {
+          supabase.rpc('admin_checkup_overview').then(({ data, error }) => { if (!error && Array.isArray(data)) setSeen(Object.fromEntries((data as { staff_id: string; last_seen_at: string | null; last_sign_in_at: string | null }[]).map((x) => [x.staff_id, [x.last_seen_at, x.last_sign_in_at].filter(Boolean).sort().pop() ?? null]))); });
+          supabase.from('alert_queue').select('send_key,created_at').eq('kind', 'confirm_remind').like('send_key', 'nudge:%').gte('created_at', new Date(Date.now() - 3 * 864e5).toISOString()).order('created_at')
+            .then(({ data, error }) => { if (!error && Array.isArray(data)) setNudged(Object.fromEntries((data as { send_key: string; created_at: string }[]).map((x) => [x.send_key.split(':')[1], x.created_at]))); });
+        }
+      }
       // d · time-change requests waiting for Ronnie
       const { data: cr, error: crErr } = await supabase.from('shift_change_requests').select(CHANGE_COLS).eq('status', 'pending').order('created_at');
       if (!crErr) for (const r of (cr ?? []) as unknown as ChangeRow[]) {
@@ -229,9 +249,10 @@ export function Today() {
         </section>
         <section className="stack">
           <NicknameCards />
-          {lm.map(({ e, s }) => <LastMinute key={s.id} e={e} s={s} mgr={e.manager_id ? mgrs[e.manager_id] ?? null : null} onSent={() => setTick((t) => t + 1)} />)}
+          <div className="sec"><span className="serif">Needs you <b className="accent sm">{shown.length + askNeeds.length + lm.length + (late.length ? 1 : 0) || ''}</b></span>{shown.length > 0 && <button className="abtn sm" onClick={() => archive(shown)}>{ARCH_ICON} Archive all</button>}</div>
+          {lm.map(({ e, s }) => <CantMakeIt key={s.id} e={e} s={s} mgr={e.manager_id ? mgrs[e.manager_id] ?? null : null} ask={asks.find((a) => a.kind === 'fill' && a.status === 'open' && a.replace_for === s.id)} onFind={() => setRep({ s, e })} onChanged={() => setTick((t) => t + 1)} />)}
+          <NotConfirmed rows={late} seen={seen} nudged={nudged} asks={asks} onReplace={(r) => setRep({ s: r.s, e: r.e })} onChanged={() => setTick((t) => t + 1)} />
           {askNeeds.map((a) => <AskNeed key={a.id} a={a} onChanged={() => setTick((t) => t + 1)} />)}
-          <div className="sec"><span className="serif">Needs you <b className="accent sm">{shown.length + askNeeds.length || ''}</b></span>{shown.length > 0 && <button className="abtn sm" onClick={() => archive(shown)}>{ARCH_ICON} Archive all</button>}</div>
           <div className="adm-card" style={{ padding: '4px 16px' }}>
             {!shown.length && <div className="muted sm" style={{ padding: '12px 0' }}>All clear.</div>}
             {shown.slice(0, 14).map((x) => <NeedRow key={x.key} x={x} onArchive={() => archive([x])} />)}
@@ -261,6 +282,8 @@ export function Today() {
           <div className="muted sm">events · floor staff booked, red = bar. Amber = still short.</div>
         </section>
       </div>
+      {rep && <ReplaceSheet shift={rep.s} ev={rep.e} onClose={() => setRep(null)} onDone={(m) => { setRep(null); setToast(m); setTick((t) => t + 1); }} />}
+      {toast && <div className="undo-bar" role="status"><span className="grow">{toast}</span></div>}
       {changeId && <ChangeAnswer id={changeId} onClose={() => { const p = new URLSearchParams(params); p.delete('change'); setParams(p, { replace: true }); }} onDone={() => { const p = new URLSearchParams(params); p.delete('change'); setParams(p, { replace: true }); setTick((t) => t + 1); }} />}
     </div>
   );

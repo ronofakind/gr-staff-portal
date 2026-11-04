@@ -302,7 +302,8 @@ export function AskNeed({ a, onChanged }: { a: AdminAsk; onChanged: () => void }
     if (error) { setErr(error.message); return; }
     const spot = (data as { spot: Spot | null } | null)?.spot;
     onChanged();
-    if (spot && (action === 'replace' || action === 'ask_else')) nav(fillUrl(spot));
+    // push 47 · a replacement ask that nobody took: asking more people still replaces the same person
+    if (spot && (action === 'replace' || action === 'ask_else')) nav(fillUrl(spot, a.kind === 'fill' ? a.replace_for : null));
   };
   if (a.kind === 'fill') return (
     <div className="ask-need">
