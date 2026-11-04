@@ -22,6 +22,8 @@ import { MeetingCard } from '../components/Meeting';
 import { AskCard } from '../components/ShiftNotes';
 import { useMyAsks } from '../lib/shiftAsks';
 import { AlertsCard } from '../components/Alerts';
+import { PastStrips } from '../components/PastStrip';
+import { managesShift } from '../lib/pastEvents';
 import { NeedChange, CancelSheet, ChangeSheet, LateSheet, LateBlock, ChangeCard, CancelledCard, useShiftChanges, t12 as t12c, type LateNotice } from '../components/ShiftChange';
 
 type MgrLate = { id: string; shift_id: string; event_id: string; name: string; eta: string; reason: string | null; note?: string | null };
@@ -89,7 +91,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
       .then(({ data: g, error }) => { if (!error && Array.isArray(g)) setGone((g as unknown as { id: string; cancel_late: boolean; events: { title: string; event_date: string } | null }[]).filter((x) => x?.events).map((x) => ({ id: x.id, title: x.events!.title, date: x.events!.event_date, late: !!x.cancel_late }))); });
     if (rows.length) supabase.from('hours_questions').select('shift_id,status').in('shift_id', rows.map((r) => r.id)).order('created_at')
       .then(({ data: q }) => setQs(Object.fromEntries(((q ?? []) as Q[]).map((x) => [x.shift_id, x.status]))));
-    const managed = [...new Set(rows.filter((r) => r.events.manager_id === me.id || (r.events.co_manager_ids ?? []).includes(me.id) || r.position_code === 'MD' || r.position_code === 'BM').map((r) => r.events.id))];
+    const managed = [...new Set(rows.filter((r) => managesShift(r, me.id)).map((r) => r.events.id))]; // push 51 · one rule (lib/pastEvents)
     if (managed.length) {
       const { data: crew, error: cErr } = await supabase.from('shifts').select('id,event_id,position_code,position_detail,attendance,staff:staff!shifts_staff_id_fkey(full_name,photo_url),punches(punch_in,punch_out)')
         .in('event_id', managed).neq('status', 'declined').order('planned_start');
@@ -196,6 +198,8 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
         <div className="hello"><b>Hi {first}</b><span>{longDate(today, lang)}</span></div>
         <ProfileButton me={me} preview={preview} />
       </header>
+
+      {!preview && <PastStrips me={me} />}{/* push 51 · Rate n new staff / Send hours (events managed in the last 7 days) */}
 
       {comgrNotes.map((s) => (
         <div key={'cm' + s.events.id} className="comgr-note" role="status">

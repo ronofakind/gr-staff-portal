@@ -1,27 +1,34 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { supabase, SHIFT_SELECT, isSetup, type ShiftRow } from '../lib/supabase';
 import { useT } from '../lib/i18n';
 import { minus, mapsUrl } from '../lib/format';
 import { Avatar, PhotoViewer } from '../components/Avatar';
 import { UniformIcon, uniformFor, uniformLabel, PantsIcon, ShoesIcon, ApronIcon, TieIcon, WineKeyIcon, isBarPos, lineKey, PIECE } from '../components/Uniform';
-import { Status, isBar, StartPos } from './Home';
+import { Status, isBar, StartPos, BigTime } from './Home';
 import { GettingThere } from '../components/GettingThere';
 import { PinnedAnnouncements } from '../components/Announce';
 import { MessageRonnieLink } from '../components/MessageCard';
 import { useMyCalendar, addCalendar, defaultCalOs } from '../lib/calendar';
 import { NeedChange, CancelSheet, ChangeSheet, ChangeCard, CancelledCard, useShiftChanges } from '../components/ShiftChange';
 import { FromTheMeeting } from '../components/Meeting';
+import { useSettings } from '../lib/settings';
+import { feedbackOn, Stars } from './Manage';
+import { managesShift, loadTeamSums, type TeamSum } from '../lib/pastEvents';
+import { mtlToday, addDays } from '../lib/myDates';
 
 export function Shift({ backTo = '/' }: { backTo?: string }) {
   const { id } = useParams();
   const [s, setS] = useState<ShiftRow | null>(null);
   const [md, setMd] = useState<{ full_name: string; photo_url: string | null; phone: string | null } | null>(null);
   const [team, setTeam] = useState<TeamGroup[] | undefined>(undefined);
+  const [who, setWho] = useState<{ id: string; full_name: string } | null>(null);
+  const [q] = useSearchParams();
 
   useEffect(() => {
-    supabase.from('shifts').select(SHIFT_SELECT + ',punches(punch_in,punch_out)').eq('id', id!).single().then(({ data }) => {
-      const row = data as unknown as ShiftRow; setS(row);
+    supabase.from('shifts').select(SHIFT_SELECT + ',staff_id,who:staff!shifts_staff_id_fkey(full_name),punches(punch_in,punch_out)').eq('id', id!).single().then(({ data }) => {
+      const row = data as unknown as ShiftRow & { staff_id?: string; who?: { full_name: string } | null }; setS(row);
+      if (row?.staff_id) setWho({ id: row.staff_id, full_name: row.who?.full_name ?? '' });
       if (row && (row.position_code === 'MD' || row.position_code === 'BM'))
         supabase.from('shifts').select('planned_start,status,attendance,staff:staff!shifts_staff_id_fkey(full_name,photo_url)').eq('event_id', row.events.id).neq('status', 'declined').then(({ data: crew }) => {
           const m = new Map<string, Face[]>();
@@ -34,7 +41,42 @@ export function Shift({ backTo = '/' }: { backTo?: string }) {
   }, [id]);
 
   if (!s) return <div className="loading" />;
-  return <ShiftView s={s} lead={md ?? s.events.manager} backTo={backTo} team={team} />;
+  // push 51 · past mode: opened from My dates → Past, or any shift on an earlier day
+  const past = q.get('past') === '1' || s.events.event_date < mtlToday();
+  return <ShiftView s={s} lead={md ?? s.events.manager} backTo={past && backTo === '/' ? '/my-dates?tab=past' : backTo} team={team} past={past ? who : undefined} />;
+}
+
+/**
+ * push 51 · past event page, manager part: YOUR TEAM (ended · no-show · hours sent or not → the team screen, editable until
+ * hours are submitted) + NEW STAFF · RATE WITHIN 7 DAYS (★ Rate opens the push 30 window on the team screen, or their stars).
+ */
+function PastManager({ eventId, eventDate, sentAt, me }: { eventId: string; eventDate: string; sentAt: string | null; me: { id: string; full_name: string } }) {
+  useSettings(); const fbOn = feedbackOn(me);
+  const [sum, setSum] = useState<TeamSum | null>(null);
+  useEffect(() => { loadTeamSums([eventId], fbOn).then((m) => setSum(m[eventId] ?? null)); }, [eventId, fbOn]);
+  if (!sum) return <section className="pe-card"><div className="loading" style={{ minHeight: 60 }} /></section>;
+  const ord = ['1st', '2nd', '3rd'];
+  const open = mtlToday() <= addDays(eventDate, 7);
+  return <>
+    <section className="pe-card">
+      <span className="kicker">Your team · {sum.team}</span>
+      <div className="pe-line">{sum.ended} ended{sum.noShow ? ` · ${sum.noShow} no-show` : ''} · {sentAt ? 'hours sent' : 'hours not sent'}</div>
+      <Link className="pe-open" to={`/manage/${eventId}`}>{sentAt ? 'Open team ›' : 'Open team · Submit hours'}</Link>
+    </section>
+    {fbOn && sum.newStaff.length > 0 && (
+      <section className="pe-card">
+        <span className="kicker">New staff · {open ? 'rate within 7 days' : 'rating closed'}</span>
+        {sum.newStaff.map((n) => (
+          <div key={n.staff_id} className="pe-new">
+            <Avatar name={n.name} url={n.photo_url} size={36} />
+            <div className="grow"><b>{n.name}</b><small>{ord[n.done_before] ?? ''} shift · {n.role}</small></div>
+            {n.stars ? <Stars value={n.stars} size="sm" label={`${n.name.split(' ')[0]}`} />
+              : open ? <Link className="pe-rate" to={`/manage/${eventId}?rate=${n.staff_id}`}>★ Rate</Link> : <small className="muted">not rated</small>}
+          </div>
+        ))}
+      </section>
+    )}
+  </>;
 }
 
 type Lead = { full_name: string; photo_url: string | null; phone: string | null } | null;
@@ -48,7 +90,7 @@ const dirUrl = (a: string) => `https://www.google.com/maps/dir/?api=1&destinatio
 const placeUrl = (a: string) => mapsUrl(a);
 const MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY as string | undefined;
 
-export function ShiftView({ s, lead, backTo = '/', preview = false, team }: { s: ShiftRow; lead: Lead; backTo?: string; preview?: boolean; team?: TeamGroup[] }) {
+export function ShiftView({ s, lead, backTo = '/', preview = false, team, past }: { s: ShiftRow; lead: Lead; backTo?: string; preview?: boolean; team?: TeamGroup[]; past?: { id: string; full_name: string } | null }) {
   const t = useT();
   const [leadPhoto, setLeadPhoto] = useState(false);
   const vx = useVenueExtras(s.events.id); const [vPhoto, setVPhoto] = useState<number | null>(null); // push 32 · venue notes + photos
@@ -115,15 +157,25 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team }: { s:
   const canChange = !lead_ && !gone && !s.punches?.punch_in && Date.now() < new Date(s.planned_start).getTime();
   const seeUniform = () => uniRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   const staffNotes = ev.venues?.staff_notes?.trim();
+  const isPastV = past !== undefined; // push 51
   return (
     <main className={'page v2 details d3 d37' + (preview ? ' preview' : '')}>
       <header className="row d3-top">
         <Link to={backTo} className="back" aria-label={t('back')}>‹</Link>
-        <span className="kicker grow d37-date">{shortDate}</span>
-        {gone ? <span className="tag-done">Cancelled</span> : <Status s={s.status} />}
+        <span className="kicker grow d37-date">{isPastV ? `PAST · ${shortDate.replace(',', '')}` : shortDate}</span>
+        {isPastV ? null : gone ? <span className="tag-done">Cancelled</span> : <Status s={s.status} />}
       </header>
 
-      <section className="d3-hero">
+      {isPastV ? <>
+        <section className="pe-hero">
+          <div><div className="serif">{venueName}</div>{address && <div className="pe-addr">{address}</div>}</div>
+          <div className="dbl-times">
+            <div><small>Started</small>{s.punches?.punch_in ? <BigTime iso={s.punches.punch_in} small /> : <span className="big serif sm-big">–</span>}</div>
+            <div><small>Ended</small>{s.punches?.punch_out ? <BigTime iso={s.punches.punch_out} small /> : <span className="big serif sm-big">–</span>}</div>
+          </div>
+        </section>
+        {past && managesShift(s, past.id) && <PastManager eventId={ev.id} eventDate={ev.event_date} sentAt={ev.hours_submitted_at ?? null} me={past} />}
+      </> : <section className="d3-hero">
         <div className="d3-kick">{dayWord.toUpperCase()}{cd ? ` · ${cd.toUpperCase()}` : ''}</div>
         <div><div className="serif d3-venue">{venueName}</div>{(facts || ev.description) && <div className="d3-sub">{facts || ev.description}</div>}</div>
         <StartPos start={s.time_tbc ? null : s.planned_start} role={role} />
@@ -152,7 +204,8 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team }: { s:
           <span className="d3-hl" />
           <NeedChange canSchedule={!(req?.status === 'pending' || (req?.status === 'keep' && !req.keep_reply))} onSchedule={() => setSheet('change')} onCancel={() => setSheet('cancel')} />
         </>}
-      </section>
+      </section>}
+      {!isPastV && <>
       {gone && <CancelledCard title={ev.title} date={ev.event_date} late={gone.late} onOk={() => window.history.length > 1 ? window.history.back() : window.location.assign(backTo)} />}
       {!gone && req && <ChangeCard r={req} s={s} preview={preview} onChanged={chg.reload} />}
       {sheet === 'cancel' && <CancelSheet s={s} preview={preview} onClose={() => setSheet(null)} onDone={(late) => { setGone({ late }); setSheet(null); }} />}
@@ -160,6 +213,7 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team }: { s:
 
       {!gone && <FromTheMeeting eventId={ev.id} meetingBase={preview ? '/admin' : ''} />}{/* push 38 · pinned meeting notes */}
       {ev.transport && ev.rides && <GettingThere eventId={ev.id} eventDate={ev.event_date} firstStart={s.planned_start} travelMin={ev.travel_min ?? 60} paidMin={ev.paid_travel_min ?? 0} preview={preview} />}
+      </>}
       <SecTitle icon="pin">Where</SecTitle>
       <section className="d3-card d3-where d37-wcard">
         {address && <MapTile address={address} />}
@@ -168,7 +222,7 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team }: { s:
         </a>
         {staffNotes && <div className="d37-door">🚪 {staffNotes}</div>}
         {vx.photos.length > 0 && <div className="d3-vphotos">{vx.photos.map((u, i) => <button key={u} type="button" aria-label={`Venue photo ${i + 1} of ${vx.photos.length}`} onClick={() => setVPhoto(i)}><img src={u} alt="" loading="lazy" /></button>)}</div>}
-        <div className="row2" style={{ gap: 8 }}>
+        {!isPastV && <div className="row2" style={{ gap: 8 }}>
           {address ? <a className={'big-btn dark d37-dir' + (isToday ? ' ok' : '')} href={dirUrl(address)} target="_blank" rel="noreferrer">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 11 21 3l-8 18-2-8z" /></svg>Directions</a> : <span />}
           {myCal?.added_at
@@ -176,10 +230,10 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team }: { s:
             : myCal
               ? <button type="button" className="big-btn d37-cal" onClick={() => addCalendar(myCal, defaultCalOs()).then(setMyCal)}><span className="mini-cal"><i>{d.toLocaleDateString('en-CA', { month: 'short' }).toUpperCase().replace('.', '')}</i><b>{d.getDate()}</b></span>Add my G&R calendar</button>
               : <a className="big-btn d37-cal" href={cal} target="_blank" rel="noreferrer"><span className="mini-cal"><i>{d.toLocaleDateString('en-CA', { month: 'short' }).toUpperCase().replace('.', '')}</i><b>{d.getDate()}</b></span>Add to calendar</a>}
-        </div>
+        </div>}
       </section>
 
-      {(s.plan || ev.plan) ? (
+      {!isPastV && (s.plan || ev.plan) ? (
         <Link to={`${backTo === '/' ? '' : backTo}/shift/${s.id}/plan`} className="plan-link">
           <span className="ic">📋</span>
           <div className="grow"><b>Your plan tonight</b><span>Your role, side, leads, wine + water, clearing</span></div>
@@ -208,7 +262,7 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team }: { s:
         <section className="d3-card venue-rule"><img src="/rules/no-outside-food.png" alt="" width={52} height={52} /><b>No outside food or drinks</b></section>
       </>}
 
-      {lead_ && team && team.length > 0 && <>
+      {!isPastV && lead_ && team && team.length > 0 && <>
         <SecTitle icon="people">Your team</SecTitle>
         <section className="d3-card d37-team">
           {team.map((g) => (
@@ -222,7 +276,7 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team }: { s:
         </section>
       </>}
 
-      {!preview && <PinnedAnnouncements eventId={ev.id} />}
+      {!preview && !isPastV && <PinnedAnnouncements eventId={ev.id} />}
 
       {(ev.notes || vx.notes) && <>
         <SecTitle>Notes</SecTitle>
@@ -231,7 +285,7 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team }: { s:
       </>}
       {vPhoto !== null && vx.photos[vPhoto] && <PhotoViewer wide name={venueName} url={vx.photos[vPhoto]} sub={vx.photos.length > 1 ? `Photo ${vPhoto + 1} of ${vx.photos.length} · tap to close` : 'Tap to close'} onClose={() => setVPhoto(null)} />}
 
-      {lead && <>
+      {lead && !isPastV && <>
         <SecTitle icon="phone">Manager on-site</SecTitle>
         <section className="d3-card look">
           <button className="look-photo" aria-label={`See ${lead.full_name}'s photo`} onClick={() => setLeadPhoto(true)}><Avatar name={lead.full_name} url={lead.photo_url} size={56} /></button>

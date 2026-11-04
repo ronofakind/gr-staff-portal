@@ -5,13 +5,14 @@ import { TabBar } from '../components/TabBar';
 import { PageHead } from '../components/ProfileMenu';
 import { AskHours, todayIso } from './Home';
 import type { MeetingHours } from '../lib/meetings';
+import { managesShift } from '../lib/pastEvents';
 import { payPeriod, shiftPeriod, payDay, payDayLabel, periodLabel, paidHours, workedHours } from '../lib/hours';
 
 type P = { punch_in: string | null; punch_out: string | null } | null;
-type Row = { id: string; planned_start: string; attendance: string | null; left_early: boolean | null; punches: P;
-  events: { id: string; title: string; event_date: string; hours_submitted_at: string | null; manager_id: string | null; transport?: boolean; paid_travel_min?: number | null } };
+type Row = { id: string; planned_start: string; attendance: string | null; left_early: boolean | null; punches: P; position_code: string | null;
+  events: { id: string; title: string; event_date: string; hours_submitted_at: string | null; manager_id: string | null; co_manager_ids?: string[] | null; transport?: boolean; paid_travel_min?: number | null } };
 type Q = { id: string; shift_id: string; kind: 'start' | 'end' | 'other'; claimed_at: string | null; note: string | null; status: 'open' | 'fixed' | 'correct'; answer_note: string | null; created_at: string };
-type Team = { id: string; title: string; event_date: string; hours_submitted_at: string | null; shifts: { attendance: string | null; left_early: boolean | null; punches: P; staff: { full_name: string } | null }[] };
+type Team = { id: string; title: string; event_date: string; hours_submitted_at: string | null; shifts: { status?: string; attendance: string | null; left_early: boolean | null; punches: P; staff: { full_name: string } | null }[] };
 
 const D = (iso: string) => new Date(iso + 'T12:00:00');
 const t12 = (iso: string) => new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' });
@@ -29,12 +30,15 @@ export function Hours({ me }: { me: Staff }) {
   const [teams, setTeams] = useState<Team[] | null>(null); const [team, setTeam] = useState<Team | null>(null);
   const [mh, setMh] = useState<MeetingHours[]>([]); // push 38 · paid meetings (ended)
   const yearStart = `${today.slice(0, 4)}-01-01`;
-  const isMgr = me.role === 'manager' || me.role === 'admin';
+  // push 51 · "Teams I managed" for anyone who managed something this year (lead, co-manager or the MD / BM shift), not only role = manager
+  const managedRows = useMemo(() => (rows ?? []).filter((r) => r.attendance !== 'cancelled' && managesShift(r, me.id)), [rows, me.id]);
+  const managedIds = useMemo(() => [...new Set(managedRows.filter((r) => r.events.event_date >= per.start && r.events.event_date <= per.end).map((r) => r.events.id))], [managedRows, per.start]); // eslint-disable-line react-hooks/exhaustive-deps
+  const isMgr = me.role === 'manager' || me.role === 'admin' || managedRows.length > 0;
   const nav = useNavigate();
 
   const load = async () => {
     const from = per.start < yearStart ? per.start : yearStart;
-    const { data } = await supabase.from('shifts').select('id,planned_start,attendance,left_early,punches(punch_in,punch_out),events!inner(id,title,event_date,hours_submitted_at,manager_id,transport,paid_travel_min)')
+    const { data } = await supabase.from('shifts').select('id,planned_start,attendance,left_early,position_code,punches(punch_in,punch_out),events!inner(id,title,event_date,hours_submitted_at,manager_id,co_manager_ids,transport,paid_travel_min)')
       .eq('staff_id', me.id).neq('status', 'declined').gte('events.event_date', from).lte('events.event_date', today);
     const list = ((data ?? []) as unknown as Row[]).map((r) => ({ ...r, punches: one(r.punches as P | P[]) }));
     supabase.rpc('meeting_hours', { p_from: from, p_to: today }).then(({ data: m, error }) => setMh(error ? [] : ((m ?? []) as MeetingHours[]).filter((x) => x.paid && x.ended)));
@@ -47,12 +51,15 @@ export function Hours({ me }: { me: Staff }) {
   };
   useEffect(() => { load(); }, [me.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (view !== 'teams') return;
+    if (view !== 'teams' || rows === null) return;
     setTeams(null);
-    supabase.from('events').select('id,title,event_date,hours_submitted_at,shifts(attendance,left_early,punches(punch_in,punch_out),staff:staff!shifts_staff_id_fkey(full_name))')
-      .eq('manager_id', me.id).gte('event_date', per.start).lte('event_date', per.end < today ? per.end : today).order('event_date', { ascending: false })
-      .then(({ data }) => setTeams(((data ?? []) as unknown as Team[]).map((t) => ({ ...t, shifts: t.shifts.map((s) => ({ ...s, punches: one(s.punches as P | P[]) })) }))));
-  }, [view, per.start, me.id]); // eslint-disable-line react-hooks/exhaustive-deps
+    // push 51 fix · was manager_id only: a bar manager booked on the BM line after the event was made (Bookings board, sheet sync…)
+    // or a co-manager never showed here. Same rule as Home / Manage now: lead, co-manager, or my MD / BM shift on the event.
+    const mine = managedIds.length ? `,id.in.(${managedIds.join(',')})` : '';
+    supabase.from('events').select('id,title,event_date,hours_submitted_at,shifts(attendance,left_early,status,punches(punch_in,punch_out),staff:staff!shifts_staff_id_fkey(full_name))')
+      .or(`manager_id.eq.${me.id},co_manager_ids.cs.{${me.id}}${mine}`).gte('event_date', per.start).lte('event_date', per.end < today ? per.end : today).order('event_date', { ascending: false })
+      .then(({ data }) => setTeams(((data ?? []) as unknown as Team[]).map((t) => ({ ...t, shifts: t.shifts.filter((s) => s.status !== 'declined').map((s) => ({ ...s, punches: one(s.punches as P | P[]) })) }))));
+  }, [view, per.start, me.id, managedIds.join()]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const done = (r: Row) => !r.attendance && !!r.punches?.punch_in && !!r.punches.punch_out && new Date(r.punches.punch_out).getTime() <= Date.now();
   const travelOf = (r: Row) => (r.events.transport ? (r.events.paid_travel_min ?? 0) / 60 : 0);

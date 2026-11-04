@@ -15,12 +15,15 @@ import {
 import { AskCard } from '../components/ShiftNotes';
 import { useMyAsks } from '../lib/shiftAsks';
 import { useMyMeetings, dayOfMtl, t12 as mt12, type MyMeeting } from '../lib/meetings';
+import { useSettings } from '../lib/settings';
+import { feedbackOn } from './Manage';
+import { usePastEvents, managesShift, roleOf, type PastShift, type TeamSum } from '../lib/pastEvents';
 
 /** Booked tab rows (shifts from today on). confirm_by is push 33 (039). */
 type Shift = { id: string; status: 'booked' | 'confirmed' | 'declined'; attendance: string | null; planned_start: string; time_tbc: boolean;
   confirm_by: string | null; events: { id: string; event_date: string; title: string; details_pending?: boolean | null; venues: { name: string } | null } };
 type Week = { dow: number; status: 'yes' | 'from' | 'no'; from_time: string | null };
-type Tab = 'answer' | 'booked' | 'answered';
+type Tab = 'answer' | 'booked' | 'answered' | 'past';
 
 const t12 = (iso: string) => new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' });
 const dow3 = (iso: string) => D(iso).toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
@@ -46,6 +49,9 @@ export function MyDates({ me, base = '', preview = false }: { me: Staff; base?: 
   // push 40 · "Can you work this shift?" asks sit on top of Answer (same card as Home and Messages)
   const { asks: allAsks, reload: reloadAsks } = useMyAsks(preview || me.role === 'admin');
   const fills = allAsks.filter((a) => a.kind === 'fill');
+  // push 51 · Past tab: my own past shifts, last 30 days (+ team / hours / rating status for the ones I managed)
+  useSettings(); const fbOn = feedbackOn(me) && !preview; // admin view-as: ratings are per manager, not shown
+  const past = usePastEvents(me.id, 30, fbOn);
 
   const loadShifts = () => supabase.from('shifts')
     .select('id,status,attendance,planned_start,time_tbc,confirm_by,events!inner(id,event_date,title,details_pending,venues(name))')
@@ -111,7 +117,7 @@ export function MyDates({ me, base = '', preview = false }: { me: Staff; base?: 
   };
 
   const firstOf = (list: { for_date?: string; events?: { event_date: string } }[]) => (list[0] ? (list[0].for_date ?? list[0].events!.event_date) : today);
-  const title = monthName(curTab === 'answer' ? firstOf(answerList) : curTab === 'booked' ? firstOf(booked) : firstOf(answered));
+  const title = curTab === 'past' ? 'My dates' : monthName(curTab === 'answer' ? firstOf(answerList) : curTab === 'booked' ? firstOf(booked) : firstOf(answered));
   const dkyList = dky ? all.filter((d) => dky.ids.includes(d.id)) : waiting;
 
   return (
@@ -124,13 +130,22 @@ export function MyDates({ me, base = '', preview = false }: { me: Staff; base?: 
       {err && <p className="error">{err}</p>}
 
       {view === 'list' ? <>
-        <div className="md-tabs" role="tablist">
+        <div className="md-tabs four" role="tablist">
           <button className={curTab === 'answer' ? 'on' : ''} onClick={() => setTab('answer')}>Answer <i className={'n' + (waiting.length + fills.length ? ' red' : '')}>{waiting.length + fills.length}</i></button>
           <button className={curTab === 'booked' ? 'on' : ''} onClick={() => setTab('booked')}>Booked <i className={'n' + (curTab === 'booked' && bookedRows.length ? ' green' : '')}>{bookedRows.length}</i></button>
           <button className={curTab === 'answered' ? 'on' : ''} onClick={() => setTab('answered')}>Answered <i className={'n' + (curTab === 'answered' && answered.length ? ' dark' : '')}>{answered.length}</i></button>
+          <button className={curTab === 'past' ? 'on' : ''} onClick={() => setTab('past')}>Past</button>
         </div>
 
-        {dates === null || shifts === null ? <div className="loading" style={{ minHeight: 240 }} /> : curTab === 'answer' ? (
+        {curTab === 'past' ? (
+          past.shifts === null ? <div className="loading" style={{ minHeight: 240 }} /> : (
+            <section className="md-list">
+              {past.shifts.map((s) => <PastRow key={s.id} s={s} base={base} mine={managesShift(s, me.id)} sum={past.sums[s.events.id]} fbOn={fbOn} />)}
+              {!past.shifts.length && <div className="md-empty"><b className="serif">No past shifts yet</b><span>Shifts you worked in the last 30 days show up here.</span></div>}
+              {past.shifts.length > 0 && <p className="md-foot">Last 30 days, newest first. Tap one for the details{past.shifts.some((s) => managesShift(s, me.id)) ? ', your team and hours' : ''}.</p>}
+            </section>
+          )
+        ) : dates === null || shifts === null ? <div className="loading" style={{ minHeight: 240 }} /> : curTab === 'answer' ? (
           <section className="md-list">
             {fills.map((a) => <AskCard key={a.ask_id} a={a} preview={preview} onAnswered={(st) => { if (st === 'booked') loadShifts(); setTimeout(reloadAsks, st === 'gone' ? 4000 : 2500); }} />)}
             {dky && (
@@ -252,6 +267,28 @@ function BookedRow({ s, base, onConfirm }: { s: Shift; base: string; onConfirm: 
       </div>
       {toConfirm ? <button className="md-confirm" onClick={onConfirm}>Confirm</button> : <Link className="md-chg" to={`${base}/shift/${s.id}`}>Details</Link>}
     </div>
+  );
+}
+
+/** push 51 · a past shift: date, venue, position · start – end; managers: hours sent / to rate, staff: approved / waiting. */
+function PastRow({ s, base, mine, sum, fbOn }: { s: PastShift; base: string; mine: boolean; sum?: TeamSum; fbOn: boolean }) {
+  const p = s.punches; const a = p?.punch_in ?? s.planned_start; const b = p?.punch_out ?? s.planned_end;
+  const sent = !!s.events.hours_submitted_at;
+  return (
+    <Link to={`${base}/shift/${s.id}?past=1`} className="md-card row past">
+      <DateSq iso={s.events.event_date} kind="neutral" />
+      <div className="grow" style={{ minWidth: 0 }}>
+        <b>{s.events.venues?.name ?? s.events.title}</b>
+        <span className="md-pos">{roleOf(s.position_code, s.position_detail)} · {t12(a)}{b ? ` – ${t12(b)}` : ''}{mine && sum ? ` · you managed ${sum.team}` : ''}</span>
+        <span className="md-tags">
+          {mine ? <>
+            {sent ? <span className="md-tag okl">✓ HOURS SENT</span> : <span className="md-tag gold">HOURS NOT SENT</span>}
+            {fbOn && sum && sum.newStaff.length > 0 && (sum.toRate ? <span className="md-tag ink">★ {sum.toRate} TO RATE</span> : <span className="md-tag okl">✓ RATED</span>)}
+          </> : sent ? <span className="md-tag okl">✓ APPROVED</span> : <span className="md-tag wait">WAITING</span>}
+        </span>
+      </div>
+      <span className="md-go" aria-hidden="true">›</span>
+    </Link>
   );
 }
 

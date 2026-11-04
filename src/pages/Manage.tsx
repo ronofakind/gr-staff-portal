@@ -1,7 +1,7 @@
 import { QuarterTime } from '../components/QuarterTime';
 import { useEffect, useRef, useState } from 'react';
 import { SwipeSheet } from '../components/SwipeSheet';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { setting, useSettings } from '../lib/settings';
 import { useLang } from '../lib/i18n';
@@ -19,7 +19,7 @@ function MgrMessagesEntry({ eventId }: { eventId: string }) {
 /** Push 27 rollout: manager feedback (★ tile + new-staff check) only for these managers (full name or staff id) while Settings → Managers
  *  says "Benjamin only" (default); "All managers" turns it on for everyone who manages an event (push 32). */
 export const FEEDBACK_MANAGERS: string[] = ['Benjamin Outre'];
-const feedbackOn = (me?: { id: string; full_name: string } | null) => !!me && (setting('mgr.feedback') === 'all' || FEEDBACK_MANAGERS.some((x) => x === me.id || x.toLowerCase() === me.full_name.trim().toLowerCase()));
+export const feedbackOn = (me?: { id: string; full_name: string } | null) => !!me && (setting('mgr.feedback') === 'all' || FEEDBACK_MANAGERS.some((x) => x === me.id || x.toLowerCase() === me.full_name.trim().toLowerCase()));
 /** push 30 · detail ratings are 1–5 stars (push-27 rows had "up" / "ok" / "down": ignored here, never re-sent). */
 type Info = { staff_id: string; tier: 'A' | 'B' | 'C' | null; done_before: number; is_new: boolean; fb_tier: 'A' | 'B' | 'C' | null; fb_ratings: Record<string, unknown> | null; fb_note: string | null;
   /** push 30 · tonight's overall stars this manager sent (null = not rated tonight) */
@@ -53,7 +53,7 @@ const starOk = (v: unknown): v is number => typeof v === 'number' && Number.isIn
 const starRatings = (r: Record<string, unknown> | null | undefined): Record<string, number> =>
   Object.fromEntries(Object.entries(r ?? {}).filter(([k, v]) => AREAS.some((a) => a.key === k) && starOk(v))) as Record<string, number>;
 /** 5 stars. Tap a star to set; tap the same star again to clear (onChange(0)). Read-only without onChange. */
-function Stars({ value, onChange, size = 'md', label }: { value: number; onChange?: (v: number) => void; size?: 'sm' | 'md' | 'lg' | 'xs'; label: string }) {
+export function Stars({ value, onChange, size = 'md', label }: { value: number; onChange?: (v: number) => void; size?: 'sm' | 'md' | 'lg' | 'xs'; label: string }) {
   if (!onChange) return <span className={'stars ' + size} role="img" aria-label={value ? `${label}: ${value} of 5 stars` : `${label}: not rated`}>{[1, 2, 3, 4, 5].map((n) => <i key={n} className={n <= value ? 'on' : ''}>★</i>)}</span>;
   return (
     <span className={'stars ' + size} role="radiogroup" aria-label={label}>
@@ -211,7 +211,11 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
   useSettings(); // push 32: feedback / new tag / undo / start window come from Settings
   const fbOn = feedbackOn(me); const newUnder = setting('bookings.new_tag_shifts'); const startH = setting('mgr.start_from_h');
   const [info, setInfo] = useState<Record<string, Info>>({});
-  const [fb, setFb] = useState<{ row: Row; back: 'sheet' | 'check' | null } | null>(null);
+  const [fb, setFb] = useState<{ row: Row; back: 'sheet' | 'check' | 'queue' | null } | null>(null);
+  // push 51 · ?rate=all (Home "Rate n new staff") or ?rate=<staff id> (past event page): the ★ window opens for them one by one.
+  // ?submit=1 (Home "Send hours"): opens Submit hours. Entered that way, closing / finishing goes back where they came from.
+  const [params, setParams] = useSearchParams(); const nav = useNavigate();
+  const [rateQ, setRateQ] = useState<string[] | null>(null); const asked = useRef(false);
   const [check, setCheck] = useState(false); const [checkDone, setCheckDone] = useState(false);
   const [checkPicks, setCheckPicks] = useState<Record<string, CheckPick>>({}); // new-staff check taps survive opening someone's Rate window
   const [prob, setProb] = useState(false);
@@ -276,6 +280,27 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
     document.addEventListener('visibilitychange', vis);
     return () => { clearInterval(id); document.removeEventListener('visibilitychange', vis); };
   }, [eventId]);
+  const leave = () => { if (window.history.state?.idx > 0) nav(-1); else setParams((p) => { p.delete('rate'); p.delete('submit'); return p; }, { replace: true }); };
+  useEffect(() => {
+    if (asked.current || !ev || !rows.length) return;
+    const want = params.get('rate'); const sub = params.get('submit');
+    if (want) {
+      if (!fbOn) { asked.current = true; return; }
+      if (!Object.keys(info).length) return; // manager_team_info not back yet
+      asked.current = true;
+      const isNewW = (r: Row) => { const i = r.staff_id ? info[r.staff_id] : undefined; return !r.attendance && !!r.punches?.punch_in && !!i?.is_new && i.done_before < newUnder; };
+      const q = rows.filter((r) => isNewW(r) && (want === 'all' ? !info[r.staff_id!]?.fb_stars : r.staff_id === want)).map((r) => r.id);
+      if (q.length) { setRateQ(q.slice(1)); setFb({ row: rows.find((r) => r.id === q[0])!, back: 'queue' }); }
+    } else if (sub) {
+      asked.current = true;
+      if (!ev.hours_submitted_at) setReview(true);
+    }
+  }, [ev, rows, info, fbOn]); // eslint-disable-line react-hooks/exhaustive-deps
+  const nextInQueue = () => {
+    const [n, ...more] = (rateQ ?? []).filter((id) => rows.some((r) => r.id === id));
+    if (!n) { setRateQ(null); setFb(null); leave(); return; }
+    setRateQ(more); setFb({ row: rows.find((r) => r.id === n)!, back: 'queue' });
+  };
 
   const set = async (list: { id: string; in: string | null; out: string | null; arrived?: string | null }[]) => {
     setErr('');
@@ -389,7 +414,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
     <main className="page v2">
       <header className="row" style={{ paddingTop: 12 }}>
         <Link to="/" className="back" aria-label={t.back}>‹</Link>
-        <span className="kicker">{ev.event_date === new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' }) ? 'Tonight' : new Date(ev.event_date + 'T12:00:00').toLocaleDateString('en-CA', { weekday: 'long' })} · your team</span>
+        <span className="kicker">{ev.event_date === todayMtl ? 'Tonight' : ev.event_date < todayMtl ? `Past · ${new Date(ev.event_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).replace(',', '')}` : new Date(ev.event_date + 'T12:00:00').toLocaleDateString('en-CA', { weekday: 'long' })} · your team</span>
       </header>
       <div style={{ padding: '0 6px' }}>
         <div className="serif" style={{ fontSize: 34, lineHeight: 1 }}>{ev.title}</div>
@@ -723,8 +748,10 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
         <>
           <div className="scrim" onClick={() => setFb(null)} />
           <SwipeSheet onClose={() => setFb(null)} label={`Feedback for ${fb.row.staff?.full_name}`} x={false}>
-            <FeedbackWindow key={fb.row.id} eventId={ev.id} row={fb.row} info={infoOf(fb.row)} init={fb.back === 'check' ? checkPicks[fb.row.id] : undefined} onBack={fb.back ? () => { if (fb.back === 'check') setCheck(true); setFb(null); } : null}
-              onClose={() => { setFb(null); setOpen(null); }} onSent={() => { const back = fb.back; const rid = fb.row.id; setFb(null); if (back === 'check') { const n = { ...checkPicks }; delete n[rid]; setCheckPicks(n); setCheck(true); } else setOpen(null); load(); }} />
+            <FeedbackWindow key={fb.row.id} eventId={ev.id} row={fb.row} info={infoOf(fb.row)} init={fb.back === 'check' ? checkPicks[fb.row.id] : undefined} onBack={fb.back && fb.back !== 'queue' ? () => { if (fb.back === 'check') setCheck(true); setFb(null); } : null}
+              queue={fb.back === 'queue' && rateQ?.length ? `${rateQ.length} more after ${(fb.row.staff?.full_name ?? '').split(' ')[0]}` : undefined}
+              onClose={() => { const q = fb.back === 'queue'; setFb(null); setOpen(null); if (q) { setRateQ(null); leave(); } }}
+              onSent={() => { const back = fb.back; const rid = fb.row.id; if (back === 'queue') { load(); nextInQueue(); return; } setFb(null); if (back === 'check') { const n = { ...checkPicks }; delete n[rid]; setCheckPicks(n); setCheck(true); } else setOpen(null); load(); }} />
           </SwipeSheet>
         </>
       )}
@@ -851,7 +878,7 @@ function SwipeRow({ on, label, onAct, children }: { on: boolean; label: string; 
 }
 
 /** ★ Rate window (push 30): tonight overall 1–5 stars (required) + worked like A/B/C (pre-set to their tier) + detail stars (optional) + comment. Only Ronnie sees it. */
-function FeedbackWindow({ eventId, row, info, init, onBack, onClose, onSent }: { eventId: string; row: Row; info?: Info; init?: CheckPick; onBack: (() => void) | null; onClose: () => void; onSent: () => void }) {
+function FeedbackWindow({ eventId, row, info, init, queue, onBack, onClose, onSent }: { eventId: string; row: Row; info?: Info; init?: CheckPick; queue?: string; onBack: (() => void) | null; onClose: () => void; onSent: () => void }) {
   const f = (row.staff?.full_name ?? '').split(' ')[0];
   // from the new-staff check: start from what was tapped there
   const [stars, setStars] = useState<number>(init?.touched ? init.stars : info?.fb_stars ?? 0);
@@ -888,7 +915,8 @@ function FeedbackWindow({ eventId, row, info, init, onBack, onClose, onSent }: {
         </div>))}</div>
       <textarea className="fbw-note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Comment (optional)" />
       {err && <p className="error">{err}</p>}
-      <button className="btn-ink" disabled={busy || !stars} onClick={send}>{busy ? 'Sending…' : sent ? 'Update for Ronnie' : 'Send to Ronnie'}</button>
+      <button className="btn-ink" disabled={busy || !stars} onClick={send}>{busy ? 'Sending…' : sent ? 'Update for Ronnie' : queue ? 'Send · next' : 'Send to Ronnie'}</button>
+      {queue && <small className="muted" style={{ textAlign: 'center' }}>{queue}</small>}
     </div>
   );
 }

@@ -2919,3 +2919,36 @@ div.venue-rule { background: #fff; border-radius: 14px; padding: 10px 14px; marg
 .lk-lock.on { opacity: 1; border-color: currentColor; }
 .lk-add { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 8px; }
 .lk-add input, .lk-add select { min-width: 0; flex: 1 1 160px; }
+
+/* push 51 · Home reminder strip (managers): rate new staff / send hours for a past event */
+.past-strip { display: flex; align-items: center; gap: 10px; background: #FFF6E0; border: 1.5px solid #E6C97A; border-radius: 18px; padding: 10px 10px 10px 12px; }
+.past-strip .grow { flex: 1; min-width: 0; }
+.past-strip b { display: block; font-size: 14.5px; color: var(--ink); line-height: 1.2; }
+.past-strip small { display: block; font-size: 12px; color: #7A6A48; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ps-ic { width: 30px; height: 30px; border-radius: 15px; background: #C08A1E; color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 15px; flex: 0 0 auto; }
+.ps-go { height: 32px; padding: 0 16px; border-radius: 16px; background: var(--ink); color: #fff; font-size: 13px; font-weight: 700; display: inline-flex; align-items: center; text-decoration: none; flex: 0 0 auto; }
+.ps-x { border: 0; background: none; color: #A89E92; font-size: 15px; padding: 4px 2px; cursor: pointer; flex: 0 0 auto; }
+
+/* push 51 · My dates → Past */
+.md-tabs.four button { font-size: 12.5px; padding: 0 2px; gap: 4px; }
+.md-card.past { cursor: pointer; text-decoration: none; }
+.md-card.past .md-sq { background: #F3EFE9; }
+.md-pos { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
+.md-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
+.md-tags .md-tag { margin-top: 0; }
+.md-tag.gold { background: #C08A1E; color: #fff; } .md-tag.ink { background: var(--ink); color: #fff; }
+.md-tag.okl { background: var(--ok-bg); color: var(--ok); } .md-tag.wait { background: #FFF6E0; color: #8A6516; }
+.md-go { color: var(--soft); font-size: 20px; flex: 0 0 auto; }
+
+/* push 51 · past event page */
+.pe-hero { background: var(--ink); color: #F6F2EC; border-radius: 24px; padding: 20px; display: flex; flex-direction: column; gap: 12px; }
+.pe-hero .serif { font-size: 30px; line-height: 1.05; }
+.pe-hero .pe-addr { font-size: 13px; color: #CFC6BA; margin-top: 4px; }
+.pe-card { background: #fff; border-radius: 20px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.pe-card .kicker { font-size: 11px; }
+.pe-line { font-size: 13.5px; color: #4A4540; }
+.pe-open { height: 46px; border-radius: 14px; background: var(--ink); color: #fff; font-weight: 700; font-size: 14.5px; display: flex; align-items: center; justify-content: center; text-decoration: none; }
+.pe-new { display: flex; align-items: center; gap: 12px; padding: 8px 0; }
+.pe-new + .pe-new { border-top: 1px solid var(--line); }
+.pe-new .grow { flex: 1; min-width: 0; } .pe-new b { display: block; font-size: 14.5px; } .pe-new small { display: block; font-size: 12px; color: var(--muted); }
+.pe-rate { height: 30px; padding: 0 12px; border-radius: 15px; background: #FFF6E0; border: 1px solid #E6C97A; color: var(--ink); font-size: 12.5px; font-weight: 700; display: inline-flex; align-items: center; text-decoration: none; flex: 0 0 auto; }
