@@ -2060,7 +2060,7 @@ div.avatar { color: var(--accent); background: var(--accent-bg); }
 
 .go-hi { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; padding: 6px 0 4px; }
 .go-hi .serif { font-size: 28px; }
-.go .cu-box { margin-top: 10px; }
+.go-page .cu-box { margin-top: 10px; }
 .go-dead { background: #fff; border-radius: 22px; padding: 22px 18px; margin-top: 18px; align-items: center; text-align: center; }
 .go-dead .serif { font-size: 24px; } .go-dead .login2-p { text-align: center; }
 .go-dead .cu-btn { width: 100%; }

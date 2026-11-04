@@ -47,7 +47,7 @@ export function useInviteReady() {
 
 /** The text Ronnie pastes in WhatsApp / iMessage. No dates, no 🙏. Greeting = nickname, else first name. */
 export const inviteText = (s: AStaff, token: string) =>
-  `Hey ${callName(s)}! Ronnie added you to the G&R staff app.\n\nTap to set up your account (2 min) 👉 ${window.location.host}/go/${token}\nYour sign-in email: ${s.email}`;
+  `Hey ${callName(s)}! Ronnie added you to the G&R staff app.\n\nTap to set up your account (2 min) 👉 https://${window.location.host}/go/${token}\nYour sign-in email: ${s.email}`;
 
 /**
  * Invite pop-up (AdminInviteV1 · B). One person, or one after the other for a group ("Next: Juliette ›" after each copy).

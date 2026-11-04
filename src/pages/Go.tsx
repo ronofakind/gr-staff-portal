@@ -66,7 +66,7 @@ export function Go({ token }: { token: string }) {
   const ios = isIOS() || !isAndroid();
 
   return (
-    <main className="v2 login2 go">
+    <main className="v2 login2 go-page">
       <img src="/logo-mark.png" alt="G&R" className="login2-logo" />
 
       {screen === 'code' && <>

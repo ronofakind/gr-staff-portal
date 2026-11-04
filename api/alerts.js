@@ -19,7 +19,9 @@ import webpush from 'web-push';
 
 const URL_ = process.env.VITE_SUPABASE_URL;
 const ANON = process.env.VITE_SUPABASE_KEY;
-const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY;
+// Vercel value was pasted as SUPABASE_SERVICE_ROLE_KEY=“…” → keep only the key itself.
+const cleanKey = (v) => (v || '').replace(/^\s*[A-Z_]+\s*=\s*/, '').replace(/[\s"'“”‘’]/g, '');
+const SERVICE = cleanKey(process.env.SUPABASE_SERVICE_ROLE_KEY);
 const PUB = (process.env.VAPID_PUBLIC_KEY || '').trim();
 const PRIV = (process.env.VAPID_PRIVATE_KEY || '').trim();
 const SUBJECT = (process.env.VAPID_SUBJECT || '').trim() || 'mailto:gravotreservice@gmail.com';

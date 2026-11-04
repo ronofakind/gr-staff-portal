@@ -13,7 +13,9 @@
 //      that browser. No redirect URL to allow-list, and session tokens never pass through this server.
 // The service role key stays here (server env SUPABASE_SERVICE_ROLE_KEY); the client only ever gets the one-time hash.
 const URL_ = process.env.VITE_SUPABASE_URL;
-const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY;
+// Vercel value was pasted as SUPABASE_SERVICE_ROLE_KEY=“…” → keep only the key itself.
+const cleanKey = (v) => (v || '').replace(/^\s*[A-Z_]+\s*=\s*/, '').replace(/[\s"'“”‘’]/g, '');
+const SERVICE = cleanKey(process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 const TOKEN_RE = /^[A-Za-z0-9_-]{10,64}$/;
 const H = () => ({ apikey: SERVICE, Authorization: `Bearer ${SERVICE}`, 'Content-Type': 'application/json' });
