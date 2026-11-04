@@ -3009,3 +3009,18 @@ div.venue-rule { background: #fff; border-radius: 14px; padding: 10px 14px; marg
 .brand-i { height: 1.15em; width: auto; vertical-align: -0.28em; mix-blend-mode: multiply; display: inline-block; margin: 0 0.06em; }
 /* Ronnie, Nov 4 · ‹ Back on check-up steps 2+ */
 .cu-back { background: none; border: 0; padding: 4px 0; font: inherit; font-size: 13px; font-weight: 600; color: var(--ink); cursor: pointer; }
+/* Ronnie, Nov 4 · simpler check-up: centred titles, app tile, icon strip, one-row calendar preview */
+.cu-head .cu-title, .cu-head .cu-sub { text-align: center; }
+.cu-tile { display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 16px 0 4px; }
+.cu-tile span { width: 92px; height: 92px; border-radius: 22px; background: #fff; box-shadow: 0 6px 20px rgba(0,0,0,.12), 0 0 0 1px #EAE3D9; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.cu-tile img { width: 84px; height: 84px; border-radius: 20px; }
+.cu-tile small { font-size: 12px; font-weight: 600; }
+.cu-strip { display: flex; align-items: flex-start; justify-content: center; gap: 2px; margin: 14px 0 4px; }
+.cu-strip > span { display: flex; flex-direction: column; align-items: center; gap: 6px; width: 70px; }
+.cu-strip em { width: 46px; height: 46px; border-radius: 13px; background: #fff; box-shadow: 0 1px 0 #E4DCD1; display: flex; align-items: center; justify-content: center; color: #2F6FD6; }
+.cu-strip b { font-size: 11px; font-weight: 700; text-align: center; line-height: 1.2; white-space: nowrap; }
+.cu-strip > i { font-style: normal; color: var(--muted); height: 46px; display: flex; align-items: center; font-size: 15px; }
+.cu-os-link { border: 0; background: none; font: 500 12px Inter, system-ui, sans-serif; color: var(--muted); padding: 6px 0 0; cursor: pointer; }
+.cu-os-link.in { padding: 0; font-size: inherit; text-decoration: underline; }
+.cal-added { display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--green, #2E7D5B); font-weight: 800; font-size: 15px; padding: 6px 0; }
+.cal-added span { width: 24px; height: 24px; border-radius: 12px; background: var(--green, #2E7D5B); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; }
