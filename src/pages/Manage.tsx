@@ -288,7 +288,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
       if (!fbOn) { asked.current = true; return; }
       if (!Object.keys(info).length) return; // manager_team_info not back yet
       asked.current = true;
-      const isNewW = (r: Row) => { const i = r.staff_id ? info[r.staff_id] : undefined; return !r.attendance && !!r.punches?.punch_in && !!i?.is_new && i.done_before < newUnder; };
+      const isNewW = (r: Row) => { const i = r.staff_id ? info[r.staff_id] : undefined; return r.staff_id !== me?.id && !r.attendance && !!r.punches?.punch_in && !!i?.is_new && i.done_before < newUnder; };
       const q = rows.filter((r) => isNewW(r) && (want === 'all' ? !info[r.staff_id!]?.fb_stars : r.staff_id === want)).map((r) => r.id);
       if (q.length) { setRateQ(q.slice(1)); setFb({ row: rows.find((r) => r.id === q[0])!, back: 'queue' }); }
     } else if (sub) {
@@ -387,7 +387,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
 
   if (!ev) return <div className="loading" />;
   const active = rows.filter((r) => !r.attendance);
-  const newRows = active.filter((r) => { const i = infoOf(r); return !!i?.is_new && i.done_before < newUnder; });
+  const newRows = active.filter((r) => { const i = infoOf(r); return r.staff_id !== me?.id && !!i?.is_new && i.done_before < newUnder; });
   const groups = Array.from(new Set(rows.map((r) => r.planned_start)));
   const barN = active.filter((r) => isBar(r.position_code, r.position_detail)).length;
   const floorN = active.length - barN;
@@ -723,8 +723,8 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
               ? <button className="btn-ghost" onClick={() => mark(open.id, null)}>Undo {open.attendance === 'no_show' ? 'no-show' : 'cancelled'}</button>
               : open.left_early ? <button className="btn-ghost" onClick={() => undoLeft(open.id)}>Undo left early{open.attendance_reason ? ` · ${open.attendance_reason}` : ''}</button>
               : null}
-            <div className={'pf-tiles' + (fbOn ? '' : ' one')}>
-              {fbOn && <button className="pf-tile fb col" aria-label={inf?.fb_stars ? `Rate · sent ${inf.fb_stars} of 5 stars` : 'Rate · not rated tonight'} onClick={() => setFb({ row: open, back: 'sheet' })}>
+            <div className={'pf-tiles' + (fbOn && open.staff_id !== me?.id ? '' : ' one')}>
+              {fbOn && open.staff_id !== me?.id && <button className="pf-tile fb col" aria-label={inf?.fb_stars ? `Rate · sent ${inf.fb_stars} of 5 stars` : 'Rate · not rated tonight'} onClick={() => setFb({ row: open, back: 'sheet' })}>
                 <b><span className="pf-ic">★</span> Rate</b><Stars value={inf?.fb_stars ?? 0} size="xs" label="Tonight" />
                 <small>{inf?.fb_stars ? `sent · ${STAR_LABEL[inf.fb_stars]}` : 'not rated tonight'}</small></button>}
               {!open.attendance && !open.left_early && <button className={'pf-tile pb col' + (prob ? ' on' : '')} onClick={() => setProb(!prob)}><b><span className="pf-ic">⚠</span> Problem</b><small>no-show · left early</small></button>}

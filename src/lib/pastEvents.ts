@@ -52,7 +52,7 @@ type TeamInfo = { staff_id: string; done_before: number; is_new: boolean; fb_sta
  * Team counts + new staff to rate for events I managed. withRating = the mgr.feedback setting is on for me (Manage.tsx feedbackOn).
  * "New" = the push 27 / 30 rule: manager_team_info.is_new and fewer than Settings → "new tag" shifts done before (3 by default).
  */
-export async function loadTeamSums(eventIds: string[], withRating: boolean): Promise<Record<string, TeamSum>> {
+export async function loadTeamSums(eventIds: string[], withRating: boolean, meId?: string): Promise<Record<string, TeamSum>> {
   if (!eventIds.length) return {};
   const q = (cols: string) => supabase.from('shifts').select(cols).in('event_id', eventIds).neq('status', 'declined');
   const base = 'event_id,staff_id,attendance,position_code,position_detail,staff:staff!shifts_staff_id_fkey(full_name,photo_url),punches(punch_in,punch_out)';
@@ -75,7 +75,7 @@ export async function loadTeamSums(eventIds: string[], withRating: boolean): Pro
     const ended = worked.filter((c) => c.punches?.punch_out && new Date(c.punches.punch_out).getTime() <= Date.now());
     const inf = infos[id] ?? {};
     const seen = new Set<string>();
-    const newStaff: NewPerson[] = worked.filter((c) => { const i = inf[c.staff_id]; if (!i?.is_new || i.done_before >= newUnder || seen.has(c.staff_id)) return false; seen.add(c.staff_id); return true; })
+    const newStaff: NewPerson[] = worked.filter((c) => { const i = inf[c.staff_id]; if (c.staff_id === meId || !i?.is_new || i.done_before >= newUnder || seen.has(c.staff_id)) return false; seen.add(c.staff_id); return true; })
       .map((c) => ({ staff_id: c.staff_id, name: c.staff?.full_name ?? '?', photo_url: c.staff?.photo_url ?? null, role: roleOf(c.position_code, c.position_detail), done_before: inf[c.staff_id].done_before, stars: inf[c.staff_id].fb_stars }));
     out[id] = { team: list.length, ended: ended.length, noShow: list.filter((c) => c.attendance === 'no_show').length, worked: worked.length, newStaff, toRate: newStaff.filter((n) => !n.stars).length };
   }
@@ -91,7 +91,7 @@ export function usePastEvents(meId: string, days: number, withRating: boolean, o
     const list = await loadPastShifts(meId, days);
     setShifts(list);
     const managed = [...new Set(list.filter((s) => managesShift(s, meId)).map((s) => s.events.id))];
-    setSums(await loadTeamSums(managed, withRating));
+    setSums(await loadTeamSums(managed, withRating, meId));
   };
   useEffect(() => {
     load();

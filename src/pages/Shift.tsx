@@ -53,7 +53,7 @@ export function Shift({ backTo = '/' }: { backTo?: string }) {
 function PastManager({ eventId, eventDate, sentAt, me }: { eventId: string; eventDate: string; sentAt: string | null; me: { id: string; full_name: string } }) {
   useSettings(); const fbOn = feedbackOn(me);
   const [sum, setSum] = useState<TeamSum | null>(null);
-  useEffect(() => { loadTeamSums([eventId], fbOn).then((m) => setSum(m[eventId] ?? null)); }, [eventId, fbOn]);
+  useEffect(() => { loadTeamSums([eventId], fbOn, me.id).then((m) => setSum(m[eventId] ?? null)); }, [eventId, fbOn, me.id]);
   if (!sum) return <section className="pe-card"><div className="loading" style={{ minHeight: 60 }} /></section>;
   const ord = ['1st', '2nd', '3rd'];
   const open = mtlToday() <= addDays(eventDate, 7);
