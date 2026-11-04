@@ -37,7 +37,12 @@ export default async function handler(req, res) {
   res.setHeader('X-Robots-Tag', 'noindex');
   const ready = !!(URL_ && SERVICE);
 
-  if (req.method === 'GET' && req.query.check) { res.status(200).json({ ready }); return; }
+  if (req.method === 'GET' && req.query.check) {
+    // Key shape only (never the key): kind, length, and the role inside a JWT key (anon vs service_role).
+    let role = null; try { role = JSON.parse(Buffer.from(SERVICE.split('.')[1], 'base64url').toString()).role ?? null; } catch { /* not a JWT */ }
+    res.status(200).json({ ready, key: { kind: SERVICE.startsWith('eyJ') ? 'jwt' : SERVICE.startsWith('sb_secret_') ? 'sb_secret' : SERVICE.startsWith('sb_publishable_') ? 'sb_publishable' : 'other', len: SERVICE.length, role } });
+    return;
+  }
 
   if (req.method === 'GET') {
     const t = String(req.query.t || '');
