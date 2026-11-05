@@ -531,7 +531,9 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
                   <Link key={'m' + m.id} to={mtgTo(m.id)} className="agenda-row mtg-row" style={{ minHeight: 64 }}>
                     <div className="d" style={{ width: 40, alignItems: 'center' }}><small>{b.dow}</small><b>{b.day}</b></div>
                     <div className="what" style={{ gap: 5 }}><b>{m.title}</b><span className="pos-row2"><span className="pos-pill mtg">Meeting</span><span>✓ you’re coming</span></span></div>
+                    <span className="row-wear" aria-hidden="true" />
                     <div className="row-time"><small>Starts</small><b><span className="serif">{tm.replace(/\s?[ap]\.?\s?m\.?/i, '')}</span><i>{/p\.?\s?m/i.test(tm) ? ' PM' : ' AM'}</i></b></div>
+                    <span className="ok-dot" aria-hidden="true" style={{ visibility: 'hidden' }} />
                   </Link>); };
                   const sh = list.slice(0, 5); const cut = list.length > 5 ? sh[sh.length - 1].planned_start : null;
                   const items: { at: string; el: JSX.Element }[] = [

@@ -3270,3 +3270,4 @@ div.venue-rule { background: #fff; border-radius: 14px; padding: 10px 14px; marg
 .grp-head .btn-go { white-space: nowrap; flex: none; margin-left: auto; }
 /* Nov 5 · one clean line: time on the left, Start remaining (n) on the right (n = the people count) */
 .grp-head .btn-go { padding: 0 13px; }
+.agenda-row.mtg-row .row-wear { background: transparent; } /* Nov 5 · keeps the time column in line with shifts */
