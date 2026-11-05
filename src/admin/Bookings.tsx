@@ -358,12 +358,14 @@ export function Bookings() {
     // Ronnie, Nov 4 · the total on top includes the MDs (what the client pays for)
     const client = e.staff_needed > 0 ? Math.max(e.staff_needed, leads.length) : lineSum + Math.max(leadSlots, leads.length);
     const crew = pl.filter((p) => !isLead(p) && !p.extra && !p.suggested);
-    const extrasPlaced = pl.filter((p) => p.extra && !p.suggested).length;
+    const flagged = pl.filter((p) => p.extra && !p.suggested).length;
     const sc = crew.map((p) => scores[p.staff_id]).filter((x): x is number => typeof x === 'number' && isFinite(x));
     const strength = sc.length ? Math.round(sc.reduce((a, b) => a + b, 0) / sc.length) : null;
     const all = [...crew, ...leads];
     const confirmed = all.filter((p) => confOf(p) === 'ok').length;
-    return { pl, leads, leadSlots, leadStart: leadLines[0]?.start ?? leads[0]?.start ?? (e.start_time ?? '17:00').slice(0, 5), client, placed: all.length, extrasPlaced, extras: extrasOf(d, e), strength, confirmed };
+    // Ronnie, Nov 4 · anyone booked beyond the client count is an extra (Le 9e: 21 booked on 19 = 19 + 2 extras)
+    const over = client ? Math.max(0, all.length - client) : 0; const extrasPlaced = flagged + over;
+    return { pl, leads, leadSlots, leadStart: leadLines[0]?.start ?? leads[0]?.start ?? (e.start_time ?? '17:00').slice(0, 5), client, placed: client ? Math.min(all.length, client) : all.length, booked: all.length, extrasPlaced, extras: extrasOf(d, e), strength, confirmed };
   };
   const onDrop = (d: string, to: { event_id: string; start: string; extra?: boolean }) => {
     const g = dragRef.current; setDrag(null); if (!g) return;
@@ -451,7 +453,7 @@ export function Bookings() {
               <button type="button" aria-label="One more extra" onClick={() => setExtras(d, e, extras + 1)}>+</button></span> extras</span>
           </div>
           <div className="bk-bar"><i style={{ width: `${Math.min(100, (placed / Math.max(1, client)) * 100)}%` }} className={placed < client ? 'short' : ''} /></div>
-          {(st.strength != null || placed > 0) && <div className="bk-ts">{st.strength != null ? <span>Team strength <b>{st.strength}</b></span> : <span />}{placed > 0 && <span className="bk-tsr"><span className="okc">{st.confirmed} of {placed} confirmed</span>{st.confirmed < pl.filter((p) => !p.suggested && p.shift_id).length && <button type="button" className="bk-call" onClick={() => confirmAll(d, e)}>✓ Confirm all</button>}</span>}</div>}
+          {(st.strength != null || placed > 0) && <div className="bk-ts">{st.strength != null ? <span>Team strength <b>{st.strength}</b></span> : <span />}{placed > 0 && <span className="bk-tsr"><span className="okc">{st.confirmed} of {st.booked} confirmed</span>{st.confirmed < pl.filter((p) => !p.suggested && p.shift_id).length && <button type="button" className="bk-call" onClick={() => confirmAll(d, e)}>✓ Confirm all</button>}</span>}</div>}
           {diff > 5 && top && <div className="bk-bal">{diff} below {seeTitle(top.e)} today · worth balancing</div>}
         </div>
         {(leadSlots > 0 || leads.length > 0) && (
@@ -525,7 +527,7 @@ export function Bookings() {
             <div className="bk-wdh"><small>{dLabel(d, { weekday: 'short' })}</small><b>{new Date(d + 'T12:00:00').getDate()}</b>{d === today0 && <em>TODAY</em>}<span className="grow" />{short > 0 && <span className="bk-wds">{short} short</span>}</div>
             {!evs.length && <span className="bk-wdn">no events</span>}
             {evs.slice(0, 3).map((e) => { const c = countOf(e); const st = sendStateOf(e, today0); return (
-              <button key={e.id} type="button" className={'bk-wl' + (e.department === 'bar' ? ' bar' : '')} onClick={(ev) => { ev.stopPropagation(); go(e.id); }}>
+              <button key={e.id} type="button" className={'bk-wl' + (e.department === 'bar' ? ' is-bar' : '')} onClick={(ev) => { ev.stopPropagation(); go(e.id); }}>
                 <span className="bk-wlt">{seeTitle(e)}</span><b className={c.need && c.short ? 'sh' : 'ok'}>{c.need ? `${c.booked}/${c.need}` : c.n}</b>{c.extra > 0 && <i>+{c.extra}</i>}
                 {st === 'sent' ? <span className="bk-wok">✓</span> : st === 'ready' && d >= today0 ? <span className="bk-wsend">SEND</span> : st === 'later' ? <span className="bk-wlater">○</span> : null}
               </button>); })}
