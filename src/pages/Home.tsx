@@ -176,6 +176,8 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
   const mtgTo = (id: string) => (preview ? `/admin/meeting/${id}` : `/meeting/${id}`);
   const mtgAnswered = (id: string, a: 'coming' | 'cant') => setMeetings((l) => (l ?? []).map((x) => (x.id === id ? { ...x, answer: a } : x)));
   const mtgToday = (meetings ?? []).filter((m) => dayOfMtl(m.starts_at) === todayMtl());
+  // Nov 5 · later meetings they said Coming to → a row under Coming up
+  const mtgComing = (meetings ?? []).filter((m) => dayOfMtl(m.starts_at) > todayMtl() && m.answer === 'coming').sort((a, b) => a.starts_at.localeCompare(b.starts_at));
   const soonDay = addDay(today, 14);
   const mtgLater = (meetings ?? []).filter((m) => dayOfMtl(m.starts_at) > todayMtl() && m.answer !== 'cant' && (m.answer === null || dayOfMtl(m.starts_at) <= soonDay));
   const MEETING_ON_CARD = ['meeting_invite', 'meeting_today']; // the meeting card itself shows these
@@ -324,9 +326,9 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
         );
       })}
 
-      {mtgLater.map((m) => <MeetingCard key={m.id} m={m} to={mtgTo(m.id)} preview={preview} onAnswered={(a) => mtgAnswered(m.id, a)} />)}
+      {mtgLater.filter((m) => m.answer !== 'coming').map((m) => <MeetingCard key={m.id} m={m} to={mtgTo(m.id)} preview={preview} onAnswered={(a) => mtgAnswered(m.id, a)} />)}
 
-      {!next && !doneToday.length && !mtgToday.length && !mtgLater.length && <div className="card"><p className="muted" style={{ margin: 0 }}>No shifts booked yet.</p></div>}
+      {!next && !doneToday.length && !mtgToday.length && !mtgLater.filter((m) => m.answer !== 'coming').length && <div className="card"><p className="muted" style={{ margin: 0 }}>No shifts booked yet.</p></div>}
 
       {next && (() => {
         const addr = next.events.address || next.events.venues?.address || '';
@@ -503,7 +505,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
               <CalIcon /><b className="grow">{waitingAsks} date{waitingAsks > 1 ? 's' : ''} to answer</b><span className="dp-go">Answer ›</span>
             </Link>
           )}
-          {list.length > 0 && (
+          {(list.length > 0 || mtgComing.length > 0) && (
             <>
               <div className="sec-head"><span className="serif">Coming up</span><Link to={myDatesTo('booked')}>All my dates ›</Link></div>
               <section className="agenda">
@@ -521,6 +523,13 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
                     </Link>
                   );
                 })}
+                {/* Nov 5 · meetings they said Coming to sit here (not on top), one row each */}
+                {mtgComing.map((m) => { const d = dayOfMtl(m.starts_at); const b = dayBadge(d, lang); const tm = time(m.starts_at, lang); return (
+                  <Link key={'m' + m.id} to={mtgTo(m.id)} className="agenda-row mtg-row" style={{ minHeight: 64 }}>
+                    <div className="d" style={{ width: 40, alignItems: 'center' }}><small>{b.dow}</small><b>{b.day}</b></div>
+                    <div className="what" style={{ gap: 5 }}><b>{m.title}</b><span className="pos-row2"><span className="pos-pill mtg">Meeting</span><span>✓ you’re coming</span></span></div>
+                    <div className="row-time"><small>Starts</small><b><span className="serif">{tm.replace(/\s?[ap]\.?\s?m\.?/i, '')}</span><i>{/p\.?\s?m/i.test(tm) ? ' PM' : ' AM'}</i></b></div>
+                  </Link>); })}
               </section>
             </>
           )}

@@ -3183,3 +3183,6 @@ div.venue-rule { background: #fff; border-radius: 14px; padding: 10px 14px; marg
 .bk-sidedept button.on { background: #1A1714; color: #fff; box-shadow: none; }
 .bk-av.bar-p { box-shadow: inset 3px 0 0 #2F3A4A; }
 .bk-onedept button { text-transform: none; }
+/* Nov 5 · meeting row under Coming up */
+.pos-pill.mtg { background: #E9E6FB; color: #4B45B5; }
+.agenda-row.mtg-row { box-shadow: inset 3px 0 0 #6B64D8; }
