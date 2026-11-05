@@ -404,6 +404,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
                   : addr ? <a className="dir-btn" href={mapsUrl(addr)} target="_blank" rel="noreferrer">Directions</a>
                   : <span className="dir-btn" aria-disabled>Directions</span>}
               </div>
+              {isLead(next) && next.events.drive_folder_url && <a className="home-folder" href={next.events.drive_folder_url} target="_blank" rel="noreferrer">📁 Event Folder</a>}
               {needChange}
             </section>
             {laterSame.map((s) => {
@@ -463,6 +464,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
                 : addr ? <a className="dir-btn" href={mapsUrl(addr)} target="_blank" rel="noreferrer">Directions</a>
                 : <span className="dir-btn" aria-disabled>Directions</span>}
             </div>
+            {isLead(next) && next.events.drive_folder_url && <a className="home-folder" href={next.events.drive_folder_url} target="_blank" rel="noreferrer">📁 Event Folder</a>}
             {needChange}
           </section>
         );
