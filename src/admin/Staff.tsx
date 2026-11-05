@@ -7,6 +7,7 @@ import { uploadPhoto } from '../lib/photo';
 import { PhotoPicker, Avatar } from '../components/Avatar';
 import { StaffProfile } from './StaffProfile';
 import { CheckupTracker } from './CheckupTracker';
+import { loadScoreData, scoreOf, type ScoreData } from './score';
 import { appStatus, loadInviteStatus, InviteModal, AppChip, type InviteRow } from './Invite';
 
 type Off = { id: string; staff_id: string; from_date: string; to_date: string; every_dow: number | null };
@@ -24,6 +25,9 @@ export function Staff() {
   const [open, setOpen] = useState<string | null>(null);
   const [prof, setProf] = useState<AStaff | null>(null);
   const [month, setMonth] = useState<Record<string, number>>({});
+  // Nov 5 · Ranking v3: the form score (0–100) replaces the old manual rank number
+  const [sd, setSd] = useState<ScoreData | null>(null);
+  useEffect(() => { loadScoreData().then(setSd).catch(() => {}); }, []);
   const [off, setOff] = useState<Off[]>([]);
   const [rules, setRules] = useState<{ links: SLink[]; conds: SCond[] }>({ links: [], conds: [] });
   const [params, setParams] = useSearchParams();
@@ -63,7 +67,8 @@ export function Staff() {
   const tOf = (s: AStaff) => s.staff_private?.tier ?? null;
   const count = (t: string) => searched.filter((s) => (t === 'none' ? !tOf(s) : tOf(s) === t)).length;
   const rows = searched.filter((s) => tier === 'all' || (tier === 'none' ? !tOf(s) : tOf(s) === tier)).filter((s) => appF === 'all' || !invRows || appGroup(s) === appF).sort((a, b) => {
-    const r = (x: AStaff) => x.staff_private?.ranking ?? 9999;
+    const fm = (x: AStaff) => (sd ? scoreOf(x, sd).total : 0); // tier band + form (A first, then B, C)
+    const r = (x: AStaff) => -fm(x);
     switch (sort) {
       case 'last': return lastName(a).localeCompare(lastName(b), 'fr');
       case 'rank': return r(a) - r(b);
@@ -96,7 +101,7 @@ export function Staff() {
           <button className={tier === 'none' ? 'on' : ''} onClick={() => setTier('none')}><i className="tier-q">?</i> Unranked {count('none')}</button>
         </div>
         <label className="row sm muted" style={{ gap: 6 }}>Sort <select value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
-          <option value="first">A → Z (first name)</option><option value="last">A → Z (last name)</option><option value="rank">Rank</option><option value="tier">Tier, then rank</option><option value="shifts">Most shifts this month</option><option value="newest">Newest</option></select></label>
+          <option value="first">A → Z (first name)</option><option value="last">A → Z (last name)</option><option value="rank">Ranking (tier, then score)</option><option value="shifts">Most shifts this month</option><option value="newest">Newest</option></select></label>
         <div className="seg">{([['all', 'All'], ['floor', 'Floor'], ['bar', 'Bar'], ['md', 'MD']] as const).map(([k, l]) => <button key={k} className={dept === k ? 'on' : ''} onClick={() => setDept(k)}>{l}</button>)}</div>
         <label className="row sm" style={{ gap: 6 }}><input type="checkbox" checked={inactive} onChange={(e) => setInactive(e.target.checked)} /> Show inactive</label>
       </div>
@@ -111,7 +116,7 @@ export function Staff() {
       </div>
       {open === 'new' && <Editor onDone={() => { setOpen(null); load(); }} />}
       <div className="adm-card" style={{ padding: 0 }}>
-        <div className="st-row sl-row st-head"><span /><span>NAME</span><span>TIER · RANK</span><span className="hide-sm">{mName}</span><span className="hide-sm">TIME OFF</span><span className="hide-sm">APP</span><span /></div>
+        <div className="st-row sl-row st-head"><span /><span>NAME</span><span>TIER · SCORE</span><span className="hide-sm">{mName}</span><span className="hide-sm">TIME OFF</span><span className="hide-sm">APP</span><span /></div>
         {rows.map((s, k) => {
           const L = letters && (k === 0 || letterOf(rows[k - 1]) !== letterOf(s)) ? letterOf(s) : null;
           const tr = tOf(s); const o = offText(s.id); const ap = app(s);
@@ -123,7 +128,7 @@ export function Staff() {
                 <span className="sl-check" onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={`Select ${s.full_name}`} checked={sel.has(s.id)}
                   onChange={(e) => { const n = new Set(sel); if (e.target.checked) n.add(s.id); else n.delete(s.id); setSel(n); }} /></span>
                 <span className="st-name"><Avatar name={s.full_name} url={s.photo_url} size={34} /><span><b>{s.full_name}{!tr && <i className="new-tag">NEW</i>}<RuleIcons sid={s.id} links={rules.links} conds={rules.conds} /></b><small>{s.nickname ? `"${s.nickname}" · ` : ''}{s.positions.map((p) => p.toLowerCase()).join(', ') || s.role}{s.role !== 'staff' ? ` · ${s.role}` : ''}</small></span></span>
-                <span>{tr ? <><i className={'tier-dot ' + tr}>{tr}</i> <span className="muted">#{s.staff_private?.ranking ?? '–'}</span></> : <><i className="tier-q">?</i> <Link to="/admin/tiers" className="accent strong sm" onClick={(e) => e.stopPropagation()}>Rank ›</Link></>}</span>
+                <span>{tr ? <><i className={'tier-dot ' + tr}>{tr}</i> <span className="muted" title="Form score out of 100 (Admin → Ranking)">{sd ? scoreOf(s, sd).form : '…'}</span></> : <><i className="tier-q">?</i> <Link to="/admin/tiers" className="accent strong sm" onClick={(e) => e.stopPropagation()}>Rank ›</Link></>}</span>
                 <span className="hide-sm">{month[s.id] ?? 0}</span>
                 <span className="hide-sm">{o ? <span className="tag" style={{ height: 24 }}>{o}</span> : <span className="muted">—</span>}</span>
                 <span className="sl-app">{invRows && <><AppChip st={ap} />{ap.action ? <button className={'abtn sm' + (ap.action === 'Invite' ? ' dark' : '')} onClick={act}>{ap.action}</button> : <span className="muted">—</span>}</>}</span>
