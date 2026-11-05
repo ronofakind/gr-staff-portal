@@ -462,9 +462,9 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
         </div>); })}
       <section className="mt-sum">
         <div className="row-a">
-          <div><small>Working now</small><span className="big">{workingN}<span> / {active.length}</span></span></div>
+          <div><small>Working now</small><span className="big mt-n">{workingN}<span> of {active.length}</span></span></div>
           <div className="counts">
-            <span><b>{floorN}</b> floor</span><span><b>{barN}</b> bar</span><span><b>{doneN}</b> done</span>
+            <span><b>{active.length - workingN - doneN}</b> not started</span><span><b>{doneN}</b> done</span>{barN > 0 && floorN > 0 && <span><b>{floorN}</b> floor · <b>{barN}</b> bar</span>}
             {flaggedN > 0 && <span className="ns"><b>{flaggedN}</b> out</span>}
           </div>
         </div>
@@ -476,9 +476,8 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
         </div>
         {late.length > 0 && <div className="mt-late">{late.length} late · not started {lateMin} min after their start</div>}
       </section>
-      {(runningLate.length > 0 || late.length > 0) && <div className="late-chips">
+      {runningLate.length > 0 && <div className="late-chips">
         {runningLate.length > 0 && <span className="lc gold">⏱ Running late · {runningLate.length}</span>}
-        {late.filter((r) => !lateOf(r)).length > 0 && <span className="lc">Not in · {late.filter((r) => !lateOf(r)).length}</span>}
       </div>}
       {endsAt ? (() => {
         const left = Math.max(0, new Date(endsAt).getTime() - nowMs); const mm = Math.floor(left / 60000); const ss = Math.floor((left % 60000) / 1000);
