@@ -338,7 +338,8 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
         const working = !!next.punches?.punch_in && new Date(next.punches.punch_in).getTime() <= Date.now();
         // push 28 · bubbles until the shift starts; running late all day on the event day until they're started
         const started = !!next.punches?.punch_in || Date.now() >= new Date(next.planned_start).getTime();
-        const managesIt = !!team && !preview;
+        // Nov 5 · know it's a manager right away (the team list loads a moment later → the late button used to flash)
+        const managesIt = (!!team || isLead(next) || next.events.manager_id === me.id || (next.events.co_manager_ids ?? []).includes(me.id)) && !preview;
         const lateOn = setting('bookings.running_late') !== 'off' && next.events.event_date === today && !next.punches?.punch_in && !managesIt && !next.time_tbc; // Settings (push 32)
         const req = chg.reqs[next.id];
         const mgrName = next.events.manager?.full_name ?? null;
