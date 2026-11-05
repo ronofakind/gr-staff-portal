@@ -251,6 +251,9 @@ export function Day() {
               <>
                 <div><div className="kicker">{ev.title} · starts {t12(hm(s.planned_start))}</div><div className="serif" style={{ fontSize: 24 }}>{s.staff?.full_name}</div>
                   <AlsoWorking others={otherShifts(evs, s.staff_id, ev.id)} start={s.planned_start} /></div>
+                {s.status === 'confirmed'
+                  ? <button className="opt" onClick={() => run(async () => { const { error } = await supabase.rpc('admin_mark_confirmed', { p_shift: s.id, p_on: false }); if (error) throw error; })}><span><b>Undo confirmed</b><small>Back to waiting for {s.staff?.full_name?.split(' ')[0]} · nothing is sent</small></span></button>
+                  : <button className="opt" onClick={() => run(async () => { const { error } = await supabase.rpc('admin_mark_confirmed', { p_shift: s.id, p_on: true }); if (error) throw error; })}><span><b>✓ Mark confirmed</b><small>They confirmed by text · shows in their app · nothing is sent</small></span></button>}
                 <b className="sm">Move to…</b>
                 {others.map((x) => x.id === ev.id ? startsOf(x).filter((st) => st !== hm(s.planned_start)).map((st) => (
                   <button key={x.id + st} className="opt" onClick={() => moveTo(x, s, ev, st)}><span><b>Same event · start {t12(st)}</b></span></button>

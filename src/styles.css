@@ -3051,3 +3051,4 @@ div.venue-rule { background: #fff; border-radius: 14px; padding: 10px 14px; marg
 .bk-tq { display: flex; gap: 6px; } .bk-tq .abtn { flex: 1; }
 .bk-tin { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 6px 0; }
 .bk-tin input { font: 800 22px Inter, system-ui, sans-serif; padding: 6px 10px; border-radius: 12px; border: 1px solid var(--line, #E4DCD1); background: #F6F2EC; }
+.md-by-r { display: block; font-size: 11px; color: var(--muted); margin-top: 2px; }

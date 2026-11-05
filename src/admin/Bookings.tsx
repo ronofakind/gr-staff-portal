@@ -560,6 +560,9 @@ export function Bookings() {
           {step === 'menu' && p ? <>
             <div><b>{name(sid)} · {evById[p.event_id]?.title}</b><div className="muted sm">{roleName(p.code)} · {t12(p.start)}</div></div>
             <button className="bk-mrow" onClick={() => setPhone({ ...phone, step: 'move' })}><b>Move to…</b></button>
+            {p.shift_id && (() => { const sh = evById[p.event_id]?.shifts.find((y) => y.id === p.shift_id); const on = sh?.status === 'confirmed';
+              return <button className="bk-mrow" onClick={async () => { const { error } = await supabase.rpc('admin_mark_confirmed', { p_shift: p.shift_id, p_on: !on }); if (error) { setHint(error.message); return; } setHint(on ? `${first} back to waiting` : `✓ ${first} confirmed`); close(); await load(); }}>
+                <b>{on ? 'Undo confirmed' : '✓ Mark confirmed'}</b> <span className="muted">{on ? 'back to waiting' : 'they texted you · nothing is sent'}</span></button>; })()}
             {!p.suggested && <button className="bk-mrow" onClick={() => { setOwnT(p.start); setPhone({ ...phone, step: 'time' }); }}><b>Change start time</b> <span className="muted">only for {first}</span></button>}
             {!p.suggested && <button className="bk-mrow" onClick={() => setPhone({ ...phone, step: 'add' })}><b>Also add to…</b> <span className="muted">2nd shift that day</span></button>}
             <button className="bk-mrow red" onClick={() => { remove(date, p.key); close(); }}>Remove</button>

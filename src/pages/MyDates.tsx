@@ -21,7 +21,7 @@ import { usePastEvents, managesShift, roleOf, type PastShift, type TeamSum } fro
 import { Brand, brandify } from '../components/Brand';
 
 /** Booked tab rows (shifts from today on). confirm_by is push 33 (039). */
-type Shift = { id: string; status: 'booked' | 'confirmed' | 'declined'; attendance: string | null; planned_start: string; time_tbc: boolean;
+type Shift = { id: string; status: 'booked' | 'confirmed' | 'declined'; confirmed_by?: string | null; attendance: string | null; planned_start: string; time_tbc: boolean;
   confirm_by: string | null; events: { id: string; event_date: string; title: string; details_pending?: boolean | null; venues: { name: string } | null } };
 type Week = { dow: number; status: 'yes' | 'from' | 'no'; from_time: string | null };
 type Tab = 'answer' | 'booked' | 'answered' | 'past';
@@ -55,7 +55,7 @@ export function MyDates({ me, base = '', preview = false }: { me: Staff; base?: 
   const past = usePastEvents(me.id, 30, fbOn);
 
   const loadShifts = () => supabase.from('shifts')
-    .select('id,status,attendance,planned_start,time_tbc,confirm_by,events!inner(id,event_date,title,details_pending,venues(name))')
+    .select('id,status,attendance,planned_start,time_tbc,confirm_by,confirmed_by,events!inner(id,event_date,title,details_pending,venues(name))')
     .eq('staff_id', me.id).neq('status', 'declined').gte('events.event_date', today)
     .then(({ data, error }) => {
       if (error) console.warn('[my dates · shifts]', error.message);
@@ -264,7 +264,8 @@ function BookedRow({ s, base, onConfirm }: { s: Shift; base: string; onConfirm: 
         <b>{s.events.details_pending ? 'You’re booked' : place} · {notFinal(s) ? 'time TBC' : t12(s.planned_start)}</b>
         {notFinal(s) ? <span className="md-tag soon">DETAILS COMING</span>
           : toConfirm ? <span className="md-tag red">{left == null ? 'TO CONFIRM' : left <= 0 ? 'CONFIRM NOW' : `${left} H TO CONFIRM`}</span>
-          : <span className="md-tag ok">✓ BOOKED</span>}
+          : <span className="md-tag ok">{s.status === 'confirmed' ? '✓ CONFIRMED' : '✓ BOOKED'}</span>}
+        {s.status === 'confirmed' && s.confirmed_by && <span className="md-by-r">Ronnie confirmed this for you</span>}
       </div>
       {toConfirm ? <button className="md-confirm" onClick={onConfirm}>Confirm</button> : <Link className="md-chg" to={`${base}/shift/${s.id}`}>Details</Link>}
     </div>
