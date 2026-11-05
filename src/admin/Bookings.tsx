@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { StaffProfile } from './StaffProfile';
 import { supabase } from '../lib/supabase';
 import { setting, autoExtras } from '../lib/settings';
 import { DeptTag } from './DeptTag';
@@ -62,6 +63,8 @@ export function Bookings() {
   const [mode, setMode] = useState<'practice' | 'live'>(() => (readLS('gr-book-mode', 'practice') as 'practice' | 'live'));
   const [events, setEvents] = useState<AEvent[] | null>(null);
   const [staff, setStaff] = useState<AStaff[]>([]);
+  const [prof, setProf] = useState<string | null>(null); // Nov 5 · staff profile opened from the name menu (knows, tier, notes)
+  const navB = useNavigate();
   const [av, setAv] = useState<Av[]>([]); const [wk, setWk] = useState<Wk[]>([]); const [off, setOff] = useState<Set<string>>(new Set());
   const [links, setLinks] = useState<[string, string][]>([]); const [conds, setConds] = useState<Cond[]>([]);
   const [rl, setRl] = useState<SLink[]>([]); const [clients, setClients] = useState<Client[]>([]); const [venues, setVenues] = useState<Venue[]>([]);
@@ -728,6 +731,7 @@ export function Bookings() {
         </div></div>
       )}
 
+      {prof && byId[prof] && <StaffProfile s={byId[prof]} all={staff} onClose={() => { setProf(null); allStaff().then(setStaff); }} onEdit={() => navB(`/admin/staff?open=${prof}`)} />}
       {phone && (() => { const { sid, p, step } = phone; const first = name(sid).split(' ')[0]; const close = () => setPhone(null);
         const groups = dayEvs(date).flatMap((e) => groupsOf(date, e).map((g) => ({ e, g })));
         const addable = groups.filter(({ e }) => !onEvent(date, sid, e.id));
@@ -747,6 +751,7 @@ export function Bookings() {
               {!p.suggested && <button className="bk-mli" onClick={() => { setOwnT(p.start); setPhone({ ...phone, step: 'time' }); }}>{ic('c|M12 7v5l3 2')}<span className="grow">Change time</span><span className="bk-mch">›</span></button>}
               <button className="bk-mli" onClick={() => setPhone({ ...phone, step: 'move' })}>{ic('M5 12h14|M13 6l6 6-6 6')}<span className="grow">Move</span><span className="bk-mch">›</span></button>
               {!p.suggested && <button className="bk-mli" onClick={() => setPhone({ ...phone, step: 'add' })}>{ic('M12 5v14|M5 12h14')}<span className="grow">Add a 2nd shift</span><span className="bk-mch">›</span></button>}
+              <button className="bk-mli" onClick={() => { setProf(sid); close(); }}>{ic('c|M12 8v.01|M12 11v5')}<span className="grow">Profile · ranking · knows</span><span className="bk-mch">›</span></button>
               <Link className="bk-mli" to={`/admin/messages?staff=${sid}`} onClick={close}>{ic('M4 5h16v11H9l-5 4z')}<span className="grow">Message</span><span className="bk-mch">›</span></Link>
             </div>
             <button className="bk-mrm" onClick={() => { remove(date, p.key); close(); }}>Remove</button>
