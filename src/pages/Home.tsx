@@ -511,7 +511,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
                   const b = dayBadge(s.events.event_date, lang);
                   const pend = !!s.events.details_pending;
                   return (
-                    <Link key={s.id} to={teams[s.events.id] && !preview ? `/manage/${s.events.id}` : `${base}/shift/${s.id}`} className="agenda-row" style={{ minHeight: 64 }}>
+                    <Link key={s.id} to={`${base}/shift/${s.id}`} className="agenda-row" style={{ minHeight: 64 }}>
                       <div className="d" style={{ width: 40, alignItems: 'center' }}><small>{b.dow}</small><b>{b.day}</b></div>
                       <div className="what" style={{ gap: 5 }}><b className={pend ? 'muted' : ''}>{pend ? 'Place to come' : s.events.title}</b>
                         <span className="pos-row2"><span className={'pos-pill' + (isLead(s) ? ' lead' : '')}>{pos(s)}</span>{teams[s.events.id] && !preview ? <span>team {teams[s.events.id].length}</span> : null}</span></div>
