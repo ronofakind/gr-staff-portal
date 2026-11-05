@@ -250,6 +250,8 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
   const [lateN, setLateN] = useState<Record<string, Late>>({});
   // Nov 4 · extras (over the client count) · only the manager sees this (migration 061 · errors → no tags)
   const [xIds, setXIds] = useState<Set<string>>(new Set());
+  // Nov 5 · Ronnie's note for the manager (migration 066 · errors → nothing shown)
+  const [rNote, setRNote] = useState<Record<string, string>>({});
   // push 46 · the person's other G&R shift that day (venue + planned times only; migration 052 · errors → nothing shown)
   const [otherSh, setOtherSh] = useState<Record<string, { venue: string; start_at: string; end_at: string | null }[]>>({});
 
@@ -274,6 +276,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
       for (const x of data as { staff_id: string; venue: string; start_at: string; end_at: string | null }[]) if (x && typeof x.staff_id === 'string' && typeof x.start_at === 'string') (m[x.staff_id] ??= []).push(x);
       setOtherSh(m);
     });
+    { const ids = ((s.data ?? []) as unknown as Row[]).map((r) => r.id); if (ids.length) supabase.from('shift_mgr_notes').select('shift_id,note').in('shift_id', ids).then(({ data, error }) => { if (!error && Array.isArray(data)) setRNote(Object.fromEntries((data as { shift_id: string; note: string }[]).map((x) => [x.shift_id, x.note]))); }); }
     supabase.from('shift_extras').select('shift_id,kind').eq('event_id', eventId!).then(({ data, error }) => { if (!error && Array.isArray(data)) setXIds(new Set((data as { shift_id: string; kind?: string }[]).filter((x) => x.kind !== 'keep').map((x) => x.shift_id))); });
     supabase.from('event_notices').select('id,body,created_at').eq('event_id', eventId!).order('created_at', { ascending: false }).then(({ data }) => setNotices((data ?? []) as { id: string; body: string; created_at: string }[]));
     // Within each call time: lead (MD / bar manager) first, then everyone A–Z by first name.
@@ -563,6 +566,8 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
                         {before && !pin && <><span><i className="p28-tag from">COMING FROM {before.venue.toUpperCase()}</i></span><span className="two-line">If their first shift runs late, you’ll see it here.</span></>}
                       </>;
                     })()}
+                    {!r.attendance && r.leave_by && !pout && <span><i className="p28-tag gold">⏱ MUST LEAVE BY {fullT(r.leave_by).toUpperCase()}</i></span>}
+                    {!r.attendance && rNote[r.id] && <span className="mgr-note">From Ronnie: “{rNote[r.id]}”</span>}
                     {fromRonnie ? <span className="st muted-st">Don’t wait for {first(r.staff?.full_name)}{r.attendance_reason ? ` · ${r.attendance_reason}` : ''}</span>
                       : r.attendance ? <span className="st muted-st">{r.attendance === 'no_show' ? 'No-show' : 'Cancelled'}{r.attendance_reason ? ` · ${r.attendance_reason}` : ''}</span>
                       : r.left_early && pin && pout ? <span className="st gold">{time(pin, lang)} → {time(pout, lang)} · {hours(pin, pout)} {t.hours}<i className="st-tag gold">LEFT EARLY</i></span>
@@ -582,7 +587,6 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
                       : r.attendance ? <button className="act undo" onClick={() => mark(r.id, null)}>Undo</button>
                       : !pin ? (gate(r).kind === 'locked' ? <button className="act locked" disabled title={gate(r).label}>{t.start}</button> : <button className="act start" onClick={() => startRows([r])}>{t.start}</button>)
                       : !ended ? <button className="act end" onClick={() => endRow(r, pin)}>{t.end}</button> : <span className="act done-mark">✓</span>}
-                    {r.leave_by && !pout && !r.attendance && <span className="leave-tag">⏱ Leaves ~{time(r.leave_by, lang).replace(':00', '')}</span>}
                   </div>
                 </div>
                 </SwipeRow>
@@ -754,7 +758,8 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
                 <button className="qopt grey" onClick={() => openAsk(open, 'cancelled')}>Cancelled</button>
               </div>
             )}
-            {open.leave_by && <span className="leave-tag inline">⏱ Needs to leave ~{time(open.leave_by, lang)} · reminder only</span>}
+            {open.leave_by && <span className="leave-tag inline">⏱ Must leave by {time(open.leave_by, lang)} · their end time stays open</span>}
+            {rNote[open.id] && <span className="mgr-note">From Ronnie: “{rNote[open.id]}”</span>}
             <NoteBox key={open.id} initial={open.manager_note ?? ''} onSave={async (v) => { setErr(''); const { error } = await supabase.rpc('manager_set_note', { p_shift: open.id, p_note: v }); if (error) setErr(error.message); await load(); }} />
             {open.staff?.photo_url && <small className="muted" style={{ fontSize: 11, textAlign: 'center' }}>Tap the photo to see it full size</small>}
           </SwipeSheet>

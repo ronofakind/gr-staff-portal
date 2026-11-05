@@ -99,7 +99,9 @@ export function Bookings() {
   const replaceId = params.get('replace'); const replaceAt = params.get('at');
   const [asksBy, setAsksBy] = useState<Record<string, { kind: string; new_time: string }>>({});
   /** chip menu (phone + click): Move to… · Also add to… (2nd shift that day) · Remove. No `p` = from the side list "+ 2nd shift". */
-  const [phone, setPhone] = useState<{ sid: string; p?: Pl; step: 'menu' | 'move' | 'add' | 'time' } | null>(null);
+  const [phone, setPhone] = useState<{ sid: string; p?: Pl; step: 'menu' | 'move' | 'add' | 'time' | 'note' } | null>(null);
+  // Nov 5 · note for the manager (has to leave by + note; managers/MDs see it, staff don't)
+  const [mNotes, setMNotes] = useState<Record<string, string>>({}); const [nLeave, setNLeave] = useState(''); const [nText, setNText] = useState('');
   const [ownT, setOwnT] = useState(''); // Nov 4 · Change start time (one person)
   const [msg, setMsg] = useState(''); const [busy, setBusy] = useState(false);
   const [locks, setLocks] = useState<Locks>(NO_LOCKS); // push 50 · padlock on saved shifts
@@ -151,6 +153,7 @@ export function Bookings() {
     setDraft(Object.fromEntries(((dr.data ?? []) as { for_date: string; payload: Draft }[]).map((x) => [x.for_date, x.payload])));
     setHist([]);
     setEvents(evs);
+    { const ids = evs.flatMap((e) => e.shifts.map((s) => s.id)); if (ids.length) supabase.from('shift_mgr_notes').select('shift_id,note').in('shift_id', ids).then(({ data, error }) => { if (!error) setMNotes(Object.fromEntries(((data ?? []) as { shift_id: string; note: string }[]).map((r) => [r.shift_id, r.note]))); }); }
   };
   useEffect(() => { load(); }, [date, view, span]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -465,6 +468,9 @@ export function Bookings() {
         {n != null && <span className="bk-n">{n}</span>}<i className={'bk-cf ' + cf + (p.shift_id && !p.suggested ? ' tap' : '')} title={!p.shift_id || p.suggested ? 'Not saved yet' : cf === 'ok' ? 'Confirmed · tap to undo' : 'Tap to mark confirmed'}
           onClick={(ev) => { if (!p.shift_id || p.suggested) return; ev.stopPropagation(); toggleConf(p); }}>{cf === 'ok' ? '✓' : ''}</i>
         <span className="grow">{name(p.staff_id)}{part && <small> 🔗 {name(part).split(' ')[0]}</small>}{p.extra && <small className="bk-x"> EXTRA</small>}{p.line && p.line !== p.start && <small className="bk-own" title="Their own start time"> starts {t12(p.start)}</small>}
+          {(() => { const sh = shiftOf(p); const nt = p.shift_id ? mNotes[p.shift_id] : undefined; if (p.suggested || !sh) return null;
+            if (sh.leave_by) return <small className="bk-leave" title={nt ? `Has to leave by ${t12(hm(sh.leave_by))} · ${nt}` : `Has to leave by ${t12(hm(sh.leave_by))} · managers see it`}> ⏱ {t12(hm(sh.leave_by)).replace(':00', '')}</small>;
+            return nt ? <small className="bk-mnote" title={nt}> ✎ note</small> : null; })()}
           {p.shift_id && asksBy[p.shift_id] && <small className="bk-asks" title="Waiting for your answer (Today → Needs you)">{asksBy[p.shift_id].kind === 'later' ? 'asks' : 'leaves'} {t12(hm(asksBy[p.shift_id].new_time))}</small>}</span>
         {isLead(p) && <b className="bk-lead">{p.code}</b>}
         {mine.length > 1 && nth > 0 && <span className="bk-of" title="Two shifts this day">{nth} OF {mine.length}</span>}
@@ -753,6 +759,7 @@ export function Bookings() {
               {!p.suggested && <button className="bk-mli" onClick={() => { setOwnT(p.start); setPhone({ ...phone, step: 'time' }); }}>{ic('c|M12 7v5l3 2')}<span className="grow">Change time</span><span className="bk-mch">›</span></button>}
               <button className="bk-mli" onClick={() => setPhone({ ...phone, step: 'move' })}>{ic('M5 12h14|M13 6l6 6-6 6')}<span className="grow">Move</span><span className="bk-mch">›</span></button>
               {!p.suggested && <button className="bk-mli" onClick={() => setPhone({ ...phone, step: 'add' })}>{ic('M12 5v14|M5 12h14')}<span className="grow">Add a 2nd shift</span><span className="bk-mch">›</span></button>}
+              {sh && <button className="bk-mli" onClick={() => { setNLeave(sh.leave_by ? hm(sh.leave_by) : ''); setNText(mNotes[sh.id] ?? ''); setPhone({ ...phone, step: 'note' }); }}>{ic('c|M12 7v5l3 2')}<span className="grow">Note for the manager{(sh.leave_by || mNotes[sh.id]) && <small className="gold"> · {sh.leave_by ? `leaves ${t12(hm(sh.leave_by))}` : 'note set'}</small>}</span><span className="bk-mch">›</span></button>}
               <button className="bk-mli" onClick={() => { setProf(sid); close(); }}>{ic('c|M12 8v.01|M12 11v5')}<span className="grow">Profile · ranking · knows</span><span className="bk-mch">›</span></button>
               <Link className="bk-mli" to={`/admin/messages?staff=${sid}`} onClick={close}>{ic('M4 5h16v11H9l-5 4z')}<span className="grow">Message</span><span className="bk-mch">›</span></Link>
             </div>
@@ -768,6 +775,22 @@ export function Bookings() {
             <div className="row" style={{ gap: 8 }}>
               {p.start !== lineT && <button className="abtn" onClick={() => apply(lineT)}>Back to {t12(lineT)}</button>}
               <button className="abtn dark" disabled={!okT || ownT === p.start} onClick={() => apply(ownT)}>Save time</button>
+            </div></>; })()
+          : step === 'note' && p ? (() => { const sh = shiftOf(p); if (!sh) return null; const okT = !nLeave || /^\d{2}:\d{2}$/.test(nLeave);
+            const save = async (clear = false) => {
+              const lv = clear || !nLeave ? null : startIso(nLeave < p.start ? addDays(date, 1) : date, nLeave);
+              const { error } = await supabase.rpc('admin_set_mgr_note', { p_shift: sh.id, p_leave_by: lv, p_note: clear ? '' : nText });
+              if (error) { setHint(error.message); return; }
+              setHint(clear ? `Note cleared for ${first}` : `✓ Note saved · ${first}'s manager sees it`); close(); await load(); };
+            return <>
+            <div><b className="serif" style={{ fontSize: 20 }}>Note for the manager</b><div className="muted sm">{first} · {seeTitle(evById[p.event_id])} · booked {t12(p.start)}</div></div>
+            <label className="bk-tin"><span className="sm strong">Has to leave by</span><input type="time" step={900} value={nLeave} onChange={(ev) => setNLeave(ev.target.value)} />{nLeave && <button type="button" className="lnk" onClick={() => setNLeave('')}>no time</button>}</label>
+            <span className="muted sm">Their end time does not change. The manager gets a reminder 30 min before.</span>
+            <label className="stack" style={{ gap: 4 }}><span className="sm strong">Note <span className="muted">(optional)</span></span><textarea rows={3} value={nText} onChange={(ev) => setNText(ev.target.value)} placeholder="Last metro, let them go first if it runs late" /></label>
+            <span className="muted sm">Managers and MDs on that event see it. Staff don't. Saves right away.</span>
+            <div className="row" style={{ gap: 8 }}>
+              <button className="abtn dark grow" disabled={!okT || (!nLeave && !nText.trim() && !sh.leave_by && !mNotes[sh.id])} onClick={() => save()}>Save note</button>
+              {(sh.leave_by || mNotes[sh.id]) && <button className="abtn" onClick={() => save(true)}>Clear</button>}
             </div></>; })()
           : step === 'move' && p ? <>
             <b>Move {name(sid)} to…</b>
