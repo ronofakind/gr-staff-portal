@@ -3143,3 +3143,6 @@ div.venue-rule { background: #fff; border-radius: 14px; padding: 10px 14px; marg
 .bk-wl, .bk-wdh, .bk-wmore, .bk-wdn { flex-shrink: 0; }
 .bk-dragging .bk-grp, .bk-dragging .bk-mds { outline: 2px dashed #C9C0B4; }
 .bk-time.gold { color: #fff !important; }
+/* Nov 4 · extras on the manager's team (only managers see it) */
+.x-tag { display: inline-block; margin-left: 6px; font-style: normal; font-size: 10px; font-weight: 800; letter-spacing: .04em; color: #fff !important; background: #B08A2E; border-radius: 6px; padding: 1px 6px; vertical-align: 1px; }
+.x-note { font-size: 12.5px; line-height: 1.4; color: #4A433C; background: #FBF3E0; border-radius: 12px; padding: 10px 12px; box-shadow: inset 0 0 0 1px #EBD9AE; }

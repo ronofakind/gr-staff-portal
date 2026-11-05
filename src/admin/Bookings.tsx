@@ -509,6 +509,19 @@ export function Bookings() {
   const strip = Array.from({ length: 7 }, (_, i) => addDays(date, i - ((new Date(date + 'T12:00:00').getDay() + 6) % 7)));
   // Nov 4 · week strip: every day of the week with its events (venue · booked/needed · +extras · ✓ / SEND / ○)
   const [weekEvs, setWeekEvs] = useState<AEvent[]>([]);
+  // Nov 4 · the manager sees who the extras are (migration 061). Saved from the real schedule only (days with no unsaved changes).
+  const xSent = useRef<Record<string, string>>({});
+  useEffect(() => {
+    if (!events || !sd) return;
+    for (const e of events) {
+      if (draft[e.event_date]) continue;
+      const ax = autoX(e.event_date, e);
+      const ids = (base[e.event_date] ?? []).filter((p) => p.event_id === e.id && p.shift_id && ax.has(p.key)).map((p) => p.shift_id!).sort();
+      const sig = ids.join(','); if (xSent.current[e.id] === sig) continue;
+      xSent.current[e.id] = sig;
+      supabase.rpc('admin_set_extras', { p_event: e.id, p_shifts: ids }).then(({ error }) => { if (error) delete xSent.current[e.id]; });
+    }
+  }, [events, base, sd, locks, draft]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (view === 'board') eventsBetween(strip[0], strip[6]).then(setWeekEvs).catch(() => setWeekEvs([])); }, [strip[0], view, events]); // eslint-disable-line react-hooks/exhaustive-deps
   const focusEv = params.get('ev');
   useEffect(() => { if (!focusEv || !events) return; const t = setTimeout(() => document.querySelector(`[data-ev="${CSS.escape(focusEv)}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' }), 300); return () => clearTimeout(t); }, [focusEv, events]);

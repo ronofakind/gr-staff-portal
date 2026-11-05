@@ -239,6 +239,8 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
   const [seen, setSeen] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('gr-notice-seen') || '[]'); } catch { return []; } });
   const [reason, setReason] = useState(''); const [why, setWhy] = useState(''); const [leftAt, setLeftAt] = useState('');
   const [lateN, setLateN] = useState<Record<string, Late>>({});
+  // Nov 4 · extras (over the client count) · only the manager sees this (migration 061 · errors → no tags)
+  const [xIds, setXIds] = useState<Set<string>>(new Set());
   // push 46 · the person's other G&R shift that day (venue + planned times only; migration 052 · errors → nothing shown)
   const [otherSh, setOtherSh] = useState<Record<string, { venue: string; start_at: string; end_at: string | null }[]>>({});
 
@@ -263,6 +265,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
       for (const x of data as { staff_id: string; venue: string; start_at: string; end_at: string | null }[]) if (x && typeof x.staff_id === 'string' && typeof x.start_at === 'string') (m[x.staff_id] ??= []).push(x);
       setOtherSh(m);
     });
+    supabase.from('shift_extras').select('shift_id').eq('event_id', eventId!).then(({ data, error }) => { if (!error && Array.isArray(data)) setXIds(new Set((data as { shift_id: string }[]).map((x) => x.shift_id))); });
     supabase.from('event_notices').select('id,body,created_at').eq('event_id', eventId!).order('created_at', { ascending: false }).then(({ data }) => setNotices((data ?? []) as { id: string; body: string; created_at: string }[]));
     // Within each call time: lead (MD / bar manager) first, then everyone A–Z by first name.
     const lead = (r: Row) => (r.position_code === 'MD' || r.position_code === 'BM' ? 0 : 1);
@@ -497,6 +500,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
         );
       })()}
 
+      {(() => { const n = active.filter((r) => xIds.has(r.id)).length; return n > 0 ? <div className="x-note"><b>{n} extra{n === 1 ? '' : 's'} tonight</b> · tagged EXTRA below. Quiet night? Send them home first. Only you see this.</div> : null; })()}
       {groups.map((g) => {
         const grp = rows.filter((r) => r.planned_start === g);
         const notIn = grp.filter((r) => !r.attendance && !r.punches?.punch_in);
@@ -529,7 +533,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
                     {isNew && <i className="new-badge">NEW</i>}
                   </button>
                   <button className="who" aria-label={`Options for ${r.staff?.full_name}`} onClick={() => openRow(r, isNew)}>
-                    <span className="nm">{r.staff ? teamName(r.staff) : ''}{r.adder && <i className="added-tag">ADDED BY {r.adder.full_name.split(' ')[0].toUpperCase()}</i>}</span>
+                    <span className="nm">{r.staff ? teamName(r.staff) : ''}{xIds.has(r.id) && !r.attendance && <i className="x-tag">EXTRA</i>}{r.adder && <i className="added-tag">ADDED BY {r.adder.full_name.split(' ')[0].toUpperCase()}</i>}</span>
                     {fromRonnie && <span><i className="p28-tag red">CANCELLED{r.attendance === 'no_show' ? ' · NO-SHOW' : ''} · FROM RONNIE</i></span>}
                     {r.replacement_for && !r.attendance && <span><i className="p28-tag blue">REPLACEMENT · {fullT(r.planned_start)}</i></span>}
                     {ln && !pin && !lnPassed && <span><i className="p28-tag gold">LATE ~{shortT(ln.eta)}{ln.reason ? ` · ${ln.reason.toUpperCase()}` : ''}{ln.seen_at ? ' · ✓ SEEN' : ''}</i></span>}
