@@ -78,6 +78,9 @@ export function Bookings() {
   const [hint, setHint] = useState<string>('');
   // Nov 4 · Confirm all (with Undo), fold "Already placed today", find a name on the board
   const [undoConf, setUndoConf] = useState<{ ids: string[]; title: string } | null>(null);
+  // Nov 5 · the staff list folds into a thin strip so the events get the room (remembered)
+  const [sideOpen, setSideOpen0] = useState(() => { try { return localStorage.getItem('gr_bk_side') !== '0'; } catch { return true; } });
+  const setSideOpen = (v: boolean) => { setSideOpen0(v); try { localStorage.setItem('gr_bk_side', v ? '1' : '0'); } catch { /* private mode */ } };
   const [placedOpen, setPlacedOpen] = useState(() => { try { return localStorage.getItem('gr_bk_placed') === '1'; } catch { return false; } });
   const [findQ, setFindQ] = useState(''); const [flash, setFlash] = useState('');
   const [pair, setPair] = useState<{ moving: Pl; partner: Pl; to: { event_id: string; start: string } } | null>(null);
@@ -588,8 +591,14 @@ export function Bookings() {
       {auto?.open && auto.skipped.length > 0 && <div className="bk-skipped"><b>Not suggested · {auto.skipped.length}</b>{auto.skipped.map((s) => <span key={s.name}>{s.name} · {s.why}</span>)}<small>You can still drag them in.</small></div>}
 
       {events === null ? <div className="muted">Loading…</div> : view === 'board' ? (
-        <div className="bk-board">
+        <div className={'bk-board' + (sideOpen ? '' : ' side-off')}>
+          {!sideOpen ? (
+            <button type="button" className="bk-sidestrip" aria-label="Show the staff list" onClick={() => setSideOpen(true)} onDragOver={(ev) => ev.preventDefault()} onDrop={() => dropAvail(date)}>
+              <span>›</span><b>STAFF · {counts.yes} said yes</b>
+            </button>
+          ) : (
           <aside className="bk-avail" onDragOver={(ev) => ev.preventDefault()} onDrop={() => dropAvail(date)}>
+            <div className="bk-sidehead"><button type="button" className="bk-sidefold" aria-label="Hide the staff list" onClick={() => setSideOpen(false)}>‹ Hide</button></div>
             <div className="bk-tabs">{([['yes', 'Said yes'], ['wait', 'No reply'], ['not', 'Not asked']] as const).map(([k, l]) => <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l} {counts[k]}</button>)}</div>
             <input className="bk-search" placeholder="Search staff…" value={q} onChange={(e) => setQ(e.target.value)} />
             {(['A', 'B', 'C', null] as const).map((t) => { const list = tabList.filter(({ s }) => (s.staff_private?.tier ?? null) === t); if (!list.length) return null; return (
@@ -615,6 +624,7 @@ export function Bookings() {
               </div>)}
             <button className="link-btn" style={{ margin: 10 }} onClick={() => setAskMore(true)}>Ask more people for {dLabel(date, { month: 'short', day: 'numeric' })} ›</button>
           </aside>
+          )}
           <div className="bk-main">
             {(() => { const q = findQ.trim().toLowerCase(); const day = plOf(date).filter((p) => !p.suggested);
               const hits = q.length < 2 ? [] : staff.filter((x) => (x.full_name + ' ' + (x.nickname ?? '')).toLowerCase().includes(q)).slice(0, 8)
