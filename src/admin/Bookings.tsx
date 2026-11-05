@@ -340,8 +340,8 @@ export function Bookings() {
   /** Ronnie, Nov 4 · automatic extras: when more people are booked than the client count, the extra ones go in the Extras box:
    *  people who finish early first, then the lowest ranked. Never MDs, never padlocked people, never someone you dragged onto a line. */
   const clientOf = (e: AEvent) => { const lines = (e.staffing ?? []).reduce((n, l) => n + (l.count || 0), 0); return e.staff_needed > 0 ? e.staff_needed : lines; };
-  const autoX = (d: string, e: AEvent): Set<string> => {
-    const pl = plOf(d).filter((p) => p.event_id === e.id && !p.suggested); const client = clientOf(e);
+  const autoX = (d: string, e: AEvent, from?: Pl[]): Set<string> => {
+    const pl = (from ?? plOf(d)).filter((p) => p.event_id === e.id && !p.suggested); const client = clientOf(e);
     const over = client ? pl.length - client - pl.filter((p) => p.extra).length : 0; if (over <= 0) return new Set();
     const early = (p: Pl) => { const sh = p.shift_id ? evById[e.id]?.shifts.find((y) => y.id === p.shift_id) : undefined; return sh?.leave_by || sh?.left_early ? 0 : 1; };
     const cand = pl.filter((p) => !p.extra && !p.keep && !['MD', 'BM'].includes(p.code) && !isLocked(d, p))
@@ -509,19 +509,18 @@ export function Bookings() {
   const strip = Array.from({ length: 7 }, (_, i) => addDays(date, i - ((new Date(date + 'T12:00:00').getDay() + 6) % 7)));
   // Nov 4 · week strip: every day of the week with its events (venue · booked/needed · +extras · ✓ / SEND / ○)
   const [weekEvs, setWeekEvs] = useState<AEvent[]>([]);
-  // Nov 4 · the manager sees who the extras are (migration 061). Saved from the real schedule only (days with no unsaved changes).
+  // Nov 4 · the manager sees who the extras are (migration 061). Worked out from the real schedule, never from practice or unsaved changes.
   const xSent = useRef<Record<string, string>>({});
   useEffect(() => {
     if (!events || !sd) return;
     for (const e of events) {
-      if (draft[e.event_date]) continue;
-      const ax = autoX(e.event_date, e);
+      const ax = autoX(e.event_date, e, base[e.event_date] ?? []); // the real schedule, never a practice board
       const ids = (base[e.event_date] ?? []).filter((p) => p.event_id === e.id && p.shift_id && ax.has(p.key)).map((p) => p.shift_id!).sort();
       const sig = ids.join(','); if (xSent.current[e.id] === sig) continue;
       xSent.current[e.id] = sig;
       supabase.rpc('admin_set_extras', { p_event: e.id, p_shifts: ids }).then(({ error }) => { if (error) delete xSent.current[e.id]; });
     }
-  }, [events, base, sd, locks, draft]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [events, base, sd, locks]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (view === 'board') eventsBetween(strip[0], strip[6]).then(setWeekEvs).catch(() => setWeekEvs([])); }, [strip[0], view, events]); // eslint-disable-line react-hooks/exhaustive-deps
   const focusEv = params.get('ev');
   useEffect(() => { if (!focusEv || !events) return; const t = setTimeout(() => document.querySelector(`[data-ev="${CSS.escape(focusEv)}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' }), 300); return () => clearTimeout(t); }, [focusEv, events]);
