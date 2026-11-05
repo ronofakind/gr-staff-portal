@@ -35,6 +35,7 @@ export const isStar = (v: unknown): v is number => typeof v === 'number' && Numb
 export const RATING_ICON: Record<Rating, string> = { up: '▲', ok: '●', down: '▼' };
 
 export type Feedback = { id: string; staff_id: string; event_id: string; by_staff_id: string; tier_vote: 'A' | 'B' | 'C' | null; overall_stars: number | null; ratings: Record<string, Rating>; note: string | null; created_at: string; archived_at: string | null;
+  again?: 'yes' | 'maybe' | 'no' | null; tags?: string[] | null;
   by?: { full_name: string } | null; events?: { title: string; event_date: string } | null };
 export type Priv = { staff_id: string; experience: string | null; bmo_fit: boolean | null; priority_until: string | null; veteran: boolean | null; rel_seed?: string | null; shifts_seed?: number | null };
 type Sh = { id?: string; staff_id: string; attendance: string | null; planned_start: string; status: string; punches: { punch_in: string | null; punch_out: string | null } | null; events: { event_date: string } | null;
@@ -92,6 +93,7 @@ const FB_COLS = 'id,staff_id,event_id,by_staff_id,tier_vote,ratings,note,created
 /** Feedback rows, newest first. Falls back to the push-27 columns while migration 033 (overall_stars) isn't applied. */
 async function loadFeedback() {
   const q = (cols: string) => supabase.from('staff_feedback').select(cols).order('created_at', { ascending: false }).limit(2000);
+  const r2 = await q(FB_COLS + ',overall_stars,again,tags'); if (!r2.error) return r2; // 065 · want again + tags
   const r = await q(FB_COLS + ',overall_stars');
   return r.error && /overall_stars/.test(r.error.message) ? q(FB_COLS) : r;
 }
@@ -152,7 +154,13 @@ export function scoreOf(st: AStaff, d: ScoreData, today = isoDay(new Date())): S
   }
   if (rel.late_change) { r3 -= 2 * rel.late_change; why.push(`${rel.late_change} late change −${2 * rel.late_change}`); }
   parts.push({ key: 'rel', label: 'Reliability', pts: Math.max(0, r3), max: 25, sub: why.join(' · '), counted: true });
-  const starsW = fb.stars.map((v, i) => ({ v, w: 1 - i * 0.05 })); // newest first, newer count more
+  // Nov 5 · one rating = overall stars + want again (yes +1 · maybe 0 · no −1) + tags (±¼ each, max ±½), kept between 1 and 5
+  const GOOD = new Set(['guests', 'wine', 'bar', 'fast', 'team', 'on_time', 'trays']);
+  const vals = mine.filter((f) => f.overall_stars).map((f) => {
+    const ag = f.again === 'yes' ? 1 : f.again === 'no' ? -1 : 0;
+    const tg = Math.max(-0.5, Math.min(0.5, (f.tags ?? []).reduce((n, t) => n + (GOOD.has(t) ? 0.25 : -0.25), 0)));
+    return Math.max(1, Math.min(5, (f.overall_stars ?? 0) + ag + tg)); });
+  const starsW = vals.map((v, i) => ({ v, w: 1 - i * 0.05 })); // newest first, newer count more
   const avgW = starsW.length ? starsW.reduce((n, x) => n + x.v * x.w, 0) / starsW.reduce((n, x) => n + x.w, 0) : 0;
   parts.push({ key: 'fb', label: 'Manager feedback', pts: Math.round(20 * avgW / 5 * 10) / 10, max: 20, sub: fb.stars.length ? `★${avgW.toFixed(1)} · last ${fb.stars.length} rating${fb.stars.length > 1 ? 's' : ''}` : 'no ratings yet · not counted', counted: fb.stars.length > 0 });
   const asks = (d.asks ?? []).filter((a) => a.staff_id === st.id);

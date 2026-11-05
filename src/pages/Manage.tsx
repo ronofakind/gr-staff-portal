@@ -49,6 +49,14 @@ const AREAS: { key: string; label: string; sub?: string }[] = [
 ];
 const ORD = ['1st', '2nd', '3rd'];
 const STAR_LABEL = ['', 'Poor', 'Below average', 'OK', 'Very good', 'Excellent'];
+/** Nov 5 · quick tags (instead of the 6 detail star rows). Green +¼★ · red −¼★ in the ranking (max ±½★). */
+const TAGS_GOOD: [string, string][] = [['guests', 'Great with guests'], ['wine', 'Knows wine'], ['bar', 'Knows the bar'], ['fast', 'Fast'], ['team', 'Team player'], ['on_time', 'Ready on time'], ['trays', 'Good on trays']];
+const TAGS_BAD: [string, string][] = [['late', 'Late'], ['uniform', 'Uniform / dress off'], ['phone', 'On phone'], ['coaching', 'Needs coaching'], ['slow', 'Slow']];
+type Again = 'yes' | 'maybe' | 'no' | null;
+function AgainPick({ v, set, small = false, who }: { v: Again; set: (x: Again) => void; small?: boolean; who: string }) {
+  return <div className={'fb-again' + (small ? ' sm' : '')} role="group" aria-label={`Want ${who} on your team again?`}>{(['yes', 'maybe', 'no'] as const).map((x) => (
+    <button key={x} type="button" className={x + (v === x ? ' on' : '')} onClick={() => set(v === x ? null : x)}>{x === 'yes' ? 'Yes' : x === 'maybe' ? 'Maybe' : 'No'}</button>))}</div>;
+}
 const starOk = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 5;
 /** Only the 1–5 star detail ratings (drops push-27 "up/ok/down" values). */
 const starRatings = (r: Record<string, unknown> | null | undefined): Record<string, number> =>
@@ -895,12 +903,14 @@ function FeedbackWindow({ eventId, row, info, init, queue, onBack, onClose, onSe
   const [tier, setTier] = useState<'A' | 'B' | 'C' | null>(init?.touched ? init.tier : info?.fb_tier ?? info?.tier ?? null);
   const [rt, setRt] = useState<Record<string, number>>(() => (info?.fb_stars ? starRatings(info.fb_ratings) : {}));
   const [note, setNote] = useState(info?.fb_note ?? ''); const [busy, setBusy] = useState(false); const [err, setErr] = useState('');
+  const [again, setAgain] = useState<Again>(init?.touched ? init.again ?? null : null); const [tags, setTags] = useState<string[]>([]);
+  const togTag = (k: string) => setTags((t) => (t.includes(k) ? t.filter((x) => x !== k) : [...t, k]));
   const sent = !!info?.fb_stars;
   const send = async () => {
     if (!row.staff_id) return;
     if (!stars) { setErr(`Tap 1 to 5 stars for ${f} tonight.`); return; }
     setBusy(true); setErr('');
-    const { error } = await supabase.rpc('manager_send_feedback', { p_event: eventId, p_staff: row.staff_id, p_stars: stars, p_tier: tier, p_ratings: rt, p_note: note });
+    const { error } = await supabase.rpc('manager_send_feedback', { p_event: eventId, p_staff: row.staff_id, p_stars: stars, p_tier: tier, p_ratings: rt, p_note: note, p_again: again, p_tags: tags });
     setBusy(false); if (error) { setErr(error.message); return; } onSent();
   };
   return (
@@ -915,14 +925,14 @@ function FeedbackWindow({ eventId, row, info, init, queue, onBack, onClose, onSe
         <Stars value={stars} size="lg" label="Tonight overall" onChange={(v) => { setStars(v); setErr(''); }} />
         <span className={'fbw-lab' + (stars ? '' : ' none')}>{stars ? STAR_LABEL[stars] : 'Tap to rate · required'}</span>
       </div>
+      <span className="kicker">Want {f} on your team again?</span>
+      <AgainPick v={again} set={setAgain} who={f} />
       <div className="spread"><span className="kicker">Worked like a</span>{info?.tier && <small className="muted">tier now · {info.tier}</small>}</div>
       <div className="fbw-tiers">{(['A', 'B', 'C'] as const).map((x) => <button key={x} className={'t' + x + (tier === x ? ' on' : '')} onClick={() => setTier(tier === x ? null : x)}>{x}</button>)}</div>
       <div className="muted" style={{ fontSize: 11.5, marginTop: -4 }}>Change it only if {f} worked above or below. A suggestion only.</div>
-      <div className="spread"><span className="kicker">Details · optional</span><small className="muted">tap again to clear</small></div>
-      <div className="fbw-rates">{AREAS.map((a) => (
-        <div key={a.key} className="fbw-rate"><div className="grow"><b>{a.label}</b>{a.sub && <small>{a.sub}</small>}</div>
-          <Stars value={rt[a.key] ?? 0} size="md" label={a.label} onChange={(v) => { const n = { ...rt }; if (v) n[a.key] = v; else delete n[a.key]; setRt(n); }} />
-        </div>))}</div>
+      <div className="spread"><span className="kicker">Anything stand out? · optional</span><small className="muted">tap what fits</small></div>
+      <div className="fb-tags">{TAGS_GOOD.filter(([k]) => (isBar(row.position_code, row.position_detail) ? k !== 'wine' && k !== 'trays' : k !== 'bar')).map(([k, l]) => <button key={k} type="button" className={tags.includes(k) ? 'on good' : ''} onClick={() => togTag(k)}>{l}</button>)}</div>
+      <div className="fb-tags">{TAGS_BAD.map(([k, l]) => <button key={k} type="button" className={tags.includes(k) ? 'on bad' : ''} onClick={() => togTag(k)}>{l}</button>)}</div>
       <textarea className="fbw-note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Comment (optional)" />
       {err && <p className="error">{err}</p>}
       <button className="btn-ink" disabled={busy || !stars} onClick={send}>{busy ? 'Sending…' : sent ? 'Update for Ronnie' : queue ? 'Send · next' : 'Send to Ronnie'}</button>
@@ -932,7 +942,7 @@ function FeedbackWindow({ eventId, row, info, init, queue, onBack, onClose, onSe
 }
 
 /** One row of the new-staff check: overall stars + tier (pre-set). touched = the manager tapped something for this person. */
-type CheckPick = { stars: number; tier: 'A' | 'B' | 'C' | null; touched: boolean };
+type CheckPick = { stars: number; tier: 'A' | 'B' | 'C' | null; touched: boolean; again?: Again };
 
 /** Before Submit hours, when NEW people worked (push 30): overall stars (one tap) + small A / B / C (pre-set to their tier) each, or Skip.
  *  Stars are required only for people the manager touched; untouched people are skipped. */
@@ -951,9 +961,9 @@ function NewStaffCheck({ eventId, rows, infoOf, picks, setPicks, onOpen, onDone,
     setBusy(true); setErr('');
     for (const r of todo) {
       const inf = infoOf(r); const p = pickOf(r); if (!r.staff_id) continue;
-      if (inf?.fb_stars === p.stars && (inf?.fb_tier ?? null) === p.tier) continue; // already sent like this
+      if (inf?.fb_stars === p.stars && (inf?.fb_tier ?? null) === p.tier && !p.again) continue; // already sent like this
       const { error } = await supabase.rpc('manager_send_feedback', { p_event: eventId, p_staff: r.staff_id, p_stars: p.stars, p_tier: p.tier,
-        p_ratings: inf?.fb_stars ? starRatings(inf.fb_ratings) : {}, p_note: inf?.fb_note ?? '' });
+        p_ratings: inf?.fb_stars ? starRatings(inf.fb_ratings) : {}, p_note: inf?.fb_note ?? '', p_again: p.again ?? null });
       if (error) { setErr(error.message); setBusy(false); return; }
     }
     setBusy(false); onDone();
@@ -972,6 +982,7 @@ function NewStaffCheck({ eventId, rows, infoOf, picks, setPicks, onOpen, onDone,
                 {inf?.fb_stars ? <small className="nsc-sent">sent</small> : null}<span className="nsc-more" aria-hidden>›</span></button>
               <div className="nsc-stars"><Stars value={p.stars} size="lg" label={`${first} tonight`} onChange={(v) => change(r, { stars: v })} /></div>
               <div className="nsc-t">{(['A', 'B', 'C'] as const).map((x) => <button key={x} aria-label={`${first} worked like a ${x}`} className={'t' + x + (p.tier === x ? ' on' : '')} onClick={() => change(r, { tier: p.tier === x ? null : x })}>{x}</button>)}</div>
+              <div className="nsc-again"><small className="muted">Again?</small><AgainPick small v={p.again ?? null} set={(x) => change(r, { again: x })} who={first} /></div>
             </div>); })}
           <small className="muted">Tap a name for details or a comment.</small>
           {err && <p className="error">{err}</p>}

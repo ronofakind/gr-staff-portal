@@ -12,6 +12,8 @@ const DOW = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 type Sh = { id: string; planned_start: string; attendance: string | null; left_early?: boolean; punches: { punch_in: string | null; punch_out: string | null } | null; events: { event_date: string; title: string } };
 
 /** Side panel (desktop) / full screen (phone) with everything about one person. */
+const TAG_LABEL: Record<string, string> = { guests: 'Great with guests', wine: 'Knows wine', bar: 'Knows the bar', fast: 'Fast', team: 'Team player', on_time: 'Ready on time', trays: 'Good on trays', late: 'Late', uniform: 'Uniform / dress off', phone: 'On phone', coaching: 'Needs coaching', slow: 'Slow' };
+
 export function StaffProfile({ s, onClose, onEdit, all }: { s: AStaff; onClose: () => void; onEdit: () => void; all?: AStaff[] }) {
   const today = isoDay(new Date());
   const [week, setWeek] = useState<Record<number, { status: string; from_time: string | null }>>({});
@@ -268,6 +270,7 @@ function MgrFeedback({ sid, d }: { sid: string; d: ScoreData }) {
           <div key={f.id} className="fb-item"><div className="spread"><b>{f.by?.full_name?.split(' ')[0] ?? 'Manager'} · {f.events?.title ?? ''}{f.events?.event_date ? ` · ${dLabel(f.events.event_date)}` : ''}</b>
             <span className="fb-it-r">{st ? <StarRow v={st} /> : <small className="muted">before stars</small>}{f.tier_vote && <i className={'tier-dot ' + f.tier_vote}>{f.tier_vote}</i>}</span></div>
             {det.length > 0 && <small>{det.join(' · ')}</small>}
+            {(f.again || (f.tags ?? []).length > 0) && <small>{f.again && <b className={f.again === 'yes' ? 'okc' : f.again === 'no' ? 'accent' : ''}>Want again: {f.again === 'yes' ? 'Yes' : f.again === 'no' ? 'No' : 'Maybe'}</b>}{f.again && (f.tags ?? []).length ? ' · ' : ''}{(f.tags ?? []).map((t) => TAG_LABEL[t] ?? t).join(' · ')}</small>}
             {f.note && <span>“{f.note}”</span>}</div>); })}
     </div>
   );

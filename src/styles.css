@@ -3195,3 +3195,15 @@ div.venue-rule { background: #fff; border-radius: 14px; padding: 10px 14px; marg
 .sp-tier button.on.t-A { background: #3F7B5C; } .sp-tier button.on.t-B { background: #C9A227; } .sp-tier button.on.t-C { background: #B0452E; } .sp-tier button.on.t-none { background: #7A7268; }
 /* Nov 5 · Ranking v3 columns */
 .rk-row { grid-template-columns: 28px minmax(140px, 1fr) 56px 56px 56px 56px 72px 48px 52px; }
+/* Nov 5 · rate new staff add-ons: want again + quick tags */
+.fb-again { display: flex; gap: 8px; }
+.fb-again button { flex: 1; height: 40px; border: 0; border-radius: 12px; background: #fff; box-shadow: inset 0 0 0 1.5px #E4DCD1; font: 800 14px Inter, system-ui, sans-serif; color: var(--ink); cursor: pointer; }
+.fb-again button.on.yes { background: #3F7B5C; color: #fff; box-shadow: none; }
+.fb-again button.on.maybe { background: #7A7268; color: #fff; box-shadow: none; }
+.fb-again button.on.no { background: #B0452E; color: #fff; box-shadow: none; }
+.fb-again.sm { gap: 6px; } .fb-again.sm button { flex: none; height: 28px; padding: 0 10px; border-radius: 9px; font-size: 12px; }
+.fb-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.fb-tags button { border: 0; padding: 7px 11px; border-radius: 16px; background: #fff; box-shadow: inset 0 0 0 1.5px #E4DCD1; font: 700 12.5px Inter, system-ui, sans-serif; color: var(--ink); cursor: pointer; }
+.fb-tags button.on.good { background: #3F7B5C; color: #fff; box-shadow: none; }
+.fb-tags button.on.bad { background: #B0452E; color: #fff; box-shadow: none; }
+.nsc-again { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
