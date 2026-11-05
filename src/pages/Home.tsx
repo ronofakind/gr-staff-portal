@@ -512,7 +512,9 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
             <>
               <div className="sec-head"><span className="serif">Coming up</span><Link to={myDatesTo('booked')}>All my dates ›</Link></div>
               <section className="agenda">
-                {list.slice(0, 5).map((s) => {
+                {/* Nov 5 · shifts and meetings in date order (max 5 shifts; meetings up to the last shift shown) */}
+                {(() => {
+                  const rs = (s: ShiftRow) => {
                   const b = dayBadge(s.events.event_date, lang);
                   const pend = !!s.events.details_pending;
                   return (
@@ -524,15 +526,20 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
                       <div className="row-time"><small>Starts</small>{pend ? <b className="tbc">To come</b> : s.time_tbc ? <b className="tbc">Time TBC</b> : <b><span className="serif">{time(s.planned_start, lang).replace(/\s?[ap]\.?\s?m\.?/i, '')}</span><i>{/p\.?\s?m/i.test(time(s.planned_start, lang)) ? ' PM' : ' AM'}</i></b>}</div>
                       {soon(s) ? <span className="tag-soon">Details coming</span> : s.status === 'confirmed' ? <span className="ok-dot" aria-label="Confirmed" /> : notFinal(s) ? <span className="tag-soon">Details coming</span> : <span className="tag-ask" style={{ height: 26, fontSize: 11 }}>Confirm</span>}
                     </Link>
-                  );
-                })}
-                {/* Nov 5 · meetings they said Coming to sit here (not on top), one row each */}
-                {mtgComing.map((m) => { const d = dayOfMtl(m.starts_at); const b = dayBadge(d, lang); const tm = time(m.starts_at, lang); return (
+                  ); };
+                  const rm = (m: (typeof mtgComing)[number]) => { const d = dayOfMtl(m.starts_at); const b = dayBadge(d, lang); const tm = time(m.starts_at, lang); return (
                   <Link key={'m' + m.id} to={mtgTo(m.id)} className="agenda-row mtg-row" style={{ minHeight: 64 }}>
                     <div className="d" style={{ width: 40, alignItems: 'center' }}><small>{b.dow}</small><b>{b.day}</b></div>
                     <div className="what" style={{ gap: 5 }}><b>{m.title}</b><span className="pos-row2"><span className="pos-pill mtg">Meeting</span><span>✓ you’re coming</span></span></div>
                     <div className="row-time"><small>Starts</small><b><span className="serif">{tm.replace(/\s?[ap]\.?\s?m\.?/i, '')}</span><i>{/p\.?\s?m/i.test(tm) ? ' PM' : ' AM'}</i></b></div>
-                  </Link>); })}
+                  </Link>); };
+                  const sh = list.slice(0, 5); const cut = list.length > 5 ? sh[sh.length - 1].planned_start : null;
+                  const items: { at: string; el: JSX.Element }[] = [
+                    ...sh.map((s) => ({ at: s.planned_start, el: rs(s) })),
+                    ...mtgComing.filter((m) => !cut || m.starts_at <= cut).map((m) => ({ at: m.starts_at, el: rm(m) })),
+                  ];
+                  return items.sort((x, y) => x.at.localeCompare(y.at)).map((x) => x.el);
+                })()}
               </section>
             </>
           )}
