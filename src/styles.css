@@ -3139,3 +3139,5 @@ div.venue-rule { background: #fff; border-radius: 14px; padding: 10px 14px; marg
 .bk-wmore { font-size: 10.5px; font-weight: 700; color: var(--muted); }
 .bk-col.focus { box-shadow: 0 0 0 3px #B8892B; }
 @media (max-width: 900px) { .bk-strip { overflow-x: auto; } .bk-wd { min-width: 96px; } }
+.mo-e, .mo-m, .mo-dh, .mo-more { flex-shrink: 0; } .mo-d { height: auto; }
+.bk-wl, .bk-wdh, .bk-wmore, .bk-wdn { flex-shrink: 0; }
