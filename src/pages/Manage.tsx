@@ -95,7 +95,7 @@ type EvFull = Ev & { staffing?: { start: string; end?: string | null }[] | null;
 const L = {
   fr: { team: 'Équipe', notIn: 'Pas commencé', start: 'Commencer', end: 'Terminer', startAll: 'Commencer tous', endAll: 'Terminer tous',
     edit: 'Modifier', save: 'Enregistrer', cancel: 'Annuler', in: 'Début', out: 'Fin', started: 'commencés', back: 'Retour', hours: 'h' },
-  en: { team: 'Team', notIn: 'Not started', start: 'Start', end: 'End', startAll: 'Start all', endAll: 'End all',
+  en: { team: 'Team', notIn: 'Not started', start: 'Start', end: 'End', startAll: 'Start all', endAll: 'End All',
     edit: 'Edit', save: 'Save', cancel: 'Cancel', in: 'Start', out: 'End', started: 'started', back: 'Back', hours: 'h' },
 };
 
@@ -239,6 +239,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
   const [review, setReview] = useState(false);
   const [busy, setBusy] = useState(false);
   const [endSheet, setEndSheet] = useState<Row[] | null>(null);
+  const [endSkip, setEndSkip] = useState<Set<string>>(new Set()); // Nov 5 · End All: leave someone out
   const [endPick, setEndPick] = useState<'now' | 'next' | 'pick'>('next'); const [endTime, setEndTime] = useState('');
   const [, setTick] = useState(0);
   const [err, setErr] = useState('');
@@ -397,8 +398,9 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
     else if (endPick === 'next') at = nextQ();
     else { if (!endTime) return; at = new Date(toIso(ev!.event_date, endTime, list[0].planned_start)).getTime(); }
     if (at > Date.now() + 30 * 60000) { setErr('Pick a time within 30 minutes.'); return; }
+    const go = list.filter((r) => !endSkip.has(r.id)); if (!go.length) return;
     setEndSheet(null);
-    await set(list.map((r) => ({ id: r.id, in: r.punches!.punch_in, out: new Date(at).toISOString() })));
+    await set(go.map((r) => ({ id: r.id, in: r.punches!.punch_in, out: new Date(at).toISOString() })));
   };
 
   if (!ev) return <div className="loading" />;
@@ -495,9 +497,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
             </div>
           </section>
         );
-      })() : outstanding.length > 0 && (
-        <button className="endall-btn" onClick={() => { setEndPick('next'); setEndTime(''); setEndSheet(outstanding); }}>End all… <span>{outstanding.length} still working</span></button>
-      )}
+      })() : null}
       {err && <p className="error">{err}</p>}
 
       {newRows.length > 0 && (() => {
@@ -596,25 +596,32 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
       <p className="hint" style={{ textAlign: 'center' }}>Tap a name or photo for times, {fbOn ? 'feedback, ' : ''}note, problems · swipe left on a started person to undo</p>
       <div className="inc-entry"><button onClick={() => setIncOpen(true)}>⚠ Incident report</button><small>Emergencies only</small></div>
 
+      {!endsAt && outstanding.length > 0 && !ev.hours_submitted_at ? (
+      <div className="submit-bar">
+        <button className="endall-red" onClick={() => { setEndPick('next'); setEndTime(''); setEndSkip(new Set()); setEndSheet(outstanding); }}>{t.endAll} <span>· {outstanding.length} still working</span></button>
+      </div>) : (
       <div className="submit-bar">
         <div className="grow">
           <b className={changedSince ? 'gold' : ''}>{changedSince ? '↻ Times changed since you submitted' : ev.hours_submitted_at ? '✓ Hours submitted' : endsAt ? `Submit now with ${time(endsAt, lang)} as the end` : 'End of night'}</b>
           <span>{ev.hours_submitted_at ? `Submitted ${new Date(ev.hours_submitted_at).toLocaleString('en-CA', { weekday: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' })}${changedSince ? ' · Ronnie has the older version' : ' · you can still edit'}` : endsAt ? 'Change anything after? You can resubmit.' : "Check everyone's times, then send"}</span>
         </div>
         <button className="btn-ink" style={{ height: 46, padding: '0 18px', borderRadius: 23 }} onClick={() => (fbOn && !checkDone && newWorked.length ? setCheck(true) : setReview(true))}>{ev.hours_submitted_at ? 'Resubmit ›' : 'Submit hours ›'}</button>
-      </div>
+      </div>)}
 
       {endSheet && (
         <>
           <div className="scrim" onClick={() => setEndSheet(null)} />
           <SwipeSheet onClose={() => setEndSheet(null)} label="End all" back>
-            <div><div className="kicker">End all · {endSheet.length} still working</div><div className="serif" style={{ fontSize: 24, lineHeight: 1.15 }}>When does the night end?</div></div>
+            <div><div className="kicker">End All · {endSheet.length} still working</div><div className="serif" style={{ fontSize: 24, lineHeight: 1.15 }}>When does the night end?</div></div>
             <button className={'opt' + (endPick === 'now' ? ' on' : '')} onClick={() => setEndPick('now')}><i /><span><b>Now · {time(now(), lang)}</b><small>Counts as {time(new Date(q15(Date.now())).toISOString(), lang)} with our 15-min rounding</small></span></button>
             <button className={'opt' + (endPick === 'next' ? ' on' : '')} onClick={() => setEndPick('next')}><i /><span><b>In a few minutes · {time(new Date(nextQ()).toISOString(), lang)}</b><small>Everyone ends then. You can still change or cancel it.</small></span></button>
             <button className={'opt' + (endPick === 'pick' ? ' on' : '')} onClick={() => setEndPick('pick')}><i /><span><b>Pick a time</b><small>Up to 30 min from now</small></span>{endPick === 'pick' && <QuarterTime value={endTime} onChange={setEndTime} label="End time" />}</button>
+            <details className="end-skip"><summary>Leave someone out{endSkip.size ? ` · ${endSkip.size}` : ''} ▾</summary>
+              {endSheet.map((r) => <label key={r.id}><input type="checkbox" checked={!endSkip.has(r.id)} onChange={(e) => { const s = new Set(endSkip); if (e.target.checked) s.delete(r.id); else s.add(r.id); setEndSkip(s); }} /> {r.staff ? teamName(r.staff) : '?'}</label>)}
+            </details>
             {doneN > 0 && <div className="muted sm">The {doneN} who already ended keep their own times.</div>}
             {err && <p className="error">{err}</p>}
-            <button className="btn-ink" onClick={() => endAll(endSheet)}>End {endSheet.length} {endSheet.length === 1 ? 'person' : 'people'} at {endPick === 'now' ? time(now(), lang) : endPick === 'next' ? time(new Date(nextQ()).toISOString(), lang) : endTime ? fmt12(endTime) : '…'}</button>
+            <button className="btn-ink end-go" disabled={endSheet.length - endSkip.size < 1} onClick={() => endAll(endSheet)}>End {endSheet.length - endSkip.size} {endSheet.length - endSkip.size === 1 ? 'person' : 'people'} at {endPick === 'now' ? time(now(), lang) : endPick === 'next' ? time(new Date(nextQ()).toISOString(), lang) : endTime ? fmt12(endTime) : '…'}</button>
           </SwipeSheet>
         </>
       )}

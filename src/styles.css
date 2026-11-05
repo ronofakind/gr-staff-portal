@@ -3256,3 +3256,10 @@ div.venue-rule { background: #fff; border-radius: 14px; padding: 10px 14px; marg
 /* Nov 5 · Event Folder on Home's Today / next card (managers & MDs) */
 .home-folder { height: 44px; border-radius: 14px; background: transparent; color: #fff; box-shadow: inset 0 0 0 1.5px #5A534C; font-weight: 800; font-size: 14px; display: flex; align-items: center; justify-content: center; text-decoration: none; margin-top: 8px; }
 .mt-sum .big.mt-n { color: #F6F2EC; } /* Nov 5 · number was ink on ink */
+/* Nov 5 · End All (bottom bar) + red End, same font as Start / Start remaining */
+.crew .act.end { border: none; background: var(--accent, #B0452E); color: #fff; }
+.endall-red { flex: 1; height: 46px; border-radius: 23px; border: none; background: var(--accent, #B0452E); color: #fff; font: 600 13px Inter, system-ui, sans-serif; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px; }
+.endall-red span { font-weight: 500; opacity: .85; }
+.end-skip summary { font-size: 13px; font-weight: 600; cursor: pointer; padding: 4px 0; }
+.end-skip label { display: flex; align-items: center; gap: 8px; font-size: 14px; padding: 6px 0; }
+.btn-ink.end-go { background: var(--accent, #B0452E); }
