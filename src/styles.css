@@ -3142,3 +3142,4 @@ div.venue-rule { background: #fff; border-radius: 14px; padding: 10px 14px; marg
 .mo-e, .mo-m, .mo-dh, .mo-more { flex-shrink: 0; } .mo-d { height: auto; }
 .bk-wl, .bk-wdh, .bk-wmore, .bk-wdn { flex-shrink: 0; }
 .bk-dragging .bk-grp, .bk-dragging .bk-mds { outline: 2px dashed #C9C0B4; }
+.bk-time.gold { color: #fff !important; }
