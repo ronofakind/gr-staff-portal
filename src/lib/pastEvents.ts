@@ -1,3 +1,4 @@
+import { isBarPos } from '../components/Uniform';
 import { useEffect, useState } from 'react';
 import { supabase } from './supabase';
 import { setting } from './settings';
@@ -75,7 +76,9 @@ export async function loadTeamSums(eventIds: string[], withRating: boolean, meId
     const ended = worked.filter((c) => c.punches?.punch_out && new Date(c.punches.punch_out).getTime() <= Date.now());
     const inf = infos[id] ?? {};
     const seen = new Set<string>();
-    const newStaff: NewPerson[] = worked.filter((c) => { const i = inf[c.staff_id]; if (c.staff_id === meId || !i?.is_new || i.done_before >= newUnder || seen.has(c.staff_id)) return false; seen.add(c.staff_id); return true; })
+    // Nov 5 · managers rate their own side only: a floor manager never gets bar staff to rate (and the other way round)
+    const mine = list.find((c) => c.staff_id === meId); const myBar = mine ? isBarPos(mine.position_code, mine.position_detail) : null;
+    const newStaff: NewPerson[] = worked.filter((c) => { const i = inf[c.staff_id]; if (myBar !== null && isBarPos(c.position_code, c.position_detail) !== myBar) return false; if (c.staff_id === meId || !i?.is_new || i.done_before >= newUnder || seen.has(c.staff_id)) return false; seen.add(c.staff_id); return true; })
       .map((c) => ({ staff_id: c.staff_id, name: c.staff?.full_name ?? '?', photo_url: c.staff?.photo_url ?? null, role: roleOf(c.position_code, c.position_detail), done_before: inf[c.staff_id].done_before, stars: inf[c.staff_id].fb_stars }));
     out[id] = { team: list.length, ended: ended.length, noShow: list.filter((c) => c.attendance === 'no_show').length, worked: worked.length, newStaff, toRate: newStaff.filter((n) => !n.stars).length };
   }

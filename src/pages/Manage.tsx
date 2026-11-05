@@ -1,3 +1,4 @@
+import { isBarPos } from '../components/Uniform';
 import { QuarterTime } from '../components/QuarterTime';
 import { useEffect, useRef, useState } from 'react';
 import { SwipeSheet } from '../components/SwipeSheet';
@@ -292,7 +293,8 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
       if (!fbOn) { asked.current = true; return; }
       if (!Object.keys(info).length) return; // manager_team_info not back yet
       asked.current = true;
-      const isNewW = (r: Row) => { const i = r.staff_id ? info[r.staff_id] : undefined; return r.staff_id !== me?.id && !r.attendance && !!r.punches?.punch_in && !!i?.is_new && i.done_before < newUnder; };
+      const myR = rows.find((x) => x.staff_id === me?.id); const myB = myR ? isBarPos(myR.position_code, myR.position_detail) : null;
+      const isNewW = (r: Row) => { const i = r.staff_id ? info[r.staff_id] : undefined; return (myB === null || isBarPos(r.position_code, r.position_detail) === myB) && r.staff_id !== me?.id && !r.attendance && !!r.punches?.punch_in && !!i?.is_new && i.done_before < newUnder; };
       const q = rows.filter((r) => isNewW(r) && (want === 'all' ? !info[r.staff_id!]?.fb_stars : r.staff_id === want)).map((r) => r.id);
       if (q.length) { setRateQ(q.slice(1)); setFb({ row: rows.find((r) => r.id === q[0])!, back: 'queue' }); }
     } else if (sub) {
@@ -391,7 +393,10 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
 
   if (!ev) return <div className="loading" />;
   const active = rows.filter((r) => !r.attendance);
-  const newRows = active.filter((r) => { const i = infoOf(r); return r.staff_id !== me?.id && !!i?.is_new && i.done_before < newUnder; });
+  // Nov 5 · rate your own side only (floor manager → floor staff, bar manager → bar staff)
+  const myRow = rows.find((r) => r.staff_id === me?.id); const myBarSide = myRow ? isBarPos(myRow.position_code, myRow.position_detail) : null;
+  const mySide = (r: Row) => myBarSide === null || isBarPos(r.position_code, r.position_detail) === myBarSide;
+  const newRows = active.filter((r) => { const i = infoOf(r); return r.staff_id !== me?.id && mySide(r) && !!i?.is_new && i.done_before < newUnder; });
   const groups = Array.from(new Set(rows.map((r) => r.planned_start)));
   const barN = active.filter((r) => isBar(r.position_code, r.position_detail)).length;
   const floorN = active.length - barN;

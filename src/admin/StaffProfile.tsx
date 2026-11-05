@@ -105,7 +105,11 @@ export function StaffProfile({ s, onClose, onEdit, all }: { s: AStaff; onClose: 
           <div className="row sm sp-app" style={{ gap: 8 }}><span className="muted">App</span><AppChip st={ap} />
             {ap.action && <button className={'abtn sm' + (ap.action === 'Invite' ? ' dark' : '')} style={{ marginLeft: 'auto' }} onClick={() => (ap.action === 'Invite' || ap.action === 'Resend' ? setInviting(true) : onEdit())}>{ap.action}</button>}</div>); })()}
         <div className="pcard"><div className="kick">THIS MONTH</div><div className="row" style={{ gap: 20 }}><b className="big">{month.length} <small>shifts</small></b><b className="big">{monthHours} <small>hrs</small></b></div></div>
-        {sd && <div className="pcard"><div className="row" style={{ justifyContent: 'space-between' }}><span className="kick">SCORE</span><Link to="/admin/ranking" className="sm accent strong">Ranking ›</Link></div>
+        {sd && <div className="pcard"><div className="row" style={{ justifyContent: 'space-between' }}><span className="kick">RANKING</span><Link to="/admin/ranking" className="sm accent strong">All rankings ›</Link></div>
+          {/* Nov 5 · set the tier right here (the colour on the Bookings board) */}
+          <div className="sp-tierh"><b>Tier</b><span className="muted sm">the colour on the Bookings board</span></div>
+          <div className="sp-tier">{(['A', 'B', 'C', null] as const).map((t) => <button key={t ?? 'none'} type="button" className={(tierNow ?? null) === t ? 'on t-' + (t ?? 'none') : ''}
+            onClick={async () => { if ((tierNow ?? null) === t) return; const prev = tierNow; setTierNow(t); const { error } = await supabase.from('staff_private').update({ tier: t }).eq('staff_id', s.id); if (error) { setTierNow(prev); alert(error.message); } }}>{t ?? 'No tier'}</button>)}</div>
           <ScoreWhy compact s={{ ...s, staff_private: s.staff_private ? { ...s.staff_private, tier: tierNow } : s.staff_private }} sc={scoreOf({ ...s, staff_private: s.staff_private ? { ...s.staff_private, tier: tierNow } : s.staff_private }, sd)}
             onTier={() => supabase.from('staff_private').select('tier').eq('staff_id', s.id).maybeSingle().then(({ data }) => setTierNow(((data as { tier?: 'A' | 'B' | 'C' | null } | null)?.tier) ?? null))} /></div>}
         {sd && <MgrFeedback sid={s.id} d={sd} />}
