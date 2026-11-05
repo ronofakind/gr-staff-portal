@@ -12,7 +12,7 @@ import { appStatus, loadInviteStatus, InviteModal, AppChip, type InviteRow } fro
 
 type Off = { id: string; staff_id: string; from_date: string; to_date: string; every_dow: number | null };
 const DOWS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-type Sort = 'first' | 'last' | 'rank' | 'tier' | 'shifts' | 'newest';
+type Sort = 'first' | 'last' | 'rank' | 'tier' | 'score' | 'app' | 'shifts' | 'newest';
 const firstName = (s: AStaff) => (s.full_name.split(' ')[0] ?? '');
 const lastName = (s: AStaff) => s.full_name.split(' ').slice(1).join(' ') || s.full_name;
 
@@ -21,7 +21,8 @@ export function Staff() {
   const [q, setQ] = useState(''); const [inactive, setInactive] = useState(false);
   const [tier, setTier] = useState<'all' | 'A' | 'B' | 'C' | 'none'>('all');
   const [dept, setDept] = useState<'all' | 'floor' | 'bar' | 'md'>('all');
-  const [sort, setSort] = useState<Sort>('first');
+  const [sort, setSort0] = useState<Sort>(() => { try { return (localStorage.getItem('gr_staff_sort') as Sort) || 'first'; } catch { return 'first'; } });
+  const setSort = (v: Sort) => { setSort0(v); try { localStorage.setItem('gr_staff_sort', v); } catch { /* private mode */ } };
   const [open, setOpen] = useState<string | null>(null);
   const [prof, setProf] = useState<AStaff | null>(null);
   const [month, setMonth] = useState<Record<string, number>>({});
@@ -72,6 +73,8 @@ export function Staff() {
     switch (sort) {
       case 'last': return lastName(a).localeCompare(lastName(b), 'fr');
       case 'rank': return r(a) - r(b);
+      case 'score': return (sd ? scoreOf(b, sd).form - scoreOf(a, sd).form : 0) || a.full_name.localeCompare(b.full_name, 'fr', { sensitivity: 'base' });
+      case 'app': { const o = { signed: 0, invited: 1, not: 2 }; return o[appGroup(a)] - o[appGroup(b)] || a.full_name.localeCompare(b.full_name, 'fr', { sensitivity: 'base' }); }
       case 'tier': return (tOf(a) ?? 'Z').localeCompare(tOf(b) ?? 'Z') || r(a) - r(b);
       case 'shifts': return (month[b.id] ?? 0) - (month[a.id] ?? 0);
       case 'newest': return (b.created_at ?? '').localeCompare(a.created_at ?? '');
@@ -101,7 +104,7 @@ export function Staff() {
           <button className={tier === 'none' ? 'on' : ''} onClick={() => setTier('none')}><i className="tier-q">?</i> Unranked {count('none')}</button>
         </div>
         <label className="row sm muted" style={{ gap: 6 }}>Sort <select value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
-          <option value="first">A → Z (first name)</option><option value="last">A → Z (last name)</option><option value="rank">Ranking (tier, then score)</option><option value="shifts">Most shifts this month</option><option value="newest">Newest</option></select></label>
+          <option value="first">A → Z (first name)</option><option value="last">A → Z (last name)</option><option value="rank">Ranking (tier, then score)</option><option value="score">Score only (high → low, any tier)</option><option value="app">App (signed in → invited → not invited)</option><option value="shifts">Most shifts this month</option><option value="newest">Newest</option></select></label>
         <div className="seg">{([['all', 'All'], ['floor', 'Floor'], ['bar', 'Bar'], ['md', 'MD']] as const).map(([k, l]) => <button key={k} className={dept === k ? 'on' : ''} onClick={() => setDept(k)}>{l}</button>)}</div>
         <label className="row sm" style={{ gap: 6 }}><input type="checkbox" checked={inactive} onChange={(e) => setInactive(e.target.checked)} /> Show inactive</label>
       </div>
