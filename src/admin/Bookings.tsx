@@ -349,7 +349,9 @@ export function Bookings() {
     const pl = plOf(d).filter((p) => p.event_id === e.id); const leads = pl.filter((p) => isLead(p) && !p.suggested);
     const leadLines = (e.staffing ?? []).filter((l) => ['MD', 'BM'].includes(l.code));
     const leadSlots = leadLines.reduce((n, l) => n + l.count, 0) || (leads.length ? 1 : 0);
-    const client = Math.max(0, e.staff_needed - Math.max(leadSlots, leads.length));
+    const lineSum = (e.staffing ?? []).filter((l) => !['MD', 'BM'].includes(l.code)).reduce((n, l) => n + l.count, 0);
+    // Nov 4 · client count = staff count minus MDs; no count on the event (old imports) → the staffing lines, else unknown (0 = "count not set")
+    const client = e.staff_needed > 0 ? Math.max(0, e.staff_needed - Math.max(leadSlots, leads.length)) : lineSum;
     const crew = pl.filter((p) => !isLead(p) && !p.extra && !p.suggested);
     const extrasPlaced = pl.filter((p) => p.extra && !p.suggested).length;
     const sc = crew.map((p) => scores[p.staff_id]).filter((x): x is number => typeof x === 'number' && isFinite(x));
@@ -416,7 +418,7 @@ export function Bookings() {
           <Link to={`/admin/event/${e.id}`} className="serif bk-title">{seeTitle(e)}</Link>
           <div className="muted sm">{[e.event_private?.client, e.event_type, e.guests ? `${e.guests} guests` : null].filter(Boolean).join(' · ')}</div>
           <div className="bk-cc">
-            <span className="bk-ccn"><b>{placed} / {client}</b> <span className="muted sm">client count</span></span>
+            <span className="bk-ccn">{client > 0 ? <><b>{placed} / {client}</b> <span className="muted sm">client count</span></> : <><b>{placed}</b> <Link to={`/admin/event/${e.id}/edit`} className="gold sm strong">client count not set ›</Link></>}</span>
             <span className="bk-xs">+ {st.extrasPlaced} / <span className="bk-step" onClick={(ev) => ev.stopPropagation()}>
               <button type="button" aria-label="One less extra" disabled={extras <= 0} onClick={() => setExtras(d, e, extras - 1)}>−</button><b>{extras}</b>
               <button type="button" aria-label="One more extra" onClick={() => setExtras(d, e, extras + 1)}>+</button></span> extras</span>
