@@ -128,7 +128,7 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team, past }
   };
   const plus = (name: string): Piece => ({ key: 'x:' + name, icon: () => <span className="uni-extra">+</span>, name, extra: true });
   const order = [PIECE.tie, PIECE.pants, PIECE.shoes, PIECE.apron, PIECE.key] as string[];
-  const tiles: Piece[] = picked ? [
+  const tiles0: Piece[] = picked ? [
     ...order.filter((p) => picked.on.includes(p)).map((p) => pieceTile[p]),
     ...picked.on.filter((p) => !order.includes(p)).map(plus),
     ...picked.extra.map(plus),
@@ -139,6 +139,8 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team, past }
     ...(!dress && kind !== 'black_tshirt' ? [pieceTile[PIECE.apron]] : []),
     ...(bar ? [pieceTile[PIECE.key]] : []),
   ];
+  // Ronnie, Nov 4 · MDs and bar managers wear the same as their team, minus the apron and the wine key.
+  const tiles = s.position_code === 'MD' || s.position_code === 'BM' ? tiles0.filter((x) => x.key !== 'apron' && x.key !== 'key') : tiles0;
   const shirtLabel = uniformLabel(kind).replace(' + tie', '');
 
   const lead_ = s.position_code === 'MD' || s.position_code === 'BM';
