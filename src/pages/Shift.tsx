@@ -201,6 +201,7 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team, past }
             </span>
           </a>
         )}
+        {lead_ && ev.drive_folder_url && <a className="d3-team d3-folder" href={ev.drive_folder_url} target="_blank" rel="noreferrer">📁 Event folder · floor plan, run of show ›</a>}
         {lead_ && !preview && <Link className="d3-team" to={`/manage/${ev.id}`}>My team{team ? ` · ${team.reduce((n, g) => n + g.n, 0)}` : ''} ›</Link>}
         {canChange && <>
           <span className="d3-hl" />
