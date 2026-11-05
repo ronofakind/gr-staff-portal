@@ -3263,3 +3263,4 @@ div.venue-rule { background: #fff; border-radius: 14px; padding: 10px 14px; marg
 .end-skip summary { font-size: 13px; font-weight: 600; cursor: pointer; padding: 4px 0; }
 .end-skip label { display: flex; align-items: center; gap: 8px; font-size: 14px; padding: 6px 0; }
 .btn-ink.end-go { background: var(--accent, #B0452E); }
+.submit-bar .endall-red span { color: #fff; opacity: .85; }
