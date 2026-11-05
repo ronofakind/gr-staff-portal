@@ -26,6 +26,7 @@ import { PastStrips } from '../components/PastStrip';
 import { managesShift } from '../lib/pastEvents';
 import { NeedChange, CancelSheet, ChangeSheet, LateSheet, LateBlock, ChangeCard, CancelledCard, useShiftChanges, t12 as t12c, type LateNotice } from '../components/ShiftChange';
 import { Brand } from '../components/Brand';
+import { CantMakeIt } from '../components/ShiftNotes';
 
 type MgrLate = { id: string; shift_id: string; event_id: string; name: string; eta: string; reason: string | null; note?: string | null };
 type Gone = { id: string; title: string; date: string; late: boolean };
@@ -35,7 +36,7 @@ const COMGR_KEY = 'gr-comgr-seen'; // push 39 · "Ronnie made you a manager" not
 const readComgr = (): string[] => { try { const v = JSON.parse(localStorage.getItem(COMGR_KEY) || '[]'); return Array.isArray(v) ? v : []; } catch { return []; } };
 
 /** push 33 shift columns (migration 039), read on their own so Home still loads before it is applied. */
-type Prev = { start?: string | null; position?: string | null; place?: string | null; address?: string | null };
+type Prev = { start?: string | null; end?: string | null; position?: string | null; place?: string | null; address?: string | null; uniform?: string | null; uniform_new?: string | null };
 type P33 = { confirm_sent_at: string | null; confirm_by: string | null; change_prev: Prev | null; change_seen_at: string | null };
 type Mate = { full_name: string; photo_url: string | null; position_code: string | null; position_detail: string | null; punches: { punch_in: string | null; punch_out: string | null } | null };
 type Q = { shift_id: string; status: 'open' | 'fixed' | 'correct' };
@@ -200,7 +201,10 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
         <ProfileButton me={me} preview={preview} />
       </header>
 
-      {!preview && <PastStrips me={me} />}{/* push 51 · Rate n new staff / Send hours (events managed in the last 7 days) */}
+      {!preview && <PastStrips me={me} />}
+
+      {/* Nov 5 · every "Your shift changed" box sits at the top of Home until Got it (mapping StaffChangesV1) */}
+      {shifts.filter((s) => changed(s)).map((s) => <ChangedBox key={'chg' + s.id} prev={changed(s)!} s={s} role={role(s)} calOn={!!cal?.added_at} onSeen={() => changeSeen(s)} standalone />)}{/* push 51 · Rate n new staff / Send hours (events managed in the last 7 days) */}
 
       {comgrNotes.map((s) => (
         <div key={'cm' + s.events.id} className="comgr-note" role="status">
@@ -354,12 +358,11 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
         const waiting = !working && next.status === 'booked'; // push 33a · waiting for Confirm (details are final here)
         const confirmed = !working && next.status === 'confirmed';
         const by = x33[next.id]?.confirm_by ?? null;
-        const prev = changed(next);
         if (isDbl) {
           // push 46 · compact card: position in the pill, STARTS | ENDS on one row, then the next shift that day
           const nx = laterSame[0];
           return <>
-            <section className={'next dbl' + (working ? ' working' : '') + (waiting ? ' to-confirm' : '') + (confirmed ? ' is-confirmed' : '')}>
+            <section className={'next dbl' + (changed(next) ? ' chg' : '') + (working ? ' working' : '') + (waiting ? ' to-confirm' : '') + (confirmed ? ' is-confirmed' : '')}>
               <div className="top-line">
                 <span className="day-word">{working ? <><i className="live-dot" aria-hidden="true" />WORKING NOW</> : waiting ? <ConfirmPill by={by} />
                   : next.events.event_date === today && !next.time_tbc ? <Countdown iso={minus(next.planned_start, next.arrive_before_min)} start={next.planned_start} plain /> : dayWord.toUpperCase()}</span>
@@ -381,7 +384,6 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
                   <div><small>Ends</small>{next.planned_end && !next.time_tbc ? <BigTime iso={next.planned_end} small /> : <span className="big serif sm-big">TBC</span>}</div>
                 </>}
               </div>
-              {prev && <ChangedBox prev={prev} s={next} role={role(next)} calOn={!!cal?.added_at} onSeen={() => changeSeen(next)} />}
               {myAlerts.map((a) => (
                 <div key={a.id} className="mgr-late"><span className="grow">⏱ <b>{a.name.split(' ')[0]} running late</b> · ~{t12c(a.eta).replace(/\s?[AP]M$/, '')}{a.reason ? ` · ${a.reason.toLowerCase()}` : ''}{a.note ? ` · “${a.note}”` : ''}</span>
                   <button onClick={() => mgrGotIt(a.id)}>Got it ✓</button></div>
@@ -414,14 +416,13 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
                       <span>{pos(s)} · {ofN(s)}</span></div>
                     {!isSetup(s.events) && <span className="row-wear"><UniformIcon kind={uniformFor(s)} size={30} /></span>}
                   </Link>
-                  {changed(s) && <ChangedBox prev={changed(s)!} s={s} role={role(s)} calOn={!!cal?.added_at} onSeen={() => changeSeen(s)} standalone />}
                 </div>
               );
             })}
           </>;
         }
         return (
-          <section className={'next' + (working ? ' working' : '') + (waiting ? ' to-confirm' : '') + (confirmed ? ' is-confirmed' : '')} style={{ gap: 14, padding: 18 }}>
+          <section className={'next' + (changed(next) ? ' chg' : '') + (working ? ' working' : '') + (waiting ? ' to-confirm' : '') + (confirmed ? ' is-confirmed' : '')} style={{ gap: 14, padding: 18 }}>
             <div className="top-line">
               <span className="day-word">{working ? <><i className="live-dot" aria-hidden="true" />WORKING NOW</> : dayWord.toUpperCase()}</span>
               {working ? <span className="countdown">since {time(next.punches!.punch_in!, lang)}</span>
@@ -443,7 +444,6 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
                 <div className="tbox"><small>On the clock</small><span className="big serif sm-big mint"><Elapsed iso={next.punches!.punch_in!} /></span></div>
               </div>
             </> : <StartPos start={next.time_tbc ? null : next.planned_start} role={pos(next)} mgr={coMgr(next)} />}
-            {prev && <ChangedBox prev={prev} s={next} role={role(next)} calOn={!!cal?.added_at} onSeen={() => changeSeen(next)} />}
             {myAlerts.map((a) => (
               <div key={a.id} className="mgr-late"><span className="grow">⏱ <b>{a.name.split(' ')[0]} running late</b> · ~{t12c(a.eta).replace(/\s?[AP]M$/, '')}{a.reason ? ` · ${a.reason.toLowerCase()}` : ''}{a.note ? ` · “${a.note}”` : ''}</span>
                 <button onClick={() => mgrGotIt(a.id)}>Got it ✓</button></div>
@@ -477,9 +477,9 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
         const list = isDbl ? restAfter.slice(1) : mini ? rest.slice(1) : rest;
         return <>
           {mini && (() => { const b = dayBadge(mini.events.event_date, lang); const ok = mini.status === 'confirmed'; return (
-            <Link to={`${base}/shift/${mini.id}`} className={'next-mini' + (ok ? ' ok' : '')}>
+            <Link to={`${base}/shift/${mini.id}`} className={'next-mini' + (ok ? ' ok' : '') + (changed(mini) ? ' chg' : '')}>
               <div className="d"><small>{b.dow}</small><b>{b.day}</b></div>
-              <div className="grow"><small>NEXT · {soon(mini) ? 'DETAILS COMING' : ok ? '✓ CONFIRMED' : 'TO CONFIRM'}</small><b>{soon(mini) ? 'You’re booked' : mini.events.title}</b>
+              <div className="grow"><small className={changed(mini) ? 'chg-k' : ''}>NEXT · {changed(mini) ? 'CHANGED' : soon(mini) ? 'DETAILS COMING' : ok ? '✓ CONFIRMED' : 'TO CONFIRM'}</small><b>{soon(mini) ? 'You’re booked' : mini.events.title}</b>
                 <span>{soon(mini) || mini.time_tbc ? 'Time TBC' : time(mini.planned_start, lang)} · {pos(mini)} · {whenLabel(mini).split(' · ')[0].toLowerCase()}</span></div>
               <span className="row-wear"><UniformIcon kind={uniformFor(mini)} size={30} /></span>
             </Link>
@@ -503,7 +503,6 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
               <CalIcon /><b className="grow">{waitingAsks} date{waitingAsks > 1 ? 's' : ''} to answer</b><span className="dp-go">Answer ›</span>
             </Link>
           )}
-          {list.filter((s) => s !== next && changed(s)).map((s) => <ChangedBox key={s.id} prev={changed(s)!} s={s} role={role(s)} calOn={!!cal?.added_at} onSeen={() => changeSeen(s)} standalone />)}
           {list.length > 0 && (
             <>
               <div className="sec-head"><span className="serif">Coming up</span><Link to={myDatesTo('booked')}>All my dates ›</Link></div>
@@ -570,23 +569,29 @@ function ConfirmPill({ by }: { by: string | null }) {
   return <span className="confirm-pill"><i />{m <= 0 ? 'Confirm · overdue' : m < 60 ? `Confirm · ${m} min left` : `Confirm · ${Math.floor(m / 60)} h left`}</span>;
 }
 
-/** push 33f · gold "Your shift changed" box until Got it. */
-function ChangedBox({ prev, s, role, calOn, onSeen, standalone = false }: { prev: Prev; s: ShiftRow; role: string; calOn: boolean; onSeen: () => void; standalone?: boolean }) {
+/** push 33f · gold "Your shift changed" box until Got it. Nov 5 · one line per change (new value, old one struck), uniform + end time too. */
+function ChangedBox({ prev, s, role, calOn, onSeen }: { prev: Prev; s: ShiftRow; role: string; calOn: boolean; onSeen: () => void; standalone?: boolean }) {
+  const [cant, setCant] = useState(false);
   const place = s.events.venues?.name ?? s.events.title;
-  const bits: JSX.Element[] = [];
-  if (prev.start && new Date(prev.start).getTime() !== new Date(s.planned_start).getTime() && !s.time_tbc) bits.push(<span key="t">Now starts <b>{t12(s.planned_start)}</b> <s>{t12(prev.start)}</s></span>);
-  if (prev.place && prev.place !== place) bits.push(<span key="p">Now at <b>{place}</b> <s>{prev.place}</s></span>);
-  else if (prev.address && prev.address !== (s.events.address || s.events.venues?.address || '')) bits.push(<span key="a">New address <b>{s.events.address || s.events.venues?.address}</b></span>);
-  if (prev.position && prev.position.replace(/^bar\s*-\s*/i, '') !== role && !/^\d+$/.test(prev.position)) bits.push(<span key="r">Now <b>{role}</b> <s>{prev.position.replace(/^bar\s*-\s*/i, '')}</s></span>);
-  if (!bits.length) bits.push(<span key="x">Some details changed. Check Details.</span>);
+  const addr = s.events.address || s.events.venues?.address || '';
+  const rows: { k: string; nw: string; old?: string | null }[] = [];
+  if (prev.start && new Date(prev.start).getTime() !== new Date(s.planned_start).getTime() && !s.time_tbc) rows.push({ k: 'START TIME', nw: t12(s.planned_start), old: t12(prev.start) });
+  if ('end' in prev && (prev.end ?? null) !== (s.planned_end ?? null) && s.planned_end && (!prev.end || new Date(prev.end).getTime() !== new Date(s.planned_end).getTime())) rows.push({ k: 'END TIME', nw: '~ ' + t12(s.planned_end), old: prev.end ? '~ ' + t12(prev.end) : null });
+  if (prev.place && prev.place !== place) rows.push({ k: 'PLACE', nw: place + (addr ? ` · ${addr.split(',')[0]}` : ''), old: prev.place });
+  else if (prev.address && prev.address !== addr) rows.push({ k: 'ADDRESS', nw: addr, old: prev.address });
+  if (prev.position && prev.position.replace(/^bar\s*-\s*/i, '') !== role && !/^\d+$/.test(prev.position)) rows.push({ k: 'POSITION', nw: role, old: prev.position.replace(/^bar\s*-\s*/i, '') });
+  if (prev.uniform && prev.uniform_new && prev.uniform !== prev.uniform_new) rows.push({ k: 'UNIFORM', nw: prev.uniform_new, old: prev.uniform });
+  else if (prev.uniform_new) rows.push({ k: 'UNIFORM', nw: prev.uniform_new });
+  const day = new Date(s.events.event_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
   return (
-    <div className={'changed-box' + (standalone ? ' standalone' : '')}>
-      <div className="grow">
-        <b>Your shift changed{standalone ? ` · ${new Date(s.events.event_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}` : ''}</b>
-        {bits}
-        {calOn && <small>Your <Brand /> calendar updates by itself.</small>}
-      </div>
-      <button onClick={onSeen}>Got it</button>
+    <div className="chg-card" role="status">
+      <div className="chg-h"><span className="chg-i">!</span><b>Your shift changed</b><i>NEW</i></div>
+      <span className="chg-d">{day} · {place}</span>
+      {rows.length ? rows.map((r) => <div key={r.k} className="chg-l"><small>{r.k}</small><span><b>{r.nw}</b>{r.old ? <s>{r.old}</s> : null}</span></div>)
+        : <div className="chg-l"><span>Some details changed. Check Details.</span></div>}
+      {calOn && <small className="chg-cal">Your <Brand /> calendar updates by itself.</small>}
+      <div className="chg-btns"><button onClick={onSeen}>✓ Got it</button><button className="alt" onClick={() => setCant(true)}>Can’t make it</button></div>
+      {cant && <CantMakeIt shiftId={s.id} onClose={() => setCant(false)} />}
     </div>
   );
 }
