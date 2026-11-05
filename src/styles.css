@@ -3264,3 +3264,7 @@ div.venue-rule { background: #fff; border-radius: 14px; padding: 10px 14px; marg
 .end-skip label { display: flex; align-items: center; gap: 8px; font-size: 14px; padding: 6px 0; }
 .btn-ink.end-go { background: var(--accent, #B0452E); }
 .submit-bar .endall-red span { color: #fff; opacity: .85; }
+/* Nov 5 · Start remaining never breaks into 2 lines; the header wraps instead when the time has an end (3:00 PM ~ 10:00 PM) */
+.grp-head { flex-wrap: wrap; row-gap: 8px; }
+.grp-head .grp-rule { min-width: 12px; }
+.grp-head .btn-go { white-space: nowrap; flex: none; margin-left: auto; }
