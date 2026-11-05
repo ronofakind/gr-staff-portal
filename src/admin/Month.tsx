@@ -67,11 +67,11 @@ export function Month() {
             const short = evs.reduce((n, e) => n + countOf(e).short, 0); const isOpen = open === d;
             const list = isOpen ? evs : evs.slice(0, 4);
             return (
-              <div key={d} className={'mo-d' + (out ? ' out' : '') + (d === today ? ' today' : '') + (monday(d) === thisWeek ? ' wk' : '') + (isOpen ? ' open' : '')} onClick={() => nav(`/admin/day?d=${d}`)}>
+              <div key={d} className={'mo-d' + (out ? ' out' : '') + (d === today ? ' today' : '') + (monday(d) === thisWeek ? ' wk' : '') + (isOpen ? ' open' : '')} onClick={() => nav(`/admin/bookings?date=${d}&view=board`)}>
                 <div className="mo-dh"><b>{Number(d.slice(8))}</b>{d === today && <span className="mo-today">TODAY</span>}<span className="grow" />{short > 0 && <span className="mo-short">{short} short</span>}</div>
                 {mts.map((m) => <div key={m.id} className="mo-m">Meeting · {tShort(m.starts_at)}</div>)}
                 {list.map((e) => { const c = countOf(e); const st = sendStateOf(e, today); return (
-                  <Link key={e.id} to={`/admin/bookings?date=${d}&view=board&dept=${e.department === 'bar' ? 'bar' : 'floor'}&ev=${e.id}`} className={'mo-e' + (e.department === 'bar' ? ' is-bar' : '')} onClick={(ev) => ev.stopPropagation()}>
+                  <Link key={e.id} to={`/admin/bookings?date=${d}&view=board&ev=${e.id}`} className={'mo-e' + (e.department === 'bar' ? ' is-bar' : '')} onClick={(ev) => ev.stopPropagation()}>
                     <span className="mo-et">{title(e)}</span>
                     <b className={c.need && c.short ? 'amber-t' : 'ok-t'}>{c.need ? `${c.booked}/${c.need}` : `${c.n}`}{c.extra ? <i className="mo-x"> +{c.extra}</i> : null}</b>
                     {st === 'ready' && d >= today && <span className="mo-send">SEND</span>}{st === 'sent' && <span className="mo-sent">✓</span>}
