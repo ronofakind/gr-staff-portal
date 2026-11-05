@@ -461,14 +461,16 @@ export function Bookings() {
   const Column = ({ e, d }: { e: AEvent; d: string }) => {
     const groups = groupsOf(d, e); const st = statsOf(d, e); const { pl, leads, leadSlots, client, placed, extras } = st;
     // Nov 4 · balance note: 2+ events that day and this team is more than 5 below the strongest
-    const day = dayEvs(d).length > 1 ? dayEvs(d).map((x) => ({ e: x, s: statsOf(d, x).strength })).filter((x) => x.s != null) : [];
+    // Nov 5 · in Both, floor teams compare with floor teams and bar with bar
+    const same = dayEvs(d).filter((x) => isBarEv(x) === isBarEv(e));
+    const day = same.length > 1 ? same.map((x) => ({ e: x, s: statsOf(d, x).strength })).filter((x) => x.s != null) : [];
     const top = day.reduce<{ e: AEvent; s: number | null } | null>((b, x) => (!b || (x.s ?? 0) > (b.s ?? 0) ? x : b), null);
     const diff = top && top.e.id !== e.id && st.strength != null ? (top.s ?? 0) - st.strength : 0;
     const leadLabel = isBarEv(e) ? 'Bar manager' : 'MDs'; const leadCode = isBarEv(e) ? 'BM' : 'MD';
     return (
       <div data-ev={e.id} className={'bk-col' + (focusEv === e.id ? ' focus' : '') + (dept === 'both' && isBarEv(e) ? ' bar-col' : '')} onDragOver={(ev) => ev.preventDefault()} onDrop={() => onDrop(d, { event_id: e.id, start: groups.find((g) => g.need > g.people.length)?.start ?? groups[0]?.start ?? (e.start_time ?? '17:00').slice(0, 5) })}>
         <div className="bk-colh">
-          <div className="bk-see">{dept === 'both' && <i className={'bk-dtag' + (isBarEv(e) ? ' bar' : '')}>{isBarEv(e) ? 'BAR' : 'FLOOR'}</i>}AS STAFF SEE IT</div>
+          <div className="bk-see">{dept === 'both' && <i className={'bk-dtag' + (isBarEv(e) ? ' is-bar' : '')}>{isBarEv(e) ? 'BAR' : 'FLOOR'}</i>}AS STAFF SEE IT</div>
           <Link to={`/admin/event/${e.id}`} className="serif bk-title">{seeTitle(e)}</Link>
           <div className="muted sm">{[e.event_private?.client, e.event_type, e.guests ? `${e.guests} guests` : null].filter(Boolean).join(' · ')}</div>
           <div className="bk-cc">
