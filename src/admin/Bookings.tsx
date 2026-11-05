@@ -14,7 +14,9 @@ import { locksBetween, setLock, lockTitle, NO_LOCKS, type Locks } from './locks'
 
 type Pl = { key: string; staff_id: string; event_id: string; start: string; code: string; shift_id?: string | null; extra?: boolean; suggested?: boolean;
   /** Nov 4 · the line (time group) they sit in when their own start differs ("starts 4:30 PM" tag). start = their real start. */
-  line?: string };
+  line?: string;
+  /** Nov 4 · you dragged them onto a line (keep them off the automatic extras) */
+  keep?: boolean };
 /** Line start a time belongs to: the latest line at or before it, else the first line. null = it is a line start / no lines. */
 const lineFor = (starts: string[], t: string): string | undefined => {
   if (!starts.length || starts.includes(t)) return undefined;
@@ -66,7 +68,11 @@ export function Bookings() {
   const [hist, setHist] = useState<Record<string, Draft>[]>([]);
   const [tab, setTab] = useState<'yes' | 'wait' | 'not'>('yes'); const [q, setQ] = useState('');
   // push 49 · add = dragged from "Already placed today" → a 2nd shift that day (not a move)
-  const [drag, setDrag] = useState<{ staff_id: string; key?: string; add?: boolean } | null>(null);
+  // Nov 4 · drag lives in a ref (no re-render on drag start: that cancelled the drag on laptops); body class = drop-zone styling
+  type Drag = { staff_id: string; key?: string; add?: boolean };
+  const dragRef = useRef<Drag | null>(null);
+  const setDrag = (g: Drag | null) => { dragRef.current = g; try { document.body.classList.toggle('bk-dragging', !!g); } catch { /* ssr */ } };
+  const dragStart = (ev: React.DragEvent, g: Drag) => { try { ev.dataTransfer.setData('text/plain', g.staff_id); ev.dataTransfer.effectAllowed = 'move'; } catch { /* old browsers */ } setDrag(g); };
   /** push 49 · a placed chip dropped on ANOTHER event → "Add a 2nd shift · keep both" / "Move · off <event 1>" / Cancel */
   const [dropAsk, setDropAsk] = useState<{ p: Pl; to: { event_id: string; start: string; extra?: boolean } } | null>(null);
   const [hint, setHint] = useState<string>('');
@@ -87,7 +93,6 @@ export function Bookings() {
   const [ownT, setOwnT] = useState(''); // Nov 4 · Change start time (one person)
   const [msg, setMsg] = useState(''); const [busy, setBusy] = useState(false);
   const [locks, setLocks] = useState<Locks>(NO_LOCKS); // push 50 · padlock on saved shifts
-  const dragRef = useRef(drag); dragRef.current = drag;
 
   const range = view === 'board' ? { from: date, to: date } : { from: date, to: addDays(date, (view === 'sheet' ? span : 14) - 1) };
   const dates = useMemo(() => Array.from({ length: (new Date(range.to).getTime() - new Date(range.from).getTime()) / 864e5 + 1 }, (_, i) => addDays(range.from, i)), [range.from, range.to]);
@@ -190,7 +195,7 @@ export function Bookings() {
     if (existing) {
       if (!both) { const partner = pl.find((p) => p.event_id === existing.event_id && partnerOf(sid).includes(p.staff_id) && p.key !== existing.key && !isLocked(d, p)); // push 50 · a locked partner stays
         if (partner && existing.event_id !== to.event_id) { setPair({ moving: existing, partner, to: { event_id: to.event_id, start } }); return; } }
-      pl = pl.map((p) => (p.key === existing.key ? { ...p, event_id: to.event_id, start, line: start !== to.start ? to.start : undefined, extra: !!to.extra, suggested: false } : p));
+      pl = pl.map((p) => (p.key === existing.key ? { ...p, event_id: to.event_id, start, line: start !== to.start ? to.start : undefined, extra: !!to.extra, keep: !to.extra, suggested: false } : p));
     } else {
       const e = evById[to.event_id]; pl.push({ key: uid(), staff_id: sid, event_id: to.event_id, start, ...(start !== to.start ? { line: to.start } : {}), code: isBarEv(e) ? (byId[sid]?.positions.includes('BT') ? 'BT' : 'BB') : 'W', extra: !!to.extra });
     }
@@ -332,9 +337,22 @@ export function Bookings() {
 
   // ── board pieces ───────────────────────────────────────────────
   const dayEvs = (d: string) => (events ?? []).filter((e) => e.event_date === d && evDept(e) === dept);
+  /** Ronnie, Nov 4 · automatic extras: when more people are booked than the client count, the extra ones go in the Extras box:
+   *  people who finish early first, then the lowest ranked. Never MDs, never padlocked people, never someone you dragged onto a line. */
+  const clientOf = (e: AEvent) => { const lines = (e.staffing ?? []).reduce((n, l) => n + (l.count || 0), 0); return e.staff_needed > 0 ? e.staff_needed : lines; };
+  const autoX = (d: string, e: AEvent): Set<string> => {
+    const pl = plOf(d).filter((p) => p.event_id === e.id && !p.suggested); const client = clientOf(e);
+    const over = client ? pl.length - client - pl.filter((p) => p.extra).length : 0; if (over <= 0) return new Set();
+    const early = (p: Pl) => { const sh = p.shift_id ? evById[e.id]?.shifts.find((y) => y.id === p.shift_id) : undefined; return sh?.leave_by || sh?.left_early ? 0 : 1; };
+    const cand = pl.filter((p) => !p.extra && !p.keep && !['MD', 'BM'].includes(p.code) && !isLocked(d, p))
+      .sort((a, b) => early(a) - early(b) || (scores[a.staff_id] ?? -1e9) - (scores[b.staff_id] ?? -1e9) || rank(b.staff_id) - rank(a.staff_id));
+    return new Set(cand.slice(0, over).map((p) => p.key));
+  };
+  const isX = (d: string, e: AEvent, p: Pl) => !!p.extra || autoX(d, e).has(p.key);
   const groupsOf = (d: string, e: AEvent) => {
     const lines = (e.staffing ?? []).filter((l) => !['MD', 'BM'].includes(l.code));
-    const pl = plOf(d).filter((p) => p.event_id === e.id && !['MD', 'BM'].includes(p.code));
+    const ax = autoX(d, e);
+    const pl = plOf(d).filter((p) => p.event_id === e.id && !['MD', 'BM'].includes(p.code) && !ax.has(p.key));
     const gOf = (p: Pl) => p.line ?? p.start;
     const starts = [...new Set([...lines.map((l) => l.start), ...pl.map(gOf)])].sort((a, b) => toMin(a) - toMin(b));
     return starts.map((st) => { const ls = lines.filter((l) => l.start === st); return { start: st, end: ls.find((l) => l.end)?.end ?? null, need: ls.reduce((n, l) => n + l.count, 0), people: pl.filter((p) => gOf(p) === st && !p.extra).sort((a, b) => rank(a.staff_id) - rank(b.staff_id)), isNew: !ls.length }; });
@@ -418,7 +436,7 @@ export function Bookings() {
     const locked = isLocked(d, p); const t = tier(p.staff_id); const part = partnerOf(p.staff_id).find((x) => plOf(d).some((q2) => q2.staff_id === x));
     const cf = confOf(p);
     return (
-      <div data-key={p.key} className={'bk-chip rk' + (t ?? 'x') + (flash === p.key ? ' flash' : '') + (p.suggested ? ' sug' : '') + (!p.shift_id && !p.suggested ? ' added' : '') + (also.length ? ' has-also' : '')} draggable onDragStart={() => setDrag({ staff_id: p.staff_id, key: p.key })} onClick={() => setPhone({ sid: p.staff_id, p, step: 'menu' })}>
+      <div data-key={p.key} className={'bk-chip rk' + (t ?? 'x') + (flash === p.key ? ' flash' : '') + (p.suggested ? ' sug' : '') + (!p.shift_id && !p.suggested ? ' added' : '') + (also.length ? ' has-also' : '')} draggable onDragStart={(ev) => dragStart(ev, { staff_id: p.staff_id, key: p.key })} onDragEnd={() => setDrag(null)} onClick={() => setPhone({ sid: p.staff_id, p, step: 'menu' })}>
         {n != null && <span className="bk-n">{n}</span>}<i className={'bk-cf ' + cf + (p.shift_id && !p.suggested ? ' tap' : '')} title={!p.shift_id || p.suggested ? 'Not saved yet' : cf === 'ok' ? 'Confirmed · tap to undo' : 'Tap to mark confirmed'}
           onClick={(ev) => { if (!p.shift_id || p.suggested) return; ev.stopPropagation(); toggleConf(p); }}>{cf === 'ok' ? '✓' : ''}</i>
         <span className="grow">{name(p.staff_id)}{part && <small> 🔗 {name(part).split(' ')[0]}</small>}{p.extra && <small className="bk-x"> EXTRA</small>}{p.line && p.line !== p.start && <small className="bk-own" title="Their own start time"> starts {t12(p.start)}</small>}
@@ -457,24 +475,24 @@ export function Bookings() {
           {diff > 5 && top && <div className="bk-bal">{diff} below {seeTitle(top.e)} today · worth balancing</div>}
         </div>
         {(leadSlots > 0 || leads.length > 0) && (
-          <div className={'bk-mds' + (drag ? ' dropok' : '')} onDragOver={(ev) => ev.preventDefault()} onDrop={(ev) => { ev.stopPropagation(); onDrop(d, { event_id: e.id, start: st.leadStart }); }}>
+          <div className="bk-mds" onDragOver={(ev) => ev.preventDefault()} onDrop={(ev) => { ev.stopPropagation(); onDrop(d, { event_id: e.id, start: st.leadStart }); }}>
             <div className="bk-gh"><b className="bk-mdh">{leadLabel} · {t12(st.leadStart)}</b><span className="muted sm">{leads.length} / {leadSlots}</span></div>
             {leads.map((p) => <Chip key={p.key} p={p} d={d} />)}
             {Array.from({ length: Math.max(0, leadSlots - leads.length) }, (_, i) => <div key={i} className="bk-open bk-mdopen">{leadCode} not set · drop here</div>)}
           </div>
         )}
         {groups.map((g) => (
-          <div key={g.start} className={'bk-grp' + (drag ? ' dropok' : '')} onDragOver={(ev) => ev.preventDefault()} onDrop={(ev) => { ev.stopPropagation(); onDrop(d, { event_id: e.id, start: g.start }); }}>
+          <div key={g.start} className="bk-grp" onDragOver={(ev) => ev.preventDefault()} onDrop={(ev) => { ev.stopPropagation(); onDrop(d, { event_id: e.id, start: g.start }); }}>
             <div className="bk-gh"><span className="bk-time">{t12(g.start)}{g.end && <em> ~ {t12(g.end)}</em>}</span>{g.isNew && <span className="bk-new">NEW TIME</span>}<span className="muted sm">{g.people.length} / {g.need}</span></div>
             {g.people.map((p, i) => <Chip key={p.key} p={p} n={i + 1} d={d} />)}
             {g.need > g.people.length && <div className="bk-open">{g.need - g.people.length} open · drop here</div>}
           </div>
         ))}
-        {extras > 0 && (
+        {(extras > 0 || pl.some((p) => isX(d, e, p))) && (
           <div className="bk-grp extras" onDragOver={(ev) => ev.preventDefault()} onDrop={(ev) => { ev.stopPropagation(); onDrop(d, { event_id: e.id, start: groups[0]?.start ?? '17:00', extra: true }); }}>
-            <div className="bk-gh"><span className="bk-time gold">Extras +{setting('extras.rule').pct}%</span><span className="muted sm">{pl.filter((p) => p.extra).length} / {extras} · {(e.extras_billing ?? 'gr') === 'client' ? 'client pays' : 'on G&R'}</span></div>
-            {pl.filter((p) => p.extra).map((p) => <Chip key={p.key} p={p} d={d} />)}
-            {extras > pl.filter((p) => p.extra).length && <div className="bk-open">{extras - pl.filter((p) => p.extra).length} extra · drop here</div>}
+            <div className="bk-gh"><span className="bk-time gold">Extras +{setting('extras.rule').pct}%</span><span className="muted sm">{pl.filter((p) => isX(d, e, p)).length} / {extras} · {(e.extras_billing ?? 'gr') === 'client' ? 'client pays' : 'on G&R'}</span></div>
+            {pl.filter((p) => isX(d, e, p)).map((p) => <Chip key={p.key} p={p} d={d} />)}
+            {extras > pl.filter((p) => isX(d, e, p)).length && <div className="bk-open">{extras - pl.filter((p) => isX(d, e, p)).length} extra · drop here</div>}
           </div>
         )}
       </div>
@@ -565,7 +583,7 @@ export function Bookings() {
             {(['A', 'B', 'C', null] as const).map((t) => { const list = tabList.filter(({ s }) => (s.staff_private?.tier ?? null) === t); if (!list.length) return null; return (
               <div key={t ?? 'x'} className="bk-tier"><div className="kick">{t ? `TIER ${t}` : 'UNRANKED'} · {list.length}</div>
                 {list.map(({ s, a, u }) => { const part = partnerOf(s.id); const c = condsOf(s.id); return (
-                  <div key={s.id} className="bk-av" draggable onDragStart={() => setDrag({ staff_id: s.id })}>
+                  <div key={s.id} className="bk-av" draggable onDragStart={(ev) => dragStart(ev, { staff_id: s.id })} onDragEnd={() => setDrag(null)}>
                     <i className={'bk-t t' + (t ?? 'x')} />
                     <div className="grow"><b>{s.full_name}<RuleIcons sid={s.id} links={rl} conds={conds} /></b>
                       <small>{a?.status === 'yes' ? (a.from_time ? `from ${t12(a.from_time)}` : 'any time') : a?.status === 'asked' ? 'asked · no reply' : u?.status === 'yes' ? `usual week · ${u.from_time ? 'from ' + t12(u.from_time) : 'any time'}` : 'not asked'}
@@ -577,7 +595,7 @@ export function Bookings() {
             {placedList.length > 0 && (
               <div className="bk-tier bk-placed"><button type="button" className="kick bk-fold" aria-expanded={placedOpen} onClick={() => { const v = !placedOpen; setPlacedOpen(v); try { localStorage.setItem('gr_bk_placed', v ? '1' : '0'); } catch { /* private mode */ } }}><span className="grow">ALREADY PLACED TODAY · {placedList.length}</span><span>{placedOpen ? '▾' : '▸'}</span></button>
                 {placedOpen && placedList.map(({ sid, mine }) => (
-                  <div key={sid} className="bk-av" draggable={mine.length < 2} onDragStart={() => setDrag({ staff_id: sid, add: true })} title={mine.length < 2 ? 'Drag onto another event = a 2nd shift that day' : undefined}>
+                  <div key={sid} className="bk-av" draggable={mine.length < 2} onDragStart={(ev) => dragStart(ev, { staff_id: sid, add: true })} onDragEnd={() => setDrag(null)} title={mine.length < 2 ? 'Drag onto another event = a 2nd shift that day' : undefined}>
                     <i className={'bk-t t' + (tier(sid) ?? 'x')} />
                     <div className="grow"><b>{name(sid)}</b><small>{mine.length > 1 ? mine.map((x) => evById[x.event_id]?.title ?? '?').join(' + ') : `${evById[mine[0].event_id]?.title ?? '?'} ${span12(mine[0])}`}</small></div>
                     {mine.length > 1 ? <span className="muted sm bk-2n">{mine.length} shifts</span> : <button className="bk-2nd" onClick={() => setPhone({ sid, step: 'add' })}>+ 2nd shift</button>}
