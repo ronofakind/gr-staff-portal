@@ -3052,3 +3052,37 @@ div.venue-rule { background: #fff; border-radius: 14px; padding: 10px 14px; marg
 .bk-tin { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 6px 0; }
 .bk-tin input { font: 800 22px Inter, system-ui, sans-serif; padding: 6px 10px; border-radius: 12px; border: 1px solid var(--line, #E4DCD1); background: #F6F2EC; }
 .md-by-r { display: block; font-size: 11px; color: var(--muted); margin-top: 2px; }
+/* ── Nov 4 · Bookings board: client count, extras stepper, MD section, ranking fill + confirmed dot, balance, cleaner name menu ── */
+.bk-see { font-size: 9.5px; letter-spacing: .12em; font-weight: 800; color: var(--muted); margin-bottom: -2px; }
+.bk-cc { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.bk-ccn b { font-size: 20px; }
+.bk-xs { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 800; color: #B8892B; white-space: nowrap; }
+.bk-step { display: inline-flex; align-items: center; border-radius: 8px; box-shadow: inset 0 0 0 1.5px #B8892B; background: #fff; }
+.bk-step button { border: 0; background: none; color: #B8892B; font: 800 13px Inter, system-ui, sans-serif; padding: 1px 7px; cursor: pointer; }
+.bk-step button:disabled { opacity: .35; cursor: default; }
+.bk-step b { color: var(--ink); padding: 0 2px; min-width: 14px; text-align: center; }
+.bk-ts { display: flex; justify-content: space-between; align-items: center; font-size: 12px; gap: 8px; }
+.bk-ts b { font-size: 13.5px; }
+.bk-bal { font-size: 11.5px; font-weight: 700; color: #B8892B; background: #FBF3E0; border-radius: 8px; padding: 4px 8px; }
+.bk-mds { margin: 0 10px 8px; border-radius: 12px; background: #F3EEE7; padding: 8px; display: flex; flex-direction: column; gap: 5px; }
+.bk-mdh { font-size: 12px; } .bk-mdopen { border-style: dashed; }
+.bk-lead { font-size: 9.5px; font-weight: 800; color: #fff; background: var(--ink); border-radius: 6px; padding: 1px 6px; }
+.bk-chip.rkA { background: #E3F0E7; box-shadow: inset 3px 0 0 #3F7B5C; }
+.bk-chip.rkB { background: #FBF1D9; box-shadow: inset 3px 0 0 #C9A227; }
+.bk-chip.rkC { background: #F6E1DF; box-shadow: inset 3px 0 0 #9B2226; }
+.bk-chip.rkx { background: #EFEAE3; box-shadow: inset 3px 0 0 #B5ADA2; }
+.bk-cf { width: 16px; height: 16px; flex: 0 0 16px; border-radius: 8px; background: #fff; box-shadow: inset 0 0 0 2px #B5ADA2; display: inline-flex; align-items: center; justify-content: center; font-style: normal; font-size: 9px; font-weight: 800; color: #fff; }
+.bk-cf.ok { background: #3F7B5C; box-shadow: none; } .bk-cf.late { box-shadow: inset 0 0 0 2px #9B2226; }
+.bk-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.bk-balc { background: #fff; border-radius: 16px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; max-width: 520px; }
+.bk-balh { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.bk-balt { display: flex; justify-content: space-between; font-size: 13px; }
+.bk-balbar { height: 7px; border-radius: 4px; background: #EDE6DC; overflow: hidden; } .bk-balbar i { display: block; height: 100%; background: #3F7B5C; } .bk-balbar i.gold { background: #B8892B; }
+.bk-menu .bk-mh { display: flex; align-items: flex-start; gap: 10px; }
+.bk-mname { font-size: 16px; } .bk-mx { border: 0; background: none; font-size: 16px; color: var(--muted); cursor: pointer; padding: 0 2px; }
+.bk-mconf { height: 46px; border-radius: 12px; border: 0; background: #3F7B5C; color: #fff; font: 800 14px Inter, system-ui, sans-serif; cursor: pointer; }
+.bk-mconf.undo { background: #fff; color: var(--muted); box-shadow: inset 0 0 0 1px var(--line, #E4DCD1); font-weight: 700; }
+.bk-mlist { display: flex; flex-direction: column; }
+.bk-mli { display: flex; align-items: center; gap: 12px; padding: 11px 2px; border: 0; border-top: 1px solid #EFE8DE; background: none; font: 600 14px Inter, system-ui, sans-serif; color: var(--ink); text-align: left; cursor: pointer; text-decoration: none; }
+.bk-mli .bk-mi { color: var(--muted); flex: 0 0 18px; } .bk-mch { color: var(--muted); }
+.bk-mrm { height: 44px; border-radius: 12px; border: 0; background: #F6E3E3; color: #9B2226; font: 800 14px Inter, system-ui, sans-serif; cursor: pointer; }

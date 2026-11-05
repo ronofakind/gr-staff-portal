@@ -336,6 +336,27 @@ export function Bookings() {
     return starts.map((st) => { const ls = lines.filter((l) => l.start === st); return { start: st, end: ls.find((l) => l.end)?.end ?? null, need: ls.reduce((n, l) => n + l.count, 0), people: pl.filter((p) => gOf(p) === st && !p.extra).sort((a, b) => rank(a.staff_id) - rank(b.staff_id)), isNew: !ls.length }; });
   };
   const extrasOf = (d: string, e: AEvent) => cur(d).extras[e.id] ?? e.extras ?? defaultExtras(e);
+  const setExtras = (d: string, e: AEvent, n: number) => { const c = cur(d); setCur(d, { ...c, extras: { ...c.extras, [e.id]: Math.max(0, n) } }); };
+  /** Nov 4 · the event title exactly as staff see it in their app (venue name, else the title). */
+  const seeTitle = (e: AEvent | undefined) => (e ? venues.find((v) => v.id === e.venue_id)?.name ?? e.title : '');
+  const isLead = (p: Pl) => p.code === 'MD' || p.code === 'BM';
+  const shiftOf = (p: Pl) => (p.shift_id ? evById[p.event_id]?.shifts.find((y) => y.id === p.shift_id) : undefined);
+  /** Nov 4 · round dot: ok = confirmed · late = not confirmed 24 h+ after the confirmation went out · wait = everything else. */
+  const confOf = (p: Pl): 'ok' | 'wait' | 'late' => { const sh = p.suggested ? undefined : shiftOf(p); if (!sh) return 'wait';
+    if (sh.status === 'confirmed') return 'ok'; return sh.notified_at && Date.now() - new Date(sh.notified_at).getTime() > 864e5 ? 'late' : 'wait'; };
+  /** Nov 4 · column numbers: client count (MDs and extras not counted), extras, team strength, confirmed. */
+  const statsOf = (d: string, e: AEvent) => {
+    const pl = plOf(d).filter((p) => p.event_id === e.id); const leads = pl.filter((p) => isLead(p) && !p.suggested);
+    const leadLines = (e.staffing ?? []).filter((l) => ['MD', 'BM'].includes(l.code));
+    const leadSlots = leadLines.reduce((n, l) => n + l.count, 0) || (leads.length ? 1 : 0);
+    const client = Math.max(0, e.staff_needed - Math.max(leadSlots, leads.length));
+    const crew = pl.filter((p) => !isLead(p) && !p.extra && !p.suggested);
+    const extrasPlaced = pl.filter((p) => p.extra && !p.suggested).length;
+    const sc = crew.map((p) => scores[p.staff_id]).filter((x): x is number => typeof x === 'number' && isFinite(x));
+    const strength = sc.length ? Math.round(sc.reduce((a, b) => a + b, 0) / sc.length) : null;
+    const confirmed = crew.filter((p) => confOf(p) === 'ok').length;
+    return { pl, leads, leadSlots, leadStart: leadLines[0]?.start ?? leads[0]?.start ?? (e.start_time ?? '17:00').slice(0, 5), client, placed: crew.length, extrasPlaced, extras: extrasOf(d, e), strength, confirmed };
+  };
   const onDrop = (d: string, to: { event_id: string; start: string; extra?: boolean }) => {
     const g = dragRef.current; setDrag(null); if (!g) return;
     if (g.add) { place(d, g.staff_id, to, undefined, false, true); return; }
@@ -365,11 +386,13 @@ export function Bookings() {
   const Chip = ({ p, n, d }: { p: Pl; n?: number; d: string }) => {
     const also = othersOf(d, p); const mine = p.suggested ? [] : dayOf(d, p.staff_id); const nth = mine.findIndex((x) => x.key === p.key) + 1;
     const locked = isLocked(d, p); const t = tier(p.staff_id); const part = partnerOf(p.staff_id).find((x) => plOf(d).some((q2) => q2.staff_id === x));
+    const cf = confOf(p);
     return (
-      <div className={'bk-chip' + (p.suggested ? ' sug' : '') + (!p.shift_id && !p.suggested ? ' added' : '') + (also.length ? ' has-also' : '')} draggable onDragStart={() => setDrag({ staff_id: p.staff_id, key: p.key })} onClick={() => setPhone({ sid: p.staff_id, p, step: 'menu' })}>
-        {n != null && <span className="bk-n">{n}</span>}<i className={'bk-t t' + (t ?? 'x')} />
+      <div className={'bk-chip rk' + (t ?? 'x') + (p.suggested ? ' sug' : '') + (!p.shift_id && !p.suggested ? ' added' : '') + (also.length ? ' has-also' : '')} draggable onDragStart={() => setDrag({ staff_id: p.staff_id, key: p.key })} onClick={() => setPhone({ sid: p.staff_id, p, step: 'menu' })}>
+        {n != null && <span className="bk-n">{n}</span>}<i className={'bk-cf ' + cf} title={cf === 'ok' ? 'Confirmed' : cf === 'late' ? 'Not confirmed after 24 h' : 'Waiting'}>{cf === 'ok' ? '✓' : ''}</i>
         <span className="grow">{name(p.staff_id)}{part && <small> 🔗 {name(part).split(' ')[0]}</small>}{p.extra && <small className="bk-x"> EXTRA</small>}{p.line && p.line !== p.start && <small className="bk-own" title="Their own start time"> starts {t12(p.start)}</small>}
           {p.shift_id && asksBy[p.shift_id] && <small className="bk-asks" title="Waiting for your answer (Today → Needs you)">{asksBy[p.shift_id].kind === 'later' ? 'asks' : 'leaves'} {t12(hm(asksBy[p.shift_id].new_time))}</small>}</span>
+        {isLead(p) && <b className="bk-lead">{p.code}</b>}
         {mine.length > 1 && nth > 0 && <span className="bk-of" title="Two shifts this day">{nth} OF {mine.length}</span>}
         {p.suggested ? <span className="bk-sug">suggested</span> : <>
           <button className={'bk-lock' + (locked ? ' on' : '')} title={lockTitle(locked, !!p.shift_id && locks.byDefault.has(p.shift_id))} aria-label={locked ? `Unlock ${name(p.staff_id)}` : `Lock ${name(p.staff_id)}`} aria-pressed={locked} onClick={(ev) => { ev.stopPropagation(); toggleLock(d, p); }}>{locked ? '🔒' : '🔓'}</button>
@@ -380,19 +403,35 @@ export function Bookings() {
   };
 
   const Column = ({ e, d }: { e: AEvent; d: string }) => {
-    const groups = groupsOf(d, e); const pl = plOf(d).filter((p) => p.event_id === e.id);
-    const leads = pl.filter((p) => p.code === 'MD' || p.code === 'BM'); const lead = leads[0]; const extras = extrasOf(d, e);
-    // Nov 4 · two MDs (Le 9e): take every MD/BM slot off the count, not just one
-    const leadSlots = (e.staffing ?? []).filter((l) => ['MD', 'BM'].includes(l.code)).reduce((n, l) => n + l.count, 0) || (lead ? 1 : 0);
-    const placed = pl.filter((p) => !['MD', 'BM'].includes(p.code)).length; const need = Math.max(0, e.staff_needed - Math.max(leadSlots, leads.length)) + extras;
+    const groups = groupsOf(d, e); const st = statsOf(d, e); const { pl, leads, leadSlots, client, placed, extras } = st;
+    // Nov 4 · balance note: 2+ events that day and this team is more than 5 below the strongest
+    const day = dayEvs(d).length > 1 ? dayEvs(d).map((x) => ({ e: x, s: statsOf(d, x).strength })).filter((x) => x.s != null) : [];
+    const top = day.reduce<{ e: AEvent; s: number | null } | null>((b, x) => (!b || (x.s ?? 0) > (b.s ?? 0) ? x : b), null);
+    const diff = top && top.e.id !== e.id && st.strength != null ? (top.s ?? 0) - st.strength : 0;
+    const leadLabel = isBarEv(e) ? 'Bar manager' : 'MDs'; const leadCode = isBarEv(e) ? 'BM' : 'MD';
     return (
       <div className="bk-col" onDragOver={(ev) => ev.preventDefault()} onDrop={() => onDrop(d, { event_id: e.id, start: groups.find((g) => g.need > g.people.length)?.start ?? groups[0]?.start ?? (e.start_time ?? '17:00').slice(0, 5) })}>
         <div className="bk-colh">
-          <Link to={`/admin/event/${e.id}`} className="serif bk-title">{e.title}</Link>
+          <div className="bk-see">AS STAFF SEE IT</div>
+          <Link to={`/admin/event/${e.id}`} className="serif bk-title">{seeTitle(e)}</Link>
           <div className="muted sm">{[e.event_private?.client, e.event_type, e.guests ? `${e.guests} guests` : null].filter(Boolean).join(' · ')}</div>
-          <div className="row" style={{ gap: 8, alignItems: 'center' }}><b>{placed} / {need}</b><div className="bk-bar"><i style={{ width: `${Math.min(100, (placed / Math.max(1, need)) * 100)}%` }} className={placed < need ? 'short' : ''} /></div></div>
-          <div className="bk-md">{lead ? <>{lead.code} · <b>{leads.map((x) => name(x.staff_id)).join(' + ')}</b></> : <span className="accent">{isBarEv(e) ? 'Bar manager' : 'MD'} not set</span>}</div>
+          <div className="bk-cc">
+            <span className="bk-ccn"><b>{placed} / {client}</b> <span className="muted sm">client count</span></span>
+            <span className="bk-xs">+ {st.extrasPlaced} / <span className="bk-step" onClick={(ev) => ev.stopPropagation()}>
+              <button type="button" aria-label="One less extra" disabled={extras <= 0} onClick={() => setExtras(d, e, extras - 1)}>−</button><b>{extras}</b>
+              <button type="button" aria-label="One more extra" onClick={() => setExtras(d, e, extras + 1)}>+</button></span> extras</span>
+          </div>
+          <div className="bk-bar"><i style={{ width: `${Math.min(100, (placed / Math.max(1, client)) * 100)}%` }} className={placed < client ? 'short' : ''} /></div>
+          {(st.strength != null || placed > 0) && <div className="bk-ts">{st.strength != null ? <span>Team strength <b>{st.strength}</b></span> : <span />}{placed > 0 && <span className="okc">{st.confirmed} of {placed} confirmed</span>}</div>}
+          {diff > 5 && top && <div className="bk-bal">{diff} below {seeTitle(top.e)} today · worth balancing</div>}
         </div>
+        {(leadSlots > 0 || leads.length > 0) && (
+          <div className={'bk-mds' + (drag ? ' dropok' : '')} onDragOver={(ev) => ev.preventDefault()} onDrop={(ev) => { ev.stopPropagation(); onDrop(d, { event_id: e.id, start: st.leadStart }); }}>
+            <div className="bk-gh"><b className="bk-mdh">{leadLabel} · {t12(st.leadStart)}</b><span className="muted sm">{leads.length} / {leadSlots} · not in the client count</span></div>
+            {leads.map((p) => <Chip key={p.key} p={p} d={d} />)}
+            {Array.from({ length: Math.max(0, leadSlots - leads.length) }, (_, i) => <div key={i} className="bk-open bk-mdopen">{leadCode} not set · drop here</div>)}
+          </div>
+        )}
         {groups.map((g) => (
           <div key={g.start} className={'bk-grp' + (drag ? ' dropok' : '')} onDragOver={(ev) => ev.preventDefault()} onDrop={(ev) => { ev.stopPropagation(); onDrop(d, { event_id: e.id, start: g.start }); }}>
             <div className="bk-gh"><span className="bk-time">{t12(g.start)}{g.end && <em> ~ {t12(g.end)}</em>}</span>{g.isNew && <span className="bk-new">NEW TIME</span>}<span className="muted sm">{g.people.length} / {g.need}</span></div>
@@ -402,8 +441,7 @@ export function Bookings() {
         ))}
         {extras > 0 && (
           <div className="bk-grp extras" onDragOver={(ev) => ev.preventDefault()} onDrop={(ev) => { ev.stopPropagation(); onDrop(d, { event_id: e.id, start: groups[0]?.start ?? '17:00', extra: true }); }}>
-            <div className="bk-gh"><span className="bk-time gold">Extras +{setting('extras.rule').pct}%</span><span className="muted sm">{pl.filter((p) => p.extra).length} / {extras} · {(e.extras_billing ?? 'gr') === 'client' ? 'client pays' : 'on G&R'}</span>
-              <input className="bk-xn" type="number" min={0} value={extras} onChange={(ev) => { const c = cur(d); setCur(d, { ...c, extras: { ...c.extras, [e.id]: Math.max(0, Number(ev.target.value) || 0) } }); }} /></div>
+            <div className="bk-gh"><span className="bk-time gold">Extras +{setting('extras.rule').pct}%</span><span className="muted sm">{pl.filter((p) => p.extra).length} / {extras} · {(e.extras_billing ?? 'gr') === 'client' ? 'client pays' : 'on G&R'}</span></div>
             {pl.filter((p) => p.extra).map((p) => <Chip key={p.key} p={p} d={d} />)}
             {extras > pl.filter((p) => p.extra).length && <div className="bk-open">{extras - pl.filter((p) => p.extra).length} extra · drop here</div>}
           </div>
@@ -498,7 +536,21 @@ export function Bookings() {
               </div>)}
             <button className="link-btn" style={{ margin: 10 }} onClick={() => setAskMore(true)}>Ask more people for {dLabel(date, { month: 'short', day: 'numeric' })} ›</button>
           </aside>
-          <div className="bk-cols">{dayEvs(date).length ? dayEvs(date).map((e) => <Column key={e.id} e={e} d={date} />) : <div className="adm-card muted">No {dept} events on this day. <Link to={`/admin/event/new?d=${date}`}>+ New event</Link></div>}</div>
+          <div className="bk-main">
+            {dayEvs(date).length > 1 && (() => { const rows = dayEvs(date).map((e) => ({ e, s: statsOf(date, e) }));
+              const max = Math.max(0, ...rows.map((r) => r.s.strength ?? 0)); const sum = (k: 'placed' | 'client' | 'extrasPlaced' | 'extras' | 'confirmed') => rows.reduce((n, r) => n + r.s[k], 0);
+              return (
+              <div className="bk-balc">
+                <div className="bk-balh"><b>Today’s balance</b><span className="muted sm">{sum('placed')}/{sum('client')} · +{sum('extrasPlaced')}/{sum('extras')} extras · {sum('confirmed')} ✓</span></div>
+                <div className="muted sm">Average ranking score of each team (MDs not counted)</div>
+                {rows.map(({ e, s }) => (
+                  <div key={e.id} className="bk-balr">
+                    <div className="bk-balt"><b>{seeTitle(e)}</b><b>{s.strength ?? '—'}</b></div>
+                    <div className="bk-balbar"><i className={s.strength != null && max - s.strength > 5 ? 'gold' : ''} style={{ width: `${Math.max(0, Math.min(100, s.strength ?? 0))}%` }} /></div>
+                  </div>))}
+              </div>); })()}
+            <div className="bk-cols">{dayEvs(date).length ? dayEvs(date).map((e) => <Column key={e.id} e={e} d={date} />) : <div className="adm-card muted">No {dept} events on this day. <Link to={`/admin/event/new?d=${date}`}>+ New event</Link></div>}</div>
+          </div>
         </div>
       ) : view === 'sheet' ? (
         <div className="bk-sheet">
@@ -559,16 +611,24 @@ export function Bookings() {
         const addable = groups.filter(({ e }) => !onEvent(date, sid, e.id));
         return (
         <div className="bk-modal" onClick={close}><div className="adm-card bk-menu" onClick={(e) => e.stopPropagation()}>
-          {step === 'menu' && p ? <>
-            <div><b>{name(sid)} · {evById[p.event_id]?.title}</b><div className="muted sm">{roleName(p.code)} · {t12(p.start)}</div></div>
-            <button className="bk-mrow" onClick={() => setPhone({ ...phone, step: 'move' })}><b>Move to…</b></button>
-            {p.shift_id && (() => { const sh = evById[p.event_id]?.shifts.find((y) => y.id === p.shift_id); const on = sh?.status === 'confirmed';
-              return <button className="bk-mrow" onClick={async () => { const { error } = await supabase.rpc('admin_mark_confirmed', { p_shift: p.shift_id, p_on: !on }); if (error) { setHint(error.message); return; } setHint(on ? `${first} back to waiting` : `✓ ${first} confirmed`); close(); await load(); }}>
-                <b>{on ? 'Undo confirmed' : '✓ Mark confirmed'}</b> <span className="muted">{on ? 'back to waiting' : 'they texted you · nothing is sent'}</span></button>; })()}
-            {!p.suggested && <button className="bk-mrow" onClick={() => { setOwnT(p.start); setPhone({ ...phone, step: 'time' }); }}><b>Change start time</b> <span className="muted">only for {first}</span></button>}
-            {!p.suggested && <button className="bk-mrow" onClick={() => setPhone({ ...phone, step: 'add' })}><b>Also add to…</b> <span className="muted">2nd shift that day</span></button>}
-            <button className="bk-mrow red" onClick={() => { remove(date, p.key); close(); }}>Remove</button>
-          </> : step === 'time' && p ? (() => { const lineT = p.line ?? p.start; const okT = /^\d{2}:\d{2}$/.test(ownT);
+          {step === 'menu' && p ? (() => { const sh = p.suggested ? undefined : shiftOf(p); const on = sh?.status === 'confirmed';
+            const ic = (d: string) => <svg className="bk-mi" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{d.split('|').map((x, i) => (x.startsWith('c') ? <circle key={i} cx="12" cy="12" r="9" /> : <path key={i} d={x} />))}</svg>;
+            return <>
+            <div className="bk-mh">
+              <div className="grow"><b className="bk-mname">{name(sid)}</b>
+                <div className="muted sm">{seeTitle(evById[p.event_id])} · {t12(p.start)}{sh && <> · {on ? <span className="okc">✓ Confirmed</span> : <span className="gold">Not confirmed yet</span>}</>}</div></div>
+              <button className="bk-mx" aria-label="Close" onClick={close}>✕</button>
+            </div>
+            {sh && <button className={'bk-mconf' + (on ? ' undo' : '')} onClick={async () => { const { error } = await supabase.rpc('admin_mark_confirmed', { p_shift: p.shift_id, p_on: !on }); if (error) { setHint(error.message); return; } setHint(on ? `${first} back to waiting` : `✓ ${first} confirmed`); close(); await load(); }}>
+              {on ? 'Undo confirmed' : '✓ Mark confirmed'}</button>}
+            <div className="bk-mlist">
+              {!p.suggested && <button className="bk-mli" onClick={() => { setOwnT(p.start); setPhone({ ...phone, step: 'time' }); }}>{ic('c|M12 7v5l3 2')}<span className="grow">Change time</span><span className="bk-mch">›</span></button>}
+              <button className="bk-mli" onClick={() => setPhone({ ...phone, step: 'move' })}>{ic('M5 12h14|M13 6l6 6-6 6')}<span className="grow">Move</span><span className="bk-mch">›</span></button>
+              {!p.suggested && <button className="bk-mli" onClick={() => setPhone({ ...phone, step: 'add' })}>{ic('M12 5v14|M5 12h14')}<span className="grow">Add a 2nd shift</span><span className="bk-mch">›</span></button>}
+              <Link className="bk-mli" to={`/admin/messages?staff=${sid}`} onClick={close}>{ic('M4 5h16v11H9l-5 4z')}<span className="grow">Message</span><span className="bk-mch">›</span></Link>
+            </div>
+            <button className="bk-mrm" onClick={() => { remove(date, p.key); close(); }}>Remove</button>
+          </>; })() : step === 'time' && p ? (() => { const lineT = p.line ?? p.start; const okT = /^\d{2}:\d{2}$/.test(ownT);
             const bump = (m: number) => { const b = okT ? toMin(ownT) : toMin(p.start); const v = Math.max(0, Math.min(23 * 60 + 45, b + m)); setOwnT(`${String(Math.floor(v / 60)).padStart(2, '0')}:${String(v % 60).padStart(2, '0')}`); };
             const apply = (t: string) => { const c = cur(date); setCur(date, { ...c, pl: c.pl.map((x) => (x.key === p.key ? { ...x, start: t, line: t === lineT ? undefined : lineT } : x)) }); setHint(t === lineT ? `${first} back to ${t12(t)}` : `${first} starts ${t12(t)} · Save to keep it`); close(); };
             return <>
@@ -590,7 +650,7 @@ export function Bookings() {
               <button key={e.id + g.start} className="abtn" onClick={() => { place(date, sid, { event_id: e.id, start: g.start }, undefined, false, true); close(); }}>{e.title} · {t12(g.start)}</button>))
               : <span className="muted sm">No other {dept} event this day.</span>}
           </>}
-          <button className="abtn" onClick={close}>{step === 'menu' ? 'Close' : 'Cancel'}</button>
+          {!(step === 'menu' && p) && <button className="abtn" onClick={close}>{step === 'menu' ? 'Close' : 'Cancel'}</button>}
         </div></div>); })()}
 
       {dropAsk && (() => { const { p, to } = dropAsk; const e1 = evById[p.event_id]; const e2 = evById[to.event_id]; const first = name(p.staff_id).split(' ')[0]; const close = () => setDropAsk(null); return (
