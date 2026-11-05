@@ -521,8 +521,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
           <section key={g} className="stack" style={{ gap: 10 }}>
             <div className="grp-head">
               <span className="grp-time">{time(g, lang)}{(() => { const e = (ev.staffing ?? []).filter((l) => l.start === hm(g) && l.end).map((l) => l.end!).sort().pop(); return e ? <i className="grp-end"> ~ {fmt12(e)}</i> : null; })()}</span>
-              <span className="grp-n">{grp.length} {grp.length === 1 ? 'person' : 'people'}</span>
-              <span className="grp-rule" />
+              {(notIn.length === 0 || gate(notIn[0]).kind === 'locked') && <><span className="grp-n">{grp.length} {grp.length === 1 ? 'person' : 'people'}</span><span className="grp-rule" /></>}
               {notIn.length === 0 ? <span className="grp-st ok">✓ All started</span>
                 : gate(notIn[0]).kind === 'locked' ? <span className="grp-st">🔒 {gate(notIn[0]).label}</span>
                 : <button className="btn-go" onClick={() => startRows(notIn)}>Start remaining ({notIn.length})</button>}

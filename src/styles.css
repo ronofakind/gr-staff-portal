@@ -3268,3 +3268,5 @@ div.venue-rule { background: #fff; border-radius: 14px; padding: 10px 14px; marg
 .grp-head { flex-wrap: wrap; row-gap: 8px; }
 .grp-head .grp-rule { min-width: 12px; }
 .grp-head .btn-go { white-space: nowrap; flex: none; margin-left: auto; }
+/* Nov 5 · one clean line: time on the left, Start remaining (n) on the right (n = the people count) */
+.grp-head .btn-go { padding: 0 13px; }
