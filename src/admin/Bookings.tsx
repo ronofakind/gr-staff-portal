@@ -53,7 +53,7 @@ export function Bookings() {
   const date = params.get('date') ?? isoDay(new Date());
   const view = (params.get('view') as View) ?? (window.innerWidth < 820 ? 'list' : 'board');
   // Nov 5 · Floor / Bar / Both (both = every event of the day, floor first then bar)
-  const dept: 'floor' | 'bar' | 'both' = params.get('dept') === 'bar' ? 'bar' : params.get('dept') === 'both' ? 'both' : 'floor';
+  const dept: 'floor' | 'bar' | 'both' = params.get('dept') === 'bar' ? 'bar' : params.get('dept') === 'floor' ? 'floor' : 'both'; // Nov 5 · Both by default
   const [oneDept, setOneDept] = useState<'floor' | 'bar'>('floor'); // which team Auto-fill / Ask more works on in Both
   const fillDept: 'floor' | 'bar' = dept === 'both' ? oneDept : dept;
   const [sideDept, setSideDept] = useState<'all' | 'floor' | 'bar'>('all');
