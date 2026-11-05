@@ -35,8 +35,8 @@ export function Calendar({ view }: { view: 'week' | 'day' | 'month' }) {
 /** /admin/calendar?view=day&d=… → the right tab. */
 export function CalendarRedirect() {
   const [params] = useSearchParams();
-  let last = 'week'; try { last = localStorage.getItem('gr_cal_view') ?? 'week'; } catch { /* private mode */ }
-  const p = new URLSearchParams(params); const want = p.get('view') ?? last; const v = want === 'day' ? 'day' : want === 'month' ? 'month' : 'week'; p.delete('view');
+  // Nov 5 · Ronnie: Calendar always opens on Month
+  const p = new URLSearchParams(params); const want = p.get('view') ?? 'month'; const v = want === 'day' ? 'day' : want === 'month' ? 'month' : 'week'; p.delete('view');
   const q = p.toString();
   return <Navigate to={`/admin/${v}${q ? `?${q}` : ''}`} replace />;
 }
