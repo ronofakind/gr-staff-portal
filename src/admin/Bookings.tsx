@@ -381,15 +381,17 @@ export function Bookings() {
 
   const Column = ({ e, d }: { e: AEvent; d: string }) => {
     const groups = groupsOf(d, e); const pl = plOf(d).filter((p) => p.event_id === e.id);
-    const lead = pl.find((p) => p.code === 'MD' || p.code === 'BM'); const extras = extrasOf(d, e);
-    const placed = pl.filter((p) => !['MD', 'BM'].includes(p.code)).length; const need = e.staff_needed - (lead ? 1 : 0) + extras;
+    const leads = pl.filter((p) => p.code === 'MD' || p.code === 'BM'); const lead = leads[0]; const extras = extrasOf(d, e);
+    // Nov 4 · two MDs (Le 9e): take every MD/BM slot off the count, not just one
+    const leadSlots = (e.staffing ?? []).filter((l) => ['MD', 'BM'].includes(l.code)).reduce((n, l) => n + l.count, 0) || (lead ? 1 : 0);
+    const placed = pl.filter((p) => !['MD', 'BM'].includes(p.code)).length; const need = Math.max(0, e.staff_needed - Math.max(leadSlots, leads.length)) + extras;
     return (
       <div className="bk-col" onDragOver={(ev) => ev.preventDefault()} onDrop={() => onDrop(d, { event_id: e.id, start: groups.find((g) => g.need > g.people.length)?.start ?? groups[0]?.start ?? (e.start_time ?? '17:00').slice(0, 5) })}>
         <div className="bk-colh">
           <Link to={`/admin/event/${e.id}`} className="serif bk-title">{e.title}</Link>
           <div className="muted sm">{[e.event_private?.client, e.event_type, e.guests ? `${e.guests} guests` : null].filter(Boolean).join(' · ')}</div>
           <div className="row" style={{ gap: 8, alignItems: 'center' }}><b>{placed} / {need}</b><div className="bk-bar"><i style={{ width: `${Math.min(100, (placed / Math.max(1, need)) * 100)}%` }} className={placed < need ? 'short' : ''} /></div></div>
-          <div className="bk-md">{lead ? <>{lead.code} · <b>{name(lead.staff_id)}</b></> : <span className="accent">{isBarEv(e) ? 'Bar manager' : 'MD'} not set</span>}</div>
+          <div className="bk-md">{lead ? <>{lead.code} · <b>{leads.map((x) => name(x.staff_id)).join(' + ')}</b></> : <span className="accent">{isBarEv(e) ? 'Bar manager' : 'MD'} not set</span>}</div>
         </div>
         {groups.map((g) => (
           <div key={g.start} className={'bk-grp' + (drag ? ' dropok' : '')} onDragOver={(ev) => ev.preventDefault()} onDrop={(ev) => { ev.stopPropagation(); onDrop(d, { event_id: e.id, start: g.start }); }}>
