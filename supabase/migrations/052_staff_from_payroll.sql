@@ -139,8 +139,7 @@ update staff set active = true where full_name in ('Alicia Gonthier','Elodie The
 -- Lea Moreau: inactive (Ronnie, Nov 3) — kept for her past shifts and hours, hidden everywhere
 update staff set active = false where full_name = 'Lea Morea';
 
--- Clean-up (Ronnie, Nov 3): "Unranked" placeholder row + duplicate Ronald Ladores → inactive (never deleted, history kept)
-update staff set active = false where full_name = 'Unranked';
+-- Clean-up (Ronnie, Nov 4): duplicate Ronald Ladores → inactive (never deleted, history kept). "Unranked" stays active.
 update staff set active = false
  where full_name = 'Ronald Ladores' and auth_user_id is null and role <> 'admin'
    and not exists (select 1 from shifts sh where sh.staff_id = staff.id)
