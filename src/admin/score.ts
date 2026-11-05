@@ -161,7 +161,7 @@ export function scoreOf(st: AStaff, d: ScoreData, today = isoDay(new Date())): S
   const worked = new Set(d.shifts.filter((x) => x.staff_id === st.id && x.punches?.punch_in && x.events).map((x) => x.events!.event_date));
   const lastMin = asks.filter((a) => a.asked_at && new Date(a.for_date + 'T17:00:00').getTime() - new Date(a.asked_at).getTime() < 48 * 36e5);
   const saves = lastMin.filter((a) => a.status === 'yes' && worked.has(a.for_date)).length;
-  parts.push({ key: 'save', label: 'Saves the day', pts: Math.min(10, saves * 5), max: 10, sub: lastMin.length ? `${saves} last-minute yes${saves === 1 ? '' : 'es'} worked` : 'no last-minute asks yet · not counted', counted: lastMin.length > 0 });
+  parts.push({ key: 'save', label: 'Saves the day', pts: Math.min(10, saves * 5), max: 10, sub: saves ? `${saves} last-minute yes${saves === 1 ? '' : 'es'} worked` : 'bonus only · counts once they save a date', counted: saves > 0 }); // bonus only: saying no to a last-minute ask never costs points
   const shiftsAll = (pv?.shifts_seed ?? 0) + done;
   parts.push({ key: 'time', label: 'Time with G&R', pts: Math.min(5, Math.round(shiftsAll / 10 * 10) / 10), max: 5, sub: `${shiftsAll} shift${shiftsAll === 1 ? '' : 's'}${pv?.shifts_seed ? ` (${pv.shifts_seed} on payroll this year)` : ''}`, counted: true });
   const inn = parts.filter((x) => x.counted); const got = inn.reduce((n, x) => n + x.pts, 0); const max = inn.reduce((n, x) => n + x.max, 0);
