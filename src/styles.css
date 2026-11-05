@@ -3173,3 +3173,13 @@ div.venue-rule { background: #fff; border-radius: 14px; padding: 10px 14px; marg
 .bk-sidehead { display: flex; justify-content: flex-end; margin: -4px 0 6px; }
 .bk-sidefold { border: 0; background: transparent; font: 700 12.5px Inter, system-ui, sans-serif; color: var(--muted); cursor: pointer; padding: 4px 6px; border-radius: 8px; }
 .bk-sidefold:hover { color: var(--ink); background: #F3EEE7; }
+/* Nov 5 · Bookings: Floor / Bar / Both */
+.bk-dtag { font-style: normal; display: inline-block; margin-right: 6px; font-size: 9.5px; letter-spacing: .12em; font-weight: 800; color: var(--muted); }
+.bk-dtag.bar { color: #fff; background: #2F3A4A; border-radius: 5px; padding: 2px 6px; }
+.bk-split { width: 2px; flex: none; align-self: stretch; background: repeating-linear-gradient(#2F3A4A 0 6px, transparent 6px 12px); border-radius: 1px; margin: 0 4px; }
+.bk-col.bar-col { box-shadow: inset 0 3px 0 #2F3A4A; }
+.bk-sidedept { display: flex; gap: 6px; margin-bottom: 8px; }
+.bk-sidedept button { border: 0; padding: 5px 11px; border-radius: 8px; background: transparent; box-shadow: inset 0 0 0 1px #E4DCD1; font: 700 12px Inter, system-ui, sans-serif; cursor: pointer; color: var(--ink); }
+.bk-sidedept button.on { background: #1A1714; color: #fff; box-shadow: none; }
+.bk-av.bar-p { box-shadow: inset 3px 0 0 #2F3A4A; }
+.bk-onedept button { text-transform: none; }

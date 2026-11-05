@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { setting, autoExtras } from '../lib/settings';
@@ -51,7 +51,11 @@ export function Bookings() {
   const [params, setParams] = useSearchParams();
   const date = params.get('date') ?? isoDay(new Date());
   const view = (params.get('view') as View) ?? (window.innerWidth < 820 ? 'list' : 'board');
-  const dept = (params.get('dept') as 'floor' | 'bar') ?? 'floor';
+  // Nov 5 · Floor / Bar / Both (both = every event of the day, floor first then bar)
+  const dept: 'floor' | 'bar' | 'both' = params.get('dept') === 'bar' ? 'bar' : params.get('dept') === 'both' ? 'both' : 'floor';
+  const [oneDept, setOneDept] = useState<'floor' | 'bar'>('floor'); // which team Auto-fill / Ask more works on in Both
+  const fillDept: 'floor' | 'bar' = dept === 'both' ? oneDept : dept;
+  const [sideDept, setSideDept] = useState<'all' | 'floor' | 'bar'>('all');
   const span = Number(params.get('span') ?? 7);
   const setP = (k: string, v: string) => { const p = new URLSearchParams(params); p.set(k, v); setParams(p, { replace: true }); };
 
@@ -277,7 +281,7 @@ export function Bookings() {
   const bookedOn = (d: string) => new Set(plOf(d).filter((p) => !p.suggested).map((p) => p.staff_id));
   const availFor = (d: string) => {
     const booked = bookedOn(d);
-    return staff.filter((s) => s.active && (dept === 'bar' ? s.department === 'bar' : s.department !== 'bar') && !booked.has(s.id) && !off.has(s.id + d))
+    return staff.filter((s) => s.active && (dept === 'both' ? (sideDept === 'all' || (sideDept === 'bar') === (s.department === 'bar')) : dept === 'bar' ? s.department === 'bar' : s.department !== 'bar') && !booked.has(s.id) && !off.has(s.id + d))
       .filter((s) => !/manual booking only/i.test(s.staff_private?.notes ?? ''))
       .map((s) => { const a = av.find((x) => x.staff_id === s.id); const u = usual(s.id, d); return { s, a, u }; })
       .filter(({ a, u }) => a?.status === 'yes' || a?.status === 'asked' || (!a && u?.status !== 'no') || (a && a.status !== 'no'))
@@ -289,7 +293,7 @@ export function Bookings() {
 
   // ── auto-fill ──────────────────────────────────────────────────
   const runAuto = () => {
-    const d = date; const c = cur(d); const evs = (events ?? []).filter((e) => e.event_date === d && evDept(e) === dept);
+    const d = date; const c = cur(d); const evs = (events ?? []).filter((e) => e.event_date === d && evDept(e) === fillDept);
     const pl = c.pl.filter((p) => !p.suggested); const booked = new Set(pl.map((p) => p.staff_id));
     const big = isBig(d);
     const skipped: { name: string; why: string }[] = []; const out: Pl[] = [];
@@ -311,8 +315,8 @@ export function Bookings() {
       for (const sl of slots()) {
         const why = ok(s.id, sl.e); if (why) continue;
         if (from && toMin(from) > toMin(sl.start) + 15) continue;
-        out.push({ key: uid(), staff_id: s.id, event_id: sl.e.id, start: sl.start, code: dept === 'bar' ? 'BT' : 'W', suggested: true }); booked.add(s.id);
-        for (const pid of partnerOf(s.id)) { const pp = pool.find((x) => x.s.id === pid); if (pp && !booked.has(pid) && !ok(pid, sl.e)) { const again = slots().find((x) => x.e.id === sl.e.id); if (again) { out.push({ key: uid(), staff_id: pid, event_id: sl.e.id, start: again.start, code: dept === 'bar' ? 'BT' : 'W', suggested: true }); booked.add(pid); } } }
+        out.push({ key: uid(), staff_id: s.id, event_id: sl.e.id, start: sl.start, code: fillDept === 'bar' ? 'BT' : 'W', suggested: true }); booked.add(s.id);
+        for (const pid of partnerOf(s.id)) { const pp = pool.find((x) => x.s.id === pid); if (pp && !booked.has(pid) && !ok(pid, sl.e)) { const again = slots().find((x) => x.e.id === sl.e.id); if (again) { out.push({ key: uid(), staff_id: pid, event_id: sl.e.id, start: again.start, code: fillDept === 'bar' ? 'BT' : 'W', suggested: true }); booked.add(pid); } } }
         return true;
       }
       return false;
@@ -339,7 +343,7 @@ export function Bookings() {
   const nLocked = (d: string) => plOf(d).filter((p) => isLocked(d, p)).length;
 
   // ── board pieces ───────────────────────────────────────────────
-  const dayEvs = (d: string) => (events ?? []).filter((e) => e.event_date === d && evDept(e) === dept);
+  const dayEvs = (d: string) => (events ?? []).filter((e) => e.event_date === d && (dept === 'both' || evDept(e) === dept)).sort((a, b) => (isBarEv(a) ? 1 : 0) - (isBarEv(b) ? 1 : 0));
   /** Ronnie, Nov 4 · automatic extras: when more people are booked than the client count, the extra ones go in the Extras box:
    *  people who finish early first, then the lowest ranked. Never MDs, never padlocked people, never someone you dragged onto a line. */
   const clientOf = (e: AEvent) => { const lines = (e.staffing ?? []).reduce((n, l) => n + (l.count || 0), 0); return e.staff_needed > 0 ? e.staff_needed : lines; };
@@ -462,9 +466,9 @@ export function Bookings() {
     const diff = top && top.e.id !== e.id && st.strength != null ? (top.s ?? 0) - st.strength : 0;
     const leadLabel = isBarEv(e) ? 'Bar manager' : 'MDs'; const leadCode = isBarEv(e) ? 'BM' : 'MD';
     return (
-      <div data-ev={e.id} className={'bk-col' + (focusEv === e.id ? ' focus' : '')} onDragOver={(ev) => ev.preventDefault()} onDrop={() => onDrop(d, { event_id: e.id, start: groups.find((g) => g.need > g.people.length)?.start ?? groups[0]?.start ?? (e.start_time ?? '17:00').slice(0, 5) })}>
+      <div data-ev={e.id} className={'bk-col' + (focusEv === e.id ? ' focus' : '') + (dept === 'both' && isBarEv(e) ? ' bar-col' : '')} onDragOver={(ev) => ev.preventDefault()} onDrop={() => onDrop(d, { event_id: e.id, start: groups.find((g) => g.need > g.people.length)?.start ?? groups[0]?.start ?? (e.start_time ?? '17:00').slice(0, 5) })}>
         <div className="bk-colh">
-          <div className="bk-see">AS STAFF SEE IT</div>
+          <div className="bk-see">{dept === 'both' && <i className={'bk-dtag' + (isBarEv(e) ? ' bar' : '')}>{isBarEv(e) ? 'BAR' : 'FLOOR'}</i>}AS STAFF SEE IT</div>
           <Link to={`/admin/event/${e.id}`} className="serif bk-title">{seeTitle(e)}</Link>
           <div className="muted sm">{[e.event_private?.client, e.event_type, e.guests ? `${e.guests} guests` : null].filter(Boolean).join(' · ')}</div>
           <div className="bk-cc">
@@ -540,10 +544,11 @@ export function Bookings() {
         <div><div className="kick">BOOKINGS</div><h1 className="serif-h">{view === 'board' ? dLabel(date, { weekday: 'long', month: 'long', day: 'numeric' }) : `From ${dLabel(date)}`}</h1></div>
         <div className="row wrap" style={{ gap: 8 }}>
           <div className="seg3">{(['board', 'sheet', 'list'] as View[]).map((v) => <button key={v} className={view === v ? 'on' : ''} onClick={() => setP('view', v)}>{v[0].toUpperCase() + v.slice(1)}</button>)}</div>
-          <div className="seg3">{(['floor', 'bar'] as const).map((v) => <button key={v} className={dept === v ? 'on' : ''} onClick={() => setP('dept', v)}>{v === 'floor' ? 'Floor' : 'Bar'}</button>)}</div>
+          <div className="seg3">{(['floor', 'bar', 'both'] as const).map((v) => <button key={v} className={dept === v ? 'on' : ''} onClick={() => setP('dept', v)}>{v === 'floor' ? 'Floor' : v === 'bar' ? 'Bar' : 'Both'}</button>)}</div>
           {view === 'sheet' && <div className="seg3">{[7, 14, 31].map((n) => <button key={n} className={span === n ? 'on' : ''} onClick={() => setP('span', String(n))}>{n === 31 ? 'Month' : `${n} days`}</button>)}</div>}
           {view === 'board' && <button className="abtn" onClick={() => (auto?.open ? setAuto(null) : setAuto({ open: false, skipped: [] }))}>Auto-fill</button>}
           <button className="abtn" onClick={() => setAskMore(true)}>Ask more people</button>
+          {dept === 'both' && <div className="seg3 bk-onedept" title="Auto-fill and Ask more work on this team">{(['floor', 'bar'] as const).map((v) => <button key={v} className={oneDept === v ? 'on' : ''} onClick={() => setOneDept(v)}>for {v}</button>)}</div>}
           <Link className="abtn dark" to={`/admin/event/new?d=${date}`}>+ New event</Link>
         </div>
       </div>
@@ -553,7 +558,7 @@ export function Bookings() {
       <div className="bk-strip">
         <button className="round" onClick={() => setP('date', addDays(date, view === 'board' ? -1 : -7))}>‹</button>
         {view === 'board' ? strip.map((d) => {
-          const evs = weekEvs.filter((e) => e.event_date === d && evDept(e) === dept); const short = evs.reduce((n, e) => n + countOf(e).short, 0); const today0 = isoDay(new Date());
+          const evs = weekEvs.filter((e) => e.event_date === d && (dept === 'both' || evDept(e) === dept)); const short = evs.reduce((n, e) => n + countOf(e).short, 0); const today0 = isoDay(new Date());
           const go = (evId?: string) => { const p = new URLSearchParams(params); p.set('date', d); if (evId) p.set('ev', evId); else p.delete('ev'); setParams(p, { replace: true }); };
           return (
           <div key={d} role="button" tabIndex={0} className={'bk-wd' + (d === date ? ' on' : '') + (d === today0 ? ' today' : '')} onClick={() => go()} onKeyDown={(k) => { if (k.key === 'Enter') go(); }}>
@@ -577,7 +582,7 @@ export function Bookings() {
 
       {auto && !auto.open && view === 'board' && (
         <div className="adm-card bk-auto">
-          <b>Auto-fill · {dLabel(date)}</b>
+          <b>Auto-fill · {dLabel(date)}{dept === 'both' ? ` · ${fillDept}` : ''}</b>
           <span className="muted sm">{nLocked(date)} locked {nLocked(date) === 1 ? 'person never moves' : 'people never move'} · only fills empty spots · uses who said yes, their from time, rank, notes, linked pairs and conditions.</span>
           <div className="row" style={{ gap: 8 }}><button className="abtn dark" onClick={runAuto}>Preview</button><button className="abtn" onClick={lockAll}>Lock all placed</button><button className="abtn" onClick={() => setAuto(null)}>Close</button></div>
         </div>
@@ -599,12 +604,13 @@ export function Bookings() {
           ) : (
           <aside className="bk-avail" onDragOver={(ev) => ev.preventDefault()} onDrop={() => dropAvail(date)}>
             <div className="bk-sidehead"><button type="button" className="bk-sidefold" aria-label="Hide the staff list" onClick={() => setSideOpen(false)}>‹ Hide</button></div>
+            {dept === 'both' && <div className="bk-sidedept">{(['all', 'floor', 'bar'] as const).map((v) => <button key={v} type="button" className={sideDept === v ? 'on' : ''} onClick={() => setSideDept(v)}>{v === 'all' ? 'All' : v === 'floor' ? 'Floor' : 'Bar'}</button>)}</div>}
             <div className="bk-tabs">{([['yes', 'Said yes'], ['wait', 'No reply'], ['not', 'Not asked']] as const).map(([k, l]) => <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{l} {counts[k]}</button>)}</div>
             <input className="bk-search" placeholder="Search staff…" value={q} onChange={(e) => setQ(e.target.value)} />
             {(['A', 'B', 'C', null] as const).map((t) => { const list = tabList.filter(({ s }) => (s.staff_private?.tier ?? null) === t); if (!list.length) return null; return (
               <div key={t ?? 'x'} className="bk-tier"><div className="kick">{t ? `TIER ${t}` : 'UNRANKED'} · {list.length}</div>
                 {list.map(({ s, a, u }) => { const part = partnerOf(s.id); const c = condsOf(s.id); return (
-                  <div key={s.id} className="bk-av" draggable onDragStart={(ev) => dragStart(ev, { staff_id: s.id })} onDragEnd={() => setDrag(null)}>
+                  <div key={s.id} className={'bk-av' + (dept === 'both' && s.department === 'bar' ? ' bar-p' : '')} draggable onDragStart={(ev) => dragStart(ev, { staff_id: s.id })} onDragEnd={() => setDrag(null)}>
                     <i className={'bk-t t' + (t ?? 'x')} />
                     <div className="grow"><b>{s.full_name}<RuleIcons sid={s.id} links={rl} conds={conds} /></b>
                       <small>{a?.status === 'yes' ? (a.from_time ? `from ${t12(a.from_time)}` : 'any time') : a?.status === 'asked' ? 'asked · no reply' : u?.status === 'yes' ? `usual week · ${u.from_time ? 'from ' + t12(u.from_time) : 'any time'}` : 'not asked'}
@@ -646,11 +652,11 @@ export function Bookings() {
                 <div className="muted sm">Average ranking score of each team (MDs not counted)</div>
                 {rows.map(({ e, s }) => (
                   <div key={e.id} className="bk-balr">
-                    <div className="bk-balt"><b>{seeTitle(e)}</b><b>{s.strength ?? '—'}</b></div>
+                    <div className="bk-balt"><b>{seeTitle(e)}{dept === 'both' && isBarEv(e) ? ' · bar' : ''}</b><b>{s.strength ?? '—'}</b></div>
                     <div className="bk-balbar"><i className={s.strength != null && max - s.strength > 5 ? 'gold' : ''} style={{ width: `${Math.max(0, Math.min(100, s.strength ?? 0))}%` }} /></div>
                   </div>))}
               </div>); })()}
-            <div className="bk-cols">{dayEvs(date).length ? dayEvs(date).map((e) => <Column key={e.id} e={e} d={date} />) : <div className="adm-card muted">No {dept} events on this day. <Link to={`/admin/event/new?d=${date}`}>+ New event</Link></div>}</div>
+            <div className="bk-cols">{dayEvs(date).length ? dayEvs(date).map((e, i, all) => <Fragment key={e.id}>{dept === 'both' && i > 0 && isBarEv(e) && !isBarEv(all[i - 1]) && <div className="bk-split" aria-hidden="true" />}<Column e={e} d={date} /></Fragment>) : <div className="adm-card muted">No {dept === 'both' ? '' : dept + ' '}events on this day. <Link to={`/admin/event/new?d=${date}`}>+ New event</Link></div>}</div>
           </div>
         </div>
       ) : view === 'sheet' ? (
@@ -671,7 +677,7 @@ export function Bookings() {
               ))}
               <datalist id={`bk-dl-${d}`}>{staff.filter((s) => s.active && !bookedOn(d).has(s.id) && !off.has(s.id + d)).sort((a, b) => Number(av.some((x) => x.staff_id === b.id && x.status === 'yes')) - Number(av.some((x) => x.staff_id === a.id && x.status === 'yes')) || rank(a.id) - rank(b.id)).map((s) => <option key={s.id} value={s.full_name} />)}</datalist>
             </div>); })}
-          {!dates.some((d) => dayEvs(d).length) && <div className="adm-card muted">No {dept} events in this range.</div>}
+          {!dates.some((d) => dayEvs(d).length) && <div className="adm-card muted">No {dept === 'both' ? '' : dept + ' '}events in this range.</div>}
         </div>
       ) : (
         <div className="stack" style={{ gap: 8 }}>
@@ -681,7 +687,7 @@ export function Bookings() {
               <span className="grow" style={{ textAlign: 'left' }}><b>{e.title}</b> <DeptTag dept={e.department} /><span className="muted sm"> · {e.event_private?.client ?? ''}</span><div className="muted sm">{lead ? `${lead.code} ${name(lead.staff_id)}` : 'MD not set'}</div></span>
               <span className={'tag ' + (pl.length >= need ? 'ok' : 'amber')}>{pl.length} / {need}</span>
             </button>); }))}
-          {!dates.some((d) => dayEvs(d).length) && <div className="adm-card muted">No {dept} events in the next 14 days.</div>}
+          {!dates.some((d) => dayEvs(d).length) && <div className="adm-card muted">No {dept === 'both' ? '' : dept + ' '}events in the next 14 days.</div>}
         </div>
       )}
 
@@ -780,7 +786,7 @@ export function Bookings() {
         </div></div>
       )}
 
-      {askMore && events && staff.length > 0 && <AskMore date={date} dept={dept} events={(events ?? []).filter((e) => e.event_date === date)} staff={staff} av={av} wk={wk} off={off} conds={conds} links={links}
+      {askMore && events && staff.length > 0 && <AskMore date={date} dept={fillDept} events={(events ?? []).filter((e) => e.event_date === date)} staff={staff} av={av} wk={wk} off={off} conds={conds} links={links}
         booked={bookedOn(date)} shifts30={shifts30} yesRate={yesRate} extras={(e) => extrasOf(date, e)} practice={mode === 'practice'} spots={spots} spotAt={replaceAt} onClose={() => setAskMore(false)} onAsked={load} />}
     </div>
   );
