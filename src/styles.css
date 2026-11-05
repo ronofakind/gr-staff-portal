@@ -3147,13 +3147,13 @@ div.venue-rule { background: #fff; border-radius: 14px; padding: 10px 14px; marg
 .x-tag { display: inline-block; margin-left: 6px; font-style: normal; font-size: 10px; font-weight: 800; letter-spacing: .04em; color: #fff !important; background: #B08A2E; border-radius: 6px; padding: 1px 6px; vertical-align: 1px; }
 .x-note { font-size: 12.5px; line-height: 1.4; color: #4A433C; background: #FBF3E0; border-radius: 12px; padding: 10px 12px; box-shadow: inset 0 0 0 1px #EBD9AE; }
 /* Nov 5 · "Your shift changed" (mapping StaffChangesV1): top of Home, one line per change */
-.chg-card { display: flex; flex-direction: column; gap: 2px; background: #FFF4D6; border-radius: 18px; padding: 12px 14px; box-shadow: inset 0 0 0 2px #D9A93A, 0 6px 18px rgba(201,162,74,.22); color: #2A2116; }
+.chg-card { display: flex; flex-direction: column; align-items: stretch; gap: 2px; background: #FFF4D6; border-radius: 18px; padding: 12px 14px; box-shadow: inset 0 0 0 2px #D9A93A, 0 6px 18px rgba(201,162,74,.22); color: #2A2116; }
 .chg-h { display: flex; align-items: center; gap: 8px; }
 .chg-h b { flex: 1; font-size: 15.5px; color: #4A3410; }
 .chg-i { width: 26px; height: 26px; border-radius: 13px; background: #C9A24A; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px; flex: none; }
 .chg-h i { font-style: normal; font-size: 10px; font-weight: 800; color: #fff; background: #B0452E; border-radius: 6px; padding: 2px 6px; }
 .chg-d { font-size: 12.5px; color: #6B5530; margin: 2px 0 4px; }
-.chg-l { display: flex; flex-direction: column; gap: 1px; padding: 7px 0; border-top: 1px solid #EAD9B0; }
+.chg-l { display: flex; flex-direction: column; gap: 1px; padding: 7px 0; border-top: 1px solid #EAD9B0; align-self: stretch; }
 .chg-l small { font-size: 9.5px; letter-spacing: .12em; font-weight: 800; color: #8A6A2A; }
 .chg-l span { font-size: 14.5px; } .chg-l b { color: #2A2116; } .chg-l s { color: #9A8A70; font-size: 12.5px; margin-left: 8px; }
 .chg-cal { font-size: 11.5px; color: #6B5530; }
