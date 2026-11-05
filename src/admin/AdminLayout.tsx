@@ -25,7 +25,7 @@ export const ICONS = {
 };
 /** push 47 · desktop left nav in 4 groups (Plan · People · Pay · Talk), setup pages greyed at the bottom. */
 export const NAV_GROUPS: { title: string; items: [string, string, keyof typeof ICONS][] }[] = [
-  { title: 'PLAN', items: [['/admin', 'Today', 'today'], ['/admin/bookings', 'Bookings', 'book'], ['/admin/week', 'Calendar', 'week']] },
+  { title: 'PLAN', items: [['/admin', 'Today', 'today'], ['/admin/bookings', 'Bookings', 'book'], ['/admin/calendar', 'Calendar', 'week']] },
   { title: 'PEOPLE', items: [['/admin/staff', 'Staff', 'staff'], ['/admin/availability', 'Availability', 'avail'], ['/admin/tiers', 'Tiers & ranking', 'tiers'], ['/admin/reliability', 'Reliability', 'flag']] },
   { title: 'PAY', items: [['/admin/hours', 'Hours', 'hours']] },
   { title: 'TALK', items: [['/admin/messages', 'Messages', 'msg'], ['/admin/meetings', 'Meetings', 'meet'], ['/admin/incidents', 'Incidents', 'alert']] },
@@ -33,7 +33,7 @@ export const NAV_GROUPS: { title: string; items: [string, string, keyof typeof I
 const SETUP: [string, string, keyof typeof ICONS][] = [['/admin/venues', 'Venues & clients', 'venue'], ['/admin/settings', 'Settings', 'gear'], ['/me', 'My shifts', 'today']];
 export const NAV = [...NAV_GROUPS.flatMap((g) => g.items), ...SETUP.filter(([to]) => to !== '/me')];
 /** One nav line stands for several pages: Calendar = Week + Day, Tiers & ranking = Tiers + Ranking. */
-const ALSO: Record<string, string[]> = { '/admin/week': ['/admin/day', '/admin/calendar'], '/admin/tiers': ['/admin/ranking'] };
+const ALSO: Record<string, string[]> = { '/admin/calendar': ['/admin/week', '/admin/day', '/admin/month'], '/admin/week': ['/admin/day', '/admin/calendar', '/admin/month'], '/admin/tiers': ['/admin/ranking'] };
 const TABS: [string, string, keyof typeof ICONS][] = [
   ['/admin', 'Today', 'today'], ['/admin/week', 'Week', 'week'], ['/admin/availability', 'Availability', 'avail'], ['/admin/staff', 'Staff', 'staff'], ['/admin/more', 'More', 'more'],
 ];

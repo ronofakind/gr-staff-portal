@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { DeleteEvent } from './DeleteEvent';
 import { DeptTag } from './DeptTag';
-import { eventsBetween, addDays, isoDay, hhmm, type AEvent, type AShift } from './api';
+import { eventsBetween, addDays, isoDay, hhmm, countOf, type AEvent, type AShift } from './api';
 import { meetingsBetween, MeetingLine, type AMeeting } from './Meetings';
 import { dayOfMtl } from '../lib/meetings';
 
@@ -22,8 +22,10 @@ export function Week() {
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
   const all = events ?? [];
   const floor = all.filter((e) => e.department !== 'bar');
-  const booked = floor.reduce((n, e) => n + e.shifts.filter((s) => s.status !== 'declined').length, 0);
-  const needed = floor.reduce((n, e) => n + e.staff_needed, 0);
+  // Nov 4 · same client count as Bookings (events with no count use their staffing lines)
+  const booked = floor.reduce((n, e) => n + countOf(e).booked, 0);
+  const needed = floor.reduce((n, e) => n + countOf(e).need, 0);
+  const shortSum = floor.reduce((n, e) => n + countOf(e).short, 0);
   const pending = floor.reduce((n, e) => n + e.shifts.filter((s) => s.status === 'booked').length, 0);
   const label = (iso: string, o: Intl.DateTimeFormatOptions) => new Date(iso + 'T12:00:00').toLocaleDateString('en-CA', o);
 
@@ -53,7 +55,7 @@ export function Week() {
       <div className="kpis">
         <div className="kpi"><small>Events</small><b>{all.length}</b></div>
         <div className="kpi"><small>Floor booked</small><b>{booked}<span> / {needed}</span></b></div>
-        <div className={'kpi' + (needed - booked > 0 ? ' warn' : '')}><small>Still short</small><b>{Math.max(0, needed - booked)}</b></div>
+        <div className={'kpi' + (shortSum > 0 ? ' warn' : '')}><small>Still short</small><b>{shortSum}</b></div>
         <div className="kpi"><small>Not confirmed</small><b>{pending}</b></div>
       </div>
       {events && (toSend > 0 || waitList.length > 0) && (
@@ -118,8 +120,7 @@ function sendState(e: AEvent, today: string): 'sent' | 'ready' | 'later' | 'none
 const sinceText = (iso: string | null) => { if (!iso) return ''; const h = Math.round((Date.now() - new Date(iso).getTime()) / 36e5); return h < 1 ? 'just now' : h < 24 ? `${h} h ago` : `${Math.round(h / 24)} d ago`; };
 
 function EventCard({ e, today, onDeleted }: { e: AEvent; today: string; onDeleted: (ids: string[]) => void }) {
-  const n = e.shifts.filter((s) => s.status !== 'declined').length;
-  const short = e.staff_needed - n;
+  const c = countOf(e); const n = c.booked; const short = c.short;
   const st = sendState(e, today); const w = waiting(e).length;
   return (
     <div className={'wk-ev' + (e.department === 'bar' ? ' is-bar' : '') + (short > 0 && e.department !== 'bar' ? ' short' : '')}>
@@ -128,7 +129,7 @@ function EventCard({ e, today, onDeleted }: { e: AEvent; today: string; onDelete
         <span className="muted sm">{hhmm(e.start_time) || 'TBC'}{e.department === 'bar' ? ' · bar' : ''}</span>
       </Link>
       <div className="wk-ev-row">
-        <span className={'sm strong ' + (short > 0 && e.department !== 'bar' ? 'amber-t' : 'ok-t')}>{n}/{e.staff_needed}{short > 0 && e.department !== 'bar' ? ' · short' : ''}</span>
+        <span className={'sm strong ' + (short > 0 && e.department !== 'bar' ? 'amber-t' : 'ok-t')}>{c.need ? `${n}/${c.need}` : `${c.n} · no count`}{c.extra ? ` +${c.extra} ex` : ''}{short > 0 && e.department !== 'bar' ? ' · short' : ''}</span>
         {st === 'sent' && <span className="wk-pill sent sm">✓ SENT</span>}
         {st === 'ready' && <Link className="wk-pill send sm" to={`/admin/day?d=${e.event_date}`}>SEND ›</Link>}
         {st === 'later' && <span className="wk-pill later sm">not sent</span>}

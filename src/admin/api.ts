@@ -179,3 +179,22 @@ export async function bookingChange(kind: 'booked' | 'moved' | 'removed', p: {
     p_meta: { date: at.event_date, venue: at.title, start: at.start, position: p.position ?? null, lines },
   }).then(() => {}, () => {});
 }
+
+// ── Nov 4 · one count for Week, Month and the Bookings week strip ─────────────
+/** A shift that still counts on the event (not declined, not cancelled). */
+export const liveShift = (s: AShift) => s.status !== 'declined' && !s.cancelled_at && s.attendance !== 'cancelled';
+/** Client count = the event's staff count (MDs included); events imported without one fall back to their staffing lines.
+ *  booked stops at the count; anyone beyond it is an extra. need 0 = count not set. */
+export function countOf(e: AEvent) {
+  const n = e.shifts.filter(liveShift).length;
+  const lines = (e.staffing ?? []).reduce((a, l) => a + (l.count || 0), 0);
+  const need = e.staff_needed > 0 ? e.staff_needed : lines;
+  return { n, need, booked: need ? Math.min(n, need) : n, extra: need ? Math.max(0, n - need) : 0, short: need ? Math.max(0, need - n) : 0 };
+}
+/** Confirmations: sent · SEND (4 days or less, not sent) · later · none. */
+export function sendStateOf(e: AEvent, today: string): 'sent' | 'ready' | 'later' | 'none' {
+  const ls = e.shifts.filter((s) => liveShift(s) && !s.attendance); if (!ls.length) return 'none';
+  if (!ls.some((s) => !s.notified_at || (s.changed_at ?? '') > s.notified_at)) return 'sent';
+  const days = Math.round((new Date(e.event_date + 'T12:00:00').getTime() - new Date(today + 'T12:00:00').getTime()) / 864e5);
+  return days <= 4 ? 'ready' : 'later';
+}

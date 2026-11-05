@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 import { setting, autoExtras } from '../lib/settings';
 import { DeptTag } from './DeptTag';
 import { BoardAlso, type OtherShift } from './alsoWorking';
-import { eventsBetween, allStaff, addDays, isoDay, dLabel, ap12, startIso, endIso, roleName, bookingChange, confirmationsSent, type AEvent, type AStaff, type Client, type Venue } from './api';
+import { eventsBetween, allStaff, addDays, isoDay, dLabel, ap12, startIso, endIso, roleName, bookingChange, confirmationsSent, countOf, sendStateOf, type AEvent, type AStaff, type Client, type Venue } from './api';
 import { misfits, linksOf, other, condShort, RuleIcons, type SLink, type SCond } from './rules';
 import { loadScoreData, scoreOf, type ScoreData } from './score';
 import { locksBetween, setLock, lockTitle, NO_LOCKS, type Locks } from './locks';
@@ -439,7 +439,7 @@ export function Bookings() {
     const diff = top && top.e.id !== e.id && st.strength != null ? (top.s ?? 0) - st.strength : 0;
     const leadLabel = isBarEv(e) ? 'Bar manager' : 'MDs'; const leadCode = isBarEv(e) ? 'BM' : 'MD';
     return (
-      <div className="bk-col" onDragOver={(ev) => ev.preventDefault()} onDrop={() => onDrop(d, { event_id: e.id, start: groups.find((g) => g.need > g.people.length)?.start ?? groups[0]?.start ?? (e.start_time ?? '17:00').slice(0, 5) })}>
+      <div data-ev={e.id} className={'bk-col' + (focusEv === e.id ? ' focus' : '')} onDragOver={(ev) => ev.preventDefault()} onDrop={() => onDrop(d, { event_id: e.id, start: groups.find((g) => g.need > g.people.length)?.start ?? groups[0]?.start ?? (e.start_time ?? '17:00').slice(0, 5) })}>
         <div className="bk-colh">
           <div className="bk-see">AS STAFF SEE IT</div>
           <Link to={`/admin/event/${e.id}`} className="serif bk-title">{seeTitle(e)}</Link>
@@ -487,6 +487,11 @@ export function Bookings() {
     return sids.sort(byScore).map((sid) => ({ sid, mine: dayOf(date, sid) })); })();
   // ── render ─────────────────────────────────────────────────────
   const strip = Array.from({ length: 7 }, (_, i) => addDays(date, i - ((new Date(date + 'T12:00:00').getDay() + 6) % 7)));
+  // Nov 4 · week strip: every day of the week with its events (venue · booked/needed · +extras · ✓ / SEND / ○)
+  const [weekEvs, setWeekEvs] = useState<AEvent[]>([]);
+  useEffect(() => { if (view === 'board') eventsBetween(strip[0], strip[6]).then(setWeekEvs).catch(() => setWeekEvs([])); }, [strip[0], view, events]); // eslint-disable-line react-hooks/exhaustive-deps
+  const focusEv = params.get('ev');
+  useEffect(() => { if (!focusEv || !events) return; const t = setTimeout(() => document.querySelector(`[data-ev="${CSS.escape(focusEv)}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' }), 300); return () => clearTimeout(t); }, [focusEv, events]);
   return (
     <div className="stack-lg bk">
       <div className={'bk-mode ' + mode}>
@@ -512,8 +517,20 @@ export function Bookings() {
         <button className="lnk" aria-label="Stop replacing" onClick={() => { const p = new URLSearchParams(params); ['replace', 'at', 'ask', 'spots'].forEach((k) => p.delete(k)); setParams(p, { replace: true }); }}>×</button></div>}
       <div className="bk-strip">
         <button className="round" onClick={() => setP('date', addDays(date, view === 'board' ? -1 : -7))}>‹</button>
-        {view === 'board' ? strip.map((d) => { const evs = (events ?? []).length && d === date ? dayEvs(d) : []; const short = evs.reduce((n, e) => n + Math.max(0, e.staff_needed + extrasOf(d, e) - plOf(d).filter((p) => p.event_id === e.id).length), 0); return (
-          <button key={d} className={'bk-day' + (d === date ? ' on' : '')} onClick={() => setP('date', d)}><small>{dLabel(d, { weekday: 'short' })}</small><b>{new Date(d + 'T12:00:00').getDate()}</b>{d === date && <span className={short ? 'accent' : 'okc'}>{short ? `${short} short` : evs.length ? 'ok' : '—'}</span>}</button>); })
+        {view === 'board' ? strip.map((d) => {
+          const evs = weekEvs.filter((e) => e.event_date === d && evDept(e) === dept); const short = evs.reduce((n, e) => n + countOf(e).short, 0); const today0 = isoDay(new Date());
+          const go = (evId?: string) => { const p = new URLSearchParams(params); p.set('date', d); if (evId) p.set('ev', evId); else p.delete('ev'); setParams(p, { replace: true }); };
+          return (
+          <div key={d} role="button" tabIndex={0} className={'bk-wd' + (d === date ? ' on' : '') + (d === today0 ? ' today' : '')} onClick={() => go()} onKeyDown={(k) => { if (k.key === 'Enter') go(); }}>
+            <div className="bk-wdh"><small>{dLabel(d, { weekday: 'short' })}</small><b>{new Date(d + 'T12:00:00').getDate()}</b>{d === today0 && <em>TODAY</em>}<span className="grow" />{short > 0 && <span className="bk-wds">{short} short</span>}</div>
+            {!evs.length && <span className="bk-wdn">no events</span>}
+            {evs.slice(0, 3).map((e) => { const c = countOf(e); const st = sendStateOf(e, today0); return (
+              <button key={e.id} type="button" className={'bk-wl' + (e.department === 'bar' ? ' bar' : '')} onClick={(ev) => { ev.stopPropagation(); go(e.id); }}>
+                <span className="bk-wlt">{seeTitle(e)}</span><b className={c.need && c.short ? 'sh' : 'ok'}>{c.need ? `${c.booked}/${c.need}` : c.n}</b>{c.extra > 0 && <i>+{c.extra}</i>}
+                {st === 'sent' ? <span className="bk-wok">✓</span> : st === 'ready' && d >= today0 ? <span className="bk-wsend">SEND</span> : st === 'later' ? <span className="bk-wlater">○</span> : null}
+              </button>); })}
+            {evs.length > 3 && <span className="bk-wmore">+{evs.length - 3} more</span>}
+          </div>); })
           : <span className="grow muted sm" style={{ textAlign: 'center' }}>{dLabel(range.from)} – {dLabel(range.to)}</span>}
         <button className="round" onClick={() => setP('date', addDays(date, view === 'board' ? 1 : 7))}>›</button>
       </div>

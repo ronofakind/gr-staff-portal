@@ -115,6 +115,7 @@ export function App() {
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<Today />} />
             <Route path="week" element={<Calendar view="week" />} />
+            <Route path="month" element={<Calendar view="month" />} />
             <Route path="calendar" element={<CalendarRedirect />} />
             <Route path="bookings" element={<Bookings />} />
             <Route path="messages" element={<Messages />} />

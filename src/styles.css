@@ -3102,3 +3102,40 @@ div.venue-rule { background: #fff; border-radius: 14px; padding: 10px 14px; marg
 .bk-hit small { display: block; font-size: 11.5px; color: var(--muted); }
 .bk-chip.flash { outline: 2.5px solid #B8892B; outline-offset: 1px; animation: bkflash 1s ease-in-out 3; }
 @keyframes bkflash { 50% { outline-color: transparent; } }
+/* ── Nov 4 · Calendar → Month ── */
+.mo { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.mo-h { font-size: 11px; letter-spacing: .12em; font-weight: 800; color: var(--muted); padding: 0 4px; }
+.mo-d { position: relative; background: #fff; border-radius: 10px; padding: 7px 8px; min-height: 104px; display: flex; flex-direction: column; gap: 2px; cursor: pointer; }
+.mo-d.wk { background: #FDF6EC; } .mo-d.out { background: #F2EDE6; opacity: .6; }
+.mo-d.today { box-shadow: inset 0 0 0 2px #9B2226; }
+.mo-d.open { z-index: 5; box-shadow: 0 10px 28px rgba(0,0,0,.18); align-self: start; min-height: 104px; }
+.mo-dh { display: flex; align-items: baseline; gap: 6px; font-size: 13px; }
+.mo-today { font-size: 9.5px; font-weight: 800; color: #9B2226; } .mo-short { font-size: 10.5px; font-weight: 800; color: #9B2226; }
+.mo-m { font-size: 10.5px; color: var(--muted); padding-left: 6px; border-left: 3px solid #C9C1B6; }
+.mo-e { display: flex; align-items: center; gap: 4px; font-size: 11px; line-height: 1.35; color: var(--ink); text-decoration: none; padding-left: 5px; border-left: 3px solid var(--ink); }
+.mo-e.bar { border-left-color: #9B2226; }
+.mo-et { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mo-e b { font-size: 11px; white-space: nowrap; } .mo-x { font-style: normal; color: #5B3A8C; }
+.mo-send { background: #9B2226; color: #fff; border-radius: 3px; padding: 0 3px; font-size: 8.5px; font-weight: 800; }
+.mo-sent { color: #3F7B5C; font-weight: 900; font-size: 11px; }
+.mo-more { align-self: flex-start; border: 0; background: #EFE8DE; border-radius: 7px; font: 800 10.5px Inter, system-ui, sans-serif; padding: 2px 7px; margin-top: 2px; cursor: pointer; }
+@media (max-width: 900px) { .mo { grid-template-columns: repeat(7, minmax(44px, 1fr)); overflow-x: auto; } .mo-et { display: none; } }
+/* ── Nov 4 · Bookings week strip (each day lists its events) ── */
+.bk-strip { position: sticky; top: 0; z-index: 20; background: var(--cream, #F6F2EC); padding: 6px 0; align-items: stretch; }
+.bk-wd { flex: 1; min-width: 0; background: #fff; border-radius: 12px; padding: 7px 8px; display: flex; flex-direction: column; gap: 2px; border: 1px solid #E6DFD4; cursor: pointer; min-height: 84px; text-align: left; }
+.bk-wd.today { box-shadow: inset 0 3px 0 #9B2226; }
+.bk-wd.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+.bk-wdh { display: flex; align-items: baseline; gap: 5px; } .bk-wdh small { font-size: 11px; font-weight: 700; color: var(--muted); } .bk-wd.on .bk-wdh small { color: #CFC6BA; }
+.bk-wdh b { font-family: Fraunces, Georgia, serif; font-size: 17px; font-weight: 600; } .bk-wdh em { font-style: normal; font-size: 9.5px; font-weight: 800; color: #9B2226; }
+.bk-wds { font-size: 10.5px; font-weight: 800; color: #9B2226; } .bk-wd.on .bk-wds { color: #F2A7A9; }
+.bk-wdn { font-size: 11px; color: #B5AB9E; }
+.bk-wl { display: flex; align-items: center; gap: 4px; font: 500 11px/1.3 Inter, system-ui, sans-serif; color: inherit; border: 0; background: none; padding: 0 0 0 5px; border-left: 3px solid currentColor; text-align: left; cursor: pointer; min-width: 0; }
+.bk-wl.bar { border-left-color: #9B2226; }
+.bk-wlt { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bk-wl b.ok { color: #1B7F5C; } .bk-wl b.sh { color: #C07A1E; } .bk-wd.on .bk-wl b.ok { color: #7FD3B0; }
+.bk-wl i { font-style: normal; font-weight: 800; color: #5B3A8C; } .bk-wd.on .bk-wl i { color: #D9C4F5; }
+.bk-wok { color: #3F7B5C; font-weight: 900; } .bk-wd.on .bk-wok { color: #7FD3B0; }
+.bk-wsend { background: #9B2226; color: #fff; border-radius: 3px; padding: 0 3px; font-weight: 800; font-size: 8.5px; } .bk-wlater { color: var(--muted); }
+.bk-wmore { font-size: 10.5px; font-weight: 700; color: var(--muted); }
+.bk-col.focus { box-shadow: 0 0 0 3px #B8892B; }
+@media (max-width: 900px) { .bk-strip { overflow-x: auto; } .bk-wd { min-width: 96px; } }

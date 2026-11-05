@@ -1,6 +1,7 @@
 import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { Week } from './Week';
 import { Day } from './Day';
+import { Month } from './Month';
 import { addDays, isoDay } from './api';
 
 /* Push 47 · Week + Day = one Calendar page with a Week / Day switch at the top.
@@ -9,7 +10,8 @@ import { addDays, isoDay } from './api';
 const monday = (iso: string) => { const d = new Date(iso + 'T12:00:00'); return addDays(iso, -((d.getDay() + 6) % 7)); };
 const okDay = (d: string | null) => !!d && /^\d{4}-\d{2}-\d{2}$/.test(d);
 
-export function Calendar({ view }: { view: 'week' | 'day' }) {
+export function Calendar({ view }: { view: 'week' | 'day' | 'month' }) {
+  try { localStorage.setItem('gr_cal_view', view); } catch { /* private mode */ } // Nov 4 · remembered when you come back
   const [params] = useSearchParams();
   const today = isoDay(new Date());
   const d = okDay(params.get('d')) ? params.get('d')! : today;
@@ -22,9 +24,10 @@ export function Calendar({ view }: { view: 'week' | 'day' }) {
         <div className="seg3" role="tablist" aria-label="Calendar view">
           <Link role="tab" aria-selected={view === 'week'} className={view === 'week' ? 'on' : ''} to={`/admin/week?d=${d}`}>Week</Link>
           <Link role="tab" aria-selected={view === 'day'} className={view === 'day' ? 'on' : ''} to={`/admin/day?d=${dayTarget}`}>Day</Link>
+          <Link role="tab" aria-selected={view === 'month'} className={view === 'month' ? 'on' : ''} to={`/admin/month?d=${d}`}>Month</Link>
         </div>
       </div>
-      {view === 'week' ? <Week /> : <Day />}
+      {view === 'week' ? <Week /> : view === 'month' ? <Month /> : <Day />}
     </div>
   );
 }
@@ -32,7 +35,8 @@ export function Calendar({ view }: { view: 'week' | 'day' }) {
 /** /admin/calendar?view=day&d=… → the right tab. */
 export function CalendarRedirect() {
   const [params] = useSearchParams();
-  const p = new URLSearchParams(params); const v = p.get('view') === 'day' ? 'day' : 'week'; p.delete('view');
+  let last = 'week'; try { last = localStorage.getItem('gr_cal_view') ?? 'week'; } catch { /* private mode */ }
+  const p = new URLSearchParams(params); const want = p.get('view') ?? last; const v = want === 'day' ? 'day' : want === 'month' ? 'month' : 'week'; p.delete('view');
   const q = p.toString();
   return <Navigate to={`/admin/${v}${q ? `?${q}` : ''}`} replace />;
 }
