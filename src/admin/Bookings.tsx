@@ -351,13 +351,15 @@ export function Bookings() {
     const leadSlots = leadLines.reduce((n, l) => n + l.count, 0) || (leads.length ? 1 : 0);
     const lineSum = (e.staffing ?? []).filter((l) => !['MD', 'BM'].includes(l.code)).reduce((n, l) => n + l.count, 0);
     // Nov 4 · client count = staff count minus MDs; no count on the event (old imports) → the staffing lines, else unknown (0 = "count not set")
-    const client = e.staff_needed > 0 ? Math.max(0, e.staff_needed - Math.max(leadSlots, leads.length)) : lineSum;
+    // Ronnie, Nov 4 · the total on top includes the MDs (what the client pays for)
+    const client = e.staff_needed > 0 ? Math.max(e.staff_needed, leads.length) : lineSum + Math.max(leadSlots, leads.length);
     const crew = pl.filter((p) => !isLead(p) && !p.extra && !p.suggested);
     const extrasPlaced = pl.filter((p) => p.extra && !p.suggested).length;
     const sc = crew.map((p) => scores[p.staff_id]).filter((x): x is number => typeof x === 'number' && isFinite(x));
     const strength = sc.length ? Math.round(sc.reduce((a, b) => a + b, 0) / sc.length) : null;
-    const confirmed = crew.filter((p) => confOf(p) === 'ok').length;
-    return { pl, leads, leadSlots, leadStart: leadLines[0]?.start ?? leads[0]?.start ?? (e.start_time ?? '17:00').slice(0, 5), client, placed: crew.length, extrasPlaced, extras: extrasOf(d, e), strength, confirmed };
+    const all = [...crew, ...leads];
+    const confirmed = all.filter((p) => confOf(p) === 'ok').length;
+    return { pl, leads, leadSlots, leadStart: leadLines[0]?.start ?? leads[0]?.start ?? (e.start_time ?? '17:00').slice(0, 5), client, placed: all.length, extrasPlaced, extras: extrasOf(d, e), strength, confirmed };
   };
   const onDrop = (d: string, to: { event_id: string; start: string; extra?: boolean }) => {
     const g = dragRef.current; setDrag(null); if (!g) return;
@@ -385,13 +387,22 @@ export function Bookings() {
   /** push 49 · the person's real placements that day, earliest first ("1 OF 2" / "2 OF 2"). */
   const dayOf = (d: string, sid: string) => plOf(d).filter((x) => x.staff_id === sid && !x.suggested).sort((a, b) => toMin(a.start) - toMin(b.start) || a.key.localeCompare(b.key));
   const pron = (sid: string) => (byId[sid]?.sex === 'f' ? 'her' : byId[sid]?.sex === 'm' ? 'him' : 'them');
+  /** Ronnie, Nov 4 · tap the dot = confirmed / not confirmed (no question, nothing sent). Updates the dot right away. */
+  const toggleConf = async (p: Pl) => {
+    const sh = shiftOf(p); if (!sh) return; const on = sh.status !== 'confirmed';
+    sh.status = on ? 'confirmed' : 'booked'; setHint(`${on ? '✓ ' : ''}${name(p.staff_id).split(' ')[0]} ${on ? 'confirmed' : 'back to waiting'}`);
+    const { error } = await supabase.rpc('admin_mark_confirmed', { p_shift: p.shift_id, p_on: on });
+    if (error) { sh.status = on ? 'booked' : 'confirmed'; setHint(error.message); }
+    await load();
+  };
   const Chip = ({ p, n, d }: { p: Pl; n?: number; d: string }) => {
     const also = othersOf(d, p); const mine = p.suggested ? [] : dayOf(d, p.staff_id); const nth = mine.findIndex((x) => x.key === p.key) + 1;
     const locked = isLocked(d, p); const t = tier(p.staff_id); const part = partnerOf(p.staff_id).find((x) => plOf(d).some((q2) => q2.staff_id === x));
     const cf = confOf(p);
     return (
       <div className={'bk-chip rk' + (t ?? 'x') + (p.suggested ? ' sug' : '') + (!p.shift_id && !p.suggested ? ' added' : '') + (also.length ? ' has-also' : '')} draggable onDragStart={() => setDrag({ staff_id: p.staff_id, key: p.key })} onClick={() => setPhone({ sid: p.staff_id, p, step: 'menu' })}>
-        {n != null && <span className="bk-n">{n}</span>}<i className={'bk-cf ' + cf} title={cf === 'ok' ? 'Confirmed' : cf === 'late' ? 'Not confirmed after 24 h' : 'Waiting'}>{cf === 'ok' ? '✓' : ''}</i>
+        {n != null && <span className="bk-n">{n}</span>}<i className={'bk-cf ' + cf + (p.shift_id && !p.suggested ? ' tap' : '')} title={!p.shift_id || p.suggested ? 'Not saved yet' : cf === 'ok' ? 'Confirmed · tap to undo' : 'Tap to mark confirmed'}
+          onClick={(ev) => { if (!p.shift_id || p.suggested) return; ev.stopPropagation(); toggleConf(p); }}>{cf === 'ok' ? '✓' : ''}</i>
         <span className="grow">{name(p.staff_id)}{part && <small> 🔗 {name(part).split(' ')[0]}</small>}{p.extra && <small className="bk-x"> EXTRA</small>}{p.line && p.line !== p.start && <small className="bk-own" title="Their own start time"> starts {t12(p.start)}</small>}
           {p.shift_id && asksBy[p.shift_id] && <small className="bk-asks" title="Waiting for your answer (Today → Needs you)">{asksBy[p.shift_id].kind === 'later' ? 'asks' : 'leaves'} {t12(hm(asksBy[p.shift_id].new_time))}</small>}</span>
         {isLead(p) && <b className="bk-lead">{p.code}</b>}
@@ -429,7 +440,7 @@ export function Bookings() {
         </div>
         {(leadSlots > 0 || leads.length > 0) && (
           <div className={'bk-mds' + (drag ? ' dropok' : '')} onDragOver={(ev) => ev.preventDefault()} onDrop={(ev) => { ev.stopPropagation(); onDrop(d, { event_id: e.id, start: st.leadStart }); }}>
-            <div className="bk-gh"><b className="bk-mdh">{leadLabel} · {t12(st.leadStart)}</b><span className="muted sm">{leads.length} / {leadSlots} · not in the client count</span></div>
+            <div className="bk-gh"><b className="bk-mdh">{leadLabel} · {t12(st.leadStart)}</b><span className="muted sm">{leads.length} / {leadSlots}</span></div>
             {leads.map((p) => <Chip key={p.key} p={p} d={d} />)}
             {Array.from({ length: Math.max(0, leadSlots - leads.length) }, (_, i) => <div key={i} className="bk-open bk-mdopen">{leadCode} not set · drop here</div>)}
           </div>

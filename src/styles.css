@@ -3086,3 +3086,4 @@ div.venue-rule { background: #fff; border-radius: 14px; padding: 10px 14px; marg
 .bk-mli { display: flex; align-items: center; gap: 12px; padding: 11px 2px; border: 0; border-top: 1px solid #EFE8DE; background: none; font: 600 14px Inter, system-ui, sans-serif; color: var(--ink); text-align: left; cursor: pointer; text-decoration: none; }
 .bk-mli .bk-mi { color: var(--muted); flex: 0 0 18px; } .bk-mch { color: var(--muted); }
 .bk-mrm { height: 44px; border-radius: 12px; border: 0; background: #F6E3E3; color: #9B2226; font: 800 14px Inter, system-ui, sans-serif; cursor: pointer; }
+.bk-cf.tap { cursor: pointer; } .bk-cf.tap:hover { box-shadow: inset 0 0 0 2px #3F7B5C; } .bk-cf.ok.tap:hover { box-shadow: none; opacity: .85; }
