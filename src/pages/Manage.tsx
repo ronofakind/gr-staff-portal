@@ -265,7 +265,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
       for (const x of data as { staff_id: string; venue: string; start_at: string; end_at: string | null }[]) if (x && typeof x.staff_id === 'string' && typeof x.start_at === 'string') (m[x.staff_id] ??= []).push(x);
       setOtherSh(m);
     });
-    supabase.from('shift_extras').select('shift_id').eq('event_id', eventId!).then(({ data, error }) => { if (!error && Array.isArray(data)) setXIds(new Set((data as { shift_id: string }[]).map((x) => x.shift_id))); });
+    supabase.from('shift_extras').select('shift_id,kind').eq('event_id', eventId!).then(({ data, error }) => { if (!error && Array.isArray(data)) setXIds(new Set((data as { shift_id: string; kind?: string }[]).filter((x) => x.kind !== 'keep').map((x) => x.shift_id))); });
     supabase.from('event_notices').select('id,body,created_at').eq('event_id', eventId!).order('created_at', { ascending: false }).then(({ data }) => setNotices((data ?? []) as { id: string; body: string; created_at: string }[]));
     // Within each call time: lead (MD / bar manager) first, then everyone A–Z by first name.
     const lead = (r: Row) => (r.position_code === 'MD' || r.position_code === 'BM' ? 0 : 1);

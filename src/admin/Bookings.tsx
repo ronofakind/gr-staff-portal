@@ -134,6 +134,11 @@ export function Bookings() {
     for (const e of evs) { const ls = [...new Set((e.staffing ?? []).filter((l) => !['MD', 'BM'].includes(l.code)).map((l) => l.start))];
       for (const s of e.shifts) if (s.status !== 'declined' && !s.attendance) { const st = hm(s.planned_start); const line = ['MD', 'BM'].includes(s.position_code ?? '') ? undefined : lineFor(ls, st);
         (b[e.event_date] ??= []).push({ key: s.id, staff_id: s.staff_id, event_id: e.id, start: st, code: s.position_code ?? 'W', shift_id: s.id, ...(line ? { line } : {}) }); } }
+    // Nov 5 · your own Extras / line picks (migration 063)
+    const xIds = evs.flatMap((e) => e.shifts.map((x) => x.id));
+    if (xIds.length) { const { data: xs } = await supabase.from('shift_extras').select('shift_id,kind').in('shift_id', xIds).in('kind', ['manual', 'keep']);
+      const k = new Map(((xs ?? []) as { shift_id: string; kind: string }[]).map((x) => [x.shift_id, x.kind]));
+      for (const d of Object.keys(b)) b[d] = b[d].map((p) => (p.shift_id && k.get(p.shift_id) === 'manual' ? { ...p, extra: true } : p.shift_id && k.get(p.shift_id) === 'keep' ? { ...p, keep: true } : p)); }
     setBase(b);
     locksBetween(range.from, range.to, evs).then(setLocks);
     // push 28d · gold "asks 7:00 PM" tag on the name until Ronnie answers (table is new in 034: errors → no tags)
@@ -184,10 +189,12 @@ export function Bookings() {
     const real = base[d] ?? []; const now = cur(d).pl.filter((p) => !p.suggested);
     const added = now.filter((p) => !p.shift_id); const removed = real.filter((r) => !now.some((p) => p.shift_id === r.shift_id));
     const moved = now.filter((p) => p.shift_id && real.some((r) => r.shift_id === p.shift_id && (r.event_id !== p.event_id || r.start !== p.start)));
-    return { added, removed, moved };
+    // Nov 5 · into / out of Extras on the same event (saved as your own pick)
+    const marked = now.filter((p) => p.shift_id && real.some((r) => r.shift_id === p.shift_id && r.event_id === p.event_id && r.start === p.start && (!!r.extra !== !!p.extra || !!r.keep !== !!p.keep)));
+    return { added, removed, moved, marked };
   };
   const allChanges = dates.map((d) => ({ d, ...changesFor(d) })).filter((c) => draft[c.d]);
-  const nChanges = allChanges.reduce((n, c) => n + c.added.length + c.removed.length + c.moved.length, 0);
+  const nChanges = allChanges.reduce((n, c) => n + c.added.length + c.removed.length + c.moved.length + c.marked.length, 0);
 
   // ── placing ─────────────────────────────────────────────────────
   /** push 49 · is the person already (really) placed on this event that day? (one shift per person per event) */
@@ -202,7 +209,10 @@ export function Bookings() {
     if (existing) {
       if (!both) { const partner = pl.find((p) => p.event_id === existing.event_id && partnerOf(sid).includes(p.staff_id) && p.key !== existing.key && !isLocked(d, p)); // push 50 · a locked partner stays
         if (partner && existing.event_id !== to.event_id) { setPair({ moving: existing, partner, to: { event_id: to.event_id, start } }); return; } }
-      pl = pl.map((p) => (p.key === existing.key ? { ...p, event_id: to.event_id, start, line: start !== to.start ? to.start : undefined, extra: !!to.extra, keep: !to.extra, suggested: false } : p));
+      const sameEv = existing.event_id === to.event_id;
+      // Nov 5 · into Extras on the same event: same start time, only the Extras flag changes
+      if (to.extra && sameEv) pl = pl.map((p) => (p.key === existing.key ? { ...p, extra: true, keep: false, suggested: false } : p));
+      else pl = pl.map((p) => (p.key === existing.key ? { ...p, event_id: to.event_id, start, line: start !== to.start ? to.start : undefined, extra: !!to.extra, keep: !to.extra, suggested: false } : p));
     } else {
       const e = evById[to.event_id]; pl.push({ key: uid(), staff_id: sid, event_id: to.event_id, start, ...(start !== to.start ? { line: to.start } : {}), code: isBarEv(e) ? (byId[sid]?.positions.includes('BT') ? 'BT' : 'BB') : 'W', extra: !!to.extra });
     }
@@ -248,6 +258,8 @@ export function Bookings() {
           await supabase.from('shifts').delete().eq('id', r.shift_id!);
           await bookingChange('removed', { staff_id: r.staff_id, shift_id: r.shift_id, from: { id: e.id, event_date: e.event_date, title: e.title, sent: confirmationsSent(e), start: startIso(e.event_date, r.start) } }); n++;
         }
+        for (const p of c.marked) { await supabase.rpc('admin_mark_extra', { p_shift: p.shift_id, p_kind: p.extra ? 'manual' : p.keep ? 'keep' : null }); n++; }
+        for (const p of c.moved) if (p.shift_id && (p.extra || p.keep)) await supabase.rpc('admin_mark_extra', { p_shift: p.shift_id, p_kind: p.extra ? 'manual' : 'keep' });
         for (const p of c.moved) {
           const r = (base[c.d] ?? []).find((x) => x.shift_id === p.shift_id)!; const fe = evById[r.event_id]; const te = evById[p.event_id];
           await supabase.from('shifts').update({ event_id: p.event_id, planned_start: startIso(te.event_date, p.start) }).eq('id', p.shift_id!);
@@ -261,6 +273,7 @@ export function Bookings() {
           let { data: ins, error: insErr } = await supabase.from('shifts').insert(isRep ? { ...row, replacement_for: repFor } : row).select('id').single();
           if (insErr && isRep) ({ data: ins, error: insErr } = await supabase.from('shifts').insert(row).select('id').single()); // migration 034 not applied yet
           if (isRep && ins) repFor = null;
+          if (ins?.id && (p.extra || p.keep)) await supabase.rpc('admin_mark_extra', { p_shift: ins.id, p_kind: p.extra ? 'manual' : 'keep' });
           if (ins?.id && (draft[c.d]?.locks ?? []).includes(p.staff_id)) await setLock(ins.id, true).catch(() => {}); // push 50 · locked before it was saved
           await bookingChange('booked', { staff_id: p.staff_id, shift_id: ins?.id ?? null, to: { id: e.id, event_date: e.event_date, title: e.title, sent: confirmationsSent(e), start: startIso(e.event_date, p.start) } }); n++;
         }
@@ -696,7 +709,7 @@ export function Bookings() {
       {nChanges > 0 && (
         <div className="bk-tray">
           <b>{nChanges} change{nChanges > 1 ? 's' : ''}</b>
-          <span>{allChanges.reduce((n, c) => n + c.added.length, 0)} added · {allChanges.reduce((n, c) => n + c.moved.length, 0)} moved · {allChanges.reduce((n, c) => n + c.removed.length, 0)} removed · {mode === 'practice' ? 'practice · nobody alerted' : 'nobody alerted yet'}</span>
+          <span>{allChanges.reduce((n, c) => n + c.added.length, 0)} added · {allChanges.reduce((n, c) => n + c.moved.length + c.marked.length, 0)} moved · {allChanges.reduce((n, c) => n + c.removed.length, 0)} removed · {mode === 'practice' ? 'practice · nobody alerted' : 'nobody alerted yet'}</span>
           <span className="grow" />
           <button className="abtn sm" disabled={!hist.length} onClick={undo}>Undo</button>
           <button className="abtn sm" disabled={busy} onClick={() => save(false)}>Save</button>
