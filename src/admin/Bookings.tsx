@@ -164,6 +164,8 @@ export function Bookings() {
   const tier = (sid: string) => byId[sid]?.staff_private?.tier ?? null;
   const rank = (sid: string) => byId[sid]?.staff_private?.ranking ?? 9999;
   const scores = useMemo(() => (sd ? Object.fromEntries(staff.map((s) => [s.id, scoreOf(s, sd).total])) : {} as Record<string, number>), [sd, staff]);
+  // Nov 5 · Ranking v3: team strength = average form score (0–100), so bar and floor compare fairly
+  const forms = useMemo(() => (sd ? Object.fromEntries(staff.map((s) => [s.id, scoreOf(s, sd).form])) : {} as Record<string, number>), [sd, staff]);
   /** Higher score first; the old rank breaks ties. */
   const byScore = (a: string, b: string) => (scores[b] ?? -1e9) - (scores[a] ?? -1e9) || rank(a) - rank(b);
   const apartOf = (sid: string) => linksOf(rl, sid, 'apart').map((l) => other(l, sid));
@@ -400,7 +402,7 @@ export function Bookings() {
     const client = e.staff_needed > 0 ? Math.max(e.staff_needed, leads.length) : lineSum + Math.max(leadSlots, leads.length);
     const crew = pl.filter((p) => !isLead(p) && !p.extra && !p.suggested);
     const flagged = pl.filter((p) => p.extra && !p.suggested).length;
-    const sc = crew.map((p) => scores[p.staff_id]).filter((x): x is number => typeof x === 'number' && isFinite(x));
+    const sc = crew.map((p) => forms[p.staff_id]).filter((x): x is number => typeof x === 'number' && isFinite(x));
     const strength = sc.length ? Math.round(sc.reduce((a, b) => a + b, 0) / sc.length) : null;
     const all = [...crew, ...leads];
     const confirmed = all.filter((p) => confOf(p) === 'ok').length;

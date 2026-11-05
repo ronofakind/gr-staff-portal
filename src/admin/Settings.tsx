@@ -66,14 +66,8 @@ const SECTIONS: Section[] = [
     { label: 'Paid on', show: () => '16th · 1st' },
     { label: 'Show money on staff phones', sub: 'hours only (Ronnie)', k: 'hours.show_money', kind: 'bool', storedOnly: true, show: ((v: boolean) => (v ? 'On' : 'Off')) as (v: never) => string },
   ] },
-  { title: 'Ranking', sub: 'score weights', rows: [
-    { label: 'Tier', k: 'rank.tier', kind: 'obj', fields: [{ f: 'A', label: 'A' }, { f: 'B', label: 'B' }, { f: 'C', label: 'C' }], show: ((v: S['rank.tier']) => `A ${v.A} · B ${v.B} · C ${v.C}`) as (v: never) => string },
-    { label: 'Reliability', k: 'rank.reliability', kind: 'obj', fields: [{ f: 'days', label: 'Window', unit: 'days' }, { f: 'start', label: 'Start' }, { f: 'no_show', label: 'No-show' }, { f: 'late_cancel', label: 'Late cancel' }, { f: 'late', label: 'Late' }, { f: 'late_change', label: 'Late change' }],
-      show: ((v: S['rank.reliability']) => `(${v.days} days) start ${v.start} · no-show ${n(v.no_show)} · late cancel ${n(v.late_cancel)} · late ${n(v.late)}`) as (v: never) => string },
-    { label: 'Experience', k: 'rank.experience', kind: 'obj', fields: [{ f: 'SENIOR', label: 'Senior' }, { f: 'MID', label: 'Mid' }, { f: 'JUNIOR', label: 'Junior' }], show: ((v: S['rank.experience']) => `Senior ${v.SENIOR} · Mid ${v.MID} · Junior ${v.JUNIOR}`) as (v: never) => string },
-    { label: 'Manager feedback', sub: 'last 10 · push 30', k: 'rank.feedback', kind: 'obj', fields: [{ f: 's5', label: '5★', step: 0.5 }, { f: 's4', label: '4★', step: 0.5 }, { f: 's3', label: '3★', step: 0.5 }, { f: 's2', label: '2★', step: 0.5 }, { f: 's1', label: '1★', step: 0.5 }, { f: 'cap', label: 'Cap ±' }],
-      show: ((v: S['rank.feedback']) => `5★ ${signed(v.s5)} · 4★ ${signed(v.s4)} · 3★ ${signed(v.s3)} · 2★ ${signed(v.s2)} · 1★ ${signed(v.s1)} · cap ±${v.cap}`) as (v: never) => string },
-    { label: 'Extras', k: 'rank.extras', kind: 'obj', fields: [{ f: 'bmo', label: 'BMO' }, { f: 'newStaff', label: 'New' }, { f: 'priority', label: 'Priority' }], show: ((v: S['rank.extras']) => `BMO ${signed(v.bmo)} · new ${signed(v.newStaff)} · priority ${signed(v.priority)}`) as (v: never) => string },
+  { title: 'Ranking', sub: 'v3 · Nov 5', rows: [
+    { label: 'How it works', sub: 'tier first, then form /100', show: () => 'See Admin → Ranking · How the form score is made' },
   ] },
   { title: 'Managers', rows: [
     { label: 'Manager feedback for', sub: 'test first, then all managers', k: 'mgr.feedback', kind: 'choice', choices: [['benjamin', 'Benjamin only'], ['all', 'All managers']], show: ((v: string) => (v === 'all' ? 'All managers' : 'Benjamin only')) as (v: never) => string },

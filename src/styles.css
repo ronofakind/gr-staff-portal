@@ -3193,3 +3193,5 @@ div.venue-rule { background: #fff; border-radius: 14px; padding: 10px 14px; marg
 .sp-tier button:last-child { flex: 1.3; font-size: 12.5px; font-weight: 700; color: var(--muted); }
 .sp-tier button.on { box-shadow: none; color: #fff; }
 .sp-tier button.on.t-A { background: #3F7B5C; } .sp-tier button.on.t-B { background: #C9A227; } .sp-tier button.on.t-C { background: #B0452E; } .sp-tier button.on.t-none { background: #7A7268; }
+/* Nov 5 · Ranking v3 columns */
+.rk-row { grid-template-columns: 28px minmax(140px, 1fr) 56px 56px 56px 56px 72px 48px 52px; }
