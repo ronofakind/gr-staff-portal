@@ -571,7 +571,7 @@ export function Bookings() {
       {replaceOf && <div className="bk-rep"><b>Replacing {replaceOf.staff?.full_name ?? '?'}</b><span>{replaceOf.title} · {t12(replaceAt ?? hm(replaceOf.planned_start))}{replaceOf.cancel_reason ? ` · ${replaceOf.cancel_reason.toLowerCase()}` : ''} · the next person you add to {replaceOf.title} is saved as the replacement (blue tag on the manager’s list){mode === 'practice' ? ' · switch to Live to save it' : ''}.</span>
         <button className="lnk" aria-label="Stop replacing" onClick={() => { const p = new URLSearchParams(params); ['replace', 'at', 'ask', 'spots'].forEach((k) => p.delete(k)); setParams(p, { replace: true }); }}>×</button></div>}
       <div className="bk-strip">
-        <button className="round" onClick={() => setP('date', addDays(date, view === 'board' ? -1 : -7))}>‹</button>
+        <button className="round" onClick={() => setP('date', addDays(date, -7))}>‹</button>
         {view === 'board' ? strip.map((d) => {
           const evs = weekEvs.filter((e) => e.event_date === d && (dept === 'both' || evDept(e) === dept)); const short = evs.reduce((n, e) => n + countOf(e).short, 0); const today0 = isoDay(new Date());
           const go = (evId?: string) => { const p = new URLSearchParams(params); p.set('date', d); if (evId) p.set('ev', evId); else p.delete('ev'); setParams(p, { replace: true }); };
@@ -587,7 +587,7 @@ export function Bookings() {
             {evs.length > 3 && <span className="bk-wmore">+{evs.length - 3} more</span>}
           </div>); })
           : <span className="grow muted sm" style={{ textAlign: 'center' }}>{dLabel(range.from)} – {dLabel(range.to)}</span>}
-        <button className="round" onClick={() => setP('date', addDays(date, view === 'board' ? 1 : 7))}>›</button>
+        <button className="round" onClick={() => setP('date', addDays(date, 7))}>›</button>
       </div>
 
       {hint && <div className="bk-hint" onClick={() => setHint('')}>{hint} ×</div>}
