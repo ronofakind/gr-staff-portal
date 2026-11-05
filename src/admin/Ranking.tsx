@@ -6,7 +6,7 @@ import { loadScoreData, scoreOf, signed, fbWhy, weights, type Score, type ScoreD
 
 type Tab = 'floor' | 'bar' | 'md';
 const isMd = (s: AStaff) => s.positions.some((p) => p.toUpperCase() === 'MD');
-const tabOf = (s: AStaff): Tab => (s.department === 'bar' ? 'bar' : isMd(s) ? 'md' : 'floor');
+export const tabOf = (s: AStaff): Tab => (s.department === 'bar' ? 'bar' : isMd(s) ? 'md' : 'floor');
 const keepKey = (sid: string, sc: Score) => `gr-keep-${sid}-${sc.suggest?.to}-${sc.fb.n}-${sc.fb.votes.A}${sc.fb.votes.B}${sc.fb.votes.C}`;
 const readKeep = (k: string) => { try { return localStorage.getItem(k) === '1'; } catch { return false; } };
 
@@ -68,7 +68,7 @@ export function Ranking() {
 }
 
 /** "Why this score" breakdown + tier suggestion (Move = admin action with confirm). Used on Ranking and the staff profile. */
-export function ScoreWhy({ s, sc, onClose, onTier, compact = false }: { s: AStaff; sc: Score; onClose?: () => void; onTier?: () => void; compact?: boolean }) {
+export function ScoreWhy({ s, sc, onClose, onTier, compact = false, bars = false }: { s: AStaff; sc: Score; onClose?: () => void; onTier?: () => void; compact?: boolean; bars?: boolean }) {
   const [kept, setKept] = useState(() => readKeep(keepKey(s.id, sc)));
   const kk = keepKey(s.id, sc);
   useEffect(() => setKept(readKeep(kk)), [kk]);
@@ -86,9 +86,11 @@ export function ScoreWhy({ s, sc, onClose, onTier, compact = false }: { s: AStaf
   return (
     <div className="stack" style={{ gap: 8 }}>
       {!compact && <div className="spread"><span className="kick">WHY THIS SCORE · {s.full_name.toUpperCase()}</span>{onClose && <button className="sq" aria-label="Close" onClick={onClose}>×</button>}</div>}
-      <div className="rk-big serif">{tier ? `${tier} · ` : ''}{sc.form}<small className="muted" style={{ fontSize: 14 }}> / 100</small></div>
-      <Line t={tier ? `Tier ${tier}` : 'No tier'} sub="set by you · sorts first" n={0} plain />
-      {sc.parts.map((x) => <div key={x.key} className="rk-line"><div className="grow"><b>{x.label}</b><small>{x.sub}</small></div><b className={x.counted ? '' : 'muted'}>{x.counted ? `${Math.round(x.pts * 10) / 10} / ${x.max}` : '–'}</b></div>)}
+      {!bars && <div className="rk-big serif">{tier ? `${tier} · ` : ''}{sc.form}<small className="muted" style={{ fontSize: 14 }}> / 100</small></div>}
+      {!bars && <Line t={tier ? `Tier ${tier}` : 'No tier'} sub="set by you · sorts first" n={0} plain />}
+      {bars && sc.parts.map((x) => <div key={x.key} className="sp-bar"><div className="spread"><b>{x.label}</b><b className={x.counted ? '' : 'muted'}>{x.counted ? `${Math.round(x.pts * 10) / 10} / ${x.max}` : '–'}</b></div>
+        <div className="sp-bar-t"><i style={{ width: `${x.counted && x.max ? Math.max(0, Math.min(100, (x.pts / x.max) * 100)) : 0}%` }} /></div><small className="muted">{x.sub}</small></div>)}
+      {!bars && sc.parts.map((x) => <div key={x.key} className="rk-line"><div className="grow"><b>{x.label}</b><small>{x.sub}</small></div><b className={x.counted ? '' : 'muted'}>{x.counted ? `${Math.round(x.pts * 10) / 10} / ${x.max}` : '–'}</b></div>)}
       {sc.priority && <div className="rk-line"><div className="grow"><b>Priority</b><small>until {sc.priority}</small></div><b className="okc">+10</b></div>}
       {sc.suggest && tier && !kept && (
         <div className="rk-suggest"><b>Suggestion:</b> {sc.suggest.why}. Keep tier {tier}?{' '}

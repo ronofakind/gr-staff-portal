@@ -3207,3 +3207,42 @@ div.venue-rule { background: #fff; border-radius: 14px; padding: 10px 14px; marg
 .fb-tags button.on.good { background: #3F7B5C; color: #fff; box-shadow: none; }
 .fb-tags button.on.bad { background: #B0452E; color: #fff; box-shadow: none; }
 .nsc-again { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+/* Nov 5 · staff profile v2 (wide, 3 columns) */
+.adm-panel.sp-wide { width: min(1180px, 96vw); left: auto; padding: 18px 20px 28px; gap: 14px; }
+.sp-head { display: flex; align-items: center; gap: 16px; background: #fff; border-radius: 18px; padding: 16px 18px; }
+.sp-who { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.sp-acts { gap: 6px; margin-top: 4px; }
+.sp-head .sp-app { margin-top: 2px; }
+.sp-badge { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 18px; border-radius: 16px; background: #FBF3E0; flex: none; }
+.sp-badge span { font-size: 10px; letter-spacing: .12em; font-weight: 800; color: #8A6A2A; }
+.sp-badge b { font-size: 34px; line-height: 1; font-weight: 500; }
+.sp-badge b i { font-style: normal; }
+.sp-badge.t-A b i { color: #3F7B5C; } .sp-badge.t-B b i { color: #B8901C; } .sp-badge.t-C b i { color: #B0452E; }
+.sp-badge small { font-size: 11px; color: #8A6A2A; }
+.sp-x { align-self: flex-start; }
+.sp-cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; align-items: start; }
+.sp-col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.sp-colh { font-size: 10.5px; letter-spacing: .14em; font-weight: 800; color: var(--muted); padding: 0 4px; }
+.sp-bar { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; }
+.sp-bar-t { height: 6px; border-radius: 3px; background: #EFE8DE; overflow: hidden; }
+.sp-bar-t i { display: block; height: 100%; background: #3F7B5C; border-radius: 3px; }
+.sp-next { display: flex; gap: 10px; font-size: 12.5px; } .sp-next span { width: 78px; flex: none; }
+@media (max-width: 900px) {
+  .adm-panel.sp-wide { width: 100%; }
+  .sp-cols { grid-template-columns: 1fr; }
+  .sp-head { flex-wrap: wrap; }
+  .sp-badge { order: 3; flex-direction: row; gap: 10px; width: 100%; justify-content: center; box-sizing: border-box; }
+}
+/* Nov 5 · new staff ratings (Today) */
+.nsr-gold { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; background: #FFFBF0; box-shadow: inset 4px 0 0 #C9A227; }
+.nsr-gold .grow { display: flex; flex-direction: column; gap: 3px; min-width: 0; } .nsr-gold span { font-size: 12px; color: var(--muted); }
+.nsr { display: flex; flex-direction: column; gap: 8px; }
+.nsr-h { display: flex; align-items: center; gap: 10px; background: none; border: 0; padding: 0; cursor: pointer; text-align: left; font: inherit; color: inherit; }
+.nsr-h .serif { font-size: 20px; }
+.nsr-n { font-size: 11px; font-weight: 800; padding: 3px 8px; border-radius: 7px; background: #FBF3E0; color: #8A6A2A; }
+.nsr-row { display: flex; gap: 12px; align-items: flex-start; padding: 10px 0; border: 0; border-top: 1px solid var(--line); background: none; text-align: left; font: inherit; color: inherit; cursor: pointer; width: 100%; }
+.nsr-row .grow { display: flex; flex-direction: column; gap: 3px; min-width: 0; } .nsr-row > .strong { align-self: center; white-space: nowrap; }
+.nsr-tag { font-size: 10px; font-weight: 800; padding: 2px 6px; border-radius: 6px; background: #FBF3E0; color: #8A6A2A; white-space: nowrap; }
+.nsr-stars i { font-style: normal; color: #DDD3C6; font-size: 13px; } .nsr-stars i.on { color: #C9A227; }
+.nsr-note { font-style: italic; color: #4A433C; }
+.nsr .gold { color: #8A6A2A; }

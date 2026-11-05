@@ -11,6 +11,7 @@ import { DeleteEvent } from './DeleteEvent';
 import { DeptTag } from './DeptTag';
 import { SheetChanges } from './SheetChanges';
 import { hoursBetween } from './api';
+import { useNewStaffRatings, NewStaffGoldCard, NewStaffPanel, nsrOpenDefault, TAG_LABEL, BAD_TAGS } from './NewStaffRatings';
 import { supabase } from '../lib/supabase';
 import { eventsBetween, addDays, isoDay, flagsOf, flagText, periodOf, dLabel, tTime, type AEvent, type AShift } from './api';
 
@@ -90,10 +91,11 @@ export function Today() {
       // Manager feedback (push 30): overall 1–2★ or "worked like a C" shows right away. Older rows (no stars): C or any ▼, as in push 27.
       const fbCols = 'id,staff_id,tier_vote,ratings,note,created_at,by:staff!staff_feedback_by_staff_id_fkey(full_name),who:staff!staff_feedback_staff_id_fkey(full_name),events(title,event_date)';
       const fbq = (cols: string) => supabase.from('staff_feedback').select(cols).is('archived_at', null).gte('created_at', addDays(today, -30) + 'T00:00:00Z').order('created_at', { ascending: false });
-      let fbr = await fbq(fbCols + ',overall_stars');
+      let fbr = await fbq(fbCols + ',overall_stars,again,tags');
+      if (fbr.error) fbr = await fbq(fbCols + ',overall_stars');
       if (fbr.error && /overall_stars/.test(fbr.error.message)) fbr = await fbq(fbCols); // migration 033 not applied yet
       const fbs = fbr.data;
-      type Fb = { id: string; staff_id: string; tier_vote: string | null; overall_stars?: number | null; ratings: Record<string, unknown> | null; note: string | null; by: { full_name: string } | null; who: { full_name: string } | null; events: { title: string; event_date: string } | null };
+      type Fb = { id: string; staff_id: string; tier_vote: string | null; overall_stars?: number | null; again?: string | null; tags?: string[] | null; ratings: Record<string, unknown> | null; note: string | null; by: { full_name: string } | null; who: { full_name: string } | null; events: { title: string; event_date: string } | null };
       const AREA: Record<string, string> = { punctuality: 'Punctuality', attitude: 'Attitude', presentation: 'Presentation', experience: 'Experience', teamwork: 'Teamwork', guest: 'Guest service' };
       const star = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 5;
       for (const f of (Array.isArray(fbs) ? fbs as unknown as Fb[] : []).filter((x) => x && typeof x.staff_id === 'string')) {
@@ -101,9 +103,10 @@ export function Today() {
         const stars = star(f.overall_stars) ? f.overall_stars : null;
         let bits: string[];
         if (stars) {
-          if (stars > 2 && f.tier_vote !== 'C') continue;
+          const bad = (f.tags ?? []).filter((x) => BAD_TAGS.includes(x));
+          if (stars > 2 && f.tier_vote !== 'C' && f.again !== 'no' && !bad.length) continue; // Nov 5 · + want again: No / bad tags
           const lows = Object.entries(r).filter(([, v]) => star(v) && v <= 2).map(([k, v]) => `${AREA[k] ?? k} ${v}★`);
-          bits = [`${stars}★`, f.tier_vote === 'C' ? 'worked like a C' : '', ...lows];
+          bits = [`${stars}★`, f.tier_vote === 'C' ? 'worked like a C' : '', f.again === 'no' ? 'want again: No' : '', ...lows, ...bad.map((x) => TAG_LABEL[x] ?? x)];
         } else {
           const downs = Object.entries(r).filter(([, v]) => v === 'down').map(([k]) => `${AREA[k] ?? k} ▼`);
           if (f.tier_vote !== 'C' && !downs.length) continue;
@@ -194,6 +197,7 @@ export function Today() {
     })();
   }, [tick]);
 
+  const nsr = useNewStaffRatings(tick); const [nsrOpen, setNsrOpen] = useState(nsrOpenDefault);
   const askNeeds = useAskNeeds(addDays(today, -1), addDays(today, 90), tick); // push 40 · No / no answer / nobody took the spot
   const tonight = (week ?? []).filter((e) => e.event_date === today);
   const hidden = (n: Need) => arch.some((a) => a.key === n.key && a.sig === sigOf(n));
@@ -249,14 +253,16 @@ export function Today() {
         </section>
         <section className="stack">
           <NicknameCards />
-          <div className="sec"><span className="serif">Needs you <b className="accent sm">{shown.length + askNeeds.length + lm.length + (late.length ? 1 : 0) || ''}</b></span>{shown.length > 0 && <button className="abtn sm" onClick={() => archive(shown)}>{ARCH_ICON} Archive all</button>}</div>
+          <div className="sec"><span className="serif">Needs you <b className="accent sm">{shown.length + askNeeds.length + lm.length + (late.length ? 1 : 0) + (nsr.unseen.length ? 1 : 0) || ''}</b></span>{shown.length > 0 && <button className="abtn sm" onClick={() => archive(shown)}>{ARCH_ICON} Archive all</button>}</div>
           {lm.map(({ e, s }) => <CantMakeIt key={s.id} e={e} s={s} mgr={e.manager_id ? mgrs[e.manager_id] ?? null : null} ask={asks.find((a) => a.kind === 'fill' && a.status === 'open' && a.replace_for === s.id)} onFind={() => setRep({ s, e })} onChanged={() => setTick((t) => t + 1)} />)}
           <NotConfirmed rows={late} seen={seen} nudged={nudged} asks={asks} onReplace={(r) => setRep({ s: r.s, e: r.e })} onChanged={() => setTick((t) => t + 1)} />
           {askNeeds.map((a) => <AskNeed key={a.id} a={a} onChanged={() => setTick((t) => t + 1)} />)}
+          <NewStaffGoldCard unseen={nsr.unseen} onOpen={() => { setNsrOpen(true); setTimeout(() => document.getElementById('nsr')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }} />
           <div className="adm-card" style={{ padding: '4px 16px' }}>
             {!shown.length && <div className="muted sm" style={{ padding: '12px 0' }}>All clear.</div>}
             {shown.slice(0, 14).map((x) => <NeedRow key={x.key} x={x} onArchive={() => archive([x])} />)}
           </div>
+          <NewStaffPanel {...nsr} open={nsrOpen} setOpen={setNsrOpen} />
           {archivedToday.length > 0 && (
             <div className="arch-box">
               <button className="arch-toggle" onClick={() => setShowArch(!showArch)}>{showArch ? '▾' : '▸'} Archived today · {archivedToday.length}</button>
