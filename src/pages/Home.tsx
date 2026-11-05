@@ -341,7 +341,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
         const req = chg.reqs[next.id];
         const mgrName = next.events.manager?.full_name ?? null;
         const myAlerts = mgrLate.filter((x) => x.event_id === next.events.id);
-        const needChange = !started && !managesIt && <NeedChange canSchedule={!(req?.status === 'pending' || (req?.status === 'keep' && !req.keep_reply))} onSchedule={() => setSheet({ kind: 'change', s: next })} onCancel={() => setSheet({ kind: 'cancel', s: next })} />;
+        const needChange = !started && <NeedChange canSchedule={!(req?.status === 'pending' || (req?.status === 'keep' && !req.keep_reply))} onSchedule={() => setSheet({ kind: 'change', s: next })} onCancel={() => setSheet({ kind: 'cancel', s: next })} />;
         // push 33e · booked, details not final: no Confirm, the 24 h starts once they're set
         if (!working && soon(next)) {
           const d = new Date(next.events.event_date + 'T12:00:00');

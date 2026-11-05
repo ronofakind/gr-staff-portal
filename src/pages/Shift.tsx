@@ -156,7 +156,7 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team, past }
   const city = cityParts.join(',').trim();
   const area = cityParts[0]?.trim() ?? '';
   const shortDate = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase();
-  const canChange = !lead_ && !gone && !s.punches?.punch_in && Date.now() < new Date(s.planned_start).getTime();
+  const canChange = !gone && !s.punches?.punch_in && Date.now() < new Date(s.planned_start).getTime();
   const seeUniform = () => uniRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   const staffNotes = ev.venues?.staff_notes?.trim();
   const isPastV = past !== undefined; // push 51
