@@ -70,6 +70,10 @@ export function Bookings() {
   /** push 49 · a placed chip dropped on ANOTHER event → "Add a 2nd shift · keep both" / "Move · off <event 1>" / Cancel */
   const [dropAsk, setDropAsk] = useState<{ p: Pl; to: { event_id: string; start: string; extra?: boolean } } | null>(null);
   const [hint, setHint] = useState<string>('');
+  // Nov 4 · Confirm all (with Undo), fold "Already placed today", find a name on the board
+  const [undoConf, setUndoConf] = useState<{ ids: string[]; title: string } | null>(null);
+  const [placedOpen, setPlacedOpen] = useState(() => { try { return localStorage.getItem('gr_bk_placed') === '1'; } catch { return false; } });
+  const [findQ, setFindQ] = useState(''); const [flash, setFlash] = useState('');
   const [pair, setPair] = useState<{ moving: Pl; partner: Pl; to: { event_id: string; start: string } } | null>(null);
   const [auto, setAuto] = useState<{ open: boolean; skipped: { name: string; why: string }[] } | null>(null);
   const [review, setReview] = useState(false); const [askMore, setAskMore] = useState(() => params.get('ask') === '1');
@@ -395,12 +399,24 @@ export function Bookings() {
     if (error) { sh.status = on ? 'booked' : 'confirmed'; setHint(error.message); }
     await load();
   };
+  const confirmAll = async (d: string, e: AEvent) => {
+    const ids = plOf(d).filter((p) => p.event_id === e.id && !p.suggested && p.shift_id && shiftOf(p)?.status !== 'confirmed').map((p) => p.shift_id!);
+    if (!ids.length) return;
+    for (const id of ids) { const { error } = await supabase.rpc('admin_mark_confirmed', { p_shift: id, p_on: true }); if (error) { setHint(error.message); break; } }
+    setUndoConf({ ids, title: seeTitle(e) }); setTimeout(() => setUndoConf((u) => (u && u.ids === ids ? null : u)), 10000);
+    await load();
+  };
+  const undoConfirmAll = async () => {
+    const u = undoConf; if (!u) return; setUndoConf(null);
+    for (const id of u.ids) await supabase.rpc('admin_mark_confirmed', { p_shift: id, p_on: false });
+    setHint(`${u.title} · back to waiting`); await load();
+  };
   const Chip = ({ p, n, d }: { p: Pl; n?: number; d: string }) => {
     const also = othersOf(d, p); const mine = p.suggested ? [] : dayOf(d, p.staff_id); const nth = mine.findIndex((x) => x.key === p.key) + 1;
     const locked = isLocked(d, p); const t = tier(p.staff_id); const part = partnerOf(p.staff_id).find((x) => plOf(d).some((q2) => q2.staff_id === x));
     const cf = confOf(p);
     return (
-      <div className={'bk-chip rk' + (t ?? 'x') + (p.suggested ? ' sug' : '') + (!p.shift_id && !p.suggested ? ' added' : '') + (also.length ? ' has-also' : '')} draggable onDragStart={() => setDrag({ staff_id: p.staff_id, key: p.key })} onClick={() => setPhone({ sid: p.staff_id, p, step: 'menu' })}>
+      <div data-key={p.key} className={'bk-chip rk' + (t ?? 'x') + (flash === p.key ? ' flash' : '') + (p.suggested ? ' sug' : '') + (!p.shift_id && !p.suggested ? ' added' : '') + (also.length ? ' has-also' : '')} draggable onDragStart={() => setDrag({ staff_id: p.staff_id, key: p.key })} onClick={() => setPhone({ sid: p.staff_id, p, step: 'menu' })}>
         {n != null && <span className="bk-n">{n}</span>}<i className={'bk-cf ' + cf + (p.shift_id && !p.suggested ? ' tap' : '')} title={!p.shift_id || p.suggested ? 'Not saved yet' : cf === 'ok' ? 'Confirmed · tap to undo' : 'Tap to mark confirmed'}
           onClick={(ev) => { if (!p.shift_id || p.suggested) return; ev.stopPropagation(); toggleConf(p); }}>{cf === 'ok' ? '✓' : ''}</i>
         <span className="grow">{name(p.staff_id)}{part && <small> 🔗 {name(part).split(' ')[0]}</small>}{p.extra && <small className="bk-x"> EXTRA</small>}{p.line && p.line !== p.start && <small className="bk-own" title="Their own start time"> starts {t12(p.start)}</small>}
@@ -435,7 +451,7 @@ export function Bookings() {
               <button type="button" aria-label="One more extra" onClick={() => setExtras(d, e, extras + 1)}>+</button></span> extras</span>
           </div>
           <div className="bk-bar"><i style={{ width: `${Math.min(100, (placed / Math.max(1, client)) * 100)}%` }} className={placed < client ? 'short' : ''} /></div>
-          {(st.strength != null || placed > 0) && <div className="bk-ts">{st.strength != null ? <span>Team strength <b>{st.strength}</b></span> : <span />}{placed > 0 && <span className="okc">{st.confirmed} of {placed} confirmed</span>}</div>}
+          {(st.strength != null || placed > 0) && <div className="bk-ts">{st.strength != null ? <span>Team strength <b>{st.strength}</b></span> : <span />}{placed > 0 && <span className="bk-tsr"><span className="okc">{st.confirmed} of {placed} confirmed</span>{st.confirmed < pl.filter((p) => !p.suggested && p.shift_id).length && <button type="button" className="bk-call" onClick={() => confirmAll(d, e)}>✓ Confirm all</button>}</span>}</div>}
           {diff > 5 && top && <div className="bk-bal">{diff} below {seeTitle(top.e)} today · worth balancing</div>}
         </div>
         {(leadSlots > 0 || leads.length > 0) && (
@@ -503,6 +519,7 @@ export function Bookings() {
       </div>
 
       {hint && <div className="bk-hint" onClick={() => setHint('')}>{hint} ×</div>}
+      {undoConf && <div className="bk-undo"><span>✓ {undoConf.ids.length} confirmed · {undoConf.title}</span><button type="button" onClick={undoConfirmAll}>Undo</button></div>}
       {warns.length > 0 && <div className="bk-warns">{warns.map((w) => <div key={w.key} className={'bk-warn ' + w.cls}><span className="grow">{w.text}</span><button className="lnk" aria-label="Dismiss" onClick={() => setWarns(warns.filter((x) => x.key !== w.key))}>×</button></div>)}<small className="muted">Warnings never block you; you can still book.</small></div>}
       {msg && <div className="bk-msg">{msg}</div>}
 
@@ -539,8 +556,8 @@ export function Bookings() {
               </div>); })}
             {tab === 'yes' && !counts.yes && <div className="muted sm" style={{ padding: 10 }}>Nobody said yes yet for this date.</div>}
             {placedList.length > 0 && (
-              <div className="bk-tier bk-placed"><div className="kick">ALREADY PLACED TODAY · {placedList.length}</div>
-                {placedList.map(({ sid, mine }) => (
+              <div className="bk-tier bk-placed"><button type="button" className="kick bk-fold" aria-expanded={placedOpen} onClick={() => { const v = !placedOpen; setPlacedOpen(v); try { localStorage.setItem('gr_bk_placed', v ? '1' : '0'); } catch { /* private mode */ } }}><span className="grow">ALREADY PLACED TODAY · {placedList.length}</span><span>{placedOpen ? '▾' : '▸'}</span></button>
+                {placedOpen && placedList.map(({ sid, mine }) => (
                   <div key={sid} className="bk-av" draggable={mine.length < 2} onDragStart={() => setDrag({ staff_id: sid, add: true })} title={mine.length < 2 ? 'Drag onto another event = a 2nd shift that day' : undefined}>
                     <i className={'bk-t t' + (tier(sid) ?? 'x')} />
                     <div className="grow"><b>{name(sid)}</b><small>{mine.length > 1 ? mine.map((x) => evById[x.event_id]?.title ?? '?').join(' + ') : `${evById[mine[0].event_id]?.title ?? '?'} ${span12(mine[0])}`}</small></div>
@@ -550,6 +567,18 @@ export function Bookings() {
             <button className="link-btn" style={{ margin: 10 }} onClick={() => setAskMore(true)}>Ask more people for {dLabel(date, { month: 'short', day: 'numeric' })} ›</button>
           </aside>
           <div className="bk-main">
+            {(() => { const q = findQ.trim().toLowerCase(); const day = plOf(date).filter((p) => !p.suggested);
+              const hits = q.length < 2 ? [] : staff.filter((x) => (x.full_name + ' ' + (x.nickname ?? '')).toLowerCase().includes(q)).slice(0, 8)
+                .map((x) => ({ x, on: day.filter((p) => p.staff_id === x.id) }));
+              const show = (key: string) => { const el = document.querySelector(`[data-key="${CSS.escape(key)}"]`); el?.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' }); setFlash(key); setTimeout(() => setFlash((f) => (f === key ? '' : f)), 3000); };
+              return (
+              <div className="bk-find">
+                <div className="bk-findin"><span aria-hidden="true">🔍</span><input placeholder="Find someone on the board…" value={findQ} onChange={(ev) => setFindQ(ev.target.value)} />{findQ && <button type="button" aria-label="Clear" onClick={() => setFindQ('')}>✕</button>}</div>
+                {hits.length > 0 && <div className="bk-hits">{hits.map(({ x, on }) => on.length ? on.map((p) => { const cf = confOf(p); return (
+                  <button key={p.key} type="button" className="bk-hit" onClick={() => show(p.key)}><span className="grow"><b>{x.full_name}</b><small>{seeTitle(evById[p.event_id])} · {t12(p.start)} · {cf === 'ok' ? '✓ confirmed' : 'waiting'}</small></span><b className="sm">Show ›</b></button>); })
+                  : <div key={x.id} className="bk-hit"><span className="grow"><b>{x.full_name}</b><small>Not placed today</small></span><button type="button" className="abtn sm" onClick={() => { setPhone({ sid: x.id, step: 'add' }); }}>+ Add</button></div>)}</div>}
+                {q.length >= 2 && !hits.length && <div className="muted sm">No one called “{findQ.trim()}”.</div>}
+              </div>); })()}
             {dayEvs(date).length > 1 && (() => { const rows = dayEvs(date).map((e) => ({ e, s: statsOf(date, e) }));
               const max = Math.max(0, ...rows.map((r) => r.s.strength ?? 0)); const sum = (k: 'placed' | 'client' | 'extrasPlaced' | 'extras' | 'confirmed') => rows.reduce((n, r) => n + r.s[k], 0);
               return (
@@ -658,7 +687,8 @@ export function Bookings() {
             {groups.map(({ e, g }) => (
               <button key={e.id + g.start} className="abtn" disabled={(p.event_id === e.id && p.start === g.start) || (p.event_id !== e.id && onEvent(date, sid, e.id, p.key))} onClick={() => { if (p.event_id !== e.id && !okLocked(date, p, 'move')) return; place(date, sid, { event_id: e.id, start: g.start }, p.key); close(); }}>{e.title} · {t12(g.start)}</button>))}
           </> : <>
-            <div><b>Add {first} to… · 2nd shift that day</b><div className="muted sm">Now on {dayOf(date, sid).map((x) => `${evById[x.event_id]?.title ?? '?'} ${span12(x)}`).join(' + ')}</div></div>
+            {dayOf(date, sid).length ? <div><b>Add {first} to… · 2nd shift that day</b><div className="muted sm">Now on {dayOf(date, sid).map((x) => `${evById[x.event_id]?.title ?? '?'} ${span12(x)}`).join(' + ')}</div></div>
+              : <div><b>Add {first} to…</b><div className="muted sm">Not placed today</div></div>}
             {addable.length ? addable.map(({ e, g }) => (
               <button key={e.id + g.start} className="abtn" onClick={() => { place(date, sid, { event_id: e.id, start: g.start }, undefined, false, true); close(); }}>{e.title} · {t12(g.start)}</button>))
               : <span className="muted sm">No other {dept} event this day.</span>}

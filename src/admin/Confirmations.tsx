@@ -61,7 +61,7 @@ export function ConfirmTracker({ evs, venue }: { evs: AEvent[]; venue: string })
   const seg = (s: CState[], cls: string) => { const k = list.filter((x) => s.includes(x.st)).length; return k ? <i className={cls} style={{ flex: k }} /> : null; };
   return (
     <div className="ct">
-      <div className="ct-h"><b>Confirmations</b><span className="muted sm">{ok} of {total}</span></div>
+      <div className="ct-h"><b>Confirmations</b><span className="muted sm">{ok} of {total}{ok < total && <> · <button className="lnk sm" onClick={async () => { const ids = list.filter((x) => x.st !== 'ok').map((x) => x.r.id); for (const id of ids) await markConfirmed(id, true); }}>✓ Confirm all</button></>}</span></div>
       <div className="ct-bar">{seg(['ok'], 'ok')}{seg(['grey', 'unsent', 'pending'], 'grey')}{seg(['gold'], 'gold')}{seg(['red'], 'red')}</div>
       {shown.map(({ r, st }) => {
         const h = r.confirm_sent_at ? hoursSince(r.confirm_sent_at) : 0;

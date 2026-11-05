@@ -3087,3 +3087,18 @@ div.venue-rule { background: #fff; border-radius: 14px; padding: 10px 14px; marg
 .bk-mli .bk-mi { color: var(--muted); flex: 0 0 18px; } .bk-mch { color: var(--muted); }
 .bk-mrm { height: 44px; border-radius: 12px; border: 0; background: #F6E3E3; color: #9B2226; font: 800 14px Inter, system-ui, sans-serif; cursor: pointer; }
 .bk-cf.tap { cursor: pointer; } .bk-cf.tap:hover { box-shadow: inset 0 0 0 2px #3F7B5C; } .bk-cf.ok.tap:hover { box-shadow: none; opacity: .85; }
+/* Nov 4 · Confirm all, fold Already placed, find a name on the board */
+.bk-tsr { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.bk-call { border: 0; background: #E3F0E7; color: #3F7B5C; font: 800 11.5px Inter, system-ui, sans-serif; border-radius: 8px; padding: 3px 8px; cursor: pointer; white-space: nowrap; }
+.bk-undo { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(90px + env(safe-area-inset-bottom)); z-index: 60; background: var(--ink); color: #fff; border-radius: 14px; padding: 10px 14px; display: flex; gap: 14px; align-items: center; font: 600 13px Inter, system-ui, sans-serif; box-shadow: 0 8px 24px rgba(0,0,0,.2); }
+.bk-undo button { border: 0; background: none; color: #F2C66D; font: 800 13px Inter, system-ui, sans-serif; cursor: pointer; }
+.bk-fold { display: flex; align-items: center; width: 100%; border: 0; background: none; padding: 4px 0; cursor: pointer; text-align: left; font: inherit; color: inherit; letter-spacing: inherit; }
+.bk-find { display: flex; flex-direction: column; gap: 6px; max-width: 520px; }
+.bk-findin { display: flex; align-items: center; gap: 8px; height: 40px; border-radius: 12px; background: #fff; box-shadow: inset 0 0 0 1px var(--line, #E4DCD1); padding: 0 12px; }
+.bk-findin input { flex: 1; border: 0; outline: 0; background: none; font: 500 14px Inter, system-ui, sans-serif; min-width: 0; }
+.bk-findin button { border: 0; background: none; color: var(--muted); cursor: pointer; }
+.bk-hits { display: flex; flex-direction: column; gap: 5px; background: #fff; border-radius: 12px; padding: 6px; box-shadow: 0 6px 20px rgba(0,0,0,.08); }
+.bk-hit { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; border: 0; background: #F6F2EC; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.bk-hit small { display: block; font-size: 11.5px; color: var(--muted); }
+.bk-chip.flash { outline: 2.5px solid #B8892B; outline-offset: 1px; animation: bkflash 1s ease-in-out 3; }
+@keyframes bkflash { 50% { outline-color: transparent; } }
