@@ -8,7 +8,6 @@ import { setting, useSettings } from '../lib/settings';
 import { useLang } from '../lib/i18n';
 import { time } from '../lib/format';
 import { Avatar, PhotoViewer } from '../components/Avatar';
-import { DriveFiles } from '../components/DriveFiles';
 import { AnnounceComposer } from '../components/Announce';
 import { useInboxCount } from '../lib/messages';
 
@@ -449,8 +448,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
             <small>{incidents.map((x) => `${kindLabel(x.kind)}${x.involved_staff.length ? ' · ' + x.involved_staff.map((id) => first(rows.find((r) => r.staff && (r as unknown as { staff_id?: string }).staff_id === id)?.staff?.full_name) || '').filter(Boolean).join(', ') : ''}${x.audio_sec ? ` · 🎙 ${Math.floor(x.audio_sec / 60)}:${String(x.audio_sec % 60).padStart(2, '0')}` : ''} · ${time(x.created_at, lang)}`).join('  |  ')}</small></div></div>
         )}
         {ev.venues?.no_outside_food && <div className="venue-rule"><img src="/rules/no-outside-food.png" alt="" width={40} height={40} /><b>No outside food or drinks at this venue</b></div>}
-        {ev.drive_folder_url && <a className="folder-link" href={ev.drive_folder_url} target="_blank" rel="noreferrer">📁 Event Folder</a>}
-        {ev.drive_folder_url && <DriveFiles eventId={ev.id} admin={false} />}
+        {/* Nov 5 · Event Folder lives on Home only (Ronnie: too messy here) */}
         {/* push 36e · Messages: 📣 Message my team, what he sent (Seen n of N), replies (REPLY / ✓ DONE) */}
         <MgrMessagesEntry eventId={ev.id} />
       </div>
