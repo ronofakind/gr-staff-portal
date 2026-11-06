@@ -3421,3 +3421,6 @@ div.pf-row { cursor: default; flex-wrap: wrap; }
 .pf-row.prob { flex-wrap: wrap; row-gap: 8px; } .pf-row.prob .pf-chips { flex: 1 1 100%; padding-left: 44px; }
 /* wheel: never move the sheet behind it */
 .wt-col { overscroll-behavior: contain; touch-action: pan-y; } .wt-scrim { overscroll-behavior: contain; }
+.pf-row.prob .pf-chips { flex: 1 1 100%; padding-left: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.pf-row.prob .pc { height: 40px; width: 100%; font-size: 13px; }
+button.pf-go { border: none; background: none; padding: 4px 2px; font: 700 13px Inter, system-ui, sans-serif; cursor: pointer; } .pf-go.red { color: #9B2226; }

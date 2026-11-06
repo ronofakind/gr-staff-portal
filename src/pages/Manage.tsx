@@ -803,9 +803,10 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
               <button className="pf-row" onClick={() => setFb({ row: open, back: 'sheet' })}>
                 <span className="pf-ic2 y">★</span><span className="pf-rt"><b>Rate</b><small>{inf?.fb_stars ? `sent · ${STAR_LABEL[inf.fb_stars]}` : 'not rated tonight'}</small></span>
                 {inf?.fb_stars ? <Stars value={inf.fb_stars} size="xs" label="Tonight" /> : <b className="pf-go">Rate ›</b>}</button>)}
-            {!open.attendance && !open.left_early && (
-              <div className="pf-row prob">
-                <span className="pf-ic2 r">⚠</span><span className="pf-rt"><b>Problem</b></span>
+            {!open.attendance && !open.left_early && (!prob
+              ? <button className="pf-row" onClick={() => setProb(true)}><span className="pf-ic2 r">⚠</span><span className="pf-rt"><b>Problem</b><small>no-show · left early · cancelled</small></span><b className="pf-go red">Mark ›</b></button>
+              : <div className="pf-row prob">
+                <span className="pf-ic2 r">⚠</span><span className="pf-rt"><b>Problem</b><small>What happened?</small></span><button className="pf-go" onClick={() => setProb(false)}>Close</button>
                 <span className="pf-chips">
                   <button className="pc" onClick={() => openAsk(open, 'no_show')}>No-show</button>
                   <button className="pc" disabled={!pin} title={pin ? '' : 'Start them first'} onClick={() => openAsk(open, 'left_early')}>Left early</button>
