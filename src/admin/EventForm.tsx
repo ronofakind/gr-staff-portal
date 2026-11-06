@@ -282,6 +282,8 @@ export function EventForm() {
     if (!next.length) next = m === 'bar' ? [blankLine('bar', 'BM', '17:00'), blankLine('bar', 'BT', '17:00')] : [blankLine('floor', 'MD', '17:00'), blankLine('floor', 'W', '17:00')];
     if (m === 'both' && !next.some((l) => l.dept === 'bar')) next = [...next, blankLine('bar', 'BM', next[0]?.start ?? '17:00')];
     setLines(next); setModeRaw(m);
+    // Nov 6 · Both → the floor default is a black dress shirt (Ronnie); a shirt you already picked stays
+    if (m === 'both') { if (uFloor === 'white_shirt') setUFloor('black_shirt'); if (uFloorW === 'white_shirt') setUFloorW('black_shirt'); }
   };
   useEffect(() => { // a bar line added (typed or pasted) while on Floor → Both
     const f = lines.some((l) => l.dept === 'floor'); const b = lines.some((l) => l.dept === 'bar');
