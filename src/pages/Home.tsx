@@ -148,7 +148,9 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
 
   if (!shifts) return <div className="loading" />;
   const isDone = (s: ShiftRow) => !!s.punches?.punch_in && !!s.punches.punch_out && new Date(s.punches.punch_out).getTime() <= Date.now();
-  const doneToday = shifts.filter((s) => isDone(s) && s.events.event_date === todayIso());
+  // Nov 6 · the night runs until 6 AM: after midnight tonight's event is still "today" (managers kept losing Team · submit)
+  const night = new Date(Date.now() - 6 * 3600e3).toLocaleDateString('en-CA', { timeZone: 'America/Toronto' });
+  const doneToday = shifts.filter((s) => isDone(s) && (s.events.event_date === todayIso() || s.events.event_date === night || (!!teams[s.events.id] && !s.events.hours_submitted_at && s.events.event_date >= addDay(todayIso(), -1))));
   const [next, ...rest] = shifts.filter((s) => !isDone(s));
   // push 46 · two shifts the same day (not declined / cancelled): compact card + "then" card; normal days unchanged
   const dayShifts = (d: string) => shifts.filter((s) => s.events.event_date === d);
@@ -157,7 +159,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
   const ofN = (s: ShiftRow) => `${dbl.indexOf(s) + 1} of ${dbl.length}`;
   const laterSame = isDbl ? rest.filter((s) => s.events.event_date === next!.events.event_date) : [];
   const restAfter = isDbl ? rest.filter((s) => s.events.event_date !== next!.events.event_date) : rest;
-  const todayDbl = dayShifts(todayIso()).length >= 2;
+  const todayDbl = dayShifts(night).length >= 2;
   // push 33e · not final = details pending or time TBC: "Details coming", never a Confirm button
   const notFinal = (s: ShiftRow) => !!s.events.details_pending || !!s.time_tbc;
   const soon = (s: ShiftRow) => !!s.events.details_pending || (!!s.time_tbc && s.status === 'booked');

@@ -435,7 +435,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
     <main className="page v2">
       <header className="row" style={{ paddingTop: 12 }}>
         <Link to="/" className="back" aria-label={t.back}>‹</Link>
-        <span className="kicker">{ev.event_date === todayMtl ? 'Tonight' : ev.event_date < todayMtl ? `Past · ${new Date(ev.event_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).replace(',', '')}` : new Date(ev.event_date + 'T12:00:00').toLocaleDateString('en-CA', { weekday: 'long' })} · your team</span>
+        <span className="kicker">{ev.event_date === todayMtl || ev.event_date === new Date(Date.now() - 6 * 3600e3).toLocaleDateString('en-CA', { timeZone: 'America/Toronto' }) ? 'Tonight' : ev.event_date < todayMtl ? `Past · ${new Date(ev.event_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).replace(',', '')}` : new Date(ev.event_date + 'T12:00:00').toLocaleDateString('en-CA', { weekday: 'long' })} · your team</span>
       </header>
       <div style={{ padding: '0 6px' }}>
         <div className="serif" style={{ fontSize: 34, lineHeight: 1 }}>{ev.title}</div>
