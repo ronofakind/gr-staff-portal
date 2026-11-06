@@ -3368,10 +3368,10 @@ div.venue-rule { background: #fff; border-radius: 14px; padding: 10px 14px; marg
 .endall-red span, .submit-bar .endall-red span { color: #9B2226; opacity: .8; }
 .crew .act.start:active, .grp-head .btn-go:active { background: #DCEEE3; } .crew .act.end:active, .endall-red:active { background: #F6DCDD; }
 /* Nov 6 · person sheet v2 (manager · tap a person) */
-.pf-head.v2 { flex-direction: row; align-items: center; text-align: left; gap: 12px; padding-top: 4px; }
-.pf-head.v2 .pf-id { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.pf-head.v2 .pf-name { font-size: 22px; line-height: 1.1; }
-.pf-head.v2 .new-shift { margin: 0 0 0 6px; }
+.pf-head.pf2 { flex-direction: row; align-items: center; text-align: left; gap: 12px; padding-top: 4px; }
+.pf-head.pf2 .pf-id { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.pf-head.pf2 .pf-name { font-size: 22px; line-height: 1.1; }
+.pf-head.pf2 .new-shift { margin: 0 0 0 6px; }
 .pf-st { align-self: flex-start; font-size: 11px; font-weight: 800; letter-spacing: .03em; border-radius: 8px; padding: 3px 8px; }
 .pf-st.ok { color: #2F6B4F; background: #E3F1E8; } .pf-st.done { color: #2F6B4F; background: #EEF7F2; } .pf-st.wait { color: #8A6A1F; background: #FBF3E0; }
 .pf-st.bad { color: #9B2226; background: #F8E6E7; } .pf-st.warn { color: #8A6A1F; background: #FBF3E0; }

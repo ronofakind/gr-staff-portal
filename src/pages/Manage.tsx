@@ -727,7 +727,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
           <div className="scrim" onClick={() => setOpen(null)} />
           <SwipeSheet onClose={() => setOpen(null)} label={`Options for ${open.staff?.full_name}`} back>
             <button className="pf-x" aria-label="Close" onClick={() => setOpen(null)}>✕</button>
-            <div className="pf-head v2">
+            <div className="pf-head pf2">
               <button className={'pf-photo' + (isNewO ? ' newp' : '')} aria-label="See the photo full size" onClick={() => setBigPhoto(true)}><Avatar name={open.staff?.full_name ?? '?'} url={open.staff?.photo_url} size={62} /></button>
               <div className="pf-id">
                 <div className="serif pf-name">{open.staff?.full_name}</div>
