@@ -2,7 +2,7 @@ import { Fragment, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Link, useSearchParams } from 'react-router-dom';
 import { loadRules, RuleIcons, type SLink, type SCond } from './rules';
-import { allStaff, dLabel, type AStaff } from './api';
+import { doesBar, isBothDept, allStaff, dLabel, type AStaff } from './api';
 import { uploadPhoto } from '../lib/photo';
 import { PhotoPicker, Avatar } from '../components/Avatar';
 import { StaffProfile } from './StaffProfile';
@@ -57,7 +57,7 @@ export function Staff() {
 
   const isMd = (s: AStaff) => s.positions.includes('MD') || s.positions.includes('BM') || s.role === 'manager';
   const base = (list ?? []).filter((s) => inactive || s.active)
-    .filter((s) => dept === 'all' || (dept === 'md' ? isMd(s) : dept === 'bar' ? s.department === 'bar' : s.department !== 'bar'));
+    .filter((s) => dept === 'all' || (dept === 'md' ? isMd(s) : dept === 'bar' ? doesBar(s) : s.department !== 'bar'));
   const words = q.toLowerCase().split(/\s+/).filter(Boolean);
   const digits = q.replace(/\D/g, '');
   const searched = base.filter((s) => words.every((w) => (s.full_name + ' ' + (s.nickname ?? '')).toLowerCase().includes(w)) || (digits.length >= 3 && (s.phone ?? '').replace(/\D/g, '').includes(digits)));
@@ -155,7 +155,7 @@ export function Staff() {
 function Editor({ s, onDone }: { s?: AStaff; onDone: () => void }) {
   const [f, setF] = useState({
     full_name: s?.full_name ?? '', email: s?.email ?? '', phone: s?.phone ?? '', language: s?.language ?? 'fr',
-    department: s?.department ?? 'floor', role: s?.role ?? 'staff', positions: (s?.positions ?? []).join(', '),
+    department: (s && isBothDept(s) ? 'both' : s?.department ?? 'floor') as string, role: s?.role ?? 'staff', positions: (s?.positions ?? []).filter((p) => p.toUpperCase() !== 'BAR').join(', '),
     active: s?.active ?? true, ranking: s?.staff_private?.ranking?.toString() ?? '', notes: s?.staff_private?.notes ?? '',
   });
   const [err, setErr] = useState('');
@@ -167,8 +167,8 @@ function Editor({ s, onDone }: { s?: AStaff; onDone: () => void }) {
     e.preventDefault(); setErr('');
     const row = {
       full_name: f.full_name.trim(), email: f.email.trim().toLowerCase() || null, phone: f.phone || null, language: f.language,
-      department: f.department, role: f.role, active: f.active,
-      positions: f.positions.split(',').map((p) => p.trim().toUpperCase()).filter(Boolean),
+      department: f.department === 'both' ? 'floor' : f.department, role: f.role, active: f.active,
+      positions: [...f.positions.split(',').map((p) => p.trim().toUpperCase()).filter((p) => p && p !== 'BAR'), ...(f.department === 'both' ? ['BAR'] : [])],
     };
     // 059 · edits go through admin_staff_update (column grants block a direct update)
     const res = s ? await supabase.rpc('admin_staff_update', { p_id: s.id, p_patch: row }).then((r) => ({ error: r.error, data: { id: s.id } }))
@@ -187,7 +187,7 @@ function Editor({ s, onDone }: { s?: AStaff; onDone: () => void }) {
         <label className="field">Email (for login)<input type="email" value={f.email} onChange={set('email')} /></label>
         <label className="field">Phone<input value={f.phone} onChange={set('phone')} /></label>
         <label className="field">Role<select value={f.role} onChange={set('role')}><option value="staff">Staff</option><option value="manager">Manager</option><option value="admin">Admin</option></select></label>
-        <label className="field">Department<select value={f.department} onChange={set('department')}><option value="floor">Floor</option><option value="bar">Bar</option><option value="kitchen">Kitchen</option></select></label>
+        <label className="field">Department<select value={f.department} onChange={set('department')}><option value="floor">Floor</option><option value="bar">Bar</option><option value="both">Floor + bar</option><option value="kitchen">Kitchen</option></select></label>
         <label className="field">Language<select value={f.language} onChange={set('language')}><option value="fr">Français</option><option value="en">English</option></select></label>
         <label className="field">Positions (comma separated)<input value={f.positions} onChange={set('positions')} placeholder="MD, WAITER" /></label>
         <label className="field">Ranking (admin only)<input type="number" value={f.ranking} onChange={set('ranking')} /></label>

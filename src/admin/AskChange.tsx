@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 import { smsMany } from '../lib/messages';
 import { adminAsks, byText, dayShort, leftText, shortName, t12, waitingOf, type AdminAsk, type AskTarget, type Spot } from '../lib/shiftAsks';
 import { AlsoWorking, otherShifts, type OtherShift } from './alsoWorking';
-import { allStaff, ap12, bookingChange, confirmationsSent, eventsBetween, roleName, startIso, ROLES, type AEvent, type AShift, type AStaff } from './api';
+import { doesBar, allStaff, ap12, bookingChange, confirmationsSent, eventsBetween, roleName, startIso, ROLES, type AEvent, type AShift, type AStaff } from './api';
 
 /* Push 40 · admin side of "ask first" and "fill one spot":
    ChangeSheet (start / position / move: Ask first · Change now without asking), FillSheet (who to ask · all at once / one by one),
@@ -143,7 +143,7 @@ export function FillSheet({ spot, replaceFor, onClose, onDone }: { spot: Spot; r
       // push 46 · people working another event that day stay in the list (after the free ones) with a 🕐 note; never pre-ticked
       const onEv = new Set((e?.shifts ?? []).map((s) => s.staff_id));
       const avm = Object.fromEntries(((av.data ?? []) as { staff_id: string; status: string; from_time: string | null; until_time: string | null }[]).map((a) => [a.staff_id, a]));
-      const list = st.filter((s) => s.active && s.role !== 'admin' && (bar ? s.department === 'bar' || s.positions.some(isBarCode) : s.department !== 'bar') && !onEv.has(s.id))
+      const list = st.filter((s) => s.active && s.role !== 'admin' && (bar ? doesBar(s) : s.department !== 'bar') && !onEv.has(s.id))
         .map((s) => { const a = avm[s.id]; return { s, tier: s.staff_private?.tier ?? null, yes: a?.status === 'yes', also: otherShifts(evs, s.id, spot.event_id),
           free: a?.status === 'yes' ? (a.from_time ? `free from ${ap12(a.from_time.slice(0, 5))}` : a.until_time ? `free until ${ap12(a.until_time.slice(0, 5))}` : 'free all day') : a?.status === 'maybe' ? 'said maybe' : '' }; })
         .filter((c) => c.free)

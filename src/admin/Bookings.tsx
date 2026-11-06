@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabase';
 import { setting, autoExtras } from '../lib/settings';
 import { DeptTag } from './DeptTag';
 import { BoardAlso, type OtherShift } from './alsoWorking';
-import { eventsBetween, allStaff, addDays, isoDay, dLabel, ap12, startIso, endIso, roleName, bookingChange, confirmationsSent, countOf, sendStateOf, type AEvent, type AStaff, type Client, type Venue } from './api';
+import { doesBar, eventsBetween, allStaff, addDays, isoDay, dLabel, ap12, startIso, endIso, roleName, bookingChange, confirmationsSent, countOf, sendStateOf, type AEvent, type AStaff, type Client, type Venue } from './api';
 import { misfits, linksOf, other, condShort, RuleIcons, type SLink, type SCond } from './rules';
 import { loadScoreData, scoreOf, type ScoreData } from './score';
 import { locksBetween, setLock, lockTitle, NO_LOCKS, type Locks } from './locks';
@@ -307,7 +307,7 @@ export function Bookings() {
   const bookedOn = (d: string) => new Set(plOf(d).filter((p) => !p.suggested).map((p) => p.staff_id));
   const availFor = (d: string) => {
     const booked = bookedOn(d);
-    return staff.filter((s) => s.active && (dept === 'both' ? (sideDept === 'all' || (sideDept === 'bar') === (s.department === 'bar')) : dept === 'bar' ? s.department === 'bar' : s.department !== 'bar') && !booked.has(s.id) && !off.has(s.id + d))
+    return staff.filter((s) => s.active && (dept === 'both' ? (sideDept === 'all' || (sideDept === 'bar' ? doesBar(s) : s.department !== 'bar')) : dept === 'bar' ? doesBar(s) : s.department !== 'bar') && !booked.has(s.id) && !off.has(s.id + d))
       .filter((s) => !/manual booking only/i.test(s.staff_private?.notes ?? ''))
       .map((s) => { const a = av.find((x) => x.staff_id === s.id); const u = usual(s.id, d); return { s, a, u }; })
       .filter(({ a, u }) => a?.status === 'yes' || a?.status === 'asked' || (!a && u?.status !== 'no') || (a && a.status !== 'no'))
@@ -895,7 +895,7 @@ function AskMore({ date, dept, events, staff, av, wk, off, conds, links, booked,
   const dow = dowOf(date);
   const asked = new Set(av.map((a) => a.staff_id));
   const condsOf = (sid: string) => conds.filter((c) => c.staff_id === sid);
-  const cands = staff.filter((s) => s.active && (dept === 'bar' ? s.department === 'bar' : s.department !== 'bar') && !asked.has(s.id) && !booked.has(s.id) && !off.has(s.id + date)
+  const cands = staff.filter((s) => s.active && (dept === 'bar' ? doesBar(s) : s.department !== 'bar') && !asked.has(s.id) && !booked.has(s.id) && !off.has(s.id + date)
     && wk.find((w) => w.staff_id === s.id && w.dow === dow)?.status !== 'no' && !/manual booking only|leaving|do not book/i.test(s.staff_private?.notes ?? ''))
     .map((s) => { const u = wk.find((w) => w.staff_id === s.id && w.dow === dow); const k = condsOf(s.id).map((c) => c.kind);
       const linkedBooked = links.some((l) => l.includes(s.id) && [...booked, ...av.filter((a) => a.status === 'yes').map((a) => a.staff_id)].includes(l[0] === s.id ? l[1] : l[0]));

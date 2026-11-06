@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { DeleteEvent } from './DeleteEvent';
 import { supabase } from '../lib/supabase';
 import {
-  allStaff, bookingChange, isoDay, startIso, endIso, addDays, dLabel, parseTime, ap12, roleOfShift, ROLES, UNIFORMS, ENDS,
+  allStaff, doesBar, bookingChange, isoDay, startIso, endIso, addDays, dLabel, parseTime, ap12, roleOfShift, ROLES, UNIFORMS, ENDS,
   type AStaff, type Line, type Venue, type Client,
 } from './api';
 import { tiersFor } from './Availability';
@@ -386,7 +386,7 @@ export function EventForm() {
   };
 
   const ask = async (d: string, dept: 'floor' | 'bar', needed: number, start: string) => {
-    const pool = staff.filter((s) => (dept === 'bar' ? s.department === 'bar' : s.department !== 'bar'))
+    const pool = staff.filter((s) => (dept === 'bar' ? doesBar(s) : s.department !== 'bar'))
       .filter((s) => dept === 'bar' || (tierOf(s) && tiers.includes(tierOf(s)!)))
       .filter((s) => !day.avail[s.id] && !day.booked[s.id] && !day.off.has(s.id) && !day.weeklyNo.has(s.id) && !lines.some((l) => l.names.includes(s.id)));
     const { data: prev } = await supabase.from('avail_asks').select('tiers_sent').eq('for_date', d).eq('department', dept).maybeSingle();
@@ -775,8 +775,8 @@ function NamePicker({ line, date, staff, day, taken, onChange }: { line: Line; d
   const isBar = line.dept === 'bar';
   const pool = useMemo(() => staff.filter((s) => {
     if (line.code === 'MD') return s.md_rank != null || (q.trim().length > 1 && s.department !== 'bar'); // MD list; anyone else = "+ Add MD" by typing
-    if (line.code === 'BM') return s.positions.includes('BM') || (s.role !== 'staff' && s.department === 'bar');
-    return isBar ? s.department === 'bar' : s.department !== 'bar';
+    if (line.code === 'BM') return s.positions.includes('BM') || (s.role !== 'staff' && doesBar(s));
+    return isBar ? doesBar(s) : s.department !== 'bar';
   }), [staff, line.code, isBar, q]);
   const info = (s: AStaff) => {
     if (day.off.has(s.id)) return { t: 'off that day', cls: 'grey', block: true };

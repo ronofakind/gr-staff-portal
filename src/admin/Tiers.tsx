@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { allStaff, type AStaff } from './api';
+import { doesBar, allStaff, type AStaff } from './api';
 
 type T = 'A' | 'B' | 'C' | null;
 const COLS: { t: T; label: string }[] = [{ t: 'A', label: 'Tier A' }, { t: 'B', label: 'Tier B' }, { t: 'C', label: 'Tier C' }, { t: null, label: 'Not in a tier' }];
@@ -17,7 +17,7 @@ export function Tiers({ inPage = false }: { inPage?: boolean }) {
 
   const tierOf = (s: AStaff): T => s.staff_private?.tier ?? null;
   const rank = (s: AStaff) => s.staff_private?.ranking ?? 9999;
-  const people = useMemo(() => (list ?? []).filter((s) => s.active && (dept === 'bar' ? s.department === 'bar' : s.department !== 'bar'))
+  const people = useMemo(() => (list ?? []).filter((s) => s.active && (dept === 'bar' ? doesBar(s) : s.department !== 'bar'))
     .sort((a, b) => rank(a) - rank(b) || a.full_name.localeCompare(b.full_name)), [list, dept]);
   const cols = COLS.map((c) => ({ ...c, rows: people.filter((s) => tierOf(s) === c.t) }));
 

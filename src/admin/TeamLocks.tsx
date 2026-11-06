@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
-import { allStaff, ap12, bookingChange, confirmationsSent, roleName, ROLES, startIso, type AEvent, type AStaff } from './api';
+import { doesBar, allStaff, ap12, bookingChange, confirmationsSent, roleName, ROLES, startIso, type AEvent, type AStaff } from './api';
 import { locksBetween, setLock, lockTitle, NO_LOCKS, type Locks } from './locks';
 
 /* Push 50 · event page → Team: everyone booked, with the padlock (admin only, staff never see it).
@@ -73,7 +73,7 @@ function LockIn({ evs, onClose, onDone }: { evs: AEvent[]; onClose: () => void; 
   useEffect(() => { setCode(bar ? 'BT' : 'W'); setStart(''); }, [evId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const onEv = new Set(ev.shifts.filter((s) => s.status !== 'declined' && !s.attendance && !s.cancelled_at).map((s) => s.staff_id));
-  const list = useMemo(() => (staff ?? []).filter((s) => s.active && s.role !== 'admin' && !onEv.has(s.id) && (bar ? s.department === 'bar' || s.positions.some((p) => ['BM', 'BT', 'BB'].includes(p)) : s.department !== 'bar'))
+  const list = useMemo(() => (staff ?? []).filter((s) => s.active && s.role !== 'admin' && !onEv.has(s.id) && (bar ? doesBar(s) : s.department !== 'bar'))
     .sort((a, b) => a.full_name.localeCompare(b.full_name)), [staff, evId, ev.shifts.length]); // eslint-disable-line react-hooks/exhaustive-deps
   const pick = list.find((s) => s.full_name === q) ?? (q ? list.filter((s) => norm(s.full_name).includes(norm(q))).length === 1 ? list.find((s) => norm(s.full_name).includes(norm(q))) : undefined : undefined);
 

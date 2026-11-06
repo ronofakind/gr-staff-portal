@@ -5,7 +5,7 @@ import { dayShort, shortName, t12, waitingOf, type AdminAsk } from '../lib/shift
 import { AlsoWorking, otherShifts, type OtherShift } from './alsoWorking';
 import { locksBetween } from './locks';
 import { hoursBefore, isEventDayCancel, replacementOf } from './Changes';
-import { allStaff, addDays, ap12, eventsBetween, roleName, roleOfShift, tTime, type AEvent, type AShift, type AStaff } from './api';
+import { doesBar, allStaff, addDays, ap12, eventsBetween, roleName, roleOfShift, tTime, type AEvent, type AShift, type AStaff } from './api';
 
 /* Push 47 §B · Can't make it / Not confirmed → Find replacement (admin only; the staff side is unchanged).
    Find replacement = push 40 fill a spot (admin_fill_spot with p_replace_for): first yes wins, the ask disappears for the
@@ -51,7 +51,7 @@ export function candidatesFor(p: Pool, o: { eventId: string; start: string; bar:
   const list: Cand[] = [];
   for (const s of p.staff) {
     if (!s.active || s.role === 'admin' || onEv.has(s.id) || o.exclude?.has(s.id)) continue;
-    if (o.bar ? !(s.department === 'bar' || s.positions.some(isBarCode)) : s.department === 'bar') continue;
+    if (o.bar ? !doesBar(s) : s.department === 'bar') continue;
     const a = p.av[s.id]; if (!a || (a.status !== 'yes' && a.status !== 'maybe')) continue;
     const also = otherShifts(p.evs, s.id, o.eventId);
     const covers = also.some((x) => new Date(x.start).getTime() <= st && (!x.end || new Date(x.end).getTime() > st));

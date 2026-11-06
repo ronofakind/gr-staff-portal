@@ -198,3 +198,8 @@ export function sendStateOf(e: AEvent, today: string): 'sent' | 'ready' | 'later
   const days = Math.round((new Date(e.event_date + 'T12:00:00').getTime() - new Date(today + 'T12:00:00').getTime()) / 864e5);
   return days <= 4 ? 'ready' : 'later';
 }
+
+/** Nov 6 · "Floor + bar" people (Michael Brown, Georges…): department stays floor, positions holds BAR (or a bar code). */
+export const BAR_POS = /^(BAR|BM|BT|BB|BARTENDER|BARBACK|BAR MANAGER)$/i;
+export const doesBar = (s: { department: string; positions?: string[] | null }) => s.department === 'bar' || (s.positions ?? []).some((p) => BAR_POS.test(p.trim()));
+export const isBothDept = (s: { department: string; positions?: string[] | null }) => s.department !== 'bar' && doesBar(s);
