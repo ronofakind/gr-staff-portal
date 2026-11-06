@@ -232,7 +232,7 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team, past }
       </>}
       <SecTitle icon="pin">Where</SecTitle>
       <section className="d3-card d3-where d37-wcard">
-        {pinV ? <div className="d3-pin"><PinMap pin={pinV} height={180} />{pinV.label && <b>📍 {pinV.label}</b>}</div> : address && <MapTile address={address} />}
+        {pinV ? <div className="vp-box"><PinMap pin={pinV} height={180} />{pinV.label && <b>📍 {pinV.label}</b>}</div> : address && <MapTile address={address} />}
         <a className="d37-addr" href={address ? placeUrl(address) : undefined} target="_blank" rel="noreferrer">
           <b>{street.trim()}</b>{city && <span>{city}</span>}
         </a>

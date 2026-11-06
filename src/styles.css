@@ -3340,8 +3340,8 @@ div.venue-rule { background: #fff; border-radius: 14px; padding: 10px 14px; marg
 .vp-map { width: 100%; border-radius: 14px; overflow: hidden; z-index: 0; background: #E9E4DC; }
 .vp-pin { font-size: 28px; line-height: 30px; text-align: center; background: none; border: 0; }
 .vp-edit .row input { flex: 1; }
-.d3-pin { display: flex; flex-direction: column; gap: 8px; background: #fff; border-radius: 16px; padding: 10px; }
-.d3-pin b { font-size: 13.5px; }
+.vp-box { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+.vp-box b { font-size: 13.5px; } .vp-box .vp-map img { max-width: none; }
 .vp-saved { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 13px; } .vp-saved b { color: var(--ok); } .vp-saved a, .vp-found a { font-size: 13px; font-weight: 700; color: var(--ink); }
 .vp-found { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 12px; background: #F6F2EC; } .vp-found b { font-size: 14px; color: var(--ok); }
 .vc-arch { font-style: normal; font-weight: 600; color: var(--muted); font-size: 12px; } .vc-archt { text-align: left; padding: 8px 2px; }
