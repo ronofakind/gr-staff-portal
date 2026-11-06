@@ -152,6 +152,7 @@ function InboxItem({ r, onOpen, onUnread, onDone }: { r: InboxRow; onOpen: () =>
             </span>
           </span>
         </button>
+        {(r.needs_reply || r.admin_unread) && r.status !== 'done' && <button className="abtn sm ib-noreply" title="Read · nothing to answer" onClick={onDone}>✓ No reply needed</button>}
         <button className="sq ib-more" aria-label="Mark unread or Done" onClick={() => setDx(dx ? 0 : -184)}>⋯</button>
       </div>
     </div>
@@ -181,6 +182,8 @@ function AdminConversation({ id, row, onBack, onUnread, onDone, toast }: { id: s
         <button className="sq" aria-label="Back" onClick={onBack}>‹</button>
         <Avatar name={name} url={who?.photo_url ?? row?.staff_photo} size={40} />
         <div className="grow" style={{ minWidth: 0 }}><b>{name}{conv?.kind === 'manager' ? ` → ${first(mgrName)}` : ''}</b><small className="muted">{sub}</small></div>
+        {/* Nov 6 · read it, nothing to answer → one visible click */}
+        {conv && conv.status !== 'done' && <button className="abtn sm ok" onClick={() => { onDone({ id: conv.id }, true); setTick((t) => t + 1); }}>✓ No reply needed</button>}
         {tel && <a className="abtn sm" href={`tel:${tel}`}>Call</a>}
         <div style={{ position: 'relative' }}>
           <button className="sq" aria-label="More" onClick={() => setMenu(!menu)}>⋯</button>
