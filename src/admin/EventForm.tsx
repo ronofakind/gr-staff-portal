@@ -1,3 +1,4 @@
+import { LinksEditor, asLinks, type HLink } from '../components/Links';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { DeleteEvent } from './DeleteEvent';
@@ -135,6 +136,7 @@ export function EventForm() {
   const [venueId, setVenueId] = useState<string | null>(null); const [title, setTitle] = useState('');
   const [pendingDetails, setPendingDetails] = useState(false); const [wasPending, setWasPending] = useState(false);
   // Nov 6 · ⏳ to be confirmed + start time to come (072)
+  const [links, setLinks] = useState<HLink[]>([]); const [linksVenue, setLinksVenue] = useState(false); // 075
   const [tentative, setTentative] = useState(false); const [startTbc, setStartTbc] = useState(false); const [wasTbc, setWasTbc] = useState(false);
   const [clientId, setClientId] = useState<string>(''); const [newClient, setNewClient] = useState<string | null>(null);
   const [address, setAddress] = useState(''); const [ends, setEnds] = useState('~ midnight');
@@ -191,7 +193,7 @@ export function EventForm() {
       setExisting(evs); setOldShifts(shifts);
       setDate(e.event_date); setTitle(e.title === 'Details to come' ? '' : e.title); setVenueId(e.venue_id); setAddress(e.address ?? '');
       setPendingDetails(!!(e as unknown as { details_pending?: boolean }).details_pending); setWasPending(!!(e as unknown as { details_pending?: boolean }).details_pending);
-      { const x = e as unknown as { tentative?: boolean; start_tbc?: boolean }; setTentative(!!x.tentative); setStartTbc(!!x.start_tbc); setWasTbc(!!x.start_tbc); }
+      { const x = e as unknown as { tentative?: boolean; start_tbc?: boolean }; setTentative(!!x.tentative); setStartTbc(!!x.start_tbc); setWasTbc(!!x.start_tbc); setLinks(asLinks((e as unknown as { links?: unknown }).links)); }
       setClientId(e.event_private?.client_id ?? ''); setRateSet(e.event_private?.rate_set ?? null);
       setTr({ on: !!e.transport, travel: e.travel_min ?? 60, gas: String(e.gas_per_car ?? 20), billing: e.transport_billing ?? 'client', rides: e.rides ?? !!e.transport });
       setExtras(e.extras != null ? String(e.extras) : ''); setExtrasBill(e.extras_billing ?? 'gr');
@@ -324,6 +326,11 @@ export function EventForm() {
     } else if (vId) {
       await supabase.from('venues').update({ uniform_floor: uFloor, uniform_bar: uBar, uniform_floor_w: uFloorW, uniform_bar_w: uBarW, uniform_items: lineItems(), ...(venue && !venue.address && address ? { address } : {}), ...(venue && !venue.usual_client_id && cId ? { usual_client_id: cId } : {}) }).eq('id', vId);
     }
+    if (linksVenue && vId && links.length) { // 075 · also on the venue: add the ones it doesn't have
+      const cur = asLinks((await supabase.from('venues').select('links').eq('id', vId).maybeSingle()).data?.links);
+      const add = links.filter((l) => !cur.some((c) => c.url === l.url));
+      if (add.length) await supabase.from('venues').update({ links: [...cur, ...add] }).eq('id', vId);
+    }
     const endT = ENDS.find(([l]) => l === ends)?.[1] ?? null;
     let firstId: string | null = null;
     for (const dept of ['floor', 'bar'] as const) {
@@ -334,7 +341,7 @@ export function EventForm() {
       const lead = ls.find((l) => l.code === (dept === 'floor' ? 'MD' : 'BM'));
       const start = ls.map((l) => l.start).sort()[0] ?? '17:00';
       const row = {
-        event_date: forDate, title: title.trim() || (pendingDetails ? 'Details to come' : ''), venue_id: vId, details_pending: pendingDetails, tentative, start_tbc: startTbc && !pendingDetails, address: (address + (unit.trim() ? `, ${unit.trim()}` : '')) || null, department: dept,
+        event_date: forDate, title: title.trim() || (pendingDetails ? 'Details to come' : ''), venue_id: vId, details_pending: pendingDetails, tentative, start_tbc: startTbc && !pendingDetails, links, address: (address + (unit.trim() ? `, ${unit.trim()}` : '')) || null, department: dept,
         start_time: start, end_time: endT, ends_label: ends, staff_needed: ls.reduce((n, l) => n + l.count, 0),
         manager_id: lead ? keep(lead)[0] ?? null : null, description: note || null, notes: staffNote || null,
         uniform_floor: uFloor, uniform_bar: uBar, uniform_floor_w: uFloorW, uniform_bar_w: uBarW, uniform_items: lineItems(), drive_folder_url: folder.trim() || null, staffing: ls.map(({ dept: d, code, start: s, end, count }) => ({ dept: d, code, start: s, end: end || null, count })), guests: guests ? Number(guests) : null, event_type: eventType || null, extras: extras === '' ? null : Number(extras), extras_billing: extrasBill,
@@ -467,6 +474,7 @@ export function EventForm() {
             <label className="ef-f"><span>ENDS · approx.</span><select value={ends} onChange={(e) => setEnds(e.target.value)}>{ENDS.map(([l]) => <option key={l}>{l}</option>)}</select></label>
           </div>
           <div className="ef-f ef-wide"><span>ADDRESS · {venue?.address || privateId ? 'auto' : 'start typing, pick from the list'}</span><div className="row" style={{ gap: 8, alignItems: 'flex-start' }}><div style={{ flex: '1 1 auto' }}><AddressInput value={address} onChange={(v) => { setAddress(v); setParts(null); }} onPick={(p) => { setParts(p); if (p.unit) setUnit(p.unit); }} placeholder="Start typing the address…" /></div><input aria-label="Apt / unit / floor" style={{ width: 150, flex: '0 0 auto' }} value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="Apt / unit / floor" /></div></div>
+          <LinksEditor links={links} set={setLinks} venueName={venue?.name ?? null} alsoVenue={linksVenue} setAlsoVenue={setLinksVenue} />
           <div className="ef-opts">
             <label className={'ef-opt' + (startTbc ? ' on' : '')}><input type="checkbox" checked={startTbc} disabled={pendingDetails} onChange={(e) => setStartTbc(e.target.checked)} /><span><b>Start time to come</b><small>Venue and address show. The start reads “Time TBC” for everyone booked, also people added later. Staff can still confirm.</small></span></label>
             <label className={'ef-opt' + (pendingDetails ? ' on' : '')}><input type="checkbox" checked={pendingDetails} onChange={(e) => setPendingDetails(e.target.checked)} /><span><b>Venue not known yet</b><small>Staff see “Place to come · details coming”, no Confirm button, until you untick this.</small></span></label>

@@ -3351,3 +3351,14 @@ div.venue-rule { background: #fff; border-radius: 14px; padding: 10px 14px; marg
 .vc-del { color: var(--accent); } .vc-delb { background: #9B2226; color: #fff; border-color: #9B2226; }
 .sg-tc, .sg-tbc { position: relative; display: block; min-width: 0; } .sg-tc > *, .sg-tbc > * { width: 100%; }
 .sg-tbc > :first-child { opacity: .45; } .sg-tbc em { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: auto; font-style: normal; font-size: 10px; font-weight: 800; letter-spacing: .06em; padding: 3px 6px; border-radius: 6px; background: #C9A227; color: #1A1714; pointer-events: none; }
+/* Nov 6 · helpful links (075) */
+.hl-list { display: flex; flex-direction: column; gap: 6px; } .hl-h { font-size: 10.5px; letter-spacing: .12em; font-weight: 800; color: var(--muted); margin-top: 4px; }
+.hl-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: #F6F2EC; color: var(--ink); text-decoration: none; }
+.hl-row .grow { display: flex; flex-direction: column; min-width: 0; } .hl-row b { font-size: 13.5px; } .hl-row small { font-size: 11px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hl-row.ed input { border: 0; background: transparent; font: 700 13.5px Inter, sans-serif; padding: 0; height: 22px; } .hl-row.ed small a { color: var(--muted); }
+.hl-ic { width: 24px; height: 24px; border-radius: 7px; flex: 0 0 24px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; color: #fff; background: #8A8077; }
+.hl-ig { background: linear-gradient(45deg, #F58529, #DD2A7B, #8134AF); } .hl-fb { background: #1877F2; } .hl-tt { background: #111; } .hl-yt { background: #E62117; font-size: 10px; }
+.hl-gd, .hl-gm, .hl-web { background: none; font-size: 18px; }
+.hl-add { display: grid; grid-template-columns: 1.3fr 1fr auto; gap: 8px; } @media (max-width: 760px) { .hl-add { grid-template-columns: 1fr; } }
+.hl-also { display: flex; gap: 8px; align-items: center; font-size: 12.5px; font-weight: 600; }
+.home-link { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding: 9px 11px; border-radius: 12px; background: rgba(127,127,127,.16); color: inherit; text-decoration: none; font-size: 13px; font-weight: 600; } .home-link .grow { flex: 1; }

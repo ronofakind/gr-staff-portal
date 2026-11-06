@@ -18,6 +18,7 @@ import { managesShift, loadTeamSums, type TeamSum } from '../lib/pastEvents';
 import { mtlToday, addDays } from '../lib/myDates';
 import { shiftNotes, noteSeen, type ShiftNote } from '../lib/staffNotes';
 import { PinMap, pinDirections } from '../components/VenuePin';
+import { StaffLinks, mergeLinks } from '../components/Links';
 
 export function Shift({ backTo = '/' }: { backTo?: string }) {
   const { id } = useParams();
@@ -238,6 +239,7 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team, past }
         </a>
         {staffNotes && <div className="d37-door">🚪 {staffNotes}</div>}
         {vx.photos.length > 0 && <div className="d3-vphotos">{vx.photos.map((u, i) => <button key={u} type="button" aria-label={`Venue photo ${i + 1} of ${vx.photos.length}`} onClick={() => setVPhoto(i)}><img src={u} alt="" loading="lazy" /></button>)}</div>}
+        <StaffLinks links={mergeLinks(ev.venues?.links, ev.links)} />
         {!isPastV && <div className="row2" style={{ gap: 8 }}>
           {address || pinV ? <a className={'big-btn dark d37-dir' + (isToday ? ' ok' : '')} href={pinV ? pinDirections(pinV) : dirUrl(address!)} target="_blank" rel="noreferrer">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 11 21 3l-8 18-2-8z" /></svg>Directions</a> : <span />}

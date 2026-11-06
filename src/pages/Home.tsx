@@ -17,6 +17,7 @@ import { MessageCard, MessageRonnieLink, MgrRepliesLine } from '../components/Me
 import { shiftNotes, noteSeen, type ShiftNote } from '../lib/staffNotes';
 import { OwnClose } from '../components/OwnClose';
 import { pinDirections } from '../components/VenuePin';
+import { mergeLinks, gettingThere, LinkIcon } from '../components/Links';
 import { useCheckup, setEmergencyReminder } from '../lib/checkup';
 import { EmergencyForm, UsualWeekScreen } from './Checkup';
 import { SwipeSheet } from '../components/SwipeSheet';
@@ -422,6 +423,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
                   : <span className="dir-btn" aria-disabled>Directions</span>}
               </div>
               {isLead(next) && next.events.drive_folder_url && <a className="home-folder" href={next.events.drive_folder_url} target="_blank" rel="noreferrer">📁 Event Folder</a>}
+              <HomeLink s={next} />
               {needChange}
             </section>
             {laterSame.map((s) => {
@@ -486,6 +488,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
                 : <span className="dir-btn" aria-disabled>Directions</span>}
             </div>
             {isLead(next) && next.events.drive_folder_url && <a className="home-folder" href={next.events.drive_folder_url} target="_blank" rel="noreferrer">📁 Event Folder</a>}
+              <HomeLink s={next} />
             {needChange}
           </section>
         );
@@ -704,4 +707,10 @@ function Countdown({ iso, start, plain = false }: { iso: string; start: string; 
 
 export function Status({ s }: { s: ShiftRow['status'] }) {
   return s === 'confirmed' ? <span className="tag-ok">✓ Confirmed</span> : s === 'booked' ? <span className="tag-ask">To confirm</span> : <span className="tag-done">Declined</span>;
+}
+
+/** Nov 6 · 075 · the "how to get there" link (Instagram post, website…) right under Directions */
+function HomeLink({ s }: { s: ShiftRow }) {
+  const l = gettingThere(mergeLinks(s.events.venues?.links, s.events.links)); if (!l) return null;
+  return <a className="home-link" href={l.url} target="_blank" rel="noreferrer"><LinkIcon url={l.url} /><span className="grow">{l.label}</span><b>›</b></a>;
 }
