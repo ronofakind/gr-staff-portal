@@ -3323,3 +3323,16 @@ div.venue-rule { background: #fff; border-radius: 14px; padding: 10px 14px; marg
 .abtn.tbc-no { color: #9B2226; box-shadow: inset 0 0 0 1.5px #9B2226; }
 .bk-col.tbc-col { outline: 2px dashed #C9A227; outline-offset: -2px; }
 .mo-e.tbc-e { outline: 1.5px dashed #C9A227; outline-offset: -1px; }
+/* Nov 6 · event form section 1 v3 */
+.ef-g { display: flex; flex-direction: column; gap: 12px; padding: 14px 0; border-top: 1px solid #EFE8DE; }
+.ef-g:first-of-type { border-top: 0; padding-top: 4px; }
+.ef-gh { font-size: 11.5px; font-weight: 800; letter-spacing: .12em; } .ef-gh span { font-weight: 500; letter-spacing: 0; color: var(--muted); margin-left: 8px; font-size: 12px; }
+.ef-row3 { display: grid; grid-template-columns: 1.1fr 1.4fr .8fr; gap: 12px; align-items: start; }
+.ef-row3 > * { min-width: 0; }
+.ef-status button.on.tbc { background: #FBF3E0; color: #8A6A2A; }
+.ef-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.ef-opt { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 12px; box-shadow: inset 0 0 0 1.5px #E4DCD1; background: #fff; cursor: pointer; }
+.ef-opt.on { background: #FFFBF0; box-shadow: inset 0 0 0 1.5px #C9A227; }
+.ef-opt input { width: 18px; height: 18px; margin-top: 2px; flex: none; }
+.ef-opt span { display: flex; flex-direction: column; gap: 2px; font-size: 13px; } .ef-opt small { color: var(--muted); font-size: 11.5px; }
+@media (max-width: 760px) { .ef-row3, .ef-opts { grid-template-columns: 1fr; } }

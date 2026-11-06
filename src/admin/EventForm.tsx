@@ -134,6 +134,8 @@ export function EventForm() {
   const [staff, setStaff] = useState<AStaff[]>([]);
   const [venueId, setVenueId] = useState<string | null>(null); const [title, setTitle] = useState('');
   const [pendingDetails, setPendingDetails] = useState(false); const [wasPending, setWasPending] = useState(false);
+  // Nov 6 · ⏳ to be confirmed + start time to come (072)
+  const [tentative, setTentative] = useState(false); const [startTbc, setStartTbc] = useState(false); const [wasTbc, setWasTbc] = useState(false);
   const [clientId, setClientId] = useState<string>(''); const [newClient, setNewClient] = useState<string | null>(null);
   const [address, setAddress] = useState(''); const [ends, setEnds] = useState('~ midnight');
   const [parts, setParts] = useState<AddressParts | null>(null);
@@ -189,6 +191,7 @@ export function EventForm() {
       setExisting(evs); setOldShifts(shifts);
       setDate(e.event_date); setTitle(e.title === 'Details to come' ? '' : e.title); setVenueId(e.venue_id); setAddress(e.address ?? '');
       setPendingDetails(!!(e as unknown as { details_pending?: boolean }).details_pending); setWasPending(!!(e as unknown as { details_pending?: boolean }).details_pending);
+      { const x = e as unknown as { tentative?: boolean; start_tbc?: boolean }; setTentative(!!x.tentative); setStartTbc(!!x.start_tbc); setWasTbc(!!x.start_tbc); }
       setClientId(e.event_private?.client_id ?? ''); setRateSet(e.event_private?.rate_set ?? null);
       setTr({ on: !!e.transport, travel: e.travel_min ?? 60, gas: String(e.gas_per_car ?? 20), billing: e.transport_billing ?? 'client', rides: e.rides ?? !!e.transport });
       setExtras(e.extras != null ? String(e.extras) : ''); setExtrasBill(e.extras_billing ?? 'gr');
@@ -331,7 +334,7 @@ export function EventForm() {
       const lead = ls.find((l) => l.code === (dept === 'floor' ? 'MD' : 'BM'));
       const start = ls.map((l) => l.start).sort()[0] ?? '17:00';
       const row = {
-        event_date: forDate, title: title.trim() || (pendingDetails ? 'Details to come' : ''), venue_id: vId, details_pending: pendingDetails, address: (address + (unit.trim() ? `, ${unit.trim()}` : '')) || null, department: dept,
+        event_date: forDate, title: title.trim() || (pendingDetails ? 'Details to come' : ''), venue_id: vId, details_pending: pendingDetails, tentative, start_tbc: startTbc && !pendingDetails, address: (address + (unit.trim() ? `, ${unit.trim()}` : '')) || null, department: dept,
         start_time: start, end_time: endT, ends_label: ends, staff_needed: ls.reduce((n, l) => n + l.count, 0),
         manager_id: lead ? keep(lead)[0] ?? null : null, description: note || null, notes: staffNote || null,
         uniform_floor: uFloor, uniform_bar: uBar, uniform_floor_w: uFloorW, uniform_bar_w: uBarW, uniform_items: lineItems(), drive_folder_url: folder.trim() || null, staffing: ls.map(({ dept: d, code, start: s, end, count }) => ({ dept: d, code, start: s, end: end || null, count })), guests: guests ? Number(guests) : null, event_type: eventType || null, extras: extras === '' ? null : Number(extras), extras_billing: extrasBill,
@@ -370,7 +373,7 @@ export function EventForm() {
 
       // Ask availability (staff only see the date)
       if (askWhen === 'save' && (dept === 'floor' || askBar === 'team')) await ask(forDate, dept, row.staff_needed, start);
-      if (pendingDetails || wasPending) await supabase.from('shifts').update({ time_tbc: pendingDetails }).eq('event_id', evId);
+      if (pendingDetails || wasPending || startTbc || wasTbc) await supabase.from('shifts').update({ time_tbc: pendingDetails || startTbc }).eq('event_id', evId);
     }
     return firstId;
   };
@@ -453,11 +456,24 @@ export function EventForm() {
 
       <Fold n={1} title="Event & client" open={isOpen(1)} setOpen={(o) => setFold(1, o)}
         summary={[dLabel(date, { weekday: 'short', month: 'short', day: 'numeric' }), title || 'no venue yet', client && client.name !== title ? client.name : privateId ? 'private home' : '', guests ? `${guests} guests` : '', eventType].filter(Boolean).join(' · ')}>
-        <div className="ef-top">
-          <label className="ef-f"><span>DATE</span><input type="date" required value={date} onChange={(e) => setDate(e.target.value)} /></label>
-          <label className="ef-f ef-pending" style={{ gridColumn: '1 / -1', flexDirection: 'row', alignItems: 'center', gap: 10 }}><input type="checkbox" checked={pendingDetails} onChange={(e) => setPendingDetails(e.target.checked)} /><span style={{ textTransform: 'none', letterSpacing: 0, fontSize: 13 }}><b>Place and time to come</b> · staff see “Details coming” with no Confirm button until you untick this and fill in the venue and times.</span></label>
-          <div className="ef-f ef-venue"><span>VENUE · this is the title staff see</span><VenuePicker venues={venues} privates={privates} value={title} venue={venue} privateId={privateId} onPick={pickVenue} onPrivate={pickPrivate} onNew={(name) => { setVenueId(null); setPrivateId(null); setTitle(name); }} /></div>
-          <label className="ef-f"><span>CLIENT · only you see it</span>
+        {/* Nov 6 · section 1 in the order you think about an event: Status · When & where · The event · Team */}
+        <div className="ef-g"><div className="ef-gh">STATUS <span>is it happening?</span></div>
+          <div className="seg3 ef-status"><button type="button" className={!tentative ? 'on' : ''} onClick={() => setTentative(false)}>✓ Confirmed</button><button type="button" className={tentative ? 'on tbc' : ''} onClick={() => setTentative(true)}>⏳ To be confirmed</button></div>
+          {tentative && <small className="muted">Staff see ⏳ To be confirmed and “Keep the date for G&amp;R”. You answer It’s confirmed / Not happening on the event page.</small>}</div>
+        <div className="ef-g"><div className="ef-gh">WHEN &amp; WHERE <span>what staff see</span></div>
+          <div className="ef-row3">
+            <label className="ef-f"><span>DATE</span><input type="date" required value={date} onChange={(e) => setDate(e.target.value)} /></label>
+            <div className="ef-f ef-venue"><span>VENUE · title staff see</span><VenuePicker venues={venues} privates={privates} value={title} venue={venue} privateId={privateId} onPick={pickVenue} onPrivate={pickPrivate} onNew={(name) => { setVenueId(null); setPrivateId(null); setTitle(name); }} /></div>
+            <label className="ef-f"><span>ENDS · approx.</span><select value={ends} onChange={(e) => setEnds(e.target.value)}>{ENDS.map(([l]) => <option key={l}>{l}</option>)}</select></label>
+          </div>
+          <div className="ef-f ef-wide"><span>ADDRESS · {venue?.address || privateId ? 'auto' : 'start typing, pick from the list'}</span><div className="row" style={{ gap: 8, alignItems: 'flex-start' }}><div style={{ flex: '1 1 auto' }}><AddressInput value={address} onChange={(v) => { setAddress(v); setParts(null); }} onPick={(p) => { setParts(p); if (p.unit) setUnit(p.unit); }} placeholder="Start typing the address…" /></div><input aria-label="Apt / unit / floor" style={{ width: 150, flex: '0 0 auto' }} value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="Apt / unit / floor" /></div></div>
+          <div className="ef-opts">
+            <label className={'ef-opt' + (startTbc ? ' on' : '')}><input type="checkbox" checked={startTbc} disabled={pendingDetails} onChange={(e) => setStartTbc(e.target.checked)} /><span><b>Start time to come</b><small>Venue and address show. The start reads “Time TBC” for everyone booked, also people added later. Staff can still confirm.</small></span></label>
+            <label className={'ef-opt' + (pendingDetails ? ' on' : '')}><input type="checkbox" checked={pendingDetails} onChange={(e) => setPendingDetails(e.target.checked)} /><span><b>Venue not known yet</b><small>Staff see “Place to come · details coming”, no Confirm button, until you untick this.</small></span></label>
+          </div></div>
+        <div className="ef-g"><div className="ef-gh">THE EVENT <span>only you see the client</span></div>
+          <div className="ef-row3">
+            <label className="ef-f"><span>CLIENT · only you</span>
             {newClient !== null ? <div className="row"><input autoFocus value={newClient} onChange={(e) => setNewClient(e.target.value)} placeholder="New client name" /><button type="button" className="abtn sm" onClick={() => setNewClient(null)}>×</button></div>
               : <select value={clientId} onChange={(e) => {
                 const v = e.target.value; if (v === '__new') { setNewClient(''); setClientId(''); return; }
@@ -471,13 +487,7 @@ export function EventForm() {
               </select>}
             {privateId ? <small className="okc">Private home · the client is the venue</small> : venue?.usual_client_id && venue.usual_client_id === clientId && <small className="okc">Filled from the venue · change if needed</small>}
           </label>
-          <label className="ef-f"><span>ENDS · approx.</span><select value={ends} onChange={(e) => setEnds(e.target.value)}>{ENDS.map(([l]) => <option key={l}>{l}</option>)}</select></label>
-          <div className="ef-f ef-wide"><span>ADDRESS · {venue?.address || privateId ? 'auto' : 'start typing, pick from the list'}</span><div className="row" style={{ gap: 8, alignItems: 'flex-start' }}><div style={{ flex: '1 1 auto' }}><AddressInput value={address} onChange={(v) => { setAddress(v); setParts(null); }} onPick={(p) => { setParts(p); if (p.unit) setUnit(p.unit); }} placeholder="Start typing the address…" /></div><input aria-label="Apt / unit / floor" style={{ width: 150, flex: '0 0 auto' }} value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="Apt / unit / floor" /></div></div>
-          <div className="ef-f"><span>STAFFING</span>
-            <div className="seg3">{(['floor', 'bar', 'both'] as Mode[]).map((m) => <button type="button" key={m} className={mode === m ? 'on' : ''} onClick={() => setMode(m)}>{m === 'floor' ? 'Floor' : m === 'bar' ? 'Bar' : 'Both'}</button>)}</div>
-            <small className="muted">Sets the Dept choices in the grid and which uniforms show</small></div>
-          <label className="ef-f"><span>GUESTS</span><input type="number" min={0} value={guests} onChange={(e) => setGuests(e.target.value)} placeholder="e.g. 220" /></label>
-          <label className="ef-f"><span>EVENT TYPE</span>
+            <label className="ef-f"><span>EVENT TYPE</span>
             <select value={eventType} onChange={async (e) => {
               const v = e.target.value;
               if (v === '__new') { const n = prompt('New event type')?.trim(); if (n) { await supabase.from('event_types').insert({ name: n, sort: 50 }); setTypes([...types, { name: n, main: false }]); setEventType(n); } return; }
@@ -489,8 +499,11 @@ export function EventForm() {
               {eventType && !types.some((t) => t.name === eventType) && <option>{eventType}</option>}
               <option value="__new">+ New type (saved for next time)</option>
             </select></label>
-          <label className="ef-f ef-wide"><span>EVENT NOTE (optional)</span><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Sit-down dinner · 250 guests" /></label>
-        </div>
+            <label className="ef-f"><span>GUESTS</span><input type="number" min={0} value={guests} onChange={(e) => setGuests(e.target.value)} placeholder="e.g. 220" /></label>
+          </div>
+          <label className="ef-f"><span>EVENT NOTE (optional)</span><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Sit-down dinner · 250 guests" /></label></div>
+        <div className="ef-g"><div className="ef-gh">TEAM <span>sets the staffing lines and which uniforms show</span></div>
+          <div className="seg3">{(['floor', 'bar', 'both'] as Mode[]).map((m) => <button type="button" key={m} className={mode === m ? 'on' : ''} onClick={() => setMode(m)}>{m === 'floor' ? 'Floor' : m === 'bar' ? 'Bar' : 'Floor + Bar'}</button>)}</div></div>
         <div className={'tr-card' + (trOn ? ' on' : '')}>
           <div className="sw-row">
             <button type="button" role="switch" aria-checked={trOn} className={'sw' + (trOn ? ' on' : '')} onClick={() => setTr({ ...tr, on: !trOn })}><span className="sw-track"><span className="sw-knob" /></span><span className="sw-lbl">{trOn ? 'ON' : 'OFF'}</span></button>
