@@ -3271,3 +3271,4 @@ div.venue-rule { background: #fff; border-radius: 14px; padding: 10px 14px; marg
 /* Nov 5 · one clean line: time on the left, Start remaining (n) on the right (n = the people count) */
 .grp-head .btn-go { padding: 0 13px; }
 .agenda-row.mtg-row .row-wear { background: transparent; } /* Nov 5 · keeps the time column in line with shifts */
+.cu-tr-h { display: flex; align-items: center; gap: 10px; width: 100%; background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; text-align: left; } /* Nov 6 · fold */
