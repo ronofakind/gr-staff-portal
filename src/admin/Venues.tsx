@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { PinEditor, type Pin } from '../components/VenuePin';
 import { supabase } from '../lib/supabase';
 import { setting, useSettings } from '../lib/settings';
 import { dLabel, isoDay, type Venue, type Client } from './api';
@@ -18,7 +19,7 @@ type V = Venue & { staff_notes?: string | null; venue_notes?: string | null; pho
 type C = Client & { qb_customer?: string | null; extras_billing?: 'gr' | 'client'; transport_billing?: 'client' | 'gr'; admin_fee_pct?: number | null };
 type Count = { n: number; last: string | null; next: string | null; bar: boolean; floor: boolean };
 
-const V_COLS = 'id,name,address,street,unit,city,province,postal_code,usual_client_id,staff_notes,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,uniform_items,always_offer_rides,no_outside_food';
+const V_COLS = 'id,name,address,street,unit,city,province,postal_code,usual_client_id,staff_notes,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,uniform_items,always_offer_rides,no_outside_food,pin_lat,pin_lng,pin_label';
 const C_COLS = 'id,name,qb_customer,rate_sets,kind,address,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,uniform_items,drive_folder_default,extras_billing';
 /** 038 columns; read in a second pass so the page works before the migration is applied. */
 const V_038 = ',venue_notes,photos'; const C_038 = ',admin_fee_pct,transport_billing';
@@ -196,6 +197,7 @@ function VenueCard({ v, clients, count, has038, onSaved, onClient }: { v: V | nu
   const [name, setName] = useState(v?.name ?? ''); const [clientId, setClientId] = useState(v?.usual_client_id ?? '');
   const [address, setAddress] = useState(v?.address ?? ''); const [parts, setParts] = useState<AddressParts | null>(null);
   const [parking, setParking] = useState(v?.staff_notes ?? ''); const [notes, setNotes] = useState(v?.venue_notes ?? '');
+  const [pin, setPin] = useState<Pin | null>(() => { const x = v as unknown as { pin_lat?: number | null; pin_lng?: number | null; pin_label?: string | null } | null; return x?.pin_lat != null && x?.pin_lng != null ? { lat: x.pin_lat, lng: x.pin_lng, label: x.pin_label ?? '' } : null; });
   const [rides, setRides] = useState(!!v?.always_offer_rides); const [noFood, setNoFood] = useState(!!v?.no_outside_food); const [u, setU] = useState<Uni>(() => uniOf(v));
   const [busy, setBusy] = useState(false); const [err, setErr] = useState(''); const [saved, setSaved] = useState<string | null>(null);
   const client = clients.find((c) => c.id === clientId) ?? null;
@@ -208,6 +210,7 @@ function VenueCard({ v, clients, count, has038, onSaved, onClient }: { v: V | nu
       name: name.trim(), usual_client_id: clientId || null, address: address.trim() || null, staff_notes: parking.trim() || null, always_offer_rides: rides, no_outside_food: noFood, ...uniRow(u),
       ...(parts ? { street: parts.street, unit: parts.unit || null, city: parts.city, province: parts.province, postal_code: parts.postal_code } : {}),
       ...(has038 ? { venue_notes: notes.trim() || null } : {}),
+      pin_lat: pin?.lat ?? null, pin_lng: pin?.lng ?? null, pin_label: pin?.label?.trim() || null,
     };
     const r = v ? await supabase.from('venues').update(row).eq('id', v.id).select('id').single() : await supabase.from('venues').insert(row).select('id').single();
     setBusy(false);
@@ -232,6 +235,7 @@ function VenueCard({ v, clients, count, has038, onSaved, onClient }: { v: V | nu
             </div>
             <div className="ef-f"><span>ADDRESS</span><AddressInput value={address} onChange={(x) => { setAddress(x); setParts(null); }} onPick={setParts} placeholder="Start typing the address…" />
               <small className="muted">Google autocomplete once the Maps key is set · plain text until then{!address.trim() && <b className="accent"> · address missing</b>}</small></div>
+            <PinEditor pin={pin} set={setPin} />
           </Sec>
           <Sec title="FOR STAFF" sub="shown on their event page">
             <label className="ef-f"><span>PARKING &amp; ENTRANCE</span><textarea rows={3} value={parking} onChange={(e) => setParking(e.target.value)} placeholder="Street parking after 6 PM… Staff entrance: side door." />

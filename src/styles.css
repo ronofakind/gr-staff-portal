@@ -3336,3 +3336,9 @@ div.venue-rule { background: #fff; border-radius: 14px; padding: 10px 14px; marg
 .ef-opt input { width: 18px; height: 18px; margin-top: 2px; flex: none; }
 .ef-opt span { display: flex; flex-direction: column; gap: 2px; font-size: 13px; } .ef-opt small { color: var(--muted); font-size: 11.5px; }
 @media (max-width: 760px) { .ef-row3, .ef-opts { grid-template-columns: 1fr; } }
+/* Nov 6 · venue pin */
+.vp-map { width: 100%; border-radius: 14px; overflow: hidden; z-index: 0; background: #E9E4DC; }
+.vp-pin { font-size: 28px; line-height: 30px; text-align: center; background: none; border: 0; }
+.vp-edit .row input { flex: 1; }
+.d3-pin { display: flex; flex-direction: column; gap: 8px; background: #fff; border-radius: 16px; padding: 10px; }
+.d3-pin b { font-size: 13.5px; }

@@ -17,6 +17,7 @@ import { feedbackOn, Stars } from './Manage';
 import { managesShift, loadTeamSums, type TeamSum } from '../lib/pastEvents';
 import { mtlToday, addDays } from '../lib/myDates';
 import { shiftNotes, noteSeen, type ShiftNote } from '../lib/staffNotes';
+import { PinMap, pinDirections } from '../components/VenuePin';
 
 export function Shift({ backTo = '/' }: { backTo?: string }) {
   const { id } = useParams();
@@ -163,6 +164,7 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team, past }
   const canChange = !gone && !s.punches?.punch_in && Date.now() < new Date(s.planned_start).getTime();
   const seeUniform = () => uniRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   const staffNotes = ev.venues?.staff_notes?.trim();
+  const pinV = ev.venues?.pin_lat != null && ev.venues?.pin_lng != null ? { lat: ev.venues.pin_lat, lng: ev.venues.pin_lng, label: ev.venues.pin_label } : null; // Nov 6 · 📍 exact spot (073)
   const isPastV = past !== undefined; // push 51
   return (
     <main className={'page v2 details d3 d37' + (preview ? ' preview' : '')}>
@@ -230,14 +232,14 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team, past }
       </>}
       <SecTitle icon="pin">Where</SecTitle>
       <section className="d3-card d3-where d37-wcard">
-        {address && <MapTile address={address} />}
+        {pinV ? <div className="d3-pin"><PinMap pin={pinV} height={180} />{pinV.label && <b>📍 {pinV.label}</b>}</div> : address && <MapTile address={address} />}
         <a className="d37-addr" href={address ? placeUrl(address) : undefined} target="_blank" rel="noreferrer">
           <b>{street.trim()}</b>{city && <span>{city}</span>}
         </a>
         {staffNotes && <div className="d37-door">🚪 {staffNotes}</div>}
         {vx.photos.length > 0 && <div className="d3-vphotos">{vx.photos.map((u, i) => <button key={u} type="button" aria-label={`Venue photo ${i + 1} of ${vx.photos.length}`} onClick={() => setVPhoto(i)}><img src={u} alt="" loading="lazy" /></button>)}</div>}
         {!isPastV && <div className="row2" style={{ gap: 8 }}>
-          {address ? <a className={'big-btn dark d37-dir' + (isToday ? ' ok' : '')} href={dirUrl(address)} target="_blank" rel="noreferrer">
+          {address || pinV ? <a className={'big-btn dark d37-dir' + (isToday ? ' ok' : '')} href={pinV ? pinDirections(pinV) : dirUrl(address!)} target="_blank" rel="noreferrer">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 11 21 3l-8 18-2-8z" /></svg>Directions</a> : <span />}
           {myCal?.added_at
             ? <div className={'big-btn d37-cal d37-calon' + (inFeed ? '' : ' wait')}><span className="mini-cal"><i>{d.toLocaleDateString('en-CA', { month: 'short' }).toUpperCase().replace('.', '')}</i><b>{d.getDate()}</b></span>{inFeed ? '✓ In your calendar' : 'In calendar once confirmed'}</div>

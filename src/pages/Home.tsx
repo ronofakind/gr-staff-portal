@@ -16,6 +16,7 @@ import { UniformIcon, uniformFor, uniformLabel } from '../components/Uniform';
 import { MessageCard, MessageRonnieLink, MgrRepliesLine } from '../components/MessageCard';
 import { shiftNotes, noteSeen, type ShiftNote } from '../lib/staffNotes';
 import { OwnClose } from '../components/OwnClose';
+import { pinDirections } from '../components/VenuePin';
 import { useCheckup, setEmergencyReminder } from '../lib/checkup';
 import { EmergencyForm, UsualWeekScreen } from './Checkup';
 import { SwipeSheet } from '../components/SwipeSheet';
@@ -417,7 +418,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
                 <Link className="light-btn" style={{ height: 46, borderRadius: 14 }} to={`${base}/shift/${next.id}`}>Details</Link>
                 {team && !preview && !waiting
                   ? <Link className="team-btn" to={`/manage/${next.events.id}`}>My team · {team.length} ›</Link>
-                  : addr ? <a className="dir-btn" href={mapsUrl(addr)} target="_blank" rel="noreferrer">Directions</a>
+                  : addr || next.events.venues?.pin_lat != null ? <a className="dir-btn" href={next.events.venues?.pin_lat != null && next.events.venues.pin_lng != null ? pinDirections({ lat: next.events.venues.pin_lat, lng: next.events.venues.pin_lng }) : mapsUrl(addr!)} target="_blank" rel="noreferrer">Directions</a>
                   : <span className="dir-btn" aria-disabled>Directions</span>}
               </div>
               {isLead(next) && next.events.drive_folder_url && <a className="home-folder" href={next.events.drive_folder_url} target="_blank" rel="noreferrer">📁 Event Folder</a>}
@@ -481,7 +482,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
               <Link className="light-btn" style={{ height: 46, borderRadius: 14 }} to={`${base}/shift/${next.id}`}>Details</Link>
               {team && !preview && !waiting
                 ? <Link className="team-btn" to={`/manage/${next.events.id}`}>My team · {team.length} ›</Link>
-                : addr ? <a className="dir-btn" href={mapsUrl(addr)} target="_blank" rel="noreferrer">Directions</a>
+                : addr || next.events.venues?.pin_lat != null ? <a className="dir-btn" href={next.events.venues?.pin_lat != null && next.events.venues.pin_lng != null ? pinDirections({ lat: next.events.venues.pin_lat, lng: next.events.venues.pin_lng }) : mapsUrl(addr!)} target="_blank" rel="noreferrer">Directions</a>
                 : <span className="dir-btn" aria-disabled>Directions</span>}
             </div>
             {isLead(next) && next.events.drive_folder_url && <a className="home-folder" href={next.events.drive_folder_url} target="_blank" rel="noreferrer">📁 Event Folder</a>}
