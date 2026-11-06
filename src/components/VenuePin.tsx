@@ -9,7 +9,7 @@ export const pinOpen = (p: Pin) => `https://maps.google.com/?q=${p.lat},${p.lng}
 
 /** "@45.5,-73.5" · "q=45.5,-73.5" · "!3d45.5!4d-73.5" · "45.5, -73.5" */
 export function parsePin(s: string): { lat: number; lng: number } | null {
-  const t = s.trim(); let m = t.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/) || t.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/) || t.match(/[?&](?:q|ll|query|destination)=(-?\d+\.\d+)(?:,|%2C)\s*(-?\d+\.\d+)/) || t.match(/^(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)$/);
+  const t = s.trim(); let m = t.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/) || t.match(/\/(?:place|search)\/(-?\d+\.\d+)\s*,\s*\+?\s*(-?\d+\.\d+)/) || t.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/) || t.match(/[?&](?:q|ll|query|destination)=(-?\d+\.\d+)(?:,|%2C)\s*(-?\d+\.\d+)/) || t.match(/^(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)$/);
   if (!m) return null; const lat = Number(m[1]); const lng = Number(m[2]);
   return Math.abs(lat) <= 90 && Math.abs(lng) <= 180 ? { lat, lng } : null;
 }

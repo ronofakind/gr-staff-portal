@@ -7,7 +7,7 @@ const ok = (lat, lng) => Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && !(lat ==
 function read(s) {
   const t = decodeURIComponent(String(s || ''));
   const m = t.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/) || t.match(/[?&](?:q|ll|query|destination|center)=(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)/)
-    || t.match(/\/place\/(-?\d+\.\d+)\s*,\s*\+?(-?\d+\.\d+)/) || t.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+    || t.match(/\/(?:place|search|dir\/[^/]*)\/(-?\d+\.\d+)\s*,\s*\+?\s*(-?\d+\.\d+)/) || t.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
   if (!m) return null; const lat = Number(m[1]); const lng = Number(m[2]);
   if (!ok(lat, lng)) return null;
   const n = t.match(/\/place\/([^/@]+)\//); const name = n && !/^-?\d/.test(n[1]) ? n[1].replace(/\+/g, ' ') : null;
@@ -17,15 +17,15 @@ export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   const raw = String(req.query.u || '').trim().match(/https?:\/\/\S+/)?.[0];
   if (!raw) return res.status(200).json({ error: 'nolink' });
-  let url = raw; const dbg = req.query.debug ? [] : null;
+  let url = raw;
   try {
     const first = read(url); if (first && !/goo\.gl/i.test(url)) return res.status(200).json(first);
     for (let i = 0; i < 6; i++) {
       const h = new URL(url).hostname; if (!OK_HOST.test(h)) return res.status(200).json({ error: 'notgoogle' });
       const r = await fetch(url, { redirect: 'manual', headers: { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148', 'Accept-Language': 'en' } });
-      const loc = r.headers.get('location'); if (dbg) dbg.push({ url, st: r.status, loc });
+      const loc = r.headers.get('location');
       if (loc) { url = new URL(loc, url).toString(); const c = new URL(url).searchParams.get('continue'); const p = read(c || url); if (p) return res.status(200).json(p); continue; }
-      const body = await r.text(); if (dbg) return res.status(200).json({ dbg, len: body.length, head: body.slice(0, 3000), urls: [...body.matchAll(/https?:[^"'\s<>]{0,40}maps[^"'\s<>]{0,300}/g)].slice(0, 15).map((m) => m[0]) }); const p = read(url) || read(body.match(/https:\/\/www\.google\.[a-z.]+\/maps\/[^"'\s\\]+/)?.[0]) || read(body.match(/center=-?\d+\.\d+%2C-?\d+\.\d+/)?.[0]?.replace('%2C', ',').replace('center=', '?center='));
+      const body = await r.text(); const p = read(url) || read(body.match(/https:\/\/www\.google\.[a-z.]+\/maps\/[^"'\s\\]+/)?.[0]) || read(body.match(/center=-?\d+\.\d+%2C-?\d+\.\d+/)?.[0]?.replace('%2C', ',').replace('center=', '?center='));
       return res.status(200).json(p || { error: 'nospot' });
     }
     return res.status(200).json({ error: 'nospot' });
