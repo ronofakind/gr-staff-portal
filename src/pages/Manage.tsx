@@ -1,5 +1,6 @@
 import { isBarPos } from '../components/Uniform';
 import { QuarterTime } from '../components/QuarterTime';
+import { WheelTime, roundQ } from '../components/WheelTime';
 import { useEffect, useRef, useState } from 'react';
 import { SwipeSheet } from '../components/SwipeSheet';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -726,17 +727,22 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
           <div className="scrim" onClick={() => setOpen(null)} />
           <SwipeSheet onClose={() => setOpen(null)} label={`Options for ${open.staff?.full_name}`} back>
             <button className="pf-x" aria-label="Close" onClick={() => setOpen(null)}>✕</button>
-            <div className="pf-head">
+            <div className="pf-head v2">
               <button className={'pf-photo' + (isNewO ? ' newp' : '')} aria-label="See the photo full size" onClick={() => setBigPhoto(true)}><Avatar name={open.staff?.full_name ?? '?'} url={open.staff?.photo_url} size={62} /></button>
-              <div className="serif" style={{ fontSize: 24, lineHeight: 1.1 }}>{open.staff?.full_name}</div>
-              <div className="muted sm pf-sub"><span>{roleLabel(open.position_code, open.position_detail)} · call {time(open.planned_start, lang)}{open.punches?.arrived_at ? ` · arrived ${time(open.punches.arrived_at, lang)}` : ''}</span>{isNewO && <i className="new-shift">NEW · {ORD[inf!.done_before] ?? ''} shift</i>}</div>
-              {open.punches?.late_entry_at && <div className="late-box"><b>Entered later by {first(open.staff?.full_name)}</b> · {new Date(open.punches.late_entry_at).toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' })}{open.punches.late_reason ? ` · “${open.punches.late_reason}”` : ''}
-                {!open.punches.late_ok_at ? <button className="btn-ink" onClick={async () => { const { error } = await supabase.rpc('manager_ok_late', { p_shift: open.id }); if (error) { alert(error.message); return; } setOpen(null); await load(); }}>✓ Looks right</button> : <span className="okc"> · ✓ checked</span>}
-                <small className="muted">Not right? Change the end time below.</small></div>}
-              {pin && !pout && !ev.hours_submitted_at && <button className="link-btn" onClick={async () => { const { error } = await supabase.rpc('manager_set_ends_own', { p_shift: open.id, p_on: !open.ends_own }); if (error) { alert(error.message); return; } setOpen(null); await load(); }}>{open.ends_own ? 'Undo · I’ll end them myself' : `⏱ ${first(open.staff?.full_name)} ends their own shift`}</button>}
-              {(ev.co_manager_ids ?? []).includes(open.staff_id ?? '') && open.staff_id !== ev.manager_id && <button className="link-btn" onClick={async () => { const { error } = await supabase.rpc('manager_set_comanager', { p_event: ev.id, p_staff: open.staff_id, p_on: false }); if (error) { alert(error.message); return; } setOpen(null); await load(); }}>Remove as manager</button>}
-              {isNewO && newRows.length > 1 && (() => { const k = newRows.findIndex((r) => r.id === open.id); const nx = newRows[(k + 1) % newRows.length]; return <button className="link-btn nb-next" onClick={() => openRow(nx, true)}>Next new · {first(nx.staff?.full_name)} ›</button>; })()}
+              <div className="pf-id">
+                <div className="serif pf-name">{open.staff?.full_name}</div>
+                <div className="muted sm">{roleLabel(open.position_code, open.position_detail)} · call {time(open.planned_start, lang)}{isNewO && <i className="new-shift">NEW · {ORD[inf!.done_before] ?? ''} shift</i>}</div>
+                {open.attendance ? <span className="pf-st bad">{open.attendance === 'no_show' ? 'NO-SHOW' : 'CANCELLED'}</span>
+                  : open.left_early ? <span className="pf-st warn">LEFT EARLY{pout ? ` · ${time(pout, lang)}` : ''}</span>
+                  : pout ? <span className="pf-st done">✓ DONE · {time(pin!, lang)} – {time(pout, lang)}</span>
+                  : pin ? <span className="pf-st ok">● WORKING{open.punches?.arrived_at ? ` · arrived ${time(open.punches.arrived_at, lang)}` : ` · since ${time(pin, lang)}`}</span>
+                  : <span className="pf-st wait">NOT STARTED{open.punches?.arrived_at ? ` · arrived ${time(open.punches.arrived_at, lang)}` : ''}</span>}
+              </div>
             </div>
+            {open.punches?.late_entry_at && <div className="late-box"><b>Entered later by {first(open.staff?.full_name)}</b> · {new Date(open.punches.late_entry_at).toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' })}{open.punches.late_reason ? ` · “${open.punches.late_reason}”` : ''}
+              {!open.punches.late_ok_at ? <button className="btn-ink" onClick={async () => { const { error } = await supabase.rpc('manager_ok_late', { p_shift: open.id }); if (error) { alert(error.message); return; } setOpen(null); await load(); }}>✓ Looks right</button> : <span className="okc"> · ✓ checked</span>}
+              <small className="muted">Not right? Change the end time below.</small></div>}
+            {isNewO && newRows.length > 1 && (() => { const k = newRows.findIndex((r) => r.id === open.id); const nx = newRows[(k + 1) % newRows.length]; return <button className="link-btn nb-next" onClick={() => openRow(nx, true)}>Next new · {first(nx.staff?.full_name)} ›</button>; })()}
             {isNewO && (ab.exp || ab.knows || ab.langs.length > 0 || ab.note) && (
               <div className="pf-about" ref={(el) => { if (el && jump.current) { jump.current = false; requestAnimationFrame(() => el.scrollIntoView({ block: 'nearest', behavior: 'smooth' })); } }}>
                 <span className="kicker">About</span>
@@ -749,55 +755,67 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
                 {ab.note && <div className="ab-note"><span>RONNIE</span><p>{ab.note}</p></div>}
               </div>
             )}
-            <span className="kicker pf-tonight">Tonight</span>
-            {!open.attendance && (
-              <div className="starts-from">
-                <span className="kicker">{pin ? 'Started' : 'Starts from'}</span>
-                <div className="row" style={{ gap: 8 }}>
-                  <button className={draft.in === hm(open.planned_start) ? 'on' : ''} onClick={() => setDraft({ ...draft, in: hm(open.planned_start) })}>Call time · {time(open.planned_start, lang)}</button>
-                  <button className={draft.in === hm(now()) ? 'on' : ''} onClick={() => setDraft({ ...draft, in: hm(now()) })}>Now · {time(now(), lang)}</button>
+            {!open.attendance && (() => {
+              const nowQ = roundQ(hm(now())); const planEnd = open.planned_end ? hm(open.planned_end) : (ev.end_time ? ev.end_time.slice(0, 5) : '');
+              const inIso = draft.in ? toIso(ev.event_date, draft.in, open.planned_start) : null;
+              const outIso = draft.out ? toIso(ev.event_date, draft.out, inIso ?? open.planned_start) : null;
+              const soFar = inIso ? Math.max(0, hours(inIso, outIso ?? now())) : 0;
+              const hrs = soFar ? `${Math.floor(soFar)} h ${String(Math.round((soFar % 1) * 60)).padStart(2, '0')}` : '';
+              return (
+              <div className="hrs-card">
+                <div className="hrs-top"><b>🕑 Hours</b>{hrs && <span className="hrs-badge">{hrs}{outIso ? '' : ' so far'}</span>}</div>
+                <div className="hrs-boxes">
+                  <div className={'hrs-box start' + (draft.in ? ' on' : '')}>
+                    <span className="hrs-lab">{pin ? 'STARTED' : 'START'}</span>
+                    <WheelTime value={draft.in} onChange={(v) => setDraft({ ...draft, in: v })} label="Start time" tone="start" start={hm(open.planned_start)} />
+                    {undoOk && pin && !pout ? <button className="hrs-undo" onClick={() => undoStart(open)}>↺ undo</button> : <small>{pin ? ' ' : 'not started'}</small>}
+                  </div>
+                  <div className={'hrs-box end' + (draft.out ? ' on' : '')}>
+                    <span className="hrs-lab">{pout ? (new Date(pout).getTime() > Date.now() ? 'ENDS' : 'ENDED') : 'END'}</span>
+                    <WheelTime value={draft.out} onChange={(v) => setDraft({ ...draft, out: v })} label="End time" tone="end" start={nowQ} />
+                    {undoOk && pout ? <button className="hrs-undo" onClick={() => undoEnd(open)}>↺ undo</button> : <small>{pin ? 'still working' : ' '}</small>}
+                  </div>
                 </div>
-                {draft.in && toIso(ev.event_date, draft.in, open.planned_start) < new Date(new Date(open.planned_start).getTime() - 60000).toISOString() && <div className="early-note">Early start · Ronnie sees it flagged with your name.</div>}
-              </div>
-            )}
-            {!open.attendance && (
-              <div className="pf-times">
-                <div className={'pf-box' + (pin ? ' on' : '')}>
-                  <div className="pf-lab"><span>{pin ? 'Started' : 'Start'}</span>{undoOk && !pout && <button className="pf-undo" onClick={() => undoStart(open)}>↶ undo</button>}</div>
-                  <QuarterTime value={draft.in} onChange={(v) => setDraft({ ...draft, in: v })} label="Start time" />
+                <div className="hrs-picks">
+                  {!pin ? <>
+                    <button className={'hp start' + (draft.in === hm(open.planned_start) ? ' on' : '')} onClick={() => setDraft({ ...draft, in: hm(open.planned_start) })}>Call time · {time(open.planned_start, lang)}</button>
+                    <button className={'hp start' + (draft.in === nowQ ? ' on' : '')} onClick={() => setDraft({ ...draft, in: nowQ })}>Now · {fmt12(nowQ)}</button>
+                  </> : !pout ? <>
+                    <button className={'hp end' + (draft.out === nowQ ? ' on' : '')} onClick={() => setDraft({ ...draft, out: nowQ })}>End now · {fmt12(nowQ)}</button>
+                    {planEnd && <button className={'hp' + (draft.out === planEnd ? ' on' : '')} onClick={() => setDraft({ ...draft, out: planEnd })}>Planned · {fmt12(planEnd)}</button>}
+                  </> : null}
                 </div>
-                <div className={'pf-box' + (pout ? ' on' : '')}>
-                  <div className="pf-lab"><span>{pout ? (new Date(pout).getTime() > Date.now() ? 'Ends' : 'Ended') : 'End'}</span>{undoOk && pout && <button className="pf-undo" onClick={() => undoEnd(open)}>↶ undo</button>}</div>
-                  <QuarterTime value={draft.out} onChange={(v) => setDraft({ ...draft, out: v })} label="End time" />
-                </div>
-              </div>
-            )}
-            {!open.attendance && <button className="btn-ink" onClick={async () => {
-              const i = draft.in ? toIso(ev.event_date, draft.in, open.planned_start) : null;
-              const o = draft.out ? toIso(ev.event_date, draft.out, i ?? open.planned_start) : null;
-              await set([{ id: open.id, in: i, out: o, arrived: open.punches?.arrived_at ? null : (i ? now() : null) }]); setOpen(null);
-            }}>{pin ? 'Save times' : draft.in ? `Start from ${fmt12(draft.in)}` : 'Save times'}</button>}
+                {inIso && inIso < new Date(new Date(open.planned_start).getTime() - 60000).toISOString() && <div className="early-note">Early start · Ronnie sees it flagged with your name.</div>}
+                <button className="btn-ink" onClick={async () => {
+                  await set([{ id: open.id, in: inIso, out: outIso, arrived: open.punches?.arrived_at ? null : (inIso ? now() : null) }]); setOpen(null);
+                }}>{pin ? 'Save hours' : draft.in ? `Start from ${fmt12(draft.in)}` : 'Save hours'}</button>
+              </div>);
+            })()}
             {open.attendance
               ? <button className="btn-ghost" onClick={() => mark(open.id, null)}>Undo {open.attendance === 'no_show' ? 'no-show' : 'cancelled'}</button>
               : open.left_early ? <button className="btn-ghost" onClick={() => undoLeft(open.id)}>Undo left early{open.attendance_reason ? ` · ${open.attendance_reason}` : ''}</button>
               : null}
-            <div className={'pf-tiles' + (fbOn && open.staff_id !== me?.id ? '' : ' one')}>
-              {fbOn && open.staff_id !== me?.id && <button className="pf-tile fb col" aria-label={inf?.fb_stars ? `Rate · sent ${inf.fb_stars} of 5 stars` : 'Rate · not rated tonight'} onClick={() => setFb({ row: open, back: 'sheet' })}>
-                <b><span className="pf-ic">★</span> Rate</b><Stars value={inf?.fb_stars ?? 0} size="xs" label="Tonight" />
-                <small>{inf?.fb_stars ? `sent · ${STAR_LABEL[inf.fb_stars]}` : 'not rated tonight'}</small></button>}
-              {!open.attendance && !open.left_early && <button className={'pf-tile pb col' + (prob ? ' on' : '')} onClick={() => setProb(!prob)}><b><span className="pf-ic">⚠</span> Problem</b><small>no-show · left early</small></button>}
-            </div>
-            {prob && !open.attendance && !open.left_early && (
-              <div className="wrong-row">
-                <button className="qopt red" onClick={() => openAsk(open, 'no_show')}>No-show</button>
-                <button className="qopt gold" disabled={!pin} title={pin ? '' : 'Start them first'} onClick={() => openAsk(open, 'left_early')}>Left early</button>
-                <button className="qopt grey" onClick={() => openAsk(open, 'cancelled')}>Cancelled</button>
-              </div>
-            )}
+            {pin && !pout && !ev.hours_submitted_at && !open.attendance && (
+              <button className="pf-row" onClick={async () => { const { error } = await supabase.rpc('manager_set_ends_own', { p_shift: open.id, p_on: !open.ends_own }); if (error) { alert(error.message); return; } setOpen(null); await load(); }}>
+                <span className="pf-ic2 g">⏱</span><span className="pf-rt"><b>Ends their own shift</b><small>{open.ends_own ? `${first(open.staff?.full_name)} has End my shift on their phone` : `Give ${first(open.staff?.full_name)} End my shift on their phone`}</small></span>
+                <span className={'pf-tog' + (open.ends_own ? ' on' : '')} aria-hidden="true"><i /></span></button>)}
+            {fbOn && open.staff_id !== me?.id && (
+              <button className="pf-row" onClick={() => setFb({ row: open, back: 'sheet' })}>
+                <span className="pf-ic2 y">★</span><span className="pf-rt"><b>Rate</b><small>{inf?.fb_stars ? `sent · ${STAR_LABEL[inf.fb_stars]}` : 'not rated tonight'}</small></span>
+                {inf?.fb_stars ? <Stars value={inf.fb_stars} size="xs" label="Tonight" /> : <b className="pf-go">Rate ›</b>}</button>)}
+            {!open.attendance && !open.left_early && (
+              <div className="pf-row">
+                <span className="pf-ic2 r">⚠</span><span className="pf-rt"><b>Problem</b></span>
+                <span className="pf-chips">
+                  <button className="pc" onClick={() => openAsk(open, 'no_show')}>No-show</button>
+                  <button className="pc" disabled={!pin} title={pin ? '' : 'Start them first'} onClick={() => openAsk(open, 'left_early')}>Left early</button>
+                  <button className="pc grey" onClick={() => openAsk(open, 'cancelled')}>Cancelled</button>
+                </span>
+              </div>)}
             {open.leave_by && <span className="leave-tag inline">⏱ Must leave by {time(open.leave_by, lang)} · their end time stays open</span>}
             {rNote[open.id] && <span className="mgr-note">From Ronnie: “{rNote[open.id]}”</span>}
             <NoteBox key={open.id} initial={open.manager_note ?? ''} onSave={async (v) => { setErr(''); const { error } = await supabase.rpc('manager_set_note', { p_shift: open.id, p_note: v }); if (error) setErr(error.message); await load(); }} />
-            {open.staff?.photo_url && <small className="muted" style={{ fontSize: 11, textAlign: 'center' }}>Tap the photo to see it full size</small>}
+            {(ev.co_manager_ids ?? []).includes(open.staff_id ?? '') && open.staff_id !== ev.manager_id && <button className="link-btn" onClick={async () => { const { error } = await supabase.rpc('manager_set_comanager', { p_event: ev.id, p_staff: open.staff_id, p_on: false }); if (error) { alert(error.message); return; } setOpen(null); await load(); }}>Remove as manager</button>}
           </SwipeSheet>
         </>
         );
@@ -906,11 +924,12 @@ export function ManagingToday({ meId, isAdmin }: { meId: string; isAdmin: boolea
 }
 
 function NoteBox({ initial, onSave }: { initial: string; onSave: (v: string) => Promise<void> }) {
-  const [v, setV] = useState(initial); const [saved, setSaved] = useState(false);
+  const [v, setV] = useState(initial); const [saved, setSaved] = useState(false); const [openN, setOpenN] = useState(!!initial.trim());
+  if (!openN) return <button className="pf-row" onClick={() => setOpenN(true)}><span className="pf-ic2 b">✎</span><span className="pf-rt"><b>Note for Ronnie</b><small>optional</small></span><b className="pf-go blue">Add ›</b></button>;
   return (
     <div className="note-box">
       <span>Note for Ronnie <em>(optional)</em></span>
-      <textarea rows={2} value={v} placeholder="e.g. had an emergency" onChange={(e) => { setV(e.target.value); setSaved(false); }} />
+      <textarea rows={2} value={v} autoFocus={!initial} placeholder="e.g. had an emergency" onChange={(e) => { setV(e.target.value); setSaved(false); }} />
       {v.trim() !== initial.trim() && <button className="btn-ink" style={{ height: 40 }} onClick={async () => { await onSave(v); setSaved(true); }}>Save note</button>}
       {saved && <small className="okc">✓ Note saved</small>}
     </div>
