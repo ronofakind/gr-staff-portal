@@ -17,15 +17,15 @@ export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   const raw = String(req.query.u || '').trim().match(/https?:\/\/\S+/)?.[0];
   if (!raw) return res.status(200).json({ error: 'nolink' });
-  let url = raw;
+  let url = raw; const dbg = req.query.debug ? [] : null;
   try {
     const first = read(url); if (first && !/goo\.gl/i.test(url)) return res.status(200).json(first);
     for (let i = 0; i < 6; i++) {
       const h = new URL(url).hostname; if (!OK_HOST.test(h)) return res.status(200).json({ error: 'notgoogle' });
       const r = await fetch(url, { redirect: 'manual', headers: { 'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148', 'Accept-Language': 'en' } });
-      const loc = r.headers.get('location');
+      const loc = r.headers.get('location'); if (dbg) dbg.push({ url, st: r.status, loc });
       if (loc) { url = new URL(loc, url).toString(); const c = new URL(url).searchParams.get('continue'); const p = read(c || url); if (p) return res.status(200).json(p); continue; }
-      const body = await r.text(); const p = read(url) || read(body.match(/https:\/\/www\.google\.[a-z.]+\/maps\/[^"'\s\\]+/)?.[0]) || read(body.match(/center=-?\d+\.\d+%2C-?\d+\.\d+/)?.[0]?.replace('%2C', ',').replace('center=', '?center='));
+      const body = await r.text(); if (dbg) return res.status(200).json({ dbg, len: body.length, head: body.slice(0, 3000), urls: [...body.matchAll(/https?:[^"'\s<>]{0,40}maps[^"'\s<>]{0,300}/g)].slice(0, 15).map((m) => m[0]) }); const p = read(url) || read(body.match(/https:\/\/www\.google\.[a-z.]+\/maps\/[^"'\s\\]+/)?.[0]) || read(body.match(/center=-?\d+\.\d+%2C-?\d+\.\d+/)?.[0]?.replace('%2C', ',').replace('center=', '?center='));
       return res.status(200).json(p || { error: 'nospot' });
     }
     return res.status(200).json({ error: 'nospot' });
