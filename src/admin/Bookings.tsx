@@ -555,6 +555,21 @@ export function Bookings() {
     }
   }, [events, base, sd, locks]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (view === 'board') eventsBetween(strip[0], strip[6]).then(setWeekEvs).catch(() => setWeekEvs([])); }, [strip[0], view, events]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Nov 6 · while dragging a name, the page (and the column under it) scrolls near the top/bottom edge
+  useEffect(() => {
+    let raf = 0; let vy = 0; let el: HTMLElement | null = null;
+    const step = () => { if (vy) { window.scrollBy(0, vy); if (el) el.scrollTop += vy; raf = requestAnimationFrame(step); } else raf = 0; };
+    const over = (e: DragEvent) => {
+      const edge = 90; const h = window.innerHeight; const y = e.clientY;
+      vy = y < edge ? -Math.ceil((edge - y) / 6) : y > h - edge ? Math.ceil((y - (h - edge)) / 6) : 0;
+      let n = e.target as HTMLElement | null; el = null;
+      while (n && n !== document.body) { const s = getComputedStyle(n); if (/(auto|scroll)/.test(s.overflowY) && n.scrollHeight > n.clientHeight) { el = n; break; } n = n.parentElement; }
+      if (vy && !raf) raf = requestAnimationFrame(step);
+    };
+    const stop = () => { vy = 0; };
+    document.addEventListener('dragover', over); document.addEventListener('dragend', stop); document.addEventListener('drop', stop);
+    return () => { document.removeEventListener('dragover', over); document.removeEventListener('dragend', stop); document.removeEventListener('drop', stop); cancelAnimationFrame(raf); };
+  }, []);
   const focusEv = params.get('ev');
   useEffect(() => { if (!focusEv || !events) return; const t = setTimeout(() => document.querySelector(`[data-ev="${CSS.escape(focusEv)}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' }), 300); return () => clearTimeout(t); }, [focusEv, events]);
   return (
@@ -756,6 +771,10 @@ export function Bookings() {
             {sh && <button className={'bk-mconf' + (on ? ' undo' : '')} onClick={async () => { const { error } = await supabase.rpc('admin_mark_confirmed', { p_shift: p.shift_id, p_on: !on }); if (error) { setHint(error.message); return; } setHint(on ? `${first} back to waiting` : `✓ ${first} confirmed`); close(); await load(); }}>
               {on ? 'Undo confirmed' : '✓ Mark confirmed'}</button>}
             <div className="bk-mlist">
+              {/* Nov 6 · one click instead of dragging down to EXTRAS (time stays) */}
+              {!p.suggested && !['MD', 'BM'].includes(p.code) && (() => { const ev = evById[p.event_id]; const xNow = !!ev && isX(date, ev, p); return (
+                <button className={'bk-mli' + (xNow ? '' : ' bk-mx-on')} onClick={() => { const c = cur(date); setCur(date, { ...c, pl: c.pl.map((q) => q.key === p.key ? (xNow ? { ...q, extra: false, keep: true } : { ...q, extra: true, keep: false }) : q) }); setHint(xNow ? `${first} is back on the line · Save to keep` : `${first} is an extra · stays at ${t12(p.start)} · Save to keep`); close(); }}>
+                  <span className="bk-mi" aria-hidden="true" style={{ display: 'inline-flex', justifyContent: 'center' }}>⭐</span><span className="grow">{xNow ? 'Not an extra' : 'Make extra'}<small className="muted"> · {xNow ? 'back on the line' : `stays at ${t12(p.start)}`}</small></span></button>); })()}
               {!p.suggested && <button className="bk-mli" onClick={() => { setOwnT(p.start); setPhone({ ...phone, step: 'time' }); }}>{ic('c|M12 7v5l3 2')}<span className="grow">Change time</span><span className="bk-mch">›</span></button>}
               <button className="bk-mli" onClick={() => setPhone({ ...phone, step: 'move' })}>{ic('M5 12h14|M13 6l6 6-6 6')}<span className="grow">Move</span><span className="bk-mch">›</span></button>
               {!p.suggested && <button className="bk-mli" onClick={() => setPhone({ ...phone, step: 'add' })}>{ic('M12 5v14|M5 12h14')}<span className="grow">Add a 2nd shift</span><span className="bk-mch">›</span></button>}
