@@ -80,10 +80,12 @@ type Row = {
   staff: { full_name: string; nickname?: string | null; photo_url: string | null; phone: string | null } | null; punches: { punch_in: string | null; punch_out: string | null; arrived_at: string | null; updated_at: string } | null;
   /** push 28 (migration 034) */
   cancel_self?: boolean; cancel_sent_to_manager?: string | null; replacement_for?: string | null;
+  /** Nov 6 · ends their own shift from their phone (070) */
+  ends_own?: boolean;
 };
 /** push 28e · "I'm running late" from the person (late_notices, read by the event's manager). */
 type Late = { id: string; shift_id: string; minutes: number; eta: string; reason: string | null; note?: string | null; sent_at: string; seen_at: string | null };
-const ROW_COLS = 'id,staff_id,position_code,position_detail,planned_start,planned_end,attendance,left_early,attendance_reason,added_note,adder:staff!shifts_added_by_fkey(full_name),leave_by,manager_note,staff:staff!shifts_staff_id_fkey(full_name,nickname,photo_url,phone),punches(punch_in,punch_out,arrived_at,updated_at)';
+const ROW_COLS = 'id,staff_id,ends_own,position_code,position_detail,planned_start,planned_end,attendance,left_early,attendance_reason,added_note,adder:staff!shifts_added_by_fkey(full_name),leave_by,manager_note,staff:staff!shifts_staff_id_fkey(full_name,nickname,photo_url,phone),punches(punch_in,punch_out,arrived_at,updated_at)';
 const fullT = (iso: string) => new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' });
 const shortT = (iso: string) => fullT(iso).replace(/\s?[AP]M$/, '');
 type Ev = { id: string; title: string; event_date: string };
@@ -241,6 +243,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
   const [busy, setBusy] = useState(false);
   const [endSheet, setEndSheet] = useState<Row[] | null>(null);
   const [endSkip, setEndSkip] = useState<Set<string>>(new Set()); // Nov 5 · End All: leave someone out
+  const [ownPick, setOwnPick] = useState<Set<string>>(new Set()); // Nov 6 · End All: they end their own
   const [endPick, setEndPick] = useState<'now' | 'next' | 'pick'>('next'); const [endTime, setEndTime] = useState('');
   const [, setTick] = useState(0);
   const [err, setErr] = useState('');
@@ -399,7 +402,9 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
     else if (endPick === 'next') at = nextQ();
     else { if (!endTime) return; at = new Date(toIso(ev!.event_date, endTime, list[0].planned_start)).getTime(); }
     if (at > Date.now() + 30 * 60000) { setErr('Pick a time within 30 minutes.'); return; }
-    const go = list.filter((r) => !endSkip.has(r.id)); if (!go.length) return;
+    const go = list.filter((r) => !endSkip.has(r.id));
+    for (const id of ownPick) await supabase.rpc('manager_set_ends_own', { p_shift: id, p_on: true });
+    if (!go.length) { setEndSheet(null); await load(); return; }
     setEndSheet(null);
     await set(go.map((r) => ({ id: r.id, in: r.punches!.punch_in, out: new Date(at).toISOString() })));
   };
@@ -415,7 +420,8 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
   const floorN = active.length - barN;
   const workingN = active.filter(isWorking).length;
   const doneN = active.filter((r) => r.punches?.punch_out && !isWorking(r)).length;
-  const outstanding = active.filter((r) => r.punches?.punch_in && !r.punches.punch_out);
+  const outstanding = active.filter((r) => r.punches?.punch_in && !r.punches.punch_out && !r.ends_own);
+  const ownOpen = active.filter((r) => r.ends_own && r.punches?.punch_in && !r.punches.punch_out); // Nov 6 · still working, ending their own
   const changedSince = ev.hours_submitted_at ? rows.some((r) => r.punches?.updated_at && r.punches.updated_at > ev.hours_submitted_at!) : false;
   const endsAt = scheduled.length ? scheduled.map((r) => r.punches!.punch_out!).sort()[0] : null;
   const late = active.filter((r) => !r.punches?.punch_in && new Date(r.planned_start).getTime() < Date.now());
@@ -546,7 +552,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
                     {isNew && <i className="new-badge">NEW</i>}
                   </button>
                   <button className="who" aria-label={`Options for ${r.staff?.full_name}`} onClick={() => openRow(r, isNew)}>
-                    <span className="nm">{r.staff ? teamName(r.staff) : ''}{(r.staff_id === ev.manager_id || (ev.co_manager_ids ?? []).includes(r.staff_id ?? '')) && <i className="mgr-tag">MANAGER</i>}{xIds.has(r.id) && !r.attendance && <i className="x-tag">EXTRA</i>}{r.adder && <i className="added-tag">ADDED BY {r.adder.full_name.split(' ')[0].toUpperCase()}</i>}</span>
+                    <span className="nm">{r.staff ? teamName(r.staff) : ''}{(r.staff_id === ev.manager_id || (ev.co_manager_ids ?? []).includes(r.staff_id ?? '')) && <i className="mgr-tag">MANAGER</i>}{r.ends_own && <i className="own-tag">ENDS OWN</i>}{xIds.has(r.id) && !r.attendance && <i className="x-tag">EXTRA</i>}{r.adder && <i className="added-tag">ADDED BY {r.adder.full_name.split(' ')[0].toUpperCase()}</i>}</span>
                     {fromRonnie && <span><i className="p28-tag red">CANCELLED{r.attendance === 'no_show' ? ' · NO-SHOW' : ''} · FROM RONNIE</i></span>}
                     {r.replacement_for && !r.attendance && <span><i className="p28-tag blue">REPLACEMENT · {fullT(r.planned_start)}</i></span>}
                     {ln && !pin && !lnPassed && <span><i className="p28-tag gold">LATE ~{shortT(ln.eta)}{ln.reason ? ` · ${ln.reason.toUpperCase()}` : ''}{ln.seen_at ? ' · ✓ SEEN' : ''}</i></span>}
@@ -617,10 +623,11 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
 
       {!endsAt && outstanding.length > 0 && !ev.hours_submitted_at ? (
       <div className="submit-bar">
-        <button className="endall-red" onClick={() => { setEndPick('next'); setEndTime(''); setEndSkip(new Set()); setEndSheet(outstanding); }}>{t.endAll} <span>· {outstanding.length} still working</span></button>
+        <button className="endall-red" onClick={() => { setEndPick('next'); setEndTime(''); setEndSkip(new Set()); setOwnPick(new Set()); setEndSheet(outstanding); }}>{t.endAll} <span>· {outstanding.length} still working</span></button>
       </div>) : (
       <div className="submit-bar">
         <div className="grow">
+          {ownPick && ownOpen.length > 0 && !ev.hours_submitted_at && <small className="own-wait">🔑 {ownOpen.map((r) => first(r.staff?.full_name)).join(', ')} {ownOpen.length === 1 ? 'is' : 'are'} ending their own · their time is added when they do</small>}
           <b className={changedSince ? 'gold' : ''}>{changedSince ? '↻ Times changed since you submitted' : ev.hours_submitted_at ? '✓ Hours submitted' : endsAt ? `Submit now with ${time(endsAt, lang)} as the end` : 'End of night'}</b>
           <span>{ev.hours_submitted_at ? `Submitted ${new Date(ev.hours_submitted_at).toLocaleString('en-CA', { weekday: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' })}${changedSince ? ' · Ronnie has the older version' : ' · you can still edit'}` : endsAt ? 'Change anything after? You can resubmit.' : "Check everyone's times, then send"}</span>
         </div>
@@ -636,11 +643,12 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
             <button className={'opt' + (endPick === 'next' ? ' on' : '')} onClick={() => setEndPick('next')}><i /><span><b>In a few minutes · {time(new Date(nextQ()).toISOString(), lang)}</b><small>Everyone ends then. You can still change or cancel it.</small></span></button>
             <button className={'opt' + (endPick === 'pick' ? ' on' : '')} onClick={() => setEndPick('pick')}><i /><span><b>Pick a time</b><small>Up to 30 min from now</small></span>{endPick === 'pick' && <QuarterTime value={endTime} onChange={setEndTime} label="End time" />}</button>
             <details className="end-skip"><summary>Leave someone out{endSkip.size ? ` · ${endSkip.size}` : ''} ▾</summary>
-              {endSheet.map((r) => <label key={r.id}><input type="checkbox" checked={!endSkip.has(r.id)} onChange={(e) => { const s = new Set(endSkip); if (e.target.checked) s.delete(r.id); else s.add(r.id); setEndSkip(s); }} /> {r.staff ? teamName(r.staff) : '?'}</label>)}
+              {endSheet.map((r) => <div key={r.id} className="end-skip-r"><label><input type="checkbox" checked={!endSkip.has(r.id)} onChange={(e) => { const s = new Set(endSkip); if (e.target.checked) s.delete(r.id); else s.add(r.id); setEndSkip(s); }} /> {r.staff ? teamName(r.staff) : '?'}</label>
+                <button type="button" className={'own-pick' + (ownPick.has(r.id) ? ' on' : '')} onClick={() => { const o = new Set(ownPick); const s = new Set(endSkip); if (o.has(r.id)) { o.delete(r.id); s.delete(r.id); } else { o.add(r.id); s.add(r.id); } setOwnPick(o); setEndSkip(s); }}>{ownPick.has(r.id) ? 'Ends own ✓' : 'Ends own'}</button></div>)}
             </details>
             {doneN > 0 && <div className="muted sm">The {doneN} who already ended keep their own times.</div>}
             {err && <p className="error">{err}</p>}
-            <button className="btn-ink end-go" disabled={endSheet.length - endSkip.size < 1} onClick={() => endAll(endSheet)}>End {endSheet.length - endSkip.size} {endSheet.length - endSkip.size === 1 ? 'person' : 'people'} at {endPick === 'now' ? time(now(), lang) : endPick === 'next' ? time(new Date(nextQ()).toISOString(), lang) : endTime ? fmt12(endTime) : '…'}</button>
+            <button className="btn-ink end-go" disabled={endSheet.length - endSkip.size < 1 && !ownPick.size} onClick={() => endAll(endSheet)}>{endSheet.length - endSkip.size < 1 && ownPick.size ? `${ownPick.size} end${ownPick.size === 1 ? 's' : ''} their own · save` : `End ${endSheet.length - endSkip.size} ${endSheet.length - endSkip.size === 1 ? 'person' : 'people'}${ownPick.size ? ` · ${ownPick.size} end their own` : ''} at`} {endPick === 'now' ? time(now(), lang) : endPick === 'next' ? time(new Date(nextQ()).toISOString(), lang) : endTime ? fmt12(endTime) : '…'}</button>
           </SwipeSheet>
         </>
       )}
@@ -722,6 +730,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
               <button className={'pf-photo' + (isNewO ? ' newp' : '')} aria-label="See the photo full size" onClick={() => setBigPhoto(true)}><Avatar name={open.staff?.full_name ?? '?'} url={open.staff?.photo_url} size={62} /></button>
               <div className="serif" style={{ fontSize: 24, lineHeight: 1.1 }}>{open.staff?.full_name}</div>
               <div className="muted sm pf-sub"><span>{roleLabel(open.position_code, open.position_detail)} · call {time(open.planned_start, lang)}{open.punches?.arrived_at ? ` · arrived ${time(open.punches.arrived_at, lang)}` : ''}</span>{isNewO && <i className="new-shift">NEW · {ORD[inf!.done_before] ?? ''} shift</i>}</div>
+              {pin && !pout && !ev.hours_submitted_at && <button className="link-btn" onClick={async () => { const { error } = await supabase.rpc('manager_set_ends_own', { p_shift: open.id, p_on: !open.ends_own }); if (error) { alert(error.message); return; } setOpen(null); await load(); }}>{open.ends_own ? 'Undo · I’ll end them myself' : `⏱ ${first(open.staff?.full_name)} ends their own shift`}</button>}
               {(ev.co_manager_ids ?? []).includes(open.staff_id ?? '') && open.staff_id !== ev.manager_id && <button className="link-btn" onClick={async () => { const { error } = await supabase.rpc('manager_set_comanager', { p_event: ev.id, p_staff: open.staff_id, p_on: false }); if (error) { alert(error.message); return; } setOpen(null); await load(); }}>Remove as manager</button>}
               {isNewO && newRows.length > 1 && (() => { const k = newRows.findIndex((r) => r.id === open.id); const nx = newRows[(k + 1) % newRows.length]; return <button className="link-btn nb-next" onClick={() => openRow(nx, true)}>Next new · {first(nx.staff?.full_name)} ›</button>; })()}
             </div>

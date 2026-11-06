@@ -85,7 +85,8 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
       .order('planned_start').limit(30);
     const all = ((data as unknown as ShiftRow[]) ?? []).filter((r) => r.attendance !== 'cancelled'); // push 28: a cancelled shift is off Home
     const td = todayIso(); const nToday = all.filter((r) => r.events.event_date === td).length;
-    const rows = all.filter((r) => new Date(r.planned_start).getTime() >= since12 || (r.events.event_date === td && nToday >= 2));
+    // Nov 6 · a shift still on the clock never drops off (long nights past midnight)
+    const rows = all.filter((r) => new Date(r.planned_start).getTime() >= since12 || (r.events.event_date === td && nToday >= 2) || (!!r.punches?.punch_in && !r.punches.punch_out));
     setShifts(rows);
     shiftNotes(rows.map((r) => r.id)).then(setGNotes);
     if (rows.length) supabase.from('shifts').select('id,confirm_sent_at,confirm_by,change_prev,change_seen_at').in('id', rows.map((r) => r.id))
@@ -403,6 +404,9 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
                 <button className="confirm-glow" onClick={() => respond(next.id, 'confirmed')}>Confirm my shift</button>
                 {by && <div className="confirm-by">{new Date(by).getTime() > Date.now() ? 'Confirm within 24 h' : 'Please confirm now'} · by {byLabel(by)}</div>}
               </>}
+              {working && next.ends_own && !next.punches?.punch_out && !preview && <div className="own-close"><span>🔑 <b>You’re closing tonight.</b> When you’re done, end your shift here.</span>
+                <button onClick={async () => { if (!confirm('End your shift now?')) return; const { error } = await supabase.rpc('staff_end_own', { p_shift: next.id }); if (error) { alert(error.message); return; } load(); }}>End my shift</button>
+                <small>Counts as the time you tap, rounded up to 15 min.</small></div>}
               {gNotes[next.id] && !gNotes[next.id].seen_at && <div className="g-note"><span>📌 <b>Note from G&amp;R</b><br />{gNotes[next.id].body}</span>
                 <button onClick={() => { const id = next.id; setGNotes((m) => ({ ...m, [id]: { ...m[id], seen_at: new Date().toISOString() } })); if (!preview) noteSeen(id); }}>Got it</button></div>}
               <div className="row2">
@@ -465,6 +469,9 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
               <button className="confirm-glow" onClick={() => respond(next.id, 'confirmed')}>Confirm my shift</button>
               {by && <div className="confirm-by">{new Date(by).getTime() > Date.now() ? 'Confirm within 24 h' : 'Please confirm now'} · by {byLabel(by)}</div>}
             </>}
+            {working && next.ends_own && !next.punches?.punch_out && !preview && <div className="own-close"><span>🔑 <b>You’re closing tonight.</b> When you’re done, end your shift here.</span>
+                <button onClick={async () => { if (!confirm('End your shift now?')) return; const { error } = await supabase.rpc('staff_end_own', { p_shift: next.id }); if (error) { alert(error.message); return; } load(); }}>End my shift</button>
+                <small>Counts as the time you tap, rounded up to 15 min.</small></div>}
             {gNotes[next.id] && !gNotes[next.id].seen_at && <div className="g-note"><span>📌 <b>Note from G&amp;R</b><br />{gNotes[next.id].body}</span>
                 <button onClick={() => { const id = next.id; setGNotes((m) => ({ ...m, [id]: { ...m[id], seen_at: new Date().toISOString() } })); if (!preview) noteSeen(id); }}>Got it</button></div>}
             <div className="row2">
