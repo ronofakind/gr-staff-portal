@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { StaffProfile } from './StaffProfile';
+import { openReminders, resolveReminder, friendly, type Reminder } from './StaffRemind';
 import { supabase } from '../lib/supabase';
 import { setting, autoExtras } from '../lib/settings';
 import { DeptTag } from './DeptTag';
@@ -83,6 +84,9 @@ export function Bookings() {
   /** push 49 · a placed chip dropped on ANOTHER event → "Add a 2nd shift · keep both" / "Move · off <event 1>" / Cancel */
   const [dropAsk, setDropAsk] = useState<{ p: Pl; to: { event_id: string; start: string; extra?: boolean } } | null>(null);
   const [hint, setHint] = useState<string>('');
+  // Nov 6 · 📌 reminders for the next booking (068) · only Ronnie sees them
+  const [rems, setRems] = useState<Record<string, Reminder[]>>({}); const [remTxt, setRemTxt] = useState('');
+  useEffect(() => { openReminders().then(setRems); }, []);
   // Nov 4 · Confirm all (with Undo), fold "Already placed today", find a name on the board
   const [undoConf, setUndoConf] = useState<{ ids: string[]; title: string } | null>(null);
   // Nov 5 · the staff list folds into a thin strip so the events get the room (remembered)
@@ -99,7 +103,7 @@ export function Bookings() {
   const replaceId = params.get('replace'); const replaceAt = params.get('at');
   const [asksBy, setAsksBy] = useState<Record<string, { kind: string; new_time: string }>>({});
   /** chip menu (phone + click): Move to… · Also add to… (2nd shift that day) · Remove. No `p` = from the side list "+ 2nd shift". */
-  const [phone, setPhone] = useState<{ sid: string; p?: Pl; step: 'menu' | 'move' | 'add' | 'time' | 'note' } | null>(null);
+  const [phone, setPhone] = useState<{ sid: string; p?: Pl; step: 'menu' | 'move' | 'add' | 'time' | 'note' | 'rem'; rid?: string } | null>(null);
   // Nov 5 · note for the manager (has to leave by + note; managers/MDs see it, staff don't)
   const [mNotes, setMNotes] = useState<Record<string, string>>({}); const [nLeave, setNLeave] = useState(''); const [nText, setNText] = useState('');
   const [ownT, setOwnT] = useState(''); // Nov 4 · Change start time (one person)
@@ -208,6 +212,7 @@ export function Bookings() {
   /** push 49 · is the person already (really) placed on this event that day? (one shift per person per event) */
   const onEvent = (d: string, sid: string, eventId: string, exceptKey?: string) => plOf(d).some((p) => p.staff_id === sid && p.event_id === eventId && !p.suggested && p.key !== exceptKey);
   const place = (d: string, sid: string, to: { event_id: string; start: string; extra?: boolean }, fromKey?: string, both = false, add = false) => {
+    if (rems[sid]?.length && !fromKey) setTimeout(() => setHint(`📌 ${name(sid).split(' ')[0]}: ${rems[sid][0].note} · click her name to add it to her confirmation`), 50);
     const c = cur(d); let pl = [...c.pl];
     const a = avOf(sid); let start = to.start;
     if (a?.from_time && toMin(a.from_time) > toMin(to.start) + 15) start = q15(a.from_time); // can only start 15+ min later → own time group
@@ -467,7 +472,7 @@ export function Bookings() {
       <div data-key={p.key} className={'bk-chip rk' + (t ?? 'x') + (flash === p.key ? ' flash' : '') + (p.suggested ? ' sug' : '') + (!p.shift_id && !p.suggested ? ' added' : '') + (also.length ? ' has-also' : '')} draggable onDragStart={(ev) => dragStart(ev, { staff_id: p.staff_id, key: p.key })} onDragEnd={() => setDrag(null)} onClick={() => setPhone({ sid: p.staff_id, p, step: 'menu' })}>
         {n != null && <span className="bk-n">{n}</span>}<i className={'bk-cf ' + cf + (p.shift_id && !p.suggested ? ' tap' : '')} title={!p.shift_id || p.suggested ? 'Not saved yet' : cf === 'ok' ? 'Confirmed · tap to undo' : 'Tap to mark confirmed'}
           onClick={(ev) => { if (!p.shift_id || p.suggested) return; ev.stopPropagation(); toggleConf(p); }}>{cf === 'ok' ? '✓' : ''}</i>
-        <span className="grow">{name(p.staff_id)}{part && <small> 🔗 {name(part).split(' ')[0]}</small>}{p.extra && <small className="bk-x"> EXTRA</small>}{p.line && p.line !== p.start && <small className="bk-own" title="Their own start time"> starts {t12(p.start)}</small>}
+        <span className="grow">{name(p.staff_id)}{part && <small> 🔗 {name(part).split(' ')[0]}</small>}{p.extra && <small className="bk-x"> EXTRA</small>}{rems[p.staff_id]?.length ? <small className="bk-pin" title={rems[p.staff_id].map((r) => r.note).join(' · ')}> 📌</small> : null}{p.line && p.line !== p.start && <small className="bk-own" title="Their own start time"> starts {t12(p.start)}</small>}
           {(() => { const sh = shiftOf(p); const nt = p.shift_id ? mNotes[p.shift_id] : undefined; if (p.suggested || !sh) return null;
             if (sh.leave_by) return <small className="bk-leave" title={nt ? `Has to leave by ${t12(hm(sh.leave_by))} · ${nt}` : `Has to leave by ${t12(hm(sh.leave_by))} · managers see it`}> ⏱ {t12(hm(sh.leave_by)).replace(':00', '')}</small>;
             return nt ? <small className="bk-mnote" title={nt}> ✎ note</small> : null; })()}
@@ -768,6 +773,11 @@ export function Bookings() {
                 <div className="muted sm">{seeTitle(evById[p.event_id])} · {t12(p.start)}{sh && <> · {on ? <span className="okc">✓ Confirmed</span> : <span className="gold">Not confirmed yet</span>}</>}</div></div>
               <button className="bk-mx" aria-label="Close" onClick={close}>✕</button>
             </div>
+            {rems[sid]?.length ? <div className="bk-rem">{rems[sid].map((r) => <div key={r.id} className="bk-rem-i"><span>📌 <b>{first}</b>: {r.note}</span>
+              <div className="row wrap" style={{ gap: 6 }}>
+                {sh ? <button className="abtn sm dark" onClick={() => { setRemTxt(friendly(r.note)); setPhone({ ...phone, step: 'rem', rid: r.id } as typeof phone); }}>Add to {first}’s confirmation</button> : <span className="muted sm">Save the booking first to add it to her confirmation</span>}
+                <button className="abtn sm" onClick={async () => { await resolveReminder(r.id, 'told'); setRems(await openReminders()); setHint(`✓ Reminder cleared for ${first}`); }}>✓ Told {first}</button>
+                <button className="lnk sm" onClick={close}>Keep for later</button></div></div>)}</div> : null}
             {sh && <button className={'bk-mconf' + (on ? ' undo' : '')} onClick={async () => { const { error } = await supabase.rpc('admin_mark_confirmed', { p_shift: p.shift_id, p_on: !on }); if (error) { setHint(error.message); return; } setHint(on ? `${first} back to waiting` : `✓ ${first} confirmed`); close(); await load(); }}>
               {on ? 'Undo confirmed' : '✓ Mark confirmed'}</button>}
             <div className="bk-mlist">
@@ -794,6 +804,19 @@ export function Bookings() {
             <div className="row" style={{ gap: 8 }}>
               {p.start !== lineT && <button className="abtn" onClick={() => apply(lineT)}>Back to {t12(lineT)}</button>}
               <button className="abtn dark" disabled={!okT || ownT === p.start} onClick={() => apply(ownT)}>Save time</button>
+            </div></>; })()
+          : step === 'rem' && p ? (() => { const sh = shiftOf(p); const rid = (phone as { rid?: string }).rid; if (!sh) return null; return <>
+            <div><b className="serif" style={{ fontSize: 20 }}>Add to {first}’s confirmation</b><div className="muted sm">{seeTitle(evById[p.event_id])} · {t12(p.start)} · this is what {first} reads</div></div>
+            <textarea rows={3} value={remTxt} onChange={(ev) => setRemTxt(ev.target.value)} />
+            <span className="muted sm">Covers her event page until she taps Got it, sits on her Home card, and goes to her messages. You see when she got it.</span>
+            <div className="row" style={{ gap: 8 }}>
+              <button className="abtn dark grow" disabled={!remTxt.trim()} onClick={async () => {
+                const { error } = await supabase.rpc('admin_note_to_shift', { p_shift: sh.id, p_body: remTxt.trim(), p_reminder: rid ?? null });
+                if (error) { setHint(error.message); return; }
+                const { data: conv } = await supabase.rpc('start_conversation', { p_staff: sid });
+                if (conv) await supabase.rpc('send_message', { p_conversation: conv as string, p_body: `📌 ${remTxt.trim()}`, p_topic: 'shift', p_shift: sh.id });
+                setRems(await openReminders()); setHint(`✓ Added to ${first}’s shift · you’ll see when she taps Got it`); close(); }}>Add to her shift</button>
+              <button className="abtn" onClick={() => setPhone({ ...phone, step: 'menu' })}>Back</button>
             </div></>; })()
           : step === 'note' && p ? (() => { const sh = shiftOf(p); if (!sh) return null; const okT = !nLeave || /^\d{2}:\d{2}$/.test(nLeave);
             const save = async (clear = false) => {

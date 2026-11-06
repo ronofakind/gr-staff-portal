@@ -3273,3 +3273,16 @@ div.venue-rule { background: #fff; border-radius: 14px; padding: 10px 14px; marg
 .agenda-row.mtg-row .row-wear { background: transparent; } /* Nov 5 · keeps the time column in line with shifts */
 .cu-tr-h { display: flex; align-items: center; gap: 10px; width: 100%; background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; text-align: left; } /* Nov 6 · fold */
 .ib-row .ib-noreply { align-self: center; flex: none; white-space: nowrap; } @media (max-width: 700px) { .ib-row .ib-noreply { display: none; } } /* Nov 6 · desktop: visible; phone: swipe */
+/* Nov 6 · note from G&R on a shift (Home card) */
+.g-note { background: #FFFBF0; box-shadow: inset 4px 0 0 #C9A227; border-radius: 12px; padding: 10px 12px; font-size: 13px; color: #1A1714; display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.g-note button { align-self: flex-start; height: 34px; padding: 0 16px; border-radius: 17px; border: none; background: #1A1714; color: #fff; font: 600 13px Inter, system-ui, sans-serif; cursor: pointer; }
+.g-cover { position: fixed; inset: 0; z-index: 80; background: rgba(26,23,20,.5); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; padding: 18px; }
+.g-cover-card { background: #FFFBF0; border-radius: 22px; padding: 20px 18px; display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 420px; box-shadow: 0 20px 50px rgba(0,0,0,.3); }
+.g-cover-card .k { font-size: 11px; letter-spacing: .13em; font-weight: 800; color: #8A6A2A; }
+.g-cover-card b.serif { font-size: 24px; line-height: 1.15; font-weight: 500; }
+.g-cover-card button { height: 50px; border-radius: 25px; border: none; background: #1A1714; color: #fff; font: 600 15px Inter, system-ui, sans-serif; cursor: pointer; }
+.g-line { font-size: 13px; background: #FBF3E0; border-radius: 12px; padding: 9px 12px; color: #4A433C; }
+/* Nov 6 · 📌 reminders on Bookings */
+.bk-pin { font-size: 10px; margin-left: 3px; }
+.bk-rem { display: flex; flex-direction: column; gap: 8px; }
+.bk-rem-i { background: #FFFBF0; box-shadow: inset 4px 0 0 #C9A227; border-radius: 12px; padding: 10px 12px; font-size: 13px; display: flex; flex-direction: column; gap: 8px; }

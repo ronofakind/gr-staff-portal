@@ -6,6 +6,7 @@ import { isoDay, flagsOf, hoursBetween, dLabel, allStaff, type AStaff, type Flag
 import { loadRules, linksOf, other, condLabel, DOW3, type SLink, type SCond, type LinkKind, type CondKind } from './rules';
 import { loadScoreData, scoreOf, AREAS, avgStars, isStar, type ScoreData } from './score';
 import { ScoreWhy, tabOf } from './Ranking';
+import { ReminderList } from './StaffRemind';
 import { appStatus, loadInviteStatus, InviteModal, AppChip, type InviteRow } from './Invite';
 
 const DOW = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
@@ -164,6 +165,7 @@ export function StaffProfile({ s, onClose, onEdit, all }: { s: AStaff; onClose: 
                   {!sex && <span className="accent">not set · they see the men's line</span>}</div>
               <textarea rows={3} value={notes} onChange={(e) => { setNotes(e.target.value); setSaved(false); }} onBlur={() => !saved && saveNotes()} placeholder="Admin notes · great with VIP tables…" />
               {!saved && <button className="abtn sm dark" onClick={saveNotes}>Save note</button>}
+              <ReminderList key={'rm' + s.id} staffId={s.id} staffName={s.full_name} />
             </div>
             <EmergencyCard key={'em' + s.id} s={s} />
             {s.active && <button className="lnk accent" style={{ alignSelf: 'flex-start' }} onClick={async () => { if (confirm(`Mark ${s.full_name} inactive? They stay in the history.`)) { await supabase.rpc('admin_staff_update', { p_id: s.id, p_patch: { active: false } }); onClose(); } }}>Mark inactive</button>}

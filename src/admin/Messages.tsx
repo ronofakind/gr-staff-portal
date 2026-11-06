@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { RemindForm } from './StaffRemind';
 import { supabase } from '../lib/supabase';
 import { AnnounceComposer, AnnounceSent, type Target } from '../components/Announce';
 import { Avatar } from '../components/Avatar';
@@ -164,6 +165,7 @@ function AdminConversation({ id, row, onBack, onUnread, onDone, toast }: { id: s
   const [who, setWho] = useState<{ full_name: string; photo_url: string | null; phone: string | null } | null>(null);
   const [lastShift, setLastShift] = useState<Msg['meta']['shift'] | null>(null); const [menu, setMenu] = useState(false);
   const [mgrName, setMgrName] = useState<string | null>(null); const [tick, setTick] = useState(0);
+  const [rem, setRem] = useState<string | null>(null); // Nov 6 · 📌 remind me next time I book them
   useEffect(() => { supabase.rpc('me').then(({ data }) => setMeId((data as string) ?? null)); }, []);
   useEffect(() => {
     if (!conv) return;
@@ -191,9 +193,11 @@ function AdminConversation({ id, row, onBack, onUnread, onDone, toast }: { id: s
             <button onClick={() => onUnread({ id: conv.id, staff_name: name })}><i className="ib-dot" /> Mark unread</button>
             <button onClick={() => { onDone({ id: conv.id }, conv.status !== 'done'); setTick((t) => t + 1); }}>✓ {conv.status === 'done' ? 'Reopen' : 'Done'}</button>
             {(lastShift?.event_id || conv.event_id) && <Link to={`/admin/event/${lastShift?.event_id ?? conv.event_id}`}>🗓 Open the shift</Link>}
+            <button onClick={() => setRem(conv.kind === 'manager' && mgrName ? ` (${first(mgrName)}, ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})` : '')}>📌 Remind me next time I book {first(name)}</button>
           </div>}
         </div>
       </div>
+      {rem !== null && conv && <RemindForm staffId={conv.staff_id} staffName={name} preset={rem} convId={conv.id} onClose={() => setRem(null)} />}
       {lastShift && conv?.kind === 'ronnie' && <div className="ch-shift" style={{ alignSelf: 'flex-start' }}>🗓 {shortDate(lastShift.date).toUpperCase()} · {lastShift.title.toUpperCase()}</div>}
       <div className="adm-card ib-chat">
         {meId ? <Chat convId={id} meId={meId} side="admin" managerName={mgrName} onConv={setConv} reloadKey={tick} placeholder={`Reply to ${first(name)}…`} /> : <div className="loading" style={{ minHeight: 200 }} />}

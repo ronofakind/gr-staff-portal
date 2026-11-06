@@ -14,6 +14,7 @@ import { useMyCalendar } from '../lib/calendar';
 import { callName } from '../lib/nickname';
 import { UniformIcon, uniformFor, uniformLabel } from '../components/Uniform';
 import { MessageCard, MessageRonnieLink, MgrRepliesLine } from '../components/MessageCard';
+import { shiftNotes, noteSeen, type ShiftNote } from '../lib/staffNotes';
 import { useCheckup, setEmergencyReminder } from '../lib/checkup';
 import { EmergencyForm, UsualWeekScreen } from './Checkup';
 import { SwipeSheet } from '../components/SwipeSheet';
@@ -52,6 +53,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
   const lang = useLang(); const nav = useNavigate(); useSettings();
   const [shifts, setShifts] = useState<ShiftRow[] | null>(null);
   const [teams, setTeams] = useState<Record<string, Mate[]>>({});
+  const [gNotes, setGNotes] = useState<Record<string, ShiftNote>>({}); // Nov 6 · note from G&R on a shift (068)
   const [qs, setQs] = useState<Record<string, Q['status']>>({});
   const [askQ, setAskQ] = useState<ShiftRow | null>(null);
   const [alerts, setAlerts] = useState<{ id: string; kind: string; title: string; body: string | null; event_id: string | null }[]>([]);
@@ -85,6 +87,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
     const td = todayIso(); const nToday = all.filter((r) => r.events.event_date === td).length;
     const rows = all.filter((r) => new Date(r.planned_start).getTime() >= since12 || (r.events.event_date === td && nToday >= 2));
     setShifts(rows);
+    shiftNotes(rows.map((r) => r.id)).then(setGNotes);
     if (rows.length) supabase.from('shifts').select('id,confirm_sent_at,confirm_by,change_prev,change_seen_at').in('id', rows.map((r) => r.id))
       .then(({ data: d, error }) => { if (!error && Array.isArray(d)) setX33(Object.fromEntries((d as (P33 & { id: string })[]).map((x) => [x.id, x]))); });
     // push 28 · "Shift cancelled · Ronnie has been told" for 24 h (cancelled_at is new in 034: errors → none)
@@ -400,6 +403,8 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
                 <button className="confirm-glow" onClick={() => respond(next.id, 'confirmed')}>Confirm my shift</button>
                 {by && <div className="confirm-by">{new Date(by).getTime() > Date.now() ? 'Confirm within 24 h' : 'Please confirm now'} · by {byLabel(by)}</div>}
               </>}
+              {gNotes[next.id] && !gNotes[next.id].seen_at && <div className="g-note"><span>📌 <b>Note from G&amp;R</b><br />{gNotes[next.id].body}</span>
+                <button onClick={() => { const id = next.id; setGNotes((m) => ({ ...m, [id]: { ...m[id], seen_at: new Date().toISOString() } })); if (!preview) noteSeen(id); }}>Got it</button></div>}
               <div className="row2">
                 <Link className="light-btn" style={{ height: 46, borderRadius: 14 }} to={`${base}/shift/${next.id}`}>Details</Link>
                 {team && !preview && !waiting
@@ -460,6 +465,8 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
               <button className="confirm-glow" onClick={() => respond(next.id, 'confirmed')}>Confirm my shift</button>
               {by && <div className="confirm-by">{new Date(by).getTime() > Date.now() ? 'Confirm within 24 h' : 'Please confirm now'} · by {byLabel(by)}</div>}
             </>}
+            {gNotes[next.id] && !gNotes[next.id].seen_at && <div className="g-note"><span>📌 <b>Note from G&amp;R</b><br />{gNotes[next.id].body}</span>
+                <button onClick={() => { const id = next.id; setGNotes((m) => ({ ...m, [id]: { ...m[id], seen_at: new Date().toISOString() } })); if (!preview) noteSeen(id); }}>Got it</button></div>}
             <div className="row2">
               <Link className="light-btn" style={{ height: 46, borderRadius: 14 }} to={`${base}/shift/${next.id}`}>Details</Link>
               {team && !preview && !waiting
@@ -522,7 +529,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
                   return (
                     <Link key={s.id} to={`${base}/shift/${s.id}`} className="agenda-row" style={{ minHeight: 64 }}>
                       <div className="d" style={{ width: 40, alignItems: 'center' }}><small>{b.dow}</small><b>{b.day}</b></div>
-                      <div className="what" style={{ gap: 5 }}><b className={pend ? 'muted' : ''}>{pend ? 'Place to come' : s.events.title}</b>
+                      <div className="what" style={{ gap: 5 }}><b className={pend ? 'muted' : ''}>{pend ? 'Place to come' : s.events.title}{gNotes[s.id] && !gNotes[s.id].seen_at ? ' 📌' : ''}</b>
                         <span className="pos-row2"><span className={'pos-pill' + (isLead(s) ? ' lead' : '')}>{pos(s)}</span>{teams[s.events.id] && !preview ? <span>team {teams[s.events.id].length}</span> : null}</span></div>
                       <span className="row-wear" title={uniformLabel(uniformFor(s))}><UniformIcon kind={uniformFor(s)} size={30} /></span>
                       <div className="row-time"><small>Starts</small>{pend ? <b className="tbc">To come</b> : s.time_tbc ? <b className="tbc">Time TBC</b> : <b><span className="serif">{time(s.planned_start, lang).replace(/\s?[ap]\.?\s?m\.?/i, '')}</span><i>{/p\.?\s?m/i.test(time(s.planned_start, lang)) ? ' PM' : ' AM'}</i></b>}</div>

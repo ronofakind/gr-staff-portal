@@ -16,6 +16,7 @@ import { useSettings } from '../lib/settings';
 import { feedbackOn, Stars } from './Manage';
 import { managesShift, loadTeamSums, type TeamSum } from '../lib/pastEvents';
 import { mtlToday, addDays } from '../lib/myDates';
+import { shiftNotes, noteSeen, type ShiftNote } from '../lib/staffNotes';
 
 export function Shift({ backTo = '/' }: { backTo?: string }) {
   const { id } = useParams();
@@ -99,6 +100,9 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team, past }
   const [sheet, setSheet] = useState<'cancel' | 'change' | null>(null);
   const [gone, setGone] = useState<{ late: boolean } | null>(s.attendance === 'cancelled' ? { late: false } : null);
   const chg = useShiftChanges(preview ? [] : [s.id]);
+  // Nov 6 · a note from G&R covers the page until they tap Got it (migration 068)
+  const [gNote, setGNote] = useState<ShiftNote | null>(null);
+  useEffect(() => { shiftNotes([s.id]).then((m) => setGNote(m[s.id] ?? null)); }, [s.id]);
   const { cal: myCal, setCal: setMyCal } = useMyCalendar(preview); // subscribed to the G&R calendar → no one-off Add to calendar
   const inFeed = s.status === 'confirmed' && !s.time_tbc && !(s.events as { details_pending?: boolean }).details_pending;
   const req = chg.reqs[s.id];
@@ -162,11 +166,16 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team, past }
   const isPastV = past !== undefined; // push 51
   return (
     <main className={'page v2 details d3 d37' + (preview ? ' preview' : '')}>
+      {gNote && !gNote.seen_at && <div className="g-cover" role="dialog" aria-modal="true"><div className="g-cover-card">
+        <span className="k">📌 BEFORE YOUR SHIFT · {ev.title.toUpperCase()}</span>
+        <b className="serif">{gNote.body}</b><span className="muted sm">From G&amp;R</span>
+        <button onClick={() => { setGNote({ ...gNote, seen_at: new Date().toISOString() }); if (!preview) noteSeen(s.id); }}>Got it · see my shift</button></div></div>}
       <header className="row d3-top">
         <Link to={backTo} className="back" aria-label={t('back')}>‹</Link>
         <span className="kicker grow d37-date">{isPastV ? `PAST · ${shortDate.replace(',', '')}` : shortDate}</span>
         {isPastV ? null : gone ? <span className="tag-done">Cancelled</span> : <Status s={s.status} />}
       </header>
+      {gNote?.seen_at && <div className="g-line">📌 <b>From G&amp;R:</b> {gNote.body}</div>}
 
       {isPastV ? <>
         <section className="pe-hero">
