@@ -71,8 +71,8 @@ export function Month() {
                 <div className="mo-dh"><b>{Number(d.slice(8))}</b>{d === today && <span className="mo-today">TODAY</span>}<span className="grow" />{short > 0 && <span className="mo-short">{short} short</span>}</div>
                 {mts.map((m) => <div key={m.id} className="mo-m">Meeting · {tShort(m.starts_at)}</div>)}
                 {list.map((e) => { const c = countOf(e); const st = sendStateOf(e, today); return (
-                  <Link key={e.id} to={`/admin/bookings?date=${d}&view=board&ev=${e.id}`} className={'mo-e' + (e.department === 'bar' ? ' is-bar' : '')} onClick={(ev) => ev.stopPropagation()}>
-                    <span className="mo-et">{title(e)}</span>
+                  <Link key={e.id} to={`/admin/bookings?date=${d}&view=board&ev=${e.id}`} className={'mo-e' + (e.department === 'bar' ? ' is-bar' : '') + (e.tentative ? ' tbc-e' : '')} onClick={(ev) => ev.stopPropagation()}>
+                    <span className="mo-et">{e.tentative ? '⏳ ' : ''}{title(e)}</span>
                     <b className={c.need && c.short ? 'amber-t' : 'ok-t'}>{c.need ? `${c.booked}/${c.need}` : `${c.n}`}{c.extra ? <i className="mo-x"> +{c.extra}</i> : null}</b>
                     {st === 'ready' && d >= today && <span className="mo-send">SEND</span>}{st === 'sent' && <span className="mo-sent">✓</span>}
                   </Link>); })}

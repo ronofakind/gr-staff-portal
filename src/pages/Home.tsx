@@ -405,8 +405,9 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
               {managesIt && <MgrRepliesLine eventId={next.events.id} />}
               {lateOn && <LateBlock notice={chg.late[next.id] ?? null} mgr={mgrName} mgrPhone={next.events.manager?.phone} onOpen={() => setSheet({ kind: 'late', s: next })} />}
               {working && nx && <div className="dbl-then-gold">Then <b>{nx.events.title} · {nx.time_tbc ? 'time TBC' : t12(nx.planned_start)}</b> · head over when you’re done here</div>}
+              {next.events.tentative && <div className="tbc-line">⏳ <b>To be confirmed</b> · the client hasn’t said yes yet. Please keep the date free.</div>}
               {waiting && <>
-                <button className="confirm-glow" onClick={() => respond(next.id, 'confirmed')}>Confirm my shift</button>
+                <button className="confirm-glow" onClick={() => respond(next.id, 'confirmed')}>{next.events.tentative ? 'Keep the date for G&R' : 'Confirm my shift'}</button>
                 {by && <div className="confirm-by">{new Date(by).getTime() > Date.now() ? 'Confirm within 24 h' : 'Please confirm now'} · by {byLabel(by)}</div>}
               </>}
               {working && next.ends_own && !next.punches?.punch_out && !preview && <OwnClose s={next} onDone={load} />}
@@ -468,8 +469,9 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
             ))}
             {managesIt && <MgrRepliesLine eventId={next.events.id} />}
             {lateOn && <LateBlock notice={chg.late[next.id] ?? null} mgr={mgrName} mgrPhone={next.events.manager?.phone} onOpen={() => setSheet({ kind: 'late', s: next })} />}
+            {next.events.tentative && <div className="tbc-line">⏳ <b>To be confirmed</b> · the client hasn’t said yes yet. Please keep the date free.</div>}
             {waiting && <>
-              <button className="confirm-glow" onClick={() => respond(next.id, 'confirmed')}>Confirm my shift</button>
+              <button className="confirm-glow" onClick={() => respond(next.id, 'confirmed')}>{next.events.tentative ? 'Keep the date for G&R' : 'Confirm my shift'}</button>
               {by && <div className="confirm-by">{new Date(by).getTime() > Date.now() ? 'Confirm within 24 h' : 'Please confirm now'} · by {byLabel(by)}</div>}
             </>}
             {working && next.ends_own && !next.punches?.punch_out && !preview && <OwnClose s={next} onDone={load} />}
@@ -535,9 +537,9 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
                   const b = dayBadge(s.events.event_date, lang);
                   const pend = !!s.events.details_pending;
                   return (
-                    <Link key={s.id} to={`${base}/shift/${s.id}`} className="agenda-row" style={{ minHeight: 64 }}>
+                    <Link key={s.id} to={`${base}/shift/${s.id}`} className={'agenda-row' + (s.events.tentative ? ' tbc-row' : '')} style={{ minHeight: 64 }}>
                       <div className="d" style={{ width: 40, alignItems: 'center' }}><small>{b.dow}</small><b>{b.day}</b></div>
-                      <div className="what" style={{ gap: 5 }}><b className={pend ? 'muted' : ''}>{pend ? 'Place to come' : s.events.title}{gNotes[s.id] && !gNotes[s.id].seen_at ? ' 📌' : ''}</b>
+                      <div className="what" style={{ gap: 5 }}><b className={pend ? 'muted' : ''}>{pend ? 'Place to come' : s.events.title}{gNotes[s.id] && !gNotes[s.id].seen_at ? ' 📌' : ''}</b>{s.events.tentative && <small className="tbc-tag">⏳ TO BE CONFIRMED</small>}
                         <span className="pos-row2"><span className={'pos-pill' + (isLead(s) ? ' lead' : '')}>{pos(s)}</span>{teams[s.events.id] && !preview ? <span>team {teams[s.events.id].length}</span> : null}</span></div>
                       <span className="row-wear" title={uniformLabel(uniformFor(s))}><UniformIcon kind={uniformFor(s)} size={30} /></span>
                       <div className="row-time"><small>Starts</small>{pend ? <b className="tbc">To come</b> : s.time_tbc ? <b className="tbc">Time TBC</b> : <b><span className="serif">{time(s.planned_start, lang).replace(/\s?[ap]\.?\s?m\.?/i, '')}</span><i>{/p\.?\s?m/i.test(time(s.planned_start, lang)) ? ' PM' : ' AM'}</i></b>}</div>

@@ -497,10 +497,10 @@ export function Bookings() {
     const diff = top && top.e.id !== e.id && st.strength != null ? (top.s ?? 0) - st.strength : 0;
     const leadLabel = isBarEv(e) ? 'Bar manager' : 'MDs'; const leadCode = isBarEv(e) ? 'BM' : 'MD';
     return (
-      <div data-ev={e.id} className={'bk-col' + (focusEv === e.id ? ' focus' : '') + (dept === 'both' && isBarEv(e) ? ' bar-col' : '')} onDragOver={(ev) => ev.preventDefault()} onDrop={() => onDrop(d, { event_id: e.id, start: groups.find((g) => g.need > g.people.length)?.start ?? groups[0]?.start ?? (e.start_time ?? '17:00').slice(0, 5) })}>
+      <div data-ev={e.id} className={'bk-col' + (focusEv === e.id ? ' focus' : '') + (dept === 'both' && isBarEv(e) ? ' bar-col' : '') + (e.tentative ? ' tbc-col' : '')} onDragOver={(ev) => ev.preventDefault()} onDrop={() => onDrop(d, { event_id: e.id, start: groups.find((g) => g.need > g.people.length)?.start ?? groups[0]?.start ?? (e.start_time ?? '17:00').slice(0, 5) })}>
         <div className="bk-colh">
           <div className="bk-see">{dept === 'both' && <i className={'bk-dtag' + (isBarEv(e) ? ' is-bar' : '')}>{isBarEv(e) ? 'BAR' : 'FLOOR'}</i>}AS STAFF SEE IT</div>
-          <Link to={`/admin/event/${e.id}`} className="serif bk-title">{seeTitle(e)}</Link>
+          <Link to={`/admin/event/${e.id}`} className="serif bk-title">{e.tentative ? '⏳ ' : ''}{seeTitle(e)}</Link>
           <div className="muted sm">{[e.event_private?.client, e.event_type, e.guests ? `${e.guests} guests` : null].filter(Boolean).join(' · ')}</div>
           <div className="bk-cc">
             <span className="bk-ccn">{client > 0 ? <><b>{placed} / {client}</b> <span className="muted sm">client count</span></> : <><b>{placed}</b> <Link to={`/admin/event/${e.id}/edit`} className="gold sm strong">client count not set ›</Link></>}</span>

@@ -175,6 +175,9 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team, past }
         <span className="kicker grow d37-date">{isPastV ? `PAST · ${shortDate.replace(',', '')}` : shortDate}</span>
         {isPastV ? null : gone ? <span className="tag-done">Cancelled</span> : <Status s={s.status} />}
       </header>
+      {ev.tentative && <div className="tbc-box"><span className="tbc-pill">⏳ TO BE CONFIRMED</span>
+        <b>The client hasn’t confirmed this event yet.</b> We’re booking early so the team is ready if it goes ahead.
+        <span>• Please keep the date free.<br />• We’ll let you know as soon as the client answers.<br />• If it doesn’t happen, it’s simply removed. Nothing to do.</span></div>}
       {gNote?.seen_at && <div className="g-line">📌 <b>From G&amp;R:</b> {gNote.body}</div>}
 
       {isPastV ? <>

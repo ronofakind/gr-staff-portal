@@ -3310,3 +3310,16 @@ div.venue-rule { background: #fff; border-radius: 14px; padding: 10px 14px; marg
 .own-why button.on { background: #1A1714; color: #fff; box-shadow: none; }
 .late-tag { font-style: normal; font-size: 9.5px; font-weight: 800; padding: 2px 6px; border-radius: 6px; background: #FBF3E0; color: #8A6A2A; margin-left: 6px; vertical-align: 2px; }
 .late-box { background: #FFFBF0; box-shadow: inset 4px 0 0 #C9A227; border-radius: 12px; padding: 10px 12px; font-size: 13px; display: flex; flex-direction: column; gap: 8px; margin: 8px 0; }
+/* Nov 6 · ⏳ To be confirmed */
+.tbc-line { background: #FBF3E0; color: #1A1714; border-radius: 12px; padding: 9px 12px; font-size: 12.5px; margin-top: 8px; }
+.agenda-row.tbc-row { box-shadow: inset 0 0 0 1.5px #C9A227; border-radius: 14px; }
+.tbc-tag { display: block; font-size: 10.5px; font-weight: 800; color: #8A6A2A; letter-spacing: .03em; }
+.tbc-box { background: #FFFBF0; box-shadow: inset 4px 0 0 #C9A227; border-radius: 14px; padding: 12px 14px; font-size: 13.5px; display: flex; flex-direction: column; gap: 8px; color: #1A1714; }
+.tbc-box span:last-child { color: #4A433C; }
+.tbc-pill { align-self: flex-start; font-size: 10.5px; font-weight: 800; letter-spacing: .06em; padding: 4px 9px; border-radius: 8px; background: #FBF3E0; color: #8A6A2A; box-shadow: inset 0 0 0 1.5px #C9A227; }
+.tbc-card { display: flex; flex-direction: column; gap: 10px; grid-column: 1 / -1; } .tbc-card.on { box-shadow: inset 0 0 0 2px #C9A227; }
+.tbc-seg button.on.tbc { background: #FBF3E0; color: #8A6A2A; }
+.tbc-ans { background: #F3EEE7; border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.abtn.tbc-no { color: #9B2226; box-shadow: inset 0 0 0 1.5px #9B2226; }
+.bk-col.tbc-col { outline: 2px dashed #C9A227; outline-offset: -2px; }
+.mo-e.tbc-e { outline: 1.5px dashed #C9A227; outline-offset: -1px; }

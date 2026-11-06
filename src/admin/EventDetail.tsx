@@ -4,6 +4,7 @@ import { supabase, type ShiftRow } from '../lib/supabase';
 import { DriveFiles } from '../components/DriveFiles';
 import { DeleteEvent } from './DeleteEvent';
 import { AlsoManaging } from './AlsoManaging';
+import { TentativeCard } from './Tentative';
 import { TeamChatCard } from './TeamChatCard';
 import { ConfirmTracker } from './Confirmations';
 import { RidesAdmin } from './Rides';
@@ -98,6 +99,8 @@ export function EventDetail() {
       <ReplacedBanners evs={evs} />
 
       <div className="ed2-grid">
+        {e.event_date >= new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' }) && <TentativeCard evs={evs} onChange={load} />}
+        {e.event_date >= new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' }) && <TentativeCard evs={evs} onChange={load} />}
         <Sec k="event" title="Event" open={isOpen('event')} setOpen={setFold} summary={[dLabel(e.event_date, { month: 'short', day: 'numeric' }), x?.venue?.name ?? e.title, e.guests ? `${e.guests} guests` : null].filter(Boolean).join(' · ')}>
           <div className="ed2-facts">
             <F l="Date" v={dLabel(e.event_date, { weekday: 'long', month: 'long', day: 'numeric' })} />
