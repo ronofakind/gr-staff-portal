@@ -36,7 +36,7 @@ export function StaffProfile({ s, onClose, onEdit, all }: { s: AStaff; onClose: 
   useEffect(() => {
     reloadRules(); loadScoreData().then(setSd); setTierNow(s.staff_private?.tier ?? null);
     if (!all?.length) allStaff().then(setPeople);
-    supabase.from('venues').select('id,name').order('name').then(({ data }) => setVenues(Array.isArray(data) ? (data as Venue[]) : []));
+    supabase.from('venues').select('id,name').is('archived_at', null).order('name').then(({ data }) => setVenues(Array.isArray(data) ? (data as Venue[]) : []));
   }, [s.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {

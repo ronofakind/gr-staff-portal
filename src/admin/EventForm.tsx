@@ -169,7 +169,7 @@ export function EventForm() {
 
   // Lists
   useEffect(() => {
-    supabase.from('venues').select('id,name,address,usual_client_id,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,uniform_items,always_offer_rides').order('name').then(({ data }) => setVenues((data ?? []) as Venue[]));
+    supabase.from('venues').select('id,name,address,usual_client_id,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,uniform_items,always_offer_rides,archived_at').order('name').then(({ data }) => setVenues((data ?? []) as Venue[]));
     // push 32: + extras_billing / transport_billing (a picked client sets the billing on new events; 038 not applied → old columns)
     const cq = (extra: string) => supabase.from('clients').select('id,name,rate_sets,kind,address,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,uniform_items,drive_folder_default' + extra).order('name');
     cq(',extras_billing,transport_billing').then(async (r) => { const res = r.error ? await cq('') : r; setClients((res.data ?? []) as unknown as Client[]); });
@@ -535,7 +535,7 @@ export function EventForm() {
 
       <Fold n={3} title="Staffing" open={isOpen(3)} setOpen={(o) => setFold(3, o)}
         summary={(() => { const t = lines.reduce((x, l) => x + l.count, 0); const nm = lines.reduce((x, l) => x + l.names.length, 0); return `${floorN} floor · ${t - floorN} bar · ${t} total · ${nm} of ${t} named`; })()}>
-        <Grid date={date} lines={lines} setLines={setLines} staff={staff} day={day} mode={mode} />
+        <Grid date={date} lines={lines} setLines={setLines} staff={staff} day={day} mode={mode} tbc={startTbc && !pendingDetails} />
       </Fold>
 
       <Fold n={4} title="Event folder" open={isOpen(4)} setOpen={(o) => setFold(4, o)} summary={folder.trim() ? 'Google Drive · folder linked' : `Google Drive · ${driveWanted ? 'create on Save' : 'off'}${drive ? '' : ' · not connected'}`}>
@@ -647,7 +647,7 @@ function VenuePicker({ venues, privates, value, venue, privateId, onPick, onPriv
   const [open, setOpen] = useState(false); const [q, setQ] = useState('');
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => { const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); }; document.addEventListener('mousedown', h); return () => document.removeEventListener('mousedown', h); }, []);
-  const list = venues.filter((v) => v.name.toLowerCase().includes(q.toLowerCase()));
+  const list = venues.filter((v) => (!(v as Venue & { archived_at?: string | null }).archived_at || v.id === venue?.id) && v.name.toLowerCase().includes(q.toLowerCase()));
   const homes = privates.filter((c) => c.name.toLowerCase().includes(q.toLowerCase()));
   return (
     <div className="vp" ref={ref}>
@@ -679,7 +679,7 @@ function VenuePicker({ venues, privates, value, venue, privateId, onPick, onPriv
 const ROLE_KEYS: Record<string, string> = { md: 'MD', w: 'W', waiter: 'W', waiters: 'W', bus: 'BUS', busboy: 'BUS', bm: 'BM', 'bar manager': 'BM', bt: 'BT', bartender: 'BT', bartenders: 'BT', bb: 'BB', barback: 'BB', barbacks: 'BB' };
 
 /** The staffing grid: one line per role + start time. */
-function Grid({ date, lines, setLines, staff, day, mode }: { date: string; lines: Line[]; setLines: (l: Line[]) => void; staff: AStaff[]; day: DayInfo; mode: Mode }) {
+function Grid({ date, lines, setLines, staff, day, mode, tbc }: { date: string; lines: Line[]; setLines: (l: Line[]) => void; staff: AStaff[]; day: DayInfo; mode: Mode; tbc?: boolean }) {
   const wrap = useRef<HTMLDivElement>(null);
   const upd = (i: number, p: Partial<Line>) => setLines(lines.map((l, k) => (k === i ? { ...l, ...p } : l)));
   const focusRow = (i: number) => setTimeout(() => wrap.current?.querySelector<HTMLElement>(`[data-row="${i}"] select`)?.focus(), 0);
@@ -724,12 +724,12 @@ function Grid({ date, lines, setLines, staff, day, mode }: { date: string; lines
     <div className="grid-card" ref={wrap}>
       <div className="sec" style={{ padding: '4px 4px 10px' }}><span className="serif">Staffing · one line per start time</span><span className="muted sm hide-sm">Tab → next cell · Enter → new line · ⌘D duplicate line · paste rows from the sheet</span></div>
       <div className="sg">
-        <div className="sg-h"><span>DEPT</span><span>ROLE</span><span>START</span><span>END ~</span><span>HOW MANY</span><span>NAMES</span><span /></div>
+        <div className="sg-h"><span>DEPT</span><span>ROLE</span><span>{tbc ? 'START · TBC' : 'START'}</span><span>END ~</span><span>HOW MANY</span><span>NAMES</span><span /></div>
         {lines.map((l, i) => (
           <div key={i} className={'sg-r ' + (l.dept === 'bar' ? 'is-bar' : 'is-floor')} data-row={i} onKeyDown={keys(i)} onPaste={paste(i)}>
             <select aria-label="Department" value={l.dept} onChange={(e) => { const d = e.target.value as 'floor' | 'bar'; upd(i, { dept: d, code: d === 'bar' ? 'BT' : 'W', names: [] }); }}>{(mode !== 'bar' || l.dept === 'floor') && <option value="floor">● Floor</option>}{(mode !== 'floor' || l.dept === 'bar') && <option value="bar">● Bar</option>}</select>
             <select aria-label="Role" value={l.code} onChange={(e) => upd(i, { code: e.target.value, names: [] })} className={l.code === 'MD' || l.code === 'BM' ? 'strong' : ''}>{ROLES.filter((r) => r.dept === l.dept).map((r) => <option key={r.code} value={r.code}>{r.label}</option>)}</select>
-            <TimeCell value={l.start} onChange={(v) => upd(i, { start: v })} />
+            <span className={tbc ? 'sg-tbc' : 'sg-tc'}><TimeCell value={l.start} onChange={(v) => upd(i, { start: v })} />{tbc && <em title="Start time to come · staff see Time TBC">TBC</em>}</span>
             <TimeCell value={l.end ?? ''} optional onChange={(v) => upd(i, { end: v || null })} />
             <input aria-label="How many" type="number" min={0} value={l.count} onChange={(e) => upd(i, { count: Math.max(0, Number(e.target.value)) })} className={l.count >= 10 ? 'strong' : ''} />
             <NamePicker line={l} date={date} staff={staff} day={day} taken={lines.flatMap((x, k) => (k === i ? [] : x.names))} onChange={(names) => upd(i, { names, count: Math.max(l.count, names.length) })} />

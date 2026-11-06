@@ -15,11 +15,11 @@ import type { UniItems, UniItemsMap, UniLineKey } from '../components/Uniform';
  */
 type Tab = 'venues' | 'clients' | 'homes';
 type RateSet = Client['rate_sets'][number];
-type V = Venue & { staff_notes?: string | null; venue_notes?: string | null; photos?: string[] | null; always_offer_rides?: boolean; no_outside_food?: boolean };
+type V = Venue & { staff_notes?: string | null; venue_notes?: string | null; photos?: string[] | null; always_offer_rides?: boolean; no_outside_food?: boolean; archived_at?: string | null };
 type C = Client & { qb_customer?: string | null; extras_billing?: 'gr' | 'client'; transport_billing?: 'client' | 'gr'; admin_fee_pct?: number | null };
 type Count = { n: number; last: string | null; next: string | null; bar: boolean; floor: boolean };
 
-const V_COLS = 'id,name,address,street,unit,city,province,postal_code,usual_client_id,staff_notes,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,uniform_items,always_offer_rides,no_outside_food,pin_lat,pin_lng,pin_label';
+const V_COLS = 'id,name,address,street,unit,city,province,postal_code,usual_client_id,staff_notes,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,uniform_items,always_offer_rides,no_outside_food,pin_lat,pin_lng,pin_label,archived_at';
 const C_COLS = 'id,name,qb_customer,rate_sets,kind,address,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,uniform_items,drive_folder_default,extras_billing';
 /** 038 columns; read in a second pass so the page works before the migration is applied. */
 const V_038 = ',venue_notes,photos'; const C_038 = ',admin_fee_pct,transport_billing';
@@ -48,7 +48,7 @@ export function Venues() {
   const [venues, setVenues] = useState<V[] | null>(null); const [clients, setClients] = useState<C[] | null>(null);
   const [has038, setHas038] = useState(true);
   const [counts, setCounts] = useState<{ v: Record<string, Count>; c: Record<string, Count> }>({ v: {}, c: {} });
-  const [q, setQ] = useState(''); const [sel, setSel] = useState<string | null>(null);
+  const [q, setQ] = useState(''); const [sel, setSel] = useState<string | null>(null); const [showArch, setShowArch] = useState(false);
   const setTabK = (t: Tab) => { setTab(t); setSel(null); setQ(''); try { localStorage.setItem('gr-vc-tab', t); } catch { /* private mode */ } };
 
   const load = async () => {
@@ -87,9 +87,9 @@ export function Venues() {
   const plain = (clients ?? []).filter((c) => c.kind !== 'private_home');
   const list = useMemo(() => {
     const w = low(q);
-    if (tab === 'venues') return (venues ?? []).filter((x) => !w || low(x.name + ' ' + (x.address ?? '')).includes(w));
+    if (tab === 'venues') return (venues ?? []).filter((x) => (showArch || !x.archived_at || x.id === sel) && (!w || low(x.name + ' ' + (x.address ?? '')).includes(w))).sort((a, b) => Number(!!a.archived_at) - Number(!!b.archived_at));
     return (tab === 'homes' ? homes : plain).filter((x) => !w || low(x.name + ' ' + (x.address ?? '') + ' ' + (x.qb_customer ?? '')).includes(w));
-  }, [tab, q, venues, clients]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tab, q, venues, clients, showArch, sel]); // eslint-disable-line react-hooks/exhaustive-deps
   const clientName = (id: string | null | undefined) => (clients ?? []).find((c) => c.id === id)?.name ?? null;
 
   const cur = sel === 'new' ? null : tab === 'venues' ? (venues ?? []).find((x) => x.id === sel) ?? null : (clients ?? []).find((x) => x.id === sel) ?? null;
@@ -102,7 +102,7 @@ export function Venues() {
       <div className={'vc-grid' + (sel ? ' has-sel' : '')}>
         <div className="vc-list">
           <div className="seg3 vc-tabs">
-            {([['venues', 'Venues', venues?.length], ['clients', 'Clients', plain.length], ['homes', 'Private homes', homes.length]] as [Tab, string, number | undefined][]).map(([k, l, n]) => (
+            {([['venues', 'Venues', venues?.filter((x) => !x.archived_at).length], ['clients', 'Clients', plain.length], ['homes', 'Private homes', homes.length]] as [Tab, string, number | undefined][]).map(([k, l, n]) => (
               <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTabK(k)}>{l}{n != null ? ` · ${n}` : ''}</button>
             ))}
           </div>
@@ -113,7 +113,7 @@ export function Venues() {
             const bits = [lastLabel(c), c?.bar && c?.floor ? 'floor + bar' : c?.bar ? 'bar' : '', x.always_offer_rides ? '🚗 rides' : '', x.no_outside_food ? 'no outside food' : ''].filter(Boolean).join(' · ');
             return (
               <button key={x.id} className={'vc-row' + (sel === x.id ? ' on' : '')} onClick={() => setSel(x.id)}>
-                <span className="spread"><b>{x.name}</b><small>{bits}</small></span>
+                <span className="spread"><b>{x.name}{x.archived_at && <em className="vc-arch"> · archived</em>}</b><small>{bits}</small></span>
                 <small>{x.address ? [shortAddr(x.address), clientName(x.usual_client_id)].filter(Boolean).join(' · ') : <span className="vc-miss">address missing</span>}</small>
               </button>
             );
@@ -128,14 +128,15 @@ export function Venues() {
             );
           })}
           {list.length === 0 && venues !== null && <div className="muted sm" style={{ padding: '6px 2px' }}>Nothing matches “{q}”.</div>}
+          {tab === 'venues' && (venues ?? []).some((x) => x.archived_at) && <button className="lnk sm vc-archt" onClick={() => setShowArch(!showArch)}>{showArch ? '▾ Hide archived' : `▸ Archived (${(venues ?? []).filter((x) => x.archived_at).length}) · tap to see / bring back`}</button>}
           <button className="vc-new" onClick={() => setSel('new')}>+ New {tab === 'venues' ? 'venue' : tab === 'homes' ? 'private home' : 'client'}</button>
         </div>
 
         <div className="vc-card">
           {sel && <button className="vc-back muted sm strong" onClick={() => setSel(null)}>‹ All {tab === 'venues' ? 'venues' : tab === 'homes' ? 'private homes' : 'clients'}</button>}
           {!sel && <div className="adm-card vc-empty muted">Pick a {tab === 'venues' ? 'venue' : tab === 'homes' ? 'private home' : 'client'} on the left, or add a new one.</div>}
-          {sel && tab === 'venues' && venues && clients && <VenueCard key={sel} v={cur as V | null} clients={clients} count={cur ? counts.v[cur.id] : undefined} has038={has038}
-            onSaved={async (id) => { await load(); setSel(id); }} onClient={openClient} />}
+          {sel && tab === 'venues' && venues && clients && <VenueCard key={sel} v={cur as V | null} clients={clients} count={cur ? counts.v[cur.id] : undefined} has038={has038} all={venues}
+            onSaved={async (id) => { await load(); setSel(id); }} onGone={async () => { await load(); setSel(null); }} onClient={openClient} />}
           {sel && tab !== 'venues' && clients && venues && <ClientCard key={sel + tab} c={cur as C | null} home={tab === 'homes'} venues={venues} count={cur ? counts.c[cur.id] : undefined} has038={has038}
             onSaved={async (id) => { await load(); const k = (await supabase.from('clients').select('kind').eq('id', id).maybeSingle()).data?.kind; if ((k === 'private_home') !== (tab === 'homes')) setTabK(k === 'private_home' ? 'homes' : 'clients'); setSel(id); }} />}
         </div>
@@ -193,7 +194,7 @@ function Uniforms({ u, set }: { u: Uni; set: (u: Uni) => void }) {
 const uniSummary = (u: Uni) => `Floor · men ${uniName(u.floor_m)} · women ${uniName(u.floor_w)} — Bar · men ${uniName(u.bar_m)} · women ${uniName(u.bar_w)}`;
 
 // ───────── venue card ─────────
-function VenueCard({ v, clients, count, has038, onSaved, onClient }: { v: V | null; clients: C[]; count?: Count; has038: boolean; onSaved: (id: string) => void; onClient: (id: string) => void }) {
+function VenueCard({ v, clients, count, has038, all, onSaved, onGone, onClient }: { v: V | null; clients: C[]; count?: Count; has038: boolean; all: V[]; onSaved: (id: string) => void; onGone: () => void; onClient: (id: string) => void }) {
   const [name, setName] = useState(v?.name ?? ''); const [clientId, setClientId] = useState(v?.usual_client_id ?? '');
   const [address, setAddress] = useState(v?.address ?? ''); const [parts, setParts] = useState<AddressParts | null>(null);
   const [parking, setParking] = useState(v?.staff_notes ?? ''); const [notes, setNotes] = useState(v?.venue_notes ?? '');
@@ -264,9 +265,64 @@ function VenueCard({ v, clients, count, has038, onSaved, onClient }: { v: V | nu
               </div>
             </> : <small className="muted">The client’s billing (extras, transport, admin fee, rates) shows here.</small>}
           </Sec>
+          {v && <VenueRemove v={v} all={all} onSaved={onSaved} onGone={onGone} />}
         </div>
       </div>
     </div>
+  );
+}
+
+/** 074 · archive / delete a venue · move its events to the right one (duplicates). */
+type VEv = { id: string; title: string; event_date: string; department: string };
+function VenueRemove({ v, all, onSaved, onGone }: { v: V; all: V[]; onSaved: (id: string) => void; onGone: () => void }) {
+  const [open, setOpen] = useState(false); const [evs, setEvs] = useState<VEv[] | null>(null); const [to, setTo] = useState('');
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState(''); const [sure, setSure] = useState(false);
+  const today = isoDay(new Date());
+  const show = async () => {
+    setOpen(true); setErr(''); setSure(false);
+    const { data, error } = await supabase.from('events').select('id,title,event_date,department').eq('venue_id', v.id).order('event_date', { ascending: false });
+    if (error) setErr(error.message); setEvs((data ?? []) as VEv[]);
+  };
+  const archive = async (on: boolean) => {
+    setBusy(true); setErr('');
+    const { error } = await supabase.from('venues').update({ archived_at: on ? new Date().toISOString() : null }).eq('id', v.id);
+    setBusy(false); if (error) return setErr(error.message); setOpen(false); onSaved(v.id);
+  };
+  const remove = async () => {
+    setBusy(true); setErr('');
+    const { error } = await supabase.rpc('admin_venue_remove', { p_venue: v.id, p_move_to: to || null });
+    setBusy(false); if (error) return setErr(error.message); onGone();
+  };
+  const n = evs?.length ?? 0; const up = (evs ?? []).filter((e) => e.event_date >= today).length;
+  const others = all.filter((x) => x.id !== v.id && !x.archived_at);
+  return (
+    <section className="adm-card vc-sec vc-rm">
+      <div className="vc-sec-h"><span>{v.archived_at ? '🗄️ ARCHIVED' : 'REMOVE THIS VENUE'}</span><small>{v.archived_at ? 'hidden from the list and the venue picker' : 'duplicates, old names'}</small></div>
+      {!open && <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+        {v.archived_at ? <button className="abtn sm dark" disabled={busy} onClick={() => archive(false)}>Bring it back</button>
+          : <button className="abtn sm" disabled={busy} onClick={() => archive(true)}>🗄️ Archive</button>}
+        <button className="abtn sm vc-del" onClick={show}>🔀 Move its events / 🗑 Delete</button></div>}
+      {open && evs === null && <small className="muted">Looking for its events…</small>}
+      {open && evs && <div className="stack" style={{ gap: 10 }}>
+        {n > 0 ? <>
+          <b className="vc-warn">⚠️ {n} event{n === 1 ? '' : 's'} use “{v.name}”{up ? ` · ${up} upcoming` : ''}</b>
+          <div className="vc-evs">{evs.map((e) => (
+            <Link key={e.id} className="vc-ev" to={`/admin/bookings?date=${e.event_date}&view=board&ev=${e.id}`}>
+              <span className="vc-ev-d">{dLabel(e.event_date)}</span><span className="grow">{e.title}{e.department === 'bar' ? ' · bar' : ''}</span>
+              <small className={e.event_date >= today ? 'accent' : 'muted'}>{e.event_date >= today ? 'UPCOMING' : 'PAST'}</small><b>Open ›</b></Link>))}</div>
+          <label className="ef-f"><span>MOVE THESE EVENTS TO</span>
+            <select value={to} onChange={(e) => { setTo(e.target.value); setSure(false); }}><option value="">Pick the right venue…</option>{others.map((x) => <option key={x.id} value={x.id}>{x.name}{x.address ? ` · ${shortAddr(x.address)}` : ''}</option>)}</select>
+            <small className="muted">Events switch to that venue (address, 📍 spot, photos). Staff only get a “shift changed” note if the address is different. Anything the right venue is missing (spot, photos, notes) is copied over.</small></label>
+          {!sure ? <button className="abtn dark" disabled={!to || busy} onClick={() => setSure(true)}>Move {n} event{n === 1 ? '' : 's'} + delete this one</button>
+            : <button className="abtn vc-delb" disabled={busy} onClick={remove}>{busy ? 'Moving…' : `Yes, move ${n} and delete “${v.name}”`}</button>}
+          <div className="row" style={{ gap: 8 }}>{!v.archived_at && <button className="abtn sm" disabled={busy} onClick={() => archive(true)}>Archive instead</button>}<button className="abtn sm" onClick={() => setOpen(false)}>Cancel</button></div>
+        </> : <>
+          <b>Delete “{v.name}”?</b><small className="muted">No events use it. This can’t be undone.</small>
+          <div className="row" style={{ gap: 8 }}>{!sure ? <button className="abtn vc-delb" onClick={() => setSure(true)}>🗑 Delete</button> : <button className="abtn vc-delb" disabled={busy} onClick={remove}>{busy ? 'Deleting…' : 'Yes, delete it'}</button>}<button className="abtn sm" onClick={() => setOpen(false)}>Cancel</button></div>
+        </>}
+      </div>}
+      {err && <p className="error">{err}</p>}
+    </section>
   );
 }
 

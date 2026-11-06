@@ -3344,3 +3344,10 @@ div.venue-rule { background: #fff; border-radius: 14px; padding: 10px 14px; marg
 .d3-pin b { font-size: 13.5px; }
 .vp-saved { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 13px; } .vp-saved b { color: var(--ok); } .vp-saved a, .vp-found a { font-size: 13px; font-weight: 700; color: var(--ink); }
 .vp-found { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 12px; background: #F6F2EC; } .vp-found b { font-size: 14px; color: var(--ok); }
+.vc-arch { font-style: normal; font-weight: 600; color: var(--muted); font-size: 12px; } .vc-archt { text-align: left; padding: 8px 2px; }
+.vc-warn { font-size: 15px; } .vc-evs { display: flex; flex-direction: column; gap: 6px; max-height: 260px; overflow: auto; }
+.vc-ev { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 11px; background: #F6F2EC; color: var(--ink); text-decoration: none; font-size: 13px; } .vc-ev:hover { background: #EEE7DD; }
+.vc-ev-d { font-weight: 800; font-size: 12px; min-width: 70px; } .vc-ev small { font-size: 10px; font-weight: 800; letter-spacing: .06em; }
+.vc-del { color: var(--accent); } .vc-delb { background: #9B2226; color: #fff; border-color: #9B2226; }
+.sg-tc, .sg-tbc { position: relative; display: block; min-width: 0; } .sg-tc > *, .sg-tbc > * { width: 100%; }
+.sg-tbc > :first-child { opacity: .45; } .sg-tbc em { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: auto; font-style: normal; font-size: 10px; font-weight: 800; letter-spacing: .06em; padding: 3px 6px; border-radius: 6px; background: #C9A227; color: #1A1714; pointer-events: none; }
