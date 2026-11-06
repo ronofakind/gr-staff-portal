@@ -10,7 +10,7 @@ import { AskNeed, useAskNeeds } from './AskChange';
 import { DeleteEvent } from './DeleteEvent';
 import { DeptTag } from './DeptTag';
 import { SheetChanges } from './SheetChanges';
-import { hoursBetween } from './api';
+import { needsSend, hoursBetween } from './api';
 import { LateEnds } from './LateEnds';
 import { useNewStaffRatings, NewStaffGoldCard, NewStaffPanel, nsrOpenDefault, TAG_LABEL, BAD_TAGS } from './NewStaffRatings';
 import { supabase } from '../lib/supabase';
@@ -70,7 +70,7 @@ export function Today() {
       for (const e of ahead.filter((x) => x.department !== 'bar')) {
         const booked = e.shifts.filter((s) => s.status !== 'declined').length;
         if (booked < e.staff_needed) n.push({ key: e.id + 'short', title: `${e.title}${e.department === 'bar' ? ' · BAR' : ''} · ${dLabel(e.event_date)}`, sub: `Short ${e.staff_needed - booked} · ${booked} / ${e.staff_needed} booked`, action: 'Assign', to: `/admin/day?d=${e.event_date}` });
-        const unsent = e.shifts.filter((s) => !s.notified_at || s.changed_at > s.notified_at).length;
+        const unsent = e.shifts.filter(needsSend).length;
         if (booked && unsent && e.event_date <= addDays(today, 7)) n.push({ key: e.id + 'send', title: `${e.title} · ${dLabel(e.event_date)}`, sub: `${unsent} not sent details yet`, action: 'Send', to: `/admin/day?d=${e.event_date}` });
       }
       // push 33g · booked, asked to confirm 6 h+ ago (red once past 24 h)

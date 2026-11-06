@@ -192,9 +192,17 @@ export function countOf(e: AEvent) {
   return { n, need, booked: need ? Math.min(n, need) : n, extra: need ? Math.max(0, n - need) : 0, short: need ? Math.max(0, need - n) : 0 };
 }
 /** Confirmations: sent · SEND (4 days or less, not sent) · later · none. */
+/** Nov 6 · still needs a confirmation from the app? Someone you confirmed by hand (text / call) counts as sent,
+ *  unless something changed after they confirmed. Everyone else: never sent, or changed since it was sent. */
+export const needsSend = (s: { status: string; notified_at: string | null; changed_at?: string | null; responded_at?: string | null }) => {
+  const ch = s.changed_at ?? '';
+  if (s.notified_at) return ch > s.notified_at;
+  if (s.status !== 'confirmed') return true;
+  return !!s.responded_at && new Date(ch).getTime() - new Date(s.responded_at).getTime() > 60000;
+};
 export function sendStateOf(e: AEvent, today: string): 'sent' | 'ready' | 'later' | 'none' {
   const ls = e.shifts.filter((s) => liveShift(s) && !s.attendance); if (!ls.length) return 'none';
-  if (!ls.some((s) => !s.notified_at || (s.changed_at ?? '') > s.notified_at)) return 'sent';
+  if (!ls.some(needsSend)) return 'sent';
   const days = Math.round((new Date(e.event_date + 'T12:00:00').getTime() - new Date(today + 'T12:00:00').getTime()) / 864e5);
   return days <= 4 ? 'ready' : 'later';
 }

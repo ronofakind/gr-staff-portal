@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { DeleteEvent } from './DeleteEvent';
 import { DeptTag } from './DeptTag';
-import { eventsBetween, addDays, isoDay, hhmm, countOf, type AEvent, type AShift } from './api';
+import { needsSend, eventsBetween, addDays, isoDay, hhmm, countOf, type AEvent, type AShift } from './api';
 import { meetingsBetween, MeetingLine, type AMeeting } from './Meetings';
 import { dayOfMtl } from '../lib/meetings';
 
@@ -108,7 +108,7 @@ export function Week() {
 }
 
 const live = (s: AShift) => s.status !== 'declined' && !s.attendance && !s.cancelled_at;
-const unsent = (s: AShift) => live(s) && (!s.notified_at || s.changed_at > s.notified_at);
+const unsent = (s: AShift) => live(s) && needsSend(s);
 /** Sent, not confirmed yet. */
 const waiting = (e: AEvent) => e.shifts.filter((s) => live(s) && !!s.notified_at && s.status === 'booked');
 function sendState(e: AEvent, today: string): 'sent' | 'ready' | 'later' | 'none' {

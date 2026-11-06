@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { DeptTag } from './DeptTag';
 import { supabase } from '../lib/supabase';
 import {
-  eventsBetween, allStaff, addDays, isoDay, startIso, endIso, flagsOf, flagText, ap12, bookingChange, confirmationsSent, UNIFORMS,
+  needsSend, eventsBetween, allStaff, addDays, isoDay, startIso, endIso, flagsOf, flagText, ap12, bookingChange, confirmationsSent, UNIFORMS,
   type AEvent, type AStaff, type AShift,
 } from './api';
 import { ChangeSheet, FillSheet, AskTracker, trackerGroups, type ChangeKind } from './AskChange';
@@ -95,7 +95,7 @@ export function Day() {
   });
   const setLeave = (e: AEvent, sh: AShift, t: string) => run(async () => { await supabase.from('shifts').update({ leave_by: t ? endIso(e.event_date, hm(sh.planned_start), t) : null }).eq('id', sh.id); });
   const sendFor = (list: AEvent[]) => run(async () => {
-    const ids = list.flatMap((e) => e.shifts.filter((s) => s.status !== 'declined' && (!s.notified_at || s.changed_at > s.notified_at)).map((s) => s.id));
+    const ids = list.flatMap((e) => e.shifts.filter((s) => s.status !== 'declined' && needsSend(s)).map((s) => s.id));
     if (ids.length) await supabase.from('shifts').update({ notified_at: new Date().toISOString() }).in('id', ids);
   });
 
@@ -117,7 +117,7 @@ export function Day() {
   const bench = useMemo(() => staff.filter((s) => s.active && s.department !== 'bar' && (!placed.has(s.id) || q.trim().length > 1))
     .filter((s) => (q ? s.full_name.toLowerCase().includes(q.toLowerCase()) : ['yes', 'maybe'].includes(avail[s.id]?.status ?? '')))
     .sort((a, b) => Number(avail[b.id]?.status === 'yes') - Number(avail[a.id]?.status === 'yes') || (a.staff_private?.ranking ?? 999) - (b.staff_private?.ranking ?? 999)), [staff, placed, avail, q]);
-  const pending = (e: AEvent) => team(e).filter((s) => !s.notified_at || s.changed_at > s.notified_at).length;
+  const pending = (e: AEvent) => team(e).filter(needsSend).length;
   const booked = evs.reduce((n, e) => n + team(e).filter((s) => !s.attendance).length, 0);
   const needed = evs.reduce((n, e) => n + e.staff_needed, 0);
   const shortEvs = evs.filter((e) => team(e).filter((s) => !s.attendance).length < e.staff_needed);
