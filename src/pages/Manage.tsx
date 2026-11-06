@@ -609,7 +609,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
           <SwipeSheet onClose={() => setAddMgr(false)} label="Add a manager">
             <div className="serif" style={{ fontSize: 24 }}>Add a manager</div>
             <div className="muted sm">From your team tonight. They can start, end and submit hours, like you.</div>
-            <input className="mgr-q" placeholder="Search your team" value={mgrQ} onChange={(e) => setMgrQ(e.target.value)} />
+            {/* Nov 6 · no search box: the keyboard popped up on open */}
             <div className="mgr-list">{pool.map((r) => <button key={r.id} className={'mgr-opt' + (mgrPick === r.staff_id ? ' on' : '')} onClick={() => setMgrPick(r.staff_id ?? null)}>
               <span className="ck">{mgrPick === r.staff_id ? '✓' : ''}</span><b className="grow">{r.staff!.full_name} <span className="muted">· {roleLabel(r.position_code, r.position_detail)}</span></b></button>)}
               {!pool.length && <div className="muted sm">Nobody else on the team.</div>}</div>
