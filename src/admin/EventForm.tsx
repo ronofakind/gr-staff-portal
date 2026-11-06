@@ -171,8 +171,8 @@ export function EventForm() {
   useEffect(() => {
     supabase.from('venues').select('id,name,address,usual_client_id,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,uniform_items,always_offer_rides,archived_at').order('name').then(({ data }) => setVenues((data ?? []) as Venue[]));
     // push 32: + extras_billing / transport_billing (a picked client sets the billing on new events; 038 not applied → old columns)
-    const cq = (extra: string) => supabase.from('clients').select('id,name,rate_sets,kind,address,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,uniform_items,drive_folder_default' + extra).order('name');
-    cq(',extras_billing,transport_billing').then(async (r) => { const res = r.error ? await cq('') : r; setClients((res.data ?? []) as unknown as Client[]); });
+    const cq = (extra: string) => supabase.from('clients').select('id,name,rate_sets,kind,address,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,uniform_items,drive_folder_default,archived_at' + extra).order('name');
+    cq(',extras_billing,transport_billing').then(async (r) => { const res = r.error ? await cq('') : r; setClients((res.data ?? []) as unknown as Client[]); }); // 074: archived ones stay in the list only for events that already use them
     allStaff().then((s) => setStaff(s.filter((x) => x.active)));
     supabase.from('event_types').select('name,main,sort').order('sort').then(({ data }) => setTypes((data ?? []) as { name: string; main: boolean }[]));
     supabase.rpc('google_status').then(({ data }) => setDrive((data as { email: string } | null) ?? null));
@@ -273,7 +273,7 @@ export function EventForm() {
     setUFloorW(c.uniform_floor_w ?? c.uniform_floor ?? uFloorW); setUBarW(c.uniform_bar_w ?? 'dress');
     setItemsMap(c.uniform_items ?? {});
   };
-  const privates = clients.filter((c) => c.kind === 'private_home');
+  const privates = clients.filter((c) => c.kind === 'private_home' && (!(c as Client & { archived_at?: string | null }).archived_at || c.id === privateId));
   useEffect(() => { if (!privateId && !venueId && title) { const c = privates.find((x) => x.name === title); if (c) setPrivateId(c.id); } }, [title, clients.length]);
 
   // Staffing toggle: limits the grid's departments and which uniform rows show.
@@ -480,9 +480,9 @@ export function EventForm() {
                 const c = clients.find((x) => x.id === v); if (c?.kind === 'private_home') pickPrivate(c); else { setClientId(v); setRateSet(null); }
               }}>
                 <option value="">—</option>
-                {clients.filter((c) => !c.kind).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {clients.filter((c) => !c.kind && (!(c as Client & { archived_at?: string | null }).archived_at || c.id === clientId)).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 {privates.length > 0 && <optgroup label="── Private homes ──">{privates.map((c) => <option key={c.id} value={c.id}>{c.name} · private home</option>)}</optgroup>}
-                {clients.some((c) => c.kind === 'roaming') && <optgroup label="── Venue changes each time ──">{clients.filter((c) => c.kind === 'roaming').map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</optgroup>}
+                {clients.some((c) => c.kind === 'roaming') && <optgroup label="── Venue changes each time ──">{clients.filter((c) => c.kind === 'roaming' && (!(c as Client & { archived_at?: string | null }).archived_at || c.id === clientId)).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</optgroup>}
                 <option value="__new">+ New client…</option>
               </select>}
             {privateId ? <small className="okc">Private home · the client is the venue</small> : venue?.usual_client_id && venue.usual_client_id === clientId && <small className="okc">Filled from the venue · change if needed</small>}

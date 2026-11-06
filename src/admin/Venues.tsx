@@ -16,11 +16,11 @@ import type { UniItems, UniItemsMap, UniLineKey } from '../components/Uniform';
 type Tab = 'venues' | 'clients' | 'homes';
 type RateSet = Client['rate_sets'][number];
 type V = Venue & { staff_notes?: string | null; venue_notes?: string | null; photos?: string[] | null; always_offer_rides?: boolean; no_outside_food?: boolean; archived_at?: string | null };
-type C = Client & { qb_customer?: string | null; extras_billing?: 'gr' | 'client'; transport_billing?: 'client' | 'gr'; admin_fee_pct?: number | null };
+type C = Client & { qb_customer?: string | null; extras_billing?: 'gr' | 'client'; transport_billing?: 'client' | 'gr'; admin_fee_pct?: number | null; archived_at?: string | null };
 type Count = { n: number; last: string | null; next: string | null; bar: boolean; floor: boolean };
 
 const V_COLS = 'id,name,address,street,unit,city,province,postal_code,usual_client_id,staff_notes,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,uniform_items,always_offer_rides,no_outside_food,pin_lat,pin_lng,pin_label,archived_at';
-const C_COLS = 'id,name,qb_customer,rate_sets,kind,address,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,uniform_items,drive_folder_default,extras_billing';
+const C_COLS = 'id,name,qb_customer,rate_sets,kind,address,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,uniform_items,drive_folder_default,extras_billing,archived_at';
 /** 038 columns; read in a second pass so the page works before the migration is applied. */
 const V_038 = ',venue_notes,photos'; const C_038 = ',admin_fee_pct,transport_billing';
 
@@ -83,8 +83,9 @@ export function Venues() {
     });
   }, []);
 
-  const homes = (clients ?? []).filter((c) => c.kind === 'private_home');
-  const plain = (clients ?? []).filter((c) => c.kind !== 'private_home');
+  const homesAll = (clients ?? []).filter((c) => c.kind === 'private_home'); const plainAll = (clients ?? []).filter((c) => c.kind !== 'private_home');
+  const vis = (c: C) => showArch || !c.archived_at || c.id === sel;
+  const homes = homesAll.filter(vis); const plain = plainAll.filter(vis);
   const list = useMemo(() => {
     const w = low(q);
     if (tab === 'venues') return (venues ?? []).filter((x) => (showArch || !x.archived_at || x.id === sel) && (!w || low(x.name + ' ' + (x.address ?? '')).includes(w))).sort((a, b) => Number(!!a.archived_at) - Number(!!b.archived_at));
@@ -102,7 +103,7 @@ export function Venues() {
       <div className={'vc-grid' + (sel ? ' has-sel' : '')}>
         <div className="vc-list">
           <div className="seg3 vc-tabs">
-            {([['venues', 'Venues', venues?.filter((x) => !x.archived_at).length], ['clients', 'Clients', plain.length], ['homes', 'Private homes', homes.length]] as [Tab, string, number | undefined][]).map(([k, l, n]) => (
+            {([['venues', 'Venues', venues?.filter((x) => !x.archived_at).length], ['clients', 'Clients', plainAll.filter((x) => !x.archived_at).length], ['homes', 'Private homes', homesAll.filter((x) => !x.archived_at).length]] as [Tab, string, number | undefined][]).map(([k, l, n]) => (
               <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTabK(k)}>{l}{n != null ? ` · ${n}` : ''}</button>
             ))}
           </div>
@@ -121,14 +122,15 @@ export function Venues() {
             const c = counts.c[x.id]; const qb = qbCheck(x.name, x.qb_customer);
             return (
               <button key={x.id} className={'vc-row' + (sel === x.id ? ' on' : '')} onClick={() => setSel(x.id)}>
-                <span className="spread"><b>{x.name}</b><small>{lastLabel(c)}{qb.state === 'linked' ? ' · ✓ QB' : ''}</small></span>
+                <span className="spread"><b>{x.name}{x.archived_at && <em className="vc-arch"> · archived</em>}</b><small>{lastLabel(c)}{qb.state === 'linked' ? ' · ✓ QB' : ''}</small></span>
                 <small>{tab === 'homes' ? (x.address ? shortAddr(x.address) : <span className="vc-miss">address missing</span>)
                   : [x.kind === 'roaming' ? 'venue changes each time' : '', x.qb_customer ? `QB: ${x.qb_customer}` : 'no QuickBooks name', (x.admin_fee_pct ?? 10) !== 10 ? `admin fee ${x.admin_fee_pct}%` : ''].filter(Boolean).join(' · ')}</small>
               </button>
             );
           })}
           {list.length === 0 && venues !== null && <div className="muted sm" style={{ padding: '6px 2px' }}>Nothing matches “{q}”.</div>}
-          {tab === 'venues' && (venues ?? []).some((x) => x.archived_at) && <button className="lnk sm vc-archt" onClick={() => setShowArch(!showArch)}>{showArch ? '▾ Hide archived' : `▸ Archived (${(venues ?? []).filter((x) => x.archived_at).length}) · tap to see / bring back`}</button>}
+          {(() => { const pool: { archived_at?: string | null }[] = tab === 'venues' ? venues ?? [] : tab === 'homes' ? homesAll : plainAll; const k = pool.filter((x) => x.archived_at).length;
+            return k > 0 && <button className="lnk sm vc-archt" onClick={() => setShowArch(!showArch)}>{showArch ? '▾ Hide archived' : `▸ Archived (${k}) · tap to see / bring back`}</button>; })()}
           <button className="vc-new" onClick={() => setSel('new')}>+ New {tab === 'venues' ? 'venue' : tab === 'homes' ? 'private home' : 'client'}</button>
         </div>
 
@@ -137,7 +139,7 @@ export function Venues() {
           {!sel && <div className="adm-card vc-empty muted">Pick a {tab === 'venues' ? 'venue' : tab === 'homes' ? 'private home' : 'client'} on the left, or add a new one.</div>}
           {sel && tab === 'venues' && venues && clients && <VenueCard key={sel} v={cur as V | null} clients={clients} count={cur ? counts.v[cur.id] : undefined} has038={has038} all={venues}
             onSaved={async (id) => { await load(); setSel(id); }} onGone={async () => { await load(); setSel(null); }} onClient={openClient} />}
-          {sel && tab !== 'venues' && clients && venues && <ClientCard key={sel + tab} c={cur as C | null} home={tab === 'homes'} venues={venues} count={cur ? counts.c[cur.id] : undefined} has038={has038}
+          {sel && tab !== 'venues' && clients && venues && <ClientCard key={sel + tab} c={cur as C | null} home={tab === 'homes'} venues={venues} all={(clients ?? []).filter((x) => (x.kind === 'private_home') === (tab === 'homes'))} onGone={async () => { await load(); setSel(null); }} count={cur ? counts.c[cur.id] : undefined} has038={has038}
             onSaved={async (id) => { await load(); const k = (await supabase.from('clients').select('kind').eq('id', id).maybeSingle()).data?.kind; if ((k === 'private_home') !== (tab === 'homes')) setTabK(k === 'private_home' ? 'homes' : 'clients'); setSel(id); }} />}
         </div>
       </div>
@@ -182,12 +184,13 @@ const uniRow = (u: Uni) => ({
   uniform_floor: u.floor_m, uniform_floor_w: u.floor_w, uniform_bar: u.bar_m, uniform_bar_w: u.bar_w,
   uniform_items: { floor_m: itemsOf(u.items, 'floor_m', u.floor_m), floor_w: itemsOf(u.items, 'floor_w', u.floor_w), bar_m: itemsOf(u.items, 'bar_m', u.bar_m), bar_w: itemsOf(u.items, 'bar_w', u.bar_w) },
 });
-function Uniforms({ u, set }: { u: Uni; set: (u: Uni) => void }) {
-  const si = (k: UniLineKey, i: UniItems) => set({ ...u, items: { ...u.items, [k]: i } });
+/** Nov 6 fix: a chip tap sets the uniform AND its pieces in one go → functional updates, so the second doesn't undo the first. */
+function Uniforms({ u, set }: { u: Uni; set: React.Dispatch<React.SetStateAction<Uni>> }) {
+  const si = (k: UniLineKey, i: UniItems) => set((x) => ({ ...x, items: { ...x.items, [k]: i } }));
   return (
     <div className="uni-card vc-uni">
-      <UniDept label="Floor" sub="MD · waiters · busboys" bar={false} men={u.floor_m} women={u.floor_w} setMen={(v) => set({ ...u, floor_m: v })} setWomen={(v) => set({ ...u, floor_w: v })} items={u.items} setItems={si} />
-      <UniDept label="Bar" sub="BM · bartenders · barbacks" bar men={u.bar_m} women={u.bar_w} setMen={(v) => set({ ...u, bar_m: v })} setWomen={(v) => set({ ...u, bar_w: v })} items={u.items} setItems={si} />
+      <UniDept label="Floor" sub="MD · waiters · busboys" bar={false} men={u.floor_m} women={u.floor_w} setMen={(v) => set((x) => ({ ...x, floor_m: v }))} setWomen={(v) => set((x) => ({ ...x, floor_w: v }))} items={u.items} setItems={si} />
+      <UniDept label="Bar" sub="BM · bartenders · barbacks" bar men={u.bar_m} women={u.bar_w} setMen={(v) => set((x) => ({ ...x, bar_m: v }))} setWomen={(v) => set((x) => ({ ...x, bar_w: v }))} items={u.items} setItems={si} />
     </div>
   );
 }
@@ -265,59 +268,69 @@ function VenueCard({ v, clients, count, has038, all, onSaved, onGone, onClient }
               </div>
             </> : <small className="muted">The client’s billing (extras, transport, admin fee, rates) shows here.</small>}
           </Sec>
-          {v && <VenueRemove v={v} all={all} onSaved={onSaved} onGone={onGone} />}
+          {v && <Remove kind="venue" it={v} all={all} onSaved={onSaved} onGone={onGone} />}
         </div>
       </div>
     </div>
   );
 }
 
-/** 074 · archive / delete a venue · move its events to the right one (duplicates). */
+/** 074 · archive / delete a venue or a client · move its events to the right one (duplicates). */
 type VEv = { id: string; title: string; event_date: string; department: string };
-function VenueRemove({ v, all, onSaved, onGone }: { v: V; all: V[]; onSaved: (id: string) => void; onGone: () => void }) {
+type RmItem = { id: string; name: string; address?: string | null; archived_at?: string | null };
+function Remove({ kind, it, all, onSaved, onGone }: { kind: 'venue' | 'client' | 'home'; it: RmItem; all: RmItem[]; onSaved: (id: string) => void; onGone: () => void }) {
   const [open, setOpen] = useState(false); const [evs, setEvs] = useState<VEv[] | null>(null); const [to, setTo] = useState('');
   const [busy, setBusy] = useState(false); const [err, setErr] = useState(''); const [sure, setSure] = useState(false);
-  const today = isoDay(new Date());
+  const today = isoDay(new Date()); const word = kind === 'venue' ? 'venue' : kind === 'home' ? 'private home' : 'client';
+  const table = kind === 'venue' ? 'venues' : 'clients';
   const show = async () => {
-    setOpen(true); setErr(''); setSure(false);
-    const { data, error } = await supabase.from('events').select('id,title,event_date,department').eq('venue_id', v.id).order('event_date', { ascending: false });
-    if (error) setErr(error.message); setEvs((data ?? []) as VEv[]);
+    setOpen(true); setErr(''); setSure(false); setEvs(null);
+    if (kind === 'venue') {
+      const { data, error } = await supabase.from('events').select('id,title,event_date,department').eq('venue_id', it.id).order('event_date', { ascending: false });
+      if (error) setErr(error.message); setEvs((data ?? []) as VEv[]);
+    } else {
+      const { data, error } = await supabase.from('event_private').select('events(id,title,event_date,department)').eq('client_id', it.id);
+      if (error) setErr(error.message);
+      const x = ((data ?? []) as unknown as { events: VEv | VEv[] | null }[]).map((r) => (Array.isArray(r.events) ? r.events[0] : r.events)).filter((e): e is VEv => !!e);
+      setEvs(x.sort((a, b) => b.event_date.localeCompare(a.event_date)));
+    }
   };
   const archive = async (on: boolean) => {
     setBusy(true); setErr('');
-    const { error } = await supabase.from('venues').update({ archived_at: on ? new Date().toISOString() : null }).eq('id', v.id);
-    setBusy(false); if (error) return setErr(error.message); setOpen(false); onSaved(v.id);
+    const { error } = await supabase.from(table).update({ archived_at: on ? new Date().toISOString() : null }).eq('id', it.id);
+    setBusy(false); if (error) return setErr(error.message); setOpen(false); onSaved(it.id);
   };
   const remove = async () => {
     setBusy(true); setErr('');
-    const { error } = await supabase.rpc('admin_venue_remove', { p_venue: v.id, p_move_to: to || null });
+    const { error } = kind === 'venue' ? await supabase.rpc('admin_venue_remove', { p_venue: it.id, p_move_to: to || null }) : await supabase.rpc('admin_client_remove', { p_client: it.id, p_move_to: to || null });
     setBusy(false); if (error) return setErr(error.message); onGone();
   };
   const n = evs?.length ?? 0; const up = (evs ?? []).filter((e) => e.event_date >= today).length;
-  const others = all.filter((x) => x.id !== v.id && !x.archived_at);
+  const others = all.filter((x) => x.id !== it.id && !x.archived_at);
   return (
     <section className="adm-card vc-sec vc-rm">
-      <div className="vc-sec-h"><span>{v.archived_at ? '🗄️ ARCHIVED' : 'REMOVE THIS VENUE'}</span><small>{v.archived_at ? 'hidden from the list and the venue picker' : 'duplicates, old names'}</small></div>
+      <div className="vc-sec-h"><span>{it.archived_at ? '🗄️ ARCHIVED' : `REMOVE THIS ${word.toUpperCase()}`}</span><small>{it.archived_at ? 'hidden from the list and the pickers' : 'duplicates, old names'}</small></div>
       {!open && <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
-        {v.archived_at ? <button className="abtn sm dark" disabled={busy} onClick={() => archive(false)}>Bring it back</button>
+        {it.archived_at ? <button className="abtn sm dark" disabled={busy} onClick={() => archive(false)}>Bring it back</button>
           : <button className="abtn sm" disabled={busy} onClick={() => archive(true)}>🗄️ Archive</button>}
         <button className="abtn sm vc-del" onClick={show}>🔀 Move its events / 🗑 Delete</button></div>}
-      {open && evs === null && <small className="muted">Looking for its events…</small>}
+      {open && evs === null && !err && <small className="muted">Looking for its events…</small>}
       {open && evs && <div className="stack" style={{ gap: 10 }}>
         {n > 0 ? <>
-          <b className="vc-warn">⚠️ {n} event{n === 1 ? '' : 's'} use “{v.name}”{up ? ` · ${up} upcoming` : ''}</b>
+          <b className="vc-warn">⚠️ {n} event{n === 1 ? '' : 's'} use “{it.name}”{up ? ` · ${up} upcoming` : ''}</b>
           <div className="vc-evs">{evs.map((e) => (
             <Link key={e.id} className="vc-ev" to={`/admin/bookings?date=${e.event_date}&view=board&ev=${e.id}`}>
               <span className="vc-ev-d">{dLabel(e.event_date)}</span><span className="grow">{e.title}{e.department === 'bar' ? ' · bar' : ''}</span>
               <small className={e.event_date >= today ? 'accent' : 'muted'}>{e.event_date >= today ? 'UPCOMING' : 'PAST'}</small><b>Open ›</b></Link>))}</div>
           <label className="ef-f"><span>MOVE THESE EVENTS TO</span>
-            <select value={to} onChange={(e) => { setTo(e.target.value); setSure(false); }}><option value="">Pick the right venue…</option>{others.map((x) => <option key={x.id} value={x.id}>{x.name}{x.address ? ` · ${shortAddr(x.address)}` : ''}</option>)}</select>
-            <small className="muted">Events switch to that venue (address, 📍 spot, photos). Staff only get a “shift changed” note if the address is different. Anything the right venue is missing (spot, photos, notes) is copied over.</small></label>
+            <select value={to} onChange={(e) => { setTo(e.target.value); setSure(false); }}><option value="">Pick the right {word}…</option>{others.map((x) => <option key={x.id} value={x.id}>{x.name}{x.address ? ` · ${shortAddr(x.address)}` : ''}</option>)}</select>
+            <small className="muted">{kind === 'venue' ? 'Events switch to that venue (address, 📍 spot, photos). Staff only get a “shift changed” note if the address is different. Anything the right venue is missing (spot, photos, notes) is copied over.'
+              : 'Events (billing, invoices) switch to that client. Venues with this as usual client switch too. Rate sets the right client doesn’t have are copied over, so events keep their rates.'}</small></label>
           {!sure ? <button className="abtn dark" disabled={!to || busy} onClick={() => setSure(true)}>Move {n} event{n === 1 ? '' : 's'} + delete this one</button>
-            : <button className="abtn vc-delb" disabled={busy} onClick={remove}>{busy ? 'Moving…' : `Yes, move ${n} and delete “${v.name}”`}</button>}
-          <div className="row" style={{ gap: 8 }}>{!v.archived_at && <button className="abtn sm" disabled={busy} onClick={() => archive(true)}>Archive instead</button>}<button className="abtn sm" onClick={() => setOpen(false)}>Cancel</button></div>
+            : <button className="abtn vc-delb" disabled={busy} onClick={remove}>{busy ? 'Moving…' : `Yes, move ${n} and delete “${it.name}”`}</button>}
+          <div className="row" style={{ gap: 8 }}>{!it.archived_at && <button className="abtn sm" disabled={busy} onClick={() => archive(true)}>Archive instead</button>}<button className="abtn sm" onClick={() => setOpen(false)}>Cancel</button></div>
         </> : <>
-          <b>Delete “{v.name}”?</b><small className="muted">No events use it. This can’t be undone.</small>
+          <b>Delete “{it.name}”?</b><small className="muted">No events use it. This can’t be undone.</small>
           <div className="row" style={{ gap: 8 }}>{!sure ? <button className="abtn vc-delb" onClick={() => setSure(true)}>🗑 Delete</button> : <button className="abtn vc-delb" disabled={busy} onClick={remove}>{busy ? 'Deleting…' : 'Yes, delete it'}</button>}<button className="abtn sm" onClick={() => setOpen(false)}>Cancel</button></div>
         </>}
       </div>}
@@ -381,7 +394,7 @@ async function shrink(f: File): Promise<Blob> {
 
 // ───────── client card (also private homes) ─────────
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'set';
-function ClientCard({ c, home, venues, count, has038, onSaved }: { c: C | null; home: boolean; venues: V[]; count?: Count; has038: boolean; onSaved: (id: string) => void }) {
+function ClientCard({ c, home, venues, all, count, has038, onSaved, onGone }: { c: C | null; home: boolean; venues: V[]; all: C[]; count?: Count; has038: boolean; onSaved: (id: string) => void; onGone: () => void }) {
   const [name, setName] = useState(c?.name ?? ''); const [kind, setKind] = useState<'' | 'private_home' | 'roaming'>(c?.kind ?? (home ? 'private_home' : ''));
   const [qb, setQb] = useState(c?.qb_customer ?? ''); const [fee, setFee] = useState(String(c?.admin_fee_pct ?? (/brera/i.test(c?.name ?? '') ? 8 : 10)));
   const [drive, setDrive] = useState(c ? c.drive_folder_default !== false : true);
@@ -457,6 +470,7 @@ function ClientCard({ c, home, venues, count, has038, onSaved }: { c: C | null; 
           </>}
           {!isHome && <small className="muted" style={{ padding: '0 4px' }}>Private homes use this same card, plus the address and uniforms (they live on the client).</small>}
           {isHome && <small className="muted" style={{ padding: '0 4px' }}>{uniSummary(u)}</small>}
+          {c && <Remove kind={home ? 'home' : 'client'} it={c} all={all} onSaved={onSaved} onGone={onGone} />}
         </div>
       </div>
     </div>

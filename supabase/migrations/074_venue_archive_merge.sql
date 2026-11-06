@@ -1,4 +1,4 @@
--- 074 · Archive / delete a venue · move its events to the right one (Nov 6, 2026)
+-- 074 · Archive / delete a venue or a client · move its events to the right one (Nov 6, 2026)
 -- For duplicates (same place, two names). Archive = hidden from the list and the venue picker, events keep it.
 -- admin_venue_remove(venue, move_to): moves every event to move_to (title too when it was the old name), copies the
 -- pin / photos / notes the right venue is missing, then deletes the old one. Staff only get "Your shift changed"
@@ -71,5 +71,30 @@ $$ declare o venues%rowtype; t venues%rowtype; n int := 0; m int := 0; norm text
 end $$;
 grant execute on function public.admin_venue_remove(uuid, uuid) to authenticated;
 
-select 'RESULT ' || (select count(*) from information_schema.columns where table_name = 'venues' and column_name = 'archived_at') || ' col · '
-    || (select count(*) from pg_proc where proname = 'admin_venue_remove') || ' fn' as result;
+-- clients: same idea. Archive = hidden from the client picker. Move = events (event_private), venues' usual client
+-- and any rate set the right client doesn't have (events keep their rate) move over, then the old one is deleted.
+alter table public.clients add column if not exists archived_at timestamptz;
+create or replace function public.admin_client_remove(p_client uuid, p_move_to uuid default null)
+returns int language plpgsql security definer set search_path = public as
+$$ declare o clients%rowtype; t clients%rowtype; n int := 0; begin
+  if not is_admin() then raise exception 'not allowed'; end if;
+  select * into o from clients where id = p_client; if not found then raise exception 'Client not found.'; end if;
+  if p_move_to is not null then
+    if p_move_to = p_client then raise exception 'Pick a different client.'; end if;
+    select * into t from clients where id = p_move_to; if not found then raise exception 'Client to move to not found.'; end if;
+    update clients set rate_sets = coalesce(rate_sets, '[]') || coalesce((select jsonb_agg(r) from jsonb_array_elements(coalesce(o.rate_sets, '[]')) r
+             where not exists (select 1 from jsonb_array_elements(coalesce(t.rate_sets, '[]')) x where x->>'key' = r->>'key')), '[]'),
+           address = coalesce(address, o.address), qb_customer = coalesce(nullif(qb_customer, ''), o.qb_customer)
+     where id = t.id;
+    update event_private set client_id = t.id where client_id = o.id; get diagnostics n = row_count;
+    update venues set usual_client_id = t.id where usual_client_id = o.id;
+  end if;
+  if exists (select 1 from event_private where client_id = o.id) then raise exception 'This client still has events. Move them first or archive it.'; end if;
+  insert into change_log(by_staff, entity, entity_id, change) values (me(), 'client', o.id, jsonb_build_object('deleted', o.name, 'moved_to', t.name, 'events', n));
+  delete from clients where id = o.id;
+  return n;
+end $$;
+grant execute on function public.admin_client_remove(uuid, uuid) to authenticated;
+
+select 'RESULT ' || (select count(*) from information_schema.columns where table_name = 'venues' and column_name = 'archived_at') || ' venue col · ' || (select count(*) from information_schema.columns where table_name = 'clients' and column_name = 'archived_at') || ' client col · '
+    || (select count(*) from pg_proc where proname in ('admin_venue_remove', 'admin_client_remove')) || ' fns' as result;
