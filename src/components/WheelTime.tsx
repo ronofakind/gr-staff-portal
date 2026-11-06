@@ -35,7 +35,9 @@ export function WheelTime({ value, onChange, label, tone, start, empty = '— : 
     <>
       <button type="button" className={'wt-val' + (value ? '' : ' empty')} aria-label={`${label}${value ? ' · ' + fmtHm(value) : ''} · change`} onClick={(e) => { e.stopPropagation(); show(); }}>{value ? fmtHm(value) : empty}</button>
       {open && createPortal(
-        <div className="wt-scrim" onClick={(e) => { e.stopPropagation(); setOpen(false); }}>
+        <div className="wt-scrim" onClick={(e) => { e.stopPropagation(); setOpen(false); }}
+          onTouchStart={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()} onTouchEnd={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()} onWheel={(e) => e.stopPropagation()}>
           <div className={'wt-sheet ' + tone} role="dialog" aria-label={label} onClick={(e) => e.stopPropagation()}>
             <div className="wt-top"><button type="button" onClick={() => setOpen(false)}>Cancel</button><b>{label}</b><button type="button" className="wt-done" onClick={done}>Done</button></div>
             <div className="wt-wheels">
