@@ -3342,3 +3342,5 @@ div.venue-rule { background: #fff; border-radius: 14px; padding: 10px 14px; marg
 .vp-edit .row input { flex: 1; }
 .d3-pin { display: flex; flex-direction: column; gap: 8px; background: #fff; border-radius: 16px; padding: 10px; }
 .d3-pin b { font-size: 13.5px; }
+.vp-saved { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 13px; } .vp-saved b { color: var(--ok); } .vp-saved a, .vp-found a { font-size: 13px; font-weight: 700; color: var(--ink); }
+.vp-found { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 12px; background: #F6F2EC; } .vp-found b { font-size: 14px; color: var(--ok); }

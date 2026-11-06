@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
-/** Nov 6 · 📍 exact spot on a venue (073). Admin: tap / drag the pin or paste a Google Maps link. Staff: small map + Directions to the pin. */
+/** Nov 6 · 📍 exact spot on a venue (073). Admin: paste a Google Maps link (checked by /api/pin). Staff: small map + Directions to the pin. */
 export type Pin = { lat: number; lng: number; label?: string | null };
 export const pinDirections = (p: Pin) => `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}`;
 export const pinOpen = (p: Pin) => `https://maps.google.com/?q=${p.lat},${p.lng}`;
@@ -37,19 +37,31 @@ export function PinMap({ pin, onPick, height = 220 }: { pin: Pin | null; onPick?
   return <div ref={el} className="vp-map" style={{ height }} />;
 }
 
-/** admin editor block for the venue card */
+/** admin editor block for the venue card · paste a Google Maps link (short share links too) → check it → Use this spot. No map here. */
 export function PinEditor({ pin, set }: { pin: Pin | null; set: (p: Pin | null) => void }) {
-  const [paste, setPaste] = useState(''); const [bad, setBad] = useState(false);
+  const [paste, setPaste] = useState(''); const [busy, setBusy] = useState(false);
+  const [found, setFound] = useState<{ lat: number; lng: number; name?: string | null } | null>(null); const [bad, setBad] = useState(false);
+  const check = async (txt: string) => {
+    const t = txt.trim(); setFound(null); setBad(false); if (!t) return;
+    const local = parsePin(t); if (local && !/goo\.gl/i.test(t)) { setFound(local); return; }
+    setBusy(true);
+    try { const r = await fetch('/api/pin?u=' + encodeURIComponent(t)); const j = await r.json(); if (j && typeof j.lat === 'number') setFound(j); else setBad(true); }
+    catch { setBad(true); } finally { setBusy(false); }
+  };
   return (
-    <div className="ef-f vp-edit"><span>📍 EXACT SPOT · where staff should go</span>
-      <PinMap pin={pin} onPick={(p) => set({ ...p, label: pin?.label ?? '' })} />
-      <small className="muted">Tap the map to drop the pin, then drag it to the right door. Zoom with + / −.</small>
-      <div className="row" style={{ gap: 8 }}><input value={paste} onChange={(e) => { setPaste(e.target.value); setBad(false); }} placeholder="…or paste a Google Maps link / “45.50, -73.52”" />
-        <button type="button" className="abtn sm dark" onClick={() => { const p = parsePin(paste); if (!p) { setBad(true); return; } set({ ...p, label: pin?.label ?? '' }); setPaste(''); }}>Use it</button></div>
-      {bad && <small className="accent">Couldn’t read a spot from that link. Short “maps.app.goo.gl” links don’t work: open it, then copy the long link from the address bar, or drop the pin on the map.</small>}
-      {pin && <>
-        <input value={pin.label ?? ''} onChange={(e) => set({ ...pin, label: e.target.value })} placeholder="What’s at the pin · e.g. Staff entrance, west side" />
-        <small className="okc">✓ {pin.lat.toFixed(5)}, {pin.lng.toFixed(5)} · Directions on the staff app go here <button type="button" className="lnk sm" onClick={() => set(null)}>remove pin</button></small></>}
+    <div className="ef-f vp-edit"><span>📍 EXACT SPOT · where staff should go (optional)</span>
+      {pin && !found && <div className="vp-saved"><b>✓ Spot saved</b> <a href={pinOpen(pin)} target="_blank" rel="noreferrer">Check in Google Maps ↗</a> <button type="button" className="lnk sm" onClick={() => set(null)}>remove</button></div>}
+      <small className="muted">In Google Maps: drop the pin on the right door → Share → Copy link → paste it here.</small>
+      <div className="row" style={{ gap: 8 }}>
+        <input value={paste} onChange={(e) => { setPaste(e.target.value); setFound(null); setBad(false); }} onPaste={(e) => { const t = e.clipboardData.getData('text'); setTimeout(() => check(t), 0); }} placeholder={pin ? 'Paste a new Google Maps link to change it' : 'Paste the Google Maps link'} />
+        <button type="button" className="abtn sm dark" disabled={busy || !paste.trim()} onClick={() => check(paste)}>{busy ? 'Reading…' : 'Check link'}</button></div>
+      {bad && <small className="accent">Couldn’t find a spot in that link. In Google Maps, tap the spot so a red pin shows, then Share → Copy link.</small>}
+      {found && <div className="vp-found"><b>Found{found.name ? `: ${found.name}` : ' the spot'}</b>
+        <a href={pinOpen(found)} target="_blank" rel="noreferrer">Check it in Google Maps ↗</a>
+        <div className="row" style={{ gap: 8 }}><button type="button" className="abtn sm dark" onClick={() => { set({ lat: found.lat, lng: found.lng, label: pin?.label ?? '' }); setFound(null); setPaste(''); }}>Use this spot</button>
+          <button type="button" className="abtn sm" onClick={() => { setFound(null); setPaste(''); }}>Cancel</button></div></div>}
+      {pin && <input value={pin.label ?? ''} onChange={(e) => set({ ...pin, label: e.target.value })} placeholder="What’s at the spot · e.g. Staff entrance, west side" />}
+      {pin && <small className="muted">Staff get a small map + Directions to this spot. Remember to save the venue.</small>}
     </div>
   );
 }
