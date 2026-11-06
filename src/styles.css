@@ -3424,3 +3424,10 @@ div.pf-row { cursor: default; flex-wrap: wrap; }
 .pf-row.prob .pf-chips { flex: 1 1 100%; padding-left: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .pf-row.prob .pc { height: 40px; width: 100%; font-size: 13px; }
 button.pf-go { border: none; background: none; padding: 4px 2px; font: 700 13px Inter, system-ui, sans-serif; cursor: pointer; } .pf-go.red { color: #9B2226; }
+
+/* Nov 6 · SEND chip menu (Bookings week strip) */
+.bk-wsend { cursor: pointer; } .bk-wsend:hover { filter: brightness(.95); }
+.bk-sendm { background: #fff; border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 1px 0 #E4DCD1, 0 8px 24px rgba(0,0,0,.06); max-width: 560px; }
+.bk-sendm-h { display: flex; justify-content: space-between; align-items: center; } .bk-sendm-h b { font-size: 15px; }
+.bk-sendm ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.bk-sendm li { display: flex; justify-content: space-between; gap: 10px; font-size: 13.5px; padding: 7px 10px; border-radius: 10px; background: #F6F2EC; } .bk-sendm li small { color: var(--muted); }

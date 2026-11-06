@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabase';
 import { setting, autoExtras } from '../lib/settings';
 import { DeptTag } from './DeptTag';
 import { BoardAlso, type OtherShift } from './alsoWorking';
-import { doesBar, eventsBetween, allStaff, addDays, isoDay, dLabel, ap12, startIso, endIso, roleName, bookingChange, confirmationsSent, countOf, sendStateOf, type AEvent, type AStaff, type Client, type Venue } from './api';
+import { needsSend, liveShift, doesBar, eventsBetween, allStaff, addDays, isoDay, dLabel, ap12, startIso, endIso, roleName, bookingChange, confirmationsSent, countOf, sendStateOf, type AEvent, type AStaff, type Client, type Venue } from './api';
 import { misfits, linksOf, other, condShort, RuleIcons, type SLink, type SCond } from './rules';
 import { loadScoreData, scoreOf, type ScoreData } from './score';
 import { locksBetween, setLock, lockTitle, NO_LOCKS, type Locks } from './locks';
@@ -84,6 +84,7 @@ export function Bookings() {
   /** push 49 · a placed chip dropped on ANOTHER event → "Add a 2nd shift · keep both" / "Move · off <event 1>" / Cancel */
   const [dropAsk, setDropAsk] = useState<{ p: Pl; to: { event_id: string; start: string; extra?: boolean } } | null>(null);
   const [hint, setHint] = useState<string>('');
+  const [sendOf, setSendOf] = useState<string | null>(null); const [sendBusy, setSendBusy] = useState(false); // Nov 6 · SEND chip menu
   // Nov 6 · 📌 reminders for the next booking (068) · only Ronnie sees them
   const [rems, setRems] = useState<Record<string, Reminder[]>>({}); const [remTxt, setRemTxt] = useState('');
   useEffect(() => { openReminders().then(setRems); }, []);
@@ -613,7 +614,7 @@ export function Bookings() {
             {evs.slice(0, 3).map((e) => { const c = countOf(e); const st = sendStateOf(e, today0); return (
               <button key={e.id} type="button" className={'bk-wl' + (e.department === 'bar' ? ' is-bar' : '')} onClick={(ev) => { ev.stopPropagation(); go(e.id); }}>
                 <span className="bk-wlt">{seeTitle(e)}</span><b className={c.need && c.short ? 'sh' : 'ok'}>{c.need ? `${c.booked}/${c.need}` : c.n}</b>{c.extra > 0 && <i>+{c.extra}</i>}
-                {st === 'sent' ? <span className="bk-wok">✓</span> : st === 'ready' && d >= today0 ? <span className="bk-wsend">SEND</span> : st === 'later' ? <span className="bk-wlater">○</span> : null}
+                {st === 'sent' ? <span className="bk-wok">✓</span> : st === 'ready' && d >= today0 ? <span className="bk-wsend" role="button" tabIndex={0} onClick={(ev) => { ev.stopPropagation(); setSendOf(sendOf === e.id ? null : e.id); }}>SEND</span> : st === 'later' ? <span className="bk-wlater">○</span> : null}
               </button>); })}
             {evs.length > 3 && <span className="bk-wmore">+{evs.length - 3} more</span>}
           </div>); })
@@ -621,6 +622,23 @@ export function Bookings() {
         <button className="round" onClick={() => setP('date', addDays(date, 7))}>›</button>
       </div>
 
+      {sendOf && (() => {
+        const e = weekEvs.find((x) => x.id === sendOf); if (!e) return null;
+        const list = e.shifts.filter((x) => liveShift(x) && !x.attendance && needsSend(x));
+        const told = list.filter((x) => x.status === 'confirmed');
+        const why = (x: typeof list[number]) => (x.status !== 'confirmed' ? (x.notified_at ? 'changed after it was sent' : 'not sent yet') : x.notified_at ? 'changed after it was sent' : 'changed after they confirmed');
+        const mark = async (ids: string[]) => { if (!ids.length) return; setSendBusy(true); const { error } = await supabase.from('shifts').update({ notified_at: new Date().toISOString() }).in('id', ids); setSendBusy(false); if (error) { setHint(error.message); return; } setSendOf(null); await load(); };
+        return (
+          <div className="bk-sendm">
+            <div className="bk-sendm-h"><b>{seeTitle(e)} · {dLabel(e.event_date, { weekday: 'short', month: 'short', day: 'numeric' })}</b><button className="lnk" aria-label="Close" onClick={() => setSendOf(null)}>×</button></div>
+            {list.length ? <ul>{list.map((x) => <li key={x.id}><b>{x.staff?.full_name ?? '?'}</b><small>{why(x)}</small></li>)}</ul> : <small className="muted">Nothing to send.</small>}
+            <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+              <button className="abtn dark" disabled={sendBusy || !list.length} onClick={() => mark(list.map((x) => x.id))}>Send to {list.length}</button>
+              {told.length > 0 && <button className="abtn" disabled={sendBusy} onClick={() => mark(told.map((x) => x.id))}>Already told them{told.length < list.length ? ` · ${told.length}` : ''}</button>}
+            </div>
+            <small className="muted">Already told them clears SEND for people who confirmed with you, without sending anything.{told.length < list.length ? ' People still to confirm need the real send.' : ''}</small>
+          </div>);
+      })()}
       {hint && <div className="bk-hint" onClick={() => setHint('')}>{hint} ×</div>}
       {undoConf && <div className="bk-undo"><span>✓ {undoConf.ids.length} confirmed · {undoConf.title}</span><button type="button" onClick={undoConfirmAll}>Undo</button></div>}
       {warns.length > 0 && <div className="bk-warns">{warns.map((w) => <div key={w.key} className={'bk-warn ' + w.cls}><span className="grow">{w.text}</span><button className="lnk" aria-label="Dismiss" onClick={() => setWarns(warns.filter((x) => x.key !== w.key))}>×</button></div>)}<small className="muted">Warnings never block you; you can still book.</small></div>}
