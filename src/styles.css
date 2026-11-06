@@ -3420,4 +3420,4 @@ div.pf-row { cursor: default; flex-wrap: wrap; }
 .hrs-box { position: relative; }
 .pf-row.prob { flex-wrap: wrap; row-gap: 8px; } .pf-row.prob .pf-chips { flex: 1 1 100%; padding-left: 44px; }
 /* wheel: never move the sheet behind it */
-.wt-col { overscroll-behavior: contain; touch-action: pan-y; } .wt-scrim { overscroll-behavior: contain; touch-action: none; } .wt-sheet { touch-action: none; } .wt-wheels { touch-action: pan-y; }
+.wt-col { overscroll-behavior: contain; touch-action: pan-y; } .wt-scrim { overscroll-behavior: contain; }
