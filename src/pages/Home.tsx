@@ -215,7 +215,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
 
       {comgrNotes.map((s) => (
         <div key={'cm' + s.events.id} className="comgr-note" role="status">
-          <span className="grow">✓ Ronnie made you a manager for {new Date(s.events.event_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).replace(',', '')} · {s.events.venues?.name ?? s.events.title}. You can start, end and submit the team.</span>
+          <span className="grow">✓ You’re a manager for {new Date(s.events.event_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).replace(',', '')} · {s.events.venues?.name ?? s.events.title}. You can start, end and submit the team.</span>
           <button aria-label="Dismiss" onClick={() => comgrOk(s.events.id)}>✕</button>
         </div>
       ))}

@@ -231,6 +231,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
   const [ev, setEv] = useState<EvFull | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
   const [open, setOpen] = useState<Row | null>(null);
+  const [addMgr, setAddMgr] = useState(false); const [mgrPick, setMgrPick] = useState<string | null>(null); const [mgrQ, setMgrQ] = useState(''); // Nov 6 · + Add manager (069)
   const [annOpen, setAnnOpen] = useState(false); const [annTick, setAnnTick] = useState(0);
   const [undo, setUndo] = useState<{ label: string; btn?: string; prev: { id: string; in: string | null; out: string | null }[] } | null>(null);
   useEffect(() => { if (!undo) return; const t = setTimeout(() => setUndo(null), 8000); return () => clearTimeout(t); }, [undo]);
@@ -545,7 +546,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
                     {isNew && <i className="new-badge">NEW</i>}
                   </button>
                   <button className="who" aria-label={`Options for ${r.staff?.full_name}`} onClick={() => openRow(r, isNew)}>
-                    <span className="nm">{r.staff ? teamName(r.staff) : ''}{xIds.has(r.id) && !r.attendance && <i className="x-tag">EXTRA</i>}{r.adder && <i className="added-tag">ADDED BY {r.adder.full_name.split(' ')[0].toUpperCase()}</i>}</span>
+                    <span className="nm">{r.staff ? teamName(r.staff) : ''}{(r.staff_id === ev.manager_id || (ev.co_manager_ids ?? []).includes(r.staff_id ?? '')) && <i className="mgr-tag">MANAGER</i>}{xIds.has(r.id) && !r.attendance && <i className="x-tag">EXTRA</i>}{r.adder && <i className="added-tag">ADDED BY {r.adder.full_name.split(' ')[0].toUpperCase()}</i>}</span>
                     {fromRonnie && <span><i className="p28-tag red">CANCELLED{r.attendance === 'no_show' ? ' · NO-SHOW' : ''} · FROM RONNIE</i></span>}
                     {r.replacement_for && !r.attendance && <span><i className="p28-tag blue">REPLACEMENT · {fullT(r.planned_start)}</i></span>}
                     {ln && !pin && !lnPassed && <span><i className="p28-tag gold">LATE ~{shortT(ln.eta)}{ln.reason ? ` · ${ln.reason.toUpperCase()}` : ''}{ln.seen_at ? ' · ✓ SEEN' : ''}</i></span>}
@@ -591,7 +592,26 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
           </section>
         );
       })}
-      {!ev.hours_submitted_at && <button className="add-staff" onClick={() => setAdding(true)}>+ Add staff</button>}
+      {!ev.hours_submitted_at && <div className="add-two"><button className="add-staff" onClick={() => setAdding(true)}>+ Add staff</button><button className="add-staff" onClick={() => { setMgrPick(null); setMgrQ(''); setAddMgr(true); }}>+ Add manager</button></div>}
+      {addMgr && (() => {
+        const mgrs = new Set([ev.manager_id, ...(ev.co_manager_ids ?? [])].filter(Boolean) as string[]);
+        const seen = new Set<string>(); const pool = rows.filter((r) => r.staff && !r.attendance && !!r.staff_id && !mgrs.has(r.staff_id) && !seen.has(r.staff_id) && (seen.add(r.staff_id), true))
+          .filter((r) => !mgrQ.trim() || r.staff!.full_name.toLowerCase().includes(mgrQ.trim().toLowerCase()))
+          .sort((a, b) => (/2ic/i.test(b.position_detail ?? '') ? 1 : 0) - (/2ic/i.test(a.position_detail ?? '') ? 1 : 0) || a.staff!.full_name.localeCompare(b.staff!.full_name));
+        const pick = rows.find((r) => r.staff_id === mgrPick);
+        return <><div className="scrim" onClick={() => setAddMgr(false)} />
+          <SwipeSheet onClose={() => setAddMgr(false)} label="Add a manager">
+            <div className="serif" style={{ fontSize: 24 }}>Add a manager</div>
+            <div className="muted sm">From your team tonight. They can start, end and submit hours, like you.</div>
+            <input className="mgr-q" placeholder="Search your team" value={mgrQ} onChange={(e) => setMgrQ(e.target.value)} />
+            <div className="mgr-list">{pool.map((r) => <button key={r.id} className={'mgr-opt' + (mgrPick === r.staff_id ? ' on' : '')} onClick={() => setMgrPick(r.staff_id ?? null)}>
+              <span className="ck">{mgrPick === r.staff_id ? '✓' : ''}</span><b className="grow">{r.staff!.full_name} <span className="muted">· {roleLabel(r.position_code, r.position_detail)}</span></b></button>)}
+              {!pool.length && <div className="muted sm">Nobody else on the team.</div>}</div>
+            <button className="btn-ink" disabled={!pick} onClick={async () => {
+              const { error } = await supabase.rpc('manager_set_comanager', { p_event: ev.id, p_staff: mgrPick, p_on: true });
+              if (error) { alert(error.message); return; } setAddMgr(false); await load(); }}>{pick ? `Make ${first(pick.staff?.full_name)} a manager tonight` : 'Pick someone'}</button>
+          </SwipeSheet></>;
+      })()}
       <p className="hint" style={{ textAlign: 'center' }}>Tap a name or photo for times, {fbOn ? 'feedback, ' : ''}note, problems · swipe left on a started person to undo</p>
       <div className="inc-entry"><button onClick={() => setIncOpen(true)}>⚠ Incident report</button><small>Emergencies only</small></div>
 
@@ -702,6 +722,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
               <button className={'pf-photo' + (isNewO ? ' newp' : '')} aria-label="See the photo full size" onClick={() => setBigPhoto(true)}><Avatar name={open.staff?.full_name ?? '?'} url={open.staff?.photo_url} size={62} /></button>
               <div className="serif" style={{ fontSize: 24, lineHeight: 1.1 }}>{open.staff?.full_name}</div>
               <div className="muted sm pf-sub"><span>{roleLabel(open.position_code, open.position_detail)} · call {time(open.planned_start, lang)}{open.punches?.arrived_at ? ` · arrived ${time(open.punches.arrived_at, lang)}` : ''}</span>{isNewO && <i className="new-shift">NEW · {ORD[inf!.done_before] ?? ''} shift</i>}</div>
+              {(ev.co_manager_ids ?? []).includes(open.staff_id ?? '') && open.staff_id !== ev.manager_id && <button className="link-btn" onClick={async () => { const { error } = await supabase.rpc('manager_set_comanager', { p_event: ev.id, p_staff: open.staff_id, p_on: false }); if (error) { alert(error.message); return; } setOpen(null); await load(); }}>Remove as manager</button>}
               {isNewO && newRows.length > 1 && (() => { const k = newRows.findIndex((r) => r.id === open.id); const nx = newRows[(k + 1) % newRows.length]; return <button className="link-btn nb-next" onClick={() => openRow(nx, true)}>Next new · {first(nx.staff?.full_name)} ›</button>; })()}
             </div>
             {isNewO && (ab.exp || ab.knows || ab.langs.length > 0 || ab.note) && (
