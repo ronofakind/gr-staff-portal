@@ -3416,3 +3416,6 @@ div.pf-row { cursor: default; flex-wrap: wrap; }
 .wt-pad { height: 80px; }
 .wt-item { height: 40px; display: flex; align-items: center; justify-content: center; scroll-snap-align: start; font-family: 'Fraunces', Georgia, serif; font-size: 20px; color: var(--muted); cursor: pointer; font-variant-numeric: tabular-nums; }
 .wt-item.on { font-size: 24px; font-weight: 600; color: var(--ink); }
+.wt-val { display: block; width: 100%; padding: 6px 0; margin: -6px 0; }
+.hrs-box { position: relative; }
+.pf-row.prob { flex-wrap: wrap; row-gap: 8px; } .pf-row.prob .pf-chips { flex: 1 1 100%; padding-left: 44px; }

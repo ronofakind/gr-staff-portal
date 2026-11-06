@@ -765,12 +765,12 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
               <div className="hrs-card">
                 <div className="hrs-top"><b>🕑 Hours</b>{hrs && <span className="hrs-badge">{hrs}{outIso ? '' : ' so far'}</span>}</div>
                 <div className="hrs-boxes">
-                  <div className={'hrs-box start' + (draft.in ? ' on' : '')}>
+                  <div onClick={(e) => { const t = e.target as HTMLElement; if (!t.closest('button')) (e.currentTarget.querySelector('.wt-val') as HTMLButtonElement | null)?.click(); }} className={'hrs-box start' + (draft.in ? ' on' : '')}>
                     <span className="hrs-lab">{pin ? 'STARTED' : 'START'}</span>
                     <WheelTime value={draft.in} onChange={(v) => setDraft({ ...draft, in: v })} label="Start time" tone="start" start={hm(open.planned_start)} />
                     {undoOk && pin && !pout ? <button className="hrs-undo" onClick={() => undoStart(open)}>↺ undo</button> : <small>{pin ? ' ' : 'not started'}</small>}
                   </div>
-                  <div className={'hrs-box end' + (draft.out ? ' on' : '')}>
+                  <div onClick={(e) => { const t = e.target as HTMLElement; if (!t.closest('button')) (e.currentTarget.querySelector('.wt-val') as HTMLButtonElement | null)?.click(); }} className={'hrs-box end' + (draft.out ? ' on' : '')}>
                     <span className="hrs-lab">{pout ? (new Date(pout).getTime() > Date.now() ? 'ENDS' : 'ENDED') : 'END'}</span>
                     <WheelTime value={draft.out} onChange={(v) => setDraft({ ...draft, out: v })} label="End time" tone="end" start={nowQ} />
                     {undoOk && pout ? <button className="hrs-undo" onClick={() => undoEnd(open)}>↺ undo</button> : <small>{pin ? 'still working' : ' '}</small>}
@@ -804,7 +804,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
                 <span className="pf-ic2 y">★</span><span className="pf-rt"><b>Rate</b><small>{inf?.fb_stars ? `sent · ${STAR_LABEL[inf.fb_stars]}` : 'not rated tonight'}</small></span>
                 {inf?.fb_stars ? <Stars value={inf.fb_stars} size="xs" label="Tonight" /> : <b className="pf-go">Rate ›</b>}</button>)}
             {!open.attendance && !open.left_early && (
-              <div className="pf-row">
+              <div className="pf-row prob">
                 <span className="pf-ic2 r">⚠</span><span className="pf-rt"><b>Problem</b></span>
                 <span className="pf-chips">
                   <button className="pc" onClick={() => openAsk(open, 'no_show')}>No-show</button>
