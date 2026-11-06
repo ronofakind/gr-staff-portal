@@ -11,6 +11,7 @@ import { DeleteEvent } from './DeleteEvent';
 import { DeptTag } from './DeptTag';
 import { SheetChanges } from './SheetChanges';
 import { hoursBetween } from './api';
+import { LateEnds } from './LateEnds';
 import { useNewStaffRatings, NewStaffGoldCard, NewStaffPanel, nsrOpenDefault, TAG_LABEL, BAD_TAGS } from './NewStaffRatings';
 import { supabase } from '../lib/supabase';
 import { eventsBetween, addDays, isoDay, flagsOf, flagText, periodOf, dLabel, tTime, type AEvent, type AShift } from './api';
@@ -257,6 +258,7 @@ export function Today() {
           {lm.map(({ e, s }) => <CantMakeIt key={s.id} e={e} s={s} mgr={e.manager_id ? mgrs[e.manager_id] ?? null : null} ask={asks.find((a) => a.kind === 'fill' && a.status === 'open' && a.replace_for === s.id)} onFind={() => setRep({ s, e })} onChanged={() => setTick((t) => t + 1)} />)}
           <NotConfirmed rows={late} seen={seen} nudged={nudged} asks={asks} onReplace={(r) => setRep({ s: r.s, e: r.e })} onChanged={() => setTick((t) => t + 1)} />
           {askNeeds.map((a) => <AskNeed key={a.id} a={a} onChanged={() => setTick((t) => t + 1)} />)}
+          <LateEnds />
           <NewStaffGoldCard unseen={nsr.unseen} onOpen={() => { setNsrOpen(true); setTimeout(() => document.getElementById('nsr')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }} />
           <div className="adm-card" style={{ padding: '4px 16px' }}>
             {!shown.length && <div className="muted sm" style={{ padding: '12px 0' }}>All clear.</div>}

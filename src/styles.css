@@ -3304,3 +3304,9 @@ div.venue-rule { background: #fff; border-radius: 14px; padding: 10px 14px; marg
 .own-close { background: #FBF3E0; color: #1A1714; border-radius: 14px; padding: 12px; font-size: 13px; display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
 .own-close button { height: 48px; border-radius: 24px; border: 0; background: #9B2226; color: #fff; font: 600 14px Inter, system-ui, sans-serif; cursor: pointer; }
 .own-close small { color: #6B635A; font-size: 11px; }
+.own-close .own-later { background: #fff; color: #1A1714; box-shadow: inset 0 0 0 1.5px #1A1714; height: 40px; }
+.own-sel { height: 46px; border-radius: 12px; border: 1.5px solid #E4DCD1; padding: 0 10px; font: 600 15px Inter, system-ui, sans-serif; background: #fff; }
+.own-why { display: flex; flex-wrap: wrap; gap: 6px; } .own-why button { height: 32px; padding: 0 12px; border-radius: 16px; border: 0; box-shadow: inset 0 0 0 1.5px #E4DCD1; background: #fff; color: #1A1714; font: 600 12px Inter, system-ui, sans-serif; }
+.own-why button.on { background: #1A1714; color: #fff; box-shadow: none; }
+.late-tag { font-style: normal; font-size: 9.5px; font-weight: 800; padding: 2px 6px; border-radius: 6px; background: #FBF3E0; color: #8A6A2A; margin-left: 6px; vertical-align: 2px; }
+.late-box { background: #FFFBF0; box-shadow: inset 4px 0 0 #C9A227; border-radius: 12px; padding: 10px 12px; font-size: 13px; display: flex; flex-direction: column; gap: 8px; margin: 8px 0; }

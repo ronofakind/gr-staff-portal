@@ -77,7 +77,7 @@ import { Brand } from '../components/Brand';
 type Row = {
   id: string; staff_id?: string; position_code: string | null; position_detail: string | null; planned_start: string; planned_end: string | null;
   attendance: 'no_show' | 'cancelled' | null; leave_by: string | null; manager_note: string | null; left_early?: boolean; attendance_reason?: string | null; added_note?: string | null; adder?: { full_name: string } | null;
-  staff: { full_name: string; nickname?: string | null; photo_url: string | null; phone: string | null } | null; punches: { punch_in: string | null; punch_out: string | null; arrived_at: string | null; updated_at: string } | null;
+  staff: { full_name: string; nickname?: string | null; photo_url: string | null; phone: string | null } | null; punches: { punch_in: string | null; punch_out: string | null; arrived_at: string | null; updated_at: string; late_entry_at?: string | null; late_reason?: string | null; late_ok_at?: string | null } | null;
   /** push 28 (migration 034) */
   cancel_self?: boolean; cancel_sent_to_manager?: string | null; replacement_for?: string | null;
   /** Nov 6 · ends their own shift from their phone (070) */
@@ -85,7 +85,7 @@ type Row = {
 };
 /** push 28e · "I'm running late" from the person (late_notices, read by the event's manager). */
 type Late = { id: string; shift_id: string; minutes: number; eta: string; reason: string | null; note?: string | null; sent_at: string; seen_at: string | null };
-const ROW_COLS = 'id,staff_id,ends_own,position_code,position_detail,planned_start,planned_end,attendance,left_early,attendance_reason,added_note,adder:staff!shifts_added_by_fkey(full_name),leave_by,manager_note,staff:staff!shifts_staff_id_fkey(full_name,nickname,photo_url,phone),punches(punch_in,punch_out,arrived_at,updated_at)';
+const ROW_COLS = 'id,staff_id,ends_own,position_code,position_detail,planned_start,planned_end,attendance,left_early,attendance_reason,added_note,adder:staff!shifts_added_by_fkey(full_name),leave_by,manager_note,staff:staff!shifts_staff_id_fkey(full_name,nickname,photo_url,phone),punches(punch_in,punch_out,arrived_at,updated_at,late_entry_at,late_reason,late_ok_at)';
 const fullT = (iso: string) => new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' });
 const shortT = (iso: string) => fullT(iso).replace(/\s?[AP]M$/, '');
 type Ev = { id: string; title: string; event_date: string };
@@ -552,7 +552,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
                     {isNew && <i className="new-badge">NEW</i>}
                   </button>
                   <button className="who" aria-label={`Options for ${r.staff?.full_name}`} onClick={() => openRow(r, isNew)}>
-                    <span className="nm">{r.staff ? teamName(r.staff) : ''}{(r.staff_id === ev.manager_id || (ev.co_manager_ids ?? []).includes(r.staff_id ?? '')) && <i className="mgr-tag">MANAGER</i>}{r.ends_own && <i className="own-tag">ENDS OWN</i>}{xIds.has(r.id) && !r.attendance && <i className="x-tag">EXTRA</i>}{r.adder && <i className="added-tag">ADDED BY {r.adder.full_name.split(' ')[0].toUpperCase()}</i>}</span>
+                    <span className="nm">{r.staff ? teamName(r.staff) : ''}{(r.staff_id === ev.manager_id || (ev.co_manager_ids ?? []).includes(r.staff_id ?? '')) && <i className="mgr-tag">MANAGER</i>}{r.ends_own && !r.punches?.late_entry_at && <i className="own-tag">ENDS OWN</i>}{r.punches?.late_entry_at && <i className="late-tag">{r.punches.late_ok_at ? '✓ ' : ''}ENTERED LATER</i>}{xIds.has(r.id) && !r.attendance && <i className="x-tag">EXTRA</i>}{r.adder && <i className="added-tag">ADDED BY {r.adder.full_name.split(' ')[0].toUpperCase()}</i>}</span>
                     {fromRonnie && <span><i className="p28-tag red">CANCELLED{r.attendance === 'no_show' ? ' · NO-SHOW' : ''} · FROM RONNIE</i></span>}
                     {r.replacement_for && !r.attendance && <span><i className="p28-tag blue">REPLACEMENT · {fullT(r.planned_start)}</i></span>}
                     {ln && !pin && !lnPassed && <span><i className="p28-tag gold">LATE ~{shortT(ln.eta)}{ln.reason ? ` · ${ln.reason.toUpperCase()}` : ''}{ln.seen_at ? ' · ✓ SEEN' : ''}</i></span>}
@@ -730,6 +730,9 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
               <button className={'pf-photo' + (isNewO ? ' newp' : '')} aria-label="See the photo full size" onClick={() => setBigPhoto(true)}><Avatar name={open.staff?.full_name ?? '?'} url={open.staff?.photo_url} size={62} /></button>
               <div className="serif" style={{ fontSize: 24, lineHeight: 1.1 }}>{open.staff?.full_name}</div>
               <div className="muted sm pf-sub"><span>{roleLabel(open.position_code, open.position_detail)} · call {time(open.planned_start, lang)}{open.punches?.arrived_at ? ` · arrived ${time(open.punches.arrived_at, lang)}` : ''}</span>{isNewO && <i className="new-shift">NEW · {ORD[inf!.done_before] ?? ''} shift</i>}</div>
+              {open.punches?.late_entry_at && <div className="late-box"><b>Entered later by {first(open.staff?.full_name)}</b> · {new Date(open.punches.late_entry_at).toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' })}{open.punches.late_reason ? ` · “${open.punches.late_reason}”` : ''}
+                {!open.punches.late_ok_at ? <button className="btn-ink" onClick={async () => { const { error } = await supabase.rpc('manager_ok_late', { p_shift: open.id }); if (error) { alert(error.message); return; } setOpen(null); await load(); }}>✓ Looks right</button> : <span className="okc"> · ✓ checked</span>}
+                <small className="muted">Not right? Change the end time below.</small></div>}
               {pin && !pout && !ev.hours_submitted_at && <button className="link-btn" onClick={async () => { const { error } = await supabase.rpc('manager_set_ends_own', { p_shift: open.id, p_on: !open.ends_own }); if (error) { alert(error.message); return; } setOpen(null); await load(); }}>{open.ends_own ? 'Undo · I’ll end them myself' : `⏱ ${first(open.staff?.full_name)} ends their own shift`}</button>}
               {(ev.co_manager_ids ?? []).includes(open.staff_id ?? '') && open.staff_id !== ev.manager_id && <button className="link-btn" onClick={async () => { const { error } = await supabase.rpc('manager_set_comanager', { p_event: ev.id, p_staff: open.staff_id, p_on: false }); if (error) { alert(error.message); return; } setOpen(null); await load(); }}>Remove as manager</button>}
               {isNewO && newRows.length > 1 && (() => { const k = newRows.findIndex((r) => r.id === open.id); const nx = newRows[(k + 1) % newRows.length]; return <button className="link-btn nb-next" onClick={() => openRow(nx, true)}>Next new · {first(nx.staff?.full_name)} ›</button>; })()}
