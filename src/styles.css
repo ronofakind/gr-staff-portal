@@ -3440,3 +3440,36 @@ button.pf-go { border: none; background: none; padding: 4px 2px; font: 700 13px 
 .pin-note i { width: 30px; height: 30px; border-radius: 9px; background: #F3E2B6; display: flex; align-items: center; justify-content: center; flex: 0 0 30px; font-style: normal; }
 .pin-note span { font-size: 13.5px; line-height: 1.45; color: var(--ink); white-space: pre-wrap; }
 .pin-line { display: block; margin-top: 4px; padding: 3px 8px; border-radius: 8px; background: #FBF3E0; font-size: 11.5px; color: #5A4A2A; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+
+/* Nov 7 · MD debrief (Debrief.tsx) */
+.db-head { display: flex; align-items: flex-start; gap: 10px; }
+.db-head .pf-st { display: inline-block; }
+.db-title { font-size: 23px; line-height: 1.1; margin-top: 5px; }
+.db-skip { border: none; background: none; font: 700 14px Inter, system-ui, sans-serif; color: var(--muted); cursor: pointer; padding: 4px 2px; }
+.db-card { background: #fff; border-radius: 18px; padding: 12px; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 1px 0 #E4DCD1; }
+.db-q { display: flex; flex-direction: column; gap: 6px; } .db-q > b { font-size: 13px; }
+.db-line { display: block; height: 1px; background: #EEE8E0; margin-bottom: 4px; }
+.db-seg { display: flex; gap: 2px; padding: 3px; border-radius: 12px; background: #F1ECE5; }
+.db-seg button { flex: 1; height: 36px; border: none; border-radius: 9px; background: none; font: 600 13px Inter, system-ui, sans-serif; color: var(--ink); cursor: pointer; white-space: nowrap; padding: 0 4px; }
+.db-seg button.on { font-weight: 800; }
+.db-seg button.on.g { background: #E3F1E8; color: #2F6B4F; box-shadow: inset 0 0 0 1.5px #2F6B4F; }
+.db-seg button.on.y { background: #FBF3E0; color: #8A6A1F; box-shadow: inset 0 0 0 1.5px #8A6A1F; }
+.db-seg button.on.r { background: #F8E6E7; color: #9B2226; box-shadow: inset 0 0 0 1.5px #9B2226; }
+.db-what { display: flex; flex-direction: column; gap: 7px; padding: 10px; border-radius: 12px; background: #F8E6E7; margin-top: 2px; }
+.db-what > b { font-size: 12.5px; color: #9B2226; } .db-what > b span { font-weight: 500; color: var(--muted); }
+.db-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.db-chips button { height: 30px; padding: 0 10px; border: none; border-radius: 9px; background: #fff; box-shadow: inset 0 0 0 1px #E7C3C5; font: 700 12px Inter, system-ui, sans-serif; color: var(--ink); cursor: pointer; }
+.db-chips button.on { background: #9B2226; color: #fff; box-shadow: none; }
+.db-what input { height: 40px; border: none; border-radius: 10px; background: #fff; padding: 0 12px; font: 500 14px Inter, system-ui, sans-serif; color: var(--ink); }
+.db-note { display: flex; align-items: center; gap: 8px; min-height: 44px; border-radius: 22px; background: #fff; box-shadow: inset 0 0 0 1.5px #E4DCD1; padding: 0 14px; }
+.db-note input { flex: 1; border: none; background: none; font: 500 14px Inter, system-ui, sans-serif; color: var(--ink); outline: none; min-width: 0; }
+.db-entry { display: flex; align-items: center; gap: 8px; width: 100%; margin: 8px 0 0; padding: 12px 14px; border: none; border-radius: 14px; background: #fff; box-shadow: 0 1px 0 #E4DCD1; font: 700 14px Inter, system-ui, sans-serif; color: var(--ink); cursor: pointer; text-align: left; }
+.db-entry span { margin-left: auto; color: var(--muted); font-weight: 600; font-size: 13px; }
+.db-ok { width: 24px; height: 24px; border-radius: 12px; background: #2F6B4F; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; flex: 0 0 24px; }
+/* admin Today */
+.dbr { display: flex; flex-direction: column; gap: 7px; padding: 10px 12px; border-radius: 14px; background: #FAF7F2; box-shadow: inset 0 0 0 1px #EEE8E0; }
+.dbr-top { display: flex; align-items: center; gap: 8px; font-size: 13px; } .dbr-top b { flex: 1; }
+.dbr-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.dbr-tags span { font-size: 11.5px; font-weight: 800; padding: 3px 8px; border-radius: 8px; }
+.dbr-tags .g { background: #E3F1E8; color: #2F6B4F; } .dbr-tags .y { background: #FBF3E0; color: #8A6A1F; } .dbr-tags .r { background: #F8E6E7; color: #9B2226; }
+.dbr-txt { font-size: 12.5px; color: #5A4A2A; }

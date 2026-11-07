@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { DebriefCards } from '../components/Debrief';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ChangeAnswer, CHANGE_COLS, isSelfCancel, isEventDayCancel, replacementOf, type ChangeRow } from './Changes';
 import { CantMakeIt, NotConfirmed, ReplaceSheet, type Late } from './Replace';
@@ -358,6 +359,7 @@ function Live({ e, q = 0, inBlock = false, onDeleted, lateBy = {} }: { e: AEvent
         {status === 'done' ? <span className="tag done-tag">✓ Completed</span> : status === 'live' ? <span className="tag ok"><i className="pulse" />live</span> : status === 'notsent' ? <span className="tag amber">Hours not sent</span> : <span className="tag amber">in {Math.floor(startsIn / 60)} h {String(startsIn % 60).padStart(2, '0')}</span>}
       </div>
       {completed && <div className="muted sm">Hours submitted by {e.shifts.find((s) => s.staff_id === e.hours_submitted_by)?.staff?.full_name ?? 'the manager'} at {tTime(e.hours_submitted_at)}</div>}
+      {completed && <DebriefCards eventId={e.id} />}
       <div className="cnt4" role="tablist">{boxes.map((b) => (
         <button key={b.label} role="tab" aria-selected={tab === b.label} disabled={!b.n} className={b.cls + (tab === b.label ? ' on' : '')} onClick={() => setTab(tab === b.label ? null : b.label)}>
           <b>{b.n}</b><small>{b.label}{tab === b.label ? ' ▴' : ''}</small>

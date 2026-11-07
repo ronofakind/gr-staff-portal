@@ -3,6 +3,7 @@ import { QuarterTime } from '../components/QuarterTime';
 import { WheelTime, roundQ } from '../components/WheelTime';
 import { useEffect, useRef, useState } from 'react';
 import { SwipeSheet } from '../components/SwipeSheet';
+import { DebriefSheet } from '../components/Debrief';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { setting, useSettings } from '../lib/settings';
@@ -241,6 +242,10 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
   const [draft, setDraft] = useState({ in: '', out: '' });
   const [ask, setAsk] = useState<Ask>(null);
   const [review, setReview] = useState(false);
+  // Nov 7 · MD debrief after Submit hours (migration 077 · errors → nothing shown). null = unknown / not available
+  const [dbDone, setDbDone] = useState<boolean | null>(null); const [dbOpen, setDbOpen] = useState(false); const [thanks, setThanks] = useState(false);
+  useEffect(() => { if (!thanks) return; const t = setTimeout(() => setThanks(false), 3000); return () => clearTimeout(t); }, [thanks]);
+  useEffect(() => { if (!eventId) return; supabase.from('event_debriefs').select('id').eq('event_id', eventId).then(({ data, error }) => setDbDone(error ? null : (data ?? []).length > 0)); }, [eventId]);
   const [busy, setBusy] = useState(false);
   const [endSheet, setEndSheet] = useState<Row[] | null>(null);
   const [endSkip, setEndSkip] = useState<Set<string>>(new Set()); // Nov 5 · End All: leave someone out
@@ -635,6 +640,10 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
         </div>
         <button className="btn-ink" style={{ height: 46, padding: '0 18px', borderRadius: 23 }} onClick={() => (fbOn && !checkDone && newWorked.length ? setCheck(true) : setReview(true))}>{ev.hours_submitted_at ? 'Resubmit ›' : 'Submit hours ›'}</button>
       </div>)}
+      {ev.hours_submitted_at && dbDone === false && Date.now() < new Date(ev.event_date + 'T12:00:00-05:00').getTime() + 864e5 && (
+        <button className="db-entry" onClick={() => setDbOpen(true)}>📝 How did tonight go? <span>Debrief ›</span></button>)}
+      {dbOpen && <DebriefSheet eventId={ev.id} onClose={() => setDbOpen(false)} onSent={() => { setDbOpen(false); setDbDone(true); setThanks(true); }} />}
+      {thanks && <div className="undo-bar" role="status"><span className="db-ok">✓</span><span className="grow">Thanks</span></div>}
 
       {endSheet && (
         <>
@@ -664,7 +673,9 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
           const { error } = await supabase.rpc('manager_submit_hours', { p_event: ev.id });
           setBusy(false);
           if (error) { setErr(error.message); return; }
+          const wasFirst = !ev.hours_submitted_at;
           setReview(false); await load();
+          if (wasFirst && dbDone === false) setDbOpen(true);
         };
         return (
           <div className="review">
