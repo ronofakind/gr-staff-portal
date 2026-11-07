@@ -140,6 +140,7 @@ export function StaffProfile({ s, onClose, onEdit, all }: { s: AStaff; onClose: 
           <div className="sp-col">
             <div className="sp-colh">WHO THEY ARE · MANAGERS SEE “ABOUT”</div>
             <AboutCard key={s.id} s={s} people={people} />
+            <PinNoteCard key={"pin" + s.id} staffId={s.id} first={(s.nickname || s.full_name).split(' ')[0]} />
             <div className="pcard ru-card">
               <div className="row" style={{ justifyContent: 'space-between' }}><span className="kick">BOOKING RULES · NEVER SHOWN TO STAFF</span><button className="lnk accent" style={{ textDecoration: 'none', fontSize: 13, whiteSpace: 'nowrap', marginLeft: 8 }} onClick={() => setAdding(true)}>+ Add</button></div>
               {(['together', 'apart'] as LinkKind[]).map((k) => { const ls = linksOf(links, s.id, k); if (!ls.length) return null; return (
@@ -400,6 +401,33 @@ function AboutCard({ s, people }: { s: AStaff; people: AStaff[] }) {
         {err && <p className="error">{err}</p>}
         <div className="ab-foot">Managers never see tiers, rankings, ratings, rates or admin notes.</div>
       </>}
+    </div>
+  );
+}
+
+/** 076 · the 📌 note for managers that follows this person (set from Bookings → Note for the manager) */
+function PinNoteCard({ staffId, first }: { staffId: string; first: string }) {
+  const [n, setN] = useState<{ note: string; shifts: number | null; from_date: string } | null>(null); const [left, setLeft] = useState<number | null>(null);
+  const load = async () => {
+    const { data } = await supabase.from('staff_mgr_notes').select('note,shifts,from_date').eq('staff_id', staffId).maybeSingle();
+    setN((data as typeof n) ?? null);
+    if (data && (data as { shifts: number | null }).shifts) {
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' });
+      const { count } = await supabase.from('shifts').select('id, events!inner(event_date)', { count: 'exact', head: true }).eq('staff_id', staffId).neq('status', 'declined').is('cancelled_at', null)
+        .gte('events.event_date', (data as { from_date: string }).from_date).lt('events.event_date', today);
+      setLeft(Math.max(0, ((data as { shifts: number }).shifts) - (count ?? 0)));
+    } else setLeft(null);
+  };
+  useEffect(() => { load(); }, [staffId]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!n) return null;
+  return (
+    <div className="pcard"><span className="kick">📌 NOTE FOR MANAGERS · STAFF DON’T SEE IT</span>
+      <div className="pin-note"><i aria-hidden="true">📌</i><span>{n.note}</span></div>
+      <div className="row" style={{ justifyContent: 'space-between', gap: 8 }}>
+        <small className="muted">{n.shifts ? (left === 0 ? 'Done · shown on their first 3 shifts' : `First ${n.shifts} shifts${left != null ? ` · ${left} left` : ''}`) : 'Every shift'} · from {new Date(n.from_date + 'T12:00:00').toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })}</small>
+        <button className="lnk accent" onClick={async () => { const { error } = await supabase.from('staff_mgr_notes').delete().eq('staff_id', staffId); if (error) { alert(error.message); return; } setN(null); }}>Remove</button>
+      </div>
+      <small className="muted">Change it from Bookings → {first} → Note for the manager.</small>
     </div>
   );
 }

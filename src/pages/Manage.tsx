@@ -281,7 +281,8 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
       for (const x of data as { staff_id: string; venue: string; start_at: string; end_at: string | null }[]) if (x && typeof x.staff_id === 'string' && typeof x.start_at === 'string') (m[x.staff_id] ??= []).push(x);
       setOtherSh(m);
     });
-    { const ids = ((s.data ?? []) as unknown as Row[]).map((r) => r.id); if (ids.length) supabase.from('shift_mgr_notes').select('shift_id,note').in('shift_id', ids).then(({ data, error }) => { if (!error && Array.isArray(data)) setRNote(Object.fromEntries((data as { shift_id: string; note: string }[]).map((x) => [x.shift_id, x.note]))); }); }
+    { const ids = ((s.data ?? []) as unknown as Row[]).map((r) => r.id); if (ids.length) supabase.from('shift_mgr_notes').select('shift_id,note').in('shift_id', ids).then(({ data, error }) => { if (!error && Array.isArray(data)) { const own = Object.fromEntries((data as { shift_id: string; note: string }[]).map((x) => [x.shift_id, x.note]));
+      supabase.rpc('mgr_staff_notes', { p_event: eventId! }).then(({ data: d2, error: e2 }) => { const per = !e2 && Array.isArray(d2) ? Object.fromEntries((d2 as { shift_id: string; note: string }[]).map((x) => [x.shift_id, x.note])) : {}; setRNote({ ...per, ...own }); }); } }); }
     supabase.from('shift_extras').select('shift_id,kind').eq('event_id', eventId!).then(({ data, error }) => { if (!error && Array.isArray(data)) setXIds(new Set((data as { shift_id: string; kind?: string }[]).filter((x) => x.kind !== 'keep').map((x) => x.shift_id))); });
     supabase.from('event_notices').select('id,body,created_at').eq('event_id', eventId!).order('created_at', { ascending: false }).then(({ data }) => setNotices((data ?? []) as { id: string; body: string; created_at: string }[]));
     // Within each call time: lead (MD / bar manager) first, then everyone A–Z by first name.
@@ -571,7 +572,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
                       </>;
                     })()}
                     {!r.attendance && r.leave_by && !pout && <span><i className="p28-tag gold">⏱ MUST LEAVE BY {fullT(r.leave_by).toUpperCase()}</i></span>}
-                    {!r.attendance && rNote[r.id] && <span className="mgr-note">From Ronnie: “{rNote[r.id]}”</span>}
+                    {!r.attendance && rNote[r.id] && <span className="pin-line">📌 {rNote[r.id]}</span>}
                     {fromRonnie ? <span className="st muted-st">Don’t wait for {first(r.staff?.full_name)}{r.attendance_reason ? ` · ${r.attendance_reason}` : ''}</span>
                       : r.attendance ? <span className="st muted-st">{r.attendance === 'no_show' ? 'No-show' : 'Cancelled'}{r.attendance_reason ? ` · ${r.attendance_reason}` : ''}</span>
                       : r.left_early && pin && pout ? <span className="st gold">{time(pin, lang)} → {time(pout, lang)} · {hours(pin, pout)} {t.hours}<i className="st-tag gold">LEFT EARLY</i></span>
@@ -739,6 +740,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
                   : <span className="pf-st wait">NOT STARTED{open.punches?.arrived_at ? ` · arrived ${time(open.punches.arrived_at, lang)}` : ''}</span>}
               </div>
             </div>
+            {rNote[open.id] && <div className="pin-note"><i aria-hidden="true">📌</i><span>{rNote[open.id]}</span></div>}
             {open.punches?.late_entry_at && <div className="late-box"><b>Entered later by {first(open.staff?.full_name)}</b> · {new Date(open.punches.late_entry_at).toLocaleString('en-US', { weekday: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' })}{open.punches.late_reason ? ` · “${open.punches.late_reason}”` : ''}
               {!open.punches.late_ok_at ? <button className="btn-ink" onClick={async () => { const { error } = await supabase.rpc('manager_ok_late', { p_shift: open.id }); if (error) { alert(error.message); return; } setOpen(null); await load(); }}>✓ Looks right</button> : <span className="okc"> · ✓ checked</span>}
               <small className="muted">Not right? Change the end time below.</small></div>}
@@ -814,7 +816,6 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
                 </span>
               </div>)}
             {open.leave_by && <span className="leave-tag inline">⏱ Must leave by {time(open.leave_by, lang)} · their end time stays open</span>}
-            {rNote[open.id] && <span className="mgr-note">From Ronnie: “{rNote[open.id]}”</span>}
             <NoteBox key={open.id} initial={open.manager_note ?? ''} onSave={async (v) => { setErr(''); const { error } = await supabase.rpc('manager_set_note', { p_shift: open.id, p_note: v }); if (error) setErr(error.message); await load(); }} />
             {(ev.co_manager_ids ?? []).includes(open.staff_id ?? '') && open.staff_id !== ev.manager_id && <button className="link-btn" onClick={async () => { const { error } = await supabase.rpc('manager_set_comanager', { p_event: ev.id, p_staff: open.staff_id, p_on: false }); if (error) { alert(error.message); return; } setOpen(null); await load(); }}>Remove as manager</button>}
           </SwipeSheet>

@@ -3431,3 +3431,12 @@ button.pf-go { border: none; background: none; padding: 4px 2px; font: 700 13px 
 .bk-sendm-h { display: flex; justify-content: space-between; align-items: center; } .bk-sendm-h b { font-size: 15px; }
 .bk-sendm ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
 .bk-sendm li { display: flex; justify-content: space-between; gap: 10px; font-size: 13.5px; padding: 7px 10px; border-radius: 10px; background: #F6F2EC; } .bk-sendm li small { color: var(--muted); }
+
+/* Nov 7 · 📌 manager note */
+.bk-scope { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.bk-scope button { height: 36px; border-radius: 10px; border: none; background: #fff; box-shadow: inset 0 0 0 1.5px #E4DCD1; font: 700 12.5px Inter, system-ui, sans-serif; color: var(--ink); cursor: pointer; }
+.bk-scope button.on { background: #FBF3E0; box-shadow: inset 0 0 0 1.5px #E9D3A0; color: #7A5A12; }
+.pin-note { display: flex; gap: 10px; align-items: flex-start; padding: 12px; border-radius: 14px; background: #FBF3E0; box-shadow: inset 0 0 0 1.5px #E9D3A0; }
+.pin-note i { width: 30px; height: 30px; border-radius: 9px; background: #F3E2B6; display: flex; align-items: center; justify-content: center; flex: 0 0 30px; font-style: normal; }
+.pin-note span { font-size: 13.5px; line-height: 1.45; color: var(--ink); white-space: pre-wrap; }
+.pin-line { display: block; margin-top: 4px; padding: 3px 8px; border-radius: 8px; background: #FBF3E0; font-size: 11.5px; color: #5A4A2A; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }

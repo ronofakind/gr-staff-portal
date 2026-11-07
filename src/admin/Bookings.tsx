@@ -107,6 +107,7 @@ export function Bookings() {
   const [phone, setPhone] = useState<{ sid: string; p?: Pl; step: 'menu' | 'move' | 'add' | 'time' | 'note' | 'rem'; rid?: string } | null>(null);
   // Nov 5 · note for the manager (has to leave by + note; managers/MDs see it, staff don't)
   const [mNotes, setMNotes] = useState<Record<string, string>>({}); const [nLeave, setNLeave] = useState(''); const [nText, setNText] = useState('');
+  const [sNotes, setSNotes] = useState<Record<string, { note: string; shifts: number | null; from_date: string }>>({}); const [nScope, setNScope] = useState<'shift' | 'first3' | 'always'>('shift'); // 076
   const [ownT, setOwnT] = useState(''); // Nov 4 · Change start time (one person)
   const [msg, setMsg] = useState(''); const [busy, setBusy] = useState(false);
   const [locks, setLocks] = useState<Locks>(NO_LOCKS); // push 50 · padlock on saved shifts
@@ -159,6 +160,7 @@ export function Bookings() {
     setHist([]);
     setEvents(evs);
     { const ids = evs.flatMap((e) => e.shifts.map((s) => s.id)); if (ids.length) supabase.from('shift_mgr_notes').select('shift_id,note').in('shift_id', ids).then(({ data, error }) => { if (!error) setMNotes(Object.fromEntries(((data ?? []) as { shift_id: string; note: string }[]).map((r) => [r.shift_id, r.note]))); }); }
+    supabase.from('staff_mgr_notes').select('staff_id,note,shifts,from_date').then(({ data, error }) => { if (!error) setSNotes(Object.fromEntries(((data ?? []) as { staff_id: string; note: string; shifts: number | null; from_date: string }[]).map((r) => [r.staff_id, r]))); });
   };
   useEffect(() => { load(); }, [date, view, span]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -806,7 +808,8 @@ export function Bookings() {
               {!p.suggested && <button className="bk-mli" onClick={() => { setOwnT(p.start); setPhone({ ...phone, step: 'time' }); }}>{ic('c|M12 7v5l3 2')}<span className="grow">Change time</span><span className="bk-mch">›</span></button>}
               <button className="bk-mli" onClick={() => setPhone({ ...phone, step: 'move' })}>{ic('M5 12h14|M13 6l6 6-6 6')}<span className="grow">Move</span><span className="bk-mch">›</span></button>
               {!p.suggested && <button className="bk-mli" onClick={() => setPhone({ ...phone, step: 'add' })}>{ic('M12 5v14|M5 12h14')}<span className="grow">Add a 2nd shift</span><span className="bk-mch">›</span></button>}
-              {sh && <button className="bk-mli" onClick={() => { setNLeave(sh.leave_by ? hm(sh.leave_by) : ''); setNText(mNotes[sh.id] ?? ''); setPhone({ ...phone, step: 'note' }); }}>{ic('c|M12 7v5l3 2')}<span className="grow">Note for the manager{(sh.leave_by || mNotes[sh.id]) && <small className="gold"> · {sh.leave_by ? `leaves ${t12(hm(sh.leave_by))}` : 'note set'}</small>}</span><span className="bk-mch">›</span></button>}
+              {sh && <button className="bk-mli" onClick={() => { setNLeave(sh.leave_by ? hm(sh.leave_by) : ''); { const sn = sNotes[sid]; const st0 = staff.find((x) => x.id === sid); const fresh = !!st0?.created_at && Date.now() - new Date(st0.created_at).getTime() < 45 * 864e5;
+                setNText(mNotes[sh.id] ?? sn?.note ?? ''); setNScope(mNotes[sh.id] ? 'shift' : sn ? (sn.shifts ? 'first3' : 'always') : fresh ? 'first3' : 'shift'); } setPhone({ ...phone, step: 'note' }); }}>{ic('c|M12 7v5l3 2')}<span className="grow">Note for the manager{(sh.leave_by || mNotes[sh.id] || sNotes[sid]) && <small className="gold"> · {sh.leave_by ? `leaves ${t12(hm(sh.leave_by))}` : sNotes[sid] && !mNotes[sh.id] ? (sNotes[sid].shifts ? '📌 first 3 shifts' : '📌 every shift') : 'note set'}</small>}</span><span className="bk-mch">›</span></button>}
               <button className="bk-mli" onClick={() => { setProf(sid); close(); }}>{ic('c|M12 8v.01|M12 11v5')}<span className="grow">Profile · ranking · knows</span><span className="bk-mch">›</span></button>
               <Link className="bk-mli" to={`/admin/messages?staff=${sid}`} onClick={close}>{ic('M4 5h16v11H9l-5 4z')}<span className="grow">Message</span><span className="bk-mch">›</span></Link>
             </div>
@@ -839,18 +842,21 @@ export function Bookings() {
           : step === 'note' && p ? (() => { const sh = shiftOf(p); if (!sh) return null; const okT = !nLeave || /^\d{2}:\d{2}$/.test(nLeave);
             const save = async (clear = false) => {
               const lv = clear || !nLeave ? null : startIso(nLeave < p.start ? addDays(date, 1) : date, nLeave);
-              const { error } = await supabase.rpc('admin_set_mgr_note', { p_shift: sh.id, p_leave_by: lv, p_note: clear ? '' : nText });
+              const { error } = await supabase.rpc('admin_set_mgr_note', { p_shift: sh.id, p_leave_by: lv, p_note: clear ? '' : nText, p_scope: nScope });
               if (error) { setHint(error.message); return; }
-              setHint(clear ? `Note cleared for ${first}` : `✓ Note saved · ${first}'s manager sees it`); close(); await load(); };
+              setHint(clear ? `Note cleared for ${first}` : `✓ Note saved · ${first}'s manager sees it${nScope === 'first3' ? ' on their first 3 shifts' : nScope === 'always' ? ' on every shift' : ''}`); close(); await load(); };
             return <>
             <div><b className="serif" style={{ fontSize: 20 }}>Note for the manager</b><div className="muted sm">{first} · {seeTitle(evById[p.event_id])} · booked {t12(p.start)}</div></div>
             <label className="bk-tin"><span className="sm strong">Has to leave by</span><input type="time" step={900} value={nLeave} onChange={(ev) => setNLeave(ev.target.value)} />{nLeave && <button type="button" className="lnk" onClick={() => setNLeave('')}>no time</button>}</label>
             <span className="muted sm">Their end time does not change. The manager gets a reminder 30 min before.</span>
             <label className="stack" style={{ gap: 4 }}><span className="sm strong">Note <span className="muted">(optional)</span></span><textarea rows={3} value={nText} onChange={(ev) => setNText(ev.target.value)} placeholder="Last metro, let them go first if it runs late" /></label>
+            <div className="stack" style={{ gap: 6 }}><span className="sm strong">Show it for</span>
+              <div className="bk-scope">{([['shift', 'This shift only'], ['first3', 'First 3 shifts'], ['always', 'Every shift']] as const).map(([k, l]) => <button key={k} type="button" className={nScope === k ? 'on' : ''} onClick={() => setNScope(k)}>{l}</button>)}</div>
+              <span className="muted sm">{nScope === 'first3' ? `Counts from this shift · drops off on its own after ${first}'s 3rd shift.` : nScope === 'always' ? `On every shift until you remove it (here or in ${first}'s profile).` : 'Only on this shift.'}</span></div>
             <span className="muted sm">Managers and MDs on that event see it. Staff don't. Saves right away.</span>
             <div className="row" style={{ gap: 8 }}>
-              <button className="abtn dark grow" disabled={!okT || (!nLeave && !nText.trim() && !sh.leave_by && !mNotes[sh.id])} onClick={() => save()}>Save note</button>
-              {(sh.leave_by || mNotes[sh.id]) && <button className="abtn" onClick={() => save(true)}>Clear</button>}
+              <button className="abtn dark grow" disabled={!okT || (!nLeave && !nText.trim() && !sh.leave_by && !mNotes[sh.id] && !sNotes[sid])} onClick={() => save()}>Save note</button>
+              {(sh.leave_by || mNotes[sh.id] || sNotes[sid]) && <button className="abtn" onClick={() => save(true)}>Clear</button>}
             </div></>; })()
           : step === 'move' && p ? <>
             <b>Move {name(sid)} to…</b>
