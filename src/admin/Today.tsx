@@ -11,6 +11,7 @@ import { AskNeed, useAskNeeds } from './AskChange';
 import { DeleteEvent } from './DeleteEvent';
 import { DeptTag } from './DeptTag';
 import { SheetChanges } from './SheetChanges';
+import { AiPanel } from './AiPanel';
 import { needsSend, hoursBetween } from './api';
 import { LateEnds } from './LateEnds';
 import { useNewStaffRatings, NewStaffGoldCard, NewStaffPanel, nsrOpenDefault, TAG_LABEL, BAD_TAGS } from './NewStaffRatings';
@@ -230,6 +231,8 @@ export function Today() {
         <Link to="/admin/availability" className="k"><small>AVAILABILITY ANSWERS</small><b>{answers} <span>said yes</span></b></Link>
         <Link to="/admin/hours" className={'k' + (missing ? ' amber' : '')}><small>HOURS TO REVIEW</small><b>{missing} <span>missing end times</span></b></Link>
       </div>
+
+      <AiPanel />
 
       <div className="two-col">
         <section className="stack">
