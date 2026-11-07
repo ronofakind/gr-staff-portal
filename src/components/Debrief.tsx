@@ -62,23 +62,34 @@ export function DebriefSheet({ eventId, onClose, onSent }: { eventId: string; on
   );
 }
 
-type Row = { id: string; night: string | null; client: string | null; difficulty: string | null; team_size: string | null; issues: string[]; what: string | null; note: string | null; created_at: string; staff: { full_name: string; nickname: string | null } | null };
+type Row = { id: string; event_id: string; night: string | null; client: string | null; difficulty: string | null; team_size: string | null; issues: string[]; what: string | null; note: string | null; created_at: string; staff: { full_name: string; nickname: string | null } | null; events?: { title: string; event_date: string } | null };
+const COLS = 'id,event_id,night,client,difficulty,team_size,issues,what,note,created_at,staff:staff!event_debriefs_by_staff_fkey(full_name,nickname),events(title,event_date)';
+function Card({ r, withEvent }: { r: Row; withEvent?: boolean }) {
+  const tags = (['night', 'client', 'difficulty', 'team_size'] as const).map((k) => r[k] ? DEBRIEF_LABEL[k + ':' + r[k]] : null).filter(Boolean) as [string, Tone][];
+  const who = r.staff ? (r.staff.nickname || r.staff.full_name.split(' ')[0]) : 'Manager';
+  const day = r.events ? new Date(r.events.event_date + 'T12:00:00').toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' }) : '';
+  return (
+    <div className="dbr">
+      <div className="dbr-top"><span aria-hidden="true">📝</span><b>{withEvent && r.events ? `${r.events.title} · ${day} · ${who}` : `Debrief · ${who}`}</b><span className="muted sm">{new Date(r.created_at).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' })}</span></div>
+      {tags.length > 0 && <div className="dbr-tags">{tags.map(([l, t]) => <span key={l} className={t}>{l}</span>)}</div>}
+      {(r.issues.length > 0 || r.what) && <div className="dbr-txt">{[r.issues.join(' · '), r.what ? `“${r.what}”` : ''].filter(Boolean).join(' · ')}</div>}
+      {r.note && <div className="dbr-txt">💬 {r.note}</div>}
+    </div>
+  );
+}
 /** Admin · the debrief(s) for one event (Today card). Nothing shown before 077 or when none was sent. */
 export function DebriefCards({ eventId }: { eventId: string }) {
   const [rows, setRows] = useState<Row[]>([]);
-  useEffect(() => { supabase.from('event_debriefs').select('id,night,client,difficulty,team_size,issues,what,note,created_at,staff:staff!event_debriefs_by_staff_fkey(full_name,nickname)').eq('event_id', eventId).order('created_at')
+  useEffect(() => { supabase.from('event_debriefs').select(COLS).eq('event_id', eventId).order('created_at')
     .then(({ data, error }) => { if (!error) setRows((data ?? []) as unknown as Row[]); }); }, [eventId]);
-  if (!rows.length) return null;
-  return <>{rows.map((r) => {
-    const tags = (['night', 'client', 'difficulty', 'team_size'] as const).map((k) => r[k] ? DEBRIEF_LABEL[k + ':' + r[k]] : null).filter(Boolean) as [string, Tone][];
-    const who = r.staff ? (r.staff.nickname || r.staff.full_name.split(' ')[0]) : 'Manager';
-    return (
-      <div key={r.id} className="dbr">
-        <div className="dbr-top"><span aria-hidden="true">📝</span><b>Debrief · {who}</b><span className="muted sm">{new Date(r.created_at).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' })}</span></div>
-        {tags.length > 0 && <div className="dbr-tags">{tags.map(([l, t]) => <span key={l} className={t}>{l}</span>)}</div>}
-        {(r.issues.length > 0 || r.what) && <div className="dbr-txt">{[r.issues.join(' · '), r.what ? `“${r.what}”` : ''].filter(Boolean).join(' · ')}</div>}
-        {r.note && <div className="dbr-txt">💬 {r.note}</div>}
-      </div>
-    );
-  })}</>;
+  return <>{rows.map((r) => <Card key={r.id} r={r} />)}</>;
+}
+/** Admin Today · debriefs sent in the last 36 h for events that are no longer on Tonight (last night's). */
+export function RecentDebriefs({ skip }: { skip: string[] }) {
+  const [rows, setRows] = useState<Row[]>([]);
+  useEffect(() => { supabase.from('event_debriefs').select(COLS).gte('created_at', new Date(Date.now() - 36 * 3600e3).toISOString()).order('created_at', { ascending: false })
+    .then(({ data, error }) => { if (!error) setRows((data ?? []) as unknown as Row[]); }); }, []);
+  const show = rows.filter((r) => !skip.includes(r.event_id));
+  if (!show.length) return null;
+  return <><div className="sec"><span className="serif">Last night · debriefs</span></div>{show.map((r) => <Card key={r.id} r={r} withEvent />)}</>;
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { DebriefCards } from '../components/Debrief';
+import { DebriefCards, RecentDebriefs } from '../components/Debrief';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ChangeAnswer, CHANGE_COLS, isSelfCancel, isEventDayCancel, replacementOf, type ChangeRow } from './Changes';
 import { CantMakeIt, NotConfirmed, ReplaceSheet, type Late } from './Replace';
@@ -251,6 +251,7 @@ export function Today() {
                 </div>);
             });
           })()}
+          <RecentDebriefs skip={tonight.map((e) => e.id)} />
           <MeetingsStrip from={today} to={addDays(today, 7)} title="Meetings · next 7 days" />
         </section>
         <section className="stack">
