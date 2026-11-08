@@ -138,7 +138,9 @@ export function AppSheet({ a, all, staff, onClose, onDone }: { a: App; all: App[
     const lv = LEVELS.find((x) => x.k === level)!;
     const sameAsRef = refStaff && refRate != null && r === refRate;
     await supabase.from('staff_rates').upsert({ staff_id: sid, rate: r, from_date: isoDay(new Date()), reason: `Start · ${lv.l}${sameAsRef ? ` · same as ${refStaff!.full_name.split(' ')[0]}` : ''}`, source: 'app' }, { onConflict: 'staff_id,from_date' });
-    await supabase.from('staff_private').upsert({ staff_id: sid, notes: `Hired ${isoDay(new Date())} · ${lv.l} · ${paid === 'cash' ? 'cash' : 'payroll'}${refStaff ? ` · referred by ${refStaff.full_name}` : ''}` });
+    // Application → profile check-up: neighbourhood + languages are already filled in for them (staff_private, same fields the check-up saves).
+    const langs = a.lang_fr && a.lang_en ? { fr: a.lang_fr, en: a.lang_en } : null;
+    await supabase.from('staff_private').upsert({ staff_id: sid, neighbourhood: a.neighbourhood?.trim() || null, ...(langs ? { languages: langs } : {}), notes: `Hired ${isoDay(new Date())} · ${lv.l} · ${paid === 'cash' ? 'cash' : 'payroll'}${refStaff ? ` · referred by ${refStaff.full_name}` : ''}` });
     const up = await supabase.from('applications').update({ status: 'accepted', decided_at: new Date().toISOString(), level, start_rate: r, handbook_roles: hb, paid_by: paid, staff_id: sid, updated_at: new Date().toISOString() }).eq('id', a.id);
     setBusy(false); if (up.error) { setErr(up.error.message); return; }
     setInvite({ id: sid, full_name: row.full_name, email: row.email, phone: row.phone, language: row.language as 'fr' | 'en', department: dept as 'floor' | 'bar', role: 'staff', positions: row.positions, active: true, photo_url: null, staff_private: null });
