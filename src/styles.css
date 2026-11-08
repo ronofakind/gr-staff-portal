@@ -3584,7 +3584,7 @@ button.pf-go { border: none; background: none; padding: 4px 2px; font: 700 13px 
 .ap-land .cu-foot { margin-top: auto; padding-top: 18px; }
 .cu-btn.ap-red { background: #9B2226; color: #fff; }
 .cu-btn.ap-red:disabled { background: #D9D1C6; color: #8F867B; }
-.ap-mark { width: 40px; height: 40px; object-fit: contain; align-self: center; margin-top: 8px; } .ap-mark.big { width: 52px; height: 52px; }
+.ap-mark { height: 34px; width: auto; align-self: center; margin-top: 8px; mix-blend-mode: multiply; } .ap-mark.big { height: 46px; }
 .ap-card { background: #fff; border-radius: 18px; box-shadow: 0 1px 0 #E4DCD1; padding: 12px 14px; display: flex; flex-direction: column; gap: 12px; }
 .ap-f { display: flex; flex-direction: column; gap: 5px; font-size: 12px; font-weight: 700; color: var(--muted); min-width: 0; }
 .ap-f input, .ap-f textarea { font: 600 16px Inter, system-ui, sans-serif; color: var(--ink); border: 0; border-bottom: 1.5px solid #EEE8E0; padding: 6px 0 8px; background: none; outline: none; width: 100%; resize: vertical; border-radius: 0; }
