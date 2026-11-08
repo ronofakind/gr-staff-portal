@@ -3414,7 +3414,7 @@ div.pf-row { cursor: default; flex-wrap: wrap; }
 .wt-col { position: relative; flex: 1; height: 200px; overflow-y: auto; scroll-snap-type: y mandatory; scrollbar-width: none; -webkit-overflow-scrolling: touch; -webkit-mask-image: linear-gradient(transparent, #000 30%, #000 70%, transparent); mask-image: linear-gradient(transparent, #000 30%, #000 70%, transparent); }
 .wt-col::-webkit-scrollbar { display: none; }
 .wt-pad { height: 80px; }
-.wt-item { height: 40px; display: flex; align-items: center; justify-content: center; scroll-snap-align: start; font-family: 'Fraunces', Georgia, serif; font-size: 20px; color: var(--muted); cursor: pointer; font-variant-numeric: tabular-nums; }
+.wt-item { height: 40px; display: flex; align-items: center; justify-content: center; scroll-snap-align: center; font-family: 'Fraunces', Georgia, serif; font-size: 20px; color: var(--muted); cursor: pointer; font-variant-numeric: tabular-nums; }
 .wt-item.on { font-size: 24px; font-weight: 600; color: var(--ink); }
 .wt-val { display: block; width: 100%; padding: 6px 0; margin: -6px 0; }
 .hrs-box { position: relative; }
