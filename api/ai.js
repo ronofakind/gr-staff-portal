@@ -28,7 +28,8 @@ export default async function handler(req, res) {
     if (!(await okToken(token))) return res.status(401).json({ error: 'bad token' });
 
     if (req.method === 'GET') {
-      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' });
+      const past = Math.min(Number(req.query.past) || 0, 90); // Nov 8 · ?past=45 → also past events (invoice matching)
+      const today = new Date(Date.now() - past * 864e5).toLocaleDateString('en-CA', { timeZone: 'America/Toronto' });
       const until = new Date(Date.now() + 60 * 864e5).toLocaleDateString('en-CA', { timeZone: 'America/Toronto' });
       const since = new Date(Date.now() - 14 * 864e5).toISOString();
       const [evs, priv, items, clients, st] = await Promise.all([
@@ -57,6 +58,21 @@ export default async function handler(req, res) {
         lines: Array.isArray(i.lines) ? i.lines.slice(0, 6).map((l) => ({ label: s(l?.label, 40), old: s(l?.old, 120), new: s(l?.new, 160) })) : [],
         sure: i.sure !== false,
       }));
+      // Nov 8 · push 54 (081) · QuickBooks invoices once SENT → profit per event. { qb_id, doc_number, event_id, customer, txn_date, sent_at, subtotal, total }
+      let invoices = 0;
+      if (Array.isArray(body.invoices) && body.invoices.length) {
+        const num = (v) => (v == null || v === '' || isNaN(Number(v)) ? null : Number(v));
+        const inv = body.invoices.slice(0, 200).filter((i) => i && i.qb_id && i.sent_at).map((i) => ({
+          qb_id: s(i.qb_id, 40), doc_number: s(i.doc_number, 40), customer: s(i.customer, 160),
+          event_id: /^[0-9a-f-]{36}$/i.test(i.event_id || '') ? i.event_id : null,
+          txn_date: /^\d{4}-\d{2}-\d{2}$/.test(i.txn_date || '') ? i.txn_date : null, sent_at: s(i.sent_at, 40),
+          subtotal: num(i.subtotal), total: num(i.total), updated_at: new Date().toISOString() }));
+        if (inv.length) {
+          const r = await fetch(`${URL_}/rest/v1/event_invoices?on_conflict=qb_id`, { method: 'POST', headers: H({ Prefer: 'resolution=merge-duplicates,return=minimal' }), body: JSON.stringify(inv) });
+          if (!r.ok) throw new Error(`invoices ${r.status} ${(await r.text()).slice(0, 200)}`);
+          invoices = inv.length;
+        }
+      }
       let added = 0;
       if (rows.length) {
         const r = await fetch(`${URL_}/rest/v1/ai_items?on_conflict=dedupe_key`, { method: 'POST', headers: H({ Prefer: 'resolution=ignore-duplicates,return=representation' }), body: JSON.stringify(rows) });
@@ -64,7 +80,7 @@ export default async function handler(req, res) {
         added = (await r.json()).length;
       }
       if (body.checked) await fetch(`${URL_}/rest/v1/ai_settings?id=eq.1`, { method: 'PATCH', headers: H(), body: JSON.stringify({ inbox_checked_at: new Date().toISOString() }) });
-      return res.json({ added, skipped: rows.length - added });
+      return res.json({ added, skipped: rows.length - added, invoices });
     }
     return res.status(405).json({ error: 'GET or POST' });
   } catch (e) {

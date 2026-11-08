@@ -13,6 +13,7 @@ import { DeleteEvent } from './DeleteEvent';
 import { DeptTag } from './DeptTag';
 import { SheetChanges } from './SheetChanges';
 import { AiPanel } from './AiPanel';
+import { PayPeriod } from './PayPeriod';
 import { needsSend, hoursBetween } from './api';
 import { LateEnds } from './LateEnds';
 import { useNewStaffRatings, RatingsToday, TAG_LABEL, BAD_TAGS } from './NewStaffRatings';
@@ -294,6 +295,10 @@ export function Today() {
           })}
         </div>
         <div className="muted sm">events · floor staff booked, red = bar. Amber = still short.</div>
+      </Section>),
+    pay: () => (
+      <Section k="pay" mode={md('pay')} title="Pay period" right={<span className="row" style={{ gap: 10 }}><Link to="/admin/rates">Rates ›</Link><Link to="/admin/hours">Hours ›</Link></span>}>
+        <PayPeriod />
       </Section>),
     meetings: () => (
       <Section k="meetings" mode={md('meetings')} title="Meetings" right={<Link to="/admin/meetings">All ›</Link>}>

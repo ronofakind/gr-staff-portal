@@ -9,6 +9,7 @@ import { Shift } from './pages/Shift';
 import { AdminLayout, More } from './admin/AdminLayout';
 import { Today } from './admin/Today';
 import { Debriefs } from './admin/Debriefs';
+import { Rates } from './admin/Rates';
 import { Hours } from './admin/Hours';
 import { Reliability } from './admin/Reliability';
 import { Calendar, CalendarRedirect } from './admin/Calendar';
@@ -123,6 +124,7 @@ export function App() {
             <Route path="hours" element={<Hours />} />
             <Route path="reliability" element={<Reliability />} />
             <Route path="debriefs" element={<Debriefs />} />
+            <Route path="rates" element={<Rates />} />
             <Route path="incidents" element={<Incidents />} />
             <Route path="more" element={<More />} />
             <Route path="day" element={<Calendar view="day" />} />
