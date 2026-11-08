@@ -3542,3 +3542,5 @@ button.pf-go { border: none; background: none; padding: 4px 2px; font: 700 13px 
 }
 .t4-search { border: 1.5px solid #DCD3C7; border-radius: 10px; padding: 7px 11px; font: inherit; font-size: 13px; background: #fff; min-width: 200px; }
 .t4-evlink { display: inline-block; margin: -6px 0 6px 24px; }
+@media (max-width: 820px) { .dbr-top .need-arch, .nsr-row.t4 .need-arch { display: inline-flex; } }
+.t4-caret { font-size: 16px !important; line-height: 1; }
