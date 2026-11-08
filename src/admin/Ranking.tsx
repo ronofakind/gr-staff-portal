@@ -79,7 +79,7 @@ export function ScoreWhy({ s, sc, onClose, onTier, compact = false, bars = false
     if (error) alert(error.message); else onTier?.();
   };
   const keep = () => { try { localStorage.setItem(keepKey(s.id, sc), '1'); } catch { /* private mode */ } setKept(true); };
-  const relWhy = [sc.rel.no_show && `${sc.rel.no_show} no-show (${signed(W.reliability.no_show)})`, sc.rel.cancelled && `${sc.rel.cancelled} late cancel (${signed(W.reliability.late_cancel)})`, sc.rel.late && `${sc.rel.late} late (${signed(W.reliability.late)})`, sc.rel.late_change && `${sc.rel.late_change} late change (${signed(W.reliability.late_change)})`, sc.rel.free && `${sc.rel.free} not counted (cancel before confirming / told ahead)`].filter(Boolean).join(' · ') || 'nothing flagged';
+  const relWhy = [sc.rel.no_show && `${sc.rel.no_show} no-show (${signed(W.reliability.no_show)})`, sc.rel.cancelled && `${sc.rel.cancelled} late cancel (${signed(W.reliability.late_cancel)})`, sc.rel.late && `${sc.rel.late} late (${signed(W.reliability.late)})`, sc.rel.late_change && `${sc.rel.late_change} late change (${signed(W.reliability.late_change)})`, sc.rel.free && `${sc.rel.free} not counted (cancel before confirming / told ahead / late while it's off in Settings)`].filter(Boolean).join(' · ') || 'nothing flagged';
   const Line = ({ t, sub, n, plain }: { t: string; sub: string; n: number; plain?: boolean }) => (
     <div className="rk-line"><div className="grow"><b>{t}</b><small>{sub}</small></div><b className={plain ? '' : n > 0 ? 'okc' : n < 0 ? 'accent' : 'muted'}>{plain ? n : signed(n)}</b></div>
   );

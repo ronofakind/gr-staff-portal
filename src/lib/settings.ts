@@ -17,6 +17,8 @@ export type Settings = {
   // Bookings & changes
   'bookings.late_cancel': 'after_confirmed';
   'bookings.count_told_ahead': boolean;
+  /** Nov 8 · Ronnie: off while start times still come from the Events sheet mapping (wrong time slots). */
+  'bookings.count_late': boolean;
   'bookings.running_late': 'event_day' | 'off';
   'bookings.new_tag_shifts': number;
   // Extras
@@ -58,6 +60,7 @@ export const DEFAULTS: Settings = {
   'ask.reply_by_days': 2,
   'bookings.late_cancel': 'after_confirmed',
   'bookings.count_told_ahead': false,
+  'bookings.count_late': false,
   'bookings.running_late': 'event_day',
   'bookings.new_tag_shifts': 3,
   'extras.rule': { over: 7, pct: 10 },

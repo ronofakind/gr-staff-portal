@@ -96,8 +96,8 @@ export function flagsOf(s: { attendance: string | null; planned_start: string; p
   const pin = s.punches?.punch_in; if (!pin) return [];
   const diff = Math.round((new Date(pin).getTime() - new Date(s.planned_start).getTime()) / 60000);
   // push 32: Settings → "Count told ahead as late" (off by default) counts them even when they came by their ETA.
-  if (diff > LATE_MIN && s.late_eta) { const byEta = new Date(pin).getTime() <= new Date(s.late_eta).getTime() + 10 * 60000; return [{ flag: 'late', min: diff, told: true, free: byEta && !setting('bookings.count_told_ahead') }]; }
-  if (diff > LATE_MIN) return [{ flag: 'late', min: diff }];
+  if (diff > LATE_MIN && s.late_eta) { const byEta = new Date(pin).getTime() <= new Date(s.late_eta).getTime() + 10 * 60000; return [{ flag: 'late', min: diff, told: true, free: !setting('bookings.count_late') || (byEta && !setting('bookings.count_told_ahead')) }]; }
+  if (diff > LATE_MIN) return [{ flag: 'late', min: diff, ...(setting('bookings.count_late') ? {} : { free: true }) }];
   if (diff < -1) return [{ flag: 'early', min: -diff }];
   return [];
 }

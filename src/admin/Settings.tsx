@@ -33,6 +33,7 @@ const SECTIONS: Section[] = [
   ] },
   { title: 'Bookings & changes', rows: [
     { label: 'Late cancel / late change', show: () => 'after they confirmed' },
+    { label: 'Late counts in reliability', sub: 'off for now · start times still come from the Events sheet · late arrivals still show, they just don’t lower the score', k: 'bookings.count_late', kind: 'bool', show: ((v: boolean) => (v ? 'On' : 'Off')) as (v: never) => string },
     { label: 'Count “told ahead” as late', sub: 'arrived by the time they gave in I’m running late', k: 'bookings.count_told_ahead', kind: 'bool', show: ((v: boolean) => (v ? 'On' : 'Off')) as (v: never) => string },
     { label: 'Running-late button', sub: 'staff Home, until they’re started', k: 'bookings.running_late', kind: 'choice', choices: [['event_day', 'All day on the event day'], ['off', 'Off']], show: ((v: string) => (v === 'off' ? 'Off' : 'All day on the event day')) as (v: never) => string },
     { label: 'New-staff tag', sub: 'NEW on Ranking, manager team screen', k: 'bookings.new_tag_shifts', kind: 'num', unit: 'shifts', min: 0, max: 20, show: ((v: number) => `first ${v} shifts`) as (v: never) => string },
