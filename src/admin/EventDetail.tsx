@@ -1,3 +1,4 @@
+import { PastDebriefsFor } from './Debriefs';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { supabase, type ShiftRow } from '../lib/supabase';
@@ -97,6 +98,7 @@ export function EventDetail() {
       </div>
 
       <ReplacedBanners evs={evs} />
+      <PastDebriefsFor title={e.title} eventId={e.id} />
 
       <div className="ed2-grid">
         {e.event_date >= new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' }) && <TentativeCard evs={evs} onChange={load} />}

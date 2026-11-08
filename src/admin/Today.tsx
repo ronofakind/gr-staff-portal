@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { DebriefCards, RecentDebriefs } from '../components/Debrief';
+import { DebriefCards, RecentDebriefs, useRecentDebriefs } from '../components/Debrief';
+import { useTodayLayout, Section, EditLayout, SEC_LABEL, WIDE, type SecKey } from './TodayLayout';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ChangeAnswer, CHANGE_COLS, isSelfCancel, isEventDayCancel, replacementOf, type ChangeRow } from './Changes';
 import { CantMakeIt, NotConfirmed, ReplaceSheet, type Late } from './Replace';
@@ -14,7 +15,7 @@ import { SheetChanges } from './SheetChanges';
 import { AiPanel } from './AiPanel';
 import { needsSend, hoursBetween } from './api';
 import { LateEnds } from './LateEnds';
-import { useNewStaffRatings, NewStaffGoldCard, NewStaffPanel, nsrOpenDefault, TAG_LABEL, BAD_TAGS } from './NewStaffRatings';
+import { useNewStaffRatings, RatingsToday, TAG_LABEL, BAD_TAGS } from './NewStaffRatings';
 import { supabase } from '../lib/supabase';
 import { eventsBetween, addDays, isoDay, flagsOf, flagText, periodOf, dLabel, tTime, type AEvent, type AShift } from './api';
 
@@ -26,6 +27,8 @@ const sigOf = (n: Need) => n.title + '|' + n.sub;
 export function Today() {
   const today = isoDay(new Date());
   const [week, setWeek] = useState<AEvent[] | null>(null);
+  const [ahead, setAhead] = useState<AEvent[]>([]); const [late30, setLate30] = useState<{ e: AEvent; s: AShift; min: number; told?: boolean }[]>([]); // Nov 8 · Today v4
+  const [editing, setEditing] = useState(false);
   const [needs, setNeeds] = useState<Need[]>([]);
   const [answers, setAnswers] = useState(0); const [qBy, setQBy] = useState<Record<string, number>>({});
   const [missing, setMissing] = useState(0);
@@ -53,7 +56,7 @@ export function Today() {
         eventsBetween(today, addDays(today, 14)),
         supabase.from('availability').select('id', { count: 'exact', head: true }).eq('status', 'yes').not('ask_id', 'is', null).gte('for_date', today),
       ]);
-      setWeek(evs); setAnswers(ans.count ?? 0);
+      setWeek(evs); setAhead(ahead); setAnswers(ans.count ?? 0);
       // Missing end times in this + last pay period
       const cur = periodOf(today); const prev = periodOf(addDays(cur.start, -1));
       const past = await eventsBetween(prev.start, addDays(today, -1));
@@ -61,13 +64,19 @@ export function Today() {
       setMissing(miss.length);
 
       const n: Need[] = [];
+      { // Nov 8 · Late 30 min + · last 7 days (its own section, not in Needs you)
+        const ids = new Set<string>(); const out: { e: AEvent; s: AShift; min: number; told?: boolean }[] = [];
+        for (const e of [...evs, ...past]) { if (e.event_date < addDays(today, -7) || e.event_date > today) continue;
+          for (const s of e.shifts) { if (ids.has(s.id)) continue; ids.add(s.id); const f = flagsOf(s).find((x) => x.flag === 'late'); if (f) out.push({ e, s, min: f.min ?? 0, told: f.told }); } }
+        setLate30(out.sort((a, b) => b.e.event_date.localeCompare(a.e.event_date)));
+      }
       // Flags from today and yesterday
       const recent = [...evs, ...past].filter((e) => e.event_date >= addDays(today, -1) && e.event_date <= today);
       const seen = new Set<string>();
       for (const e of recent) for (const s of e.shifts) {
         if (seen.has(s.id)) continue; seen.add(s.id);
         if (s.cancel_self) continue; // push 28: staff self-cancels have their own cards below
-        for (const f of flagsOf(s).filter((x) => x.flag !== 'early' && !x.free)) n.push({ key: s.id + f.flag, red: true, title: `⚑ ${s.staff?.full_name ?? '?'} · ${flagText(f).toLowerCase()}`, sub: `${e.event_date === today ? 'Today' : 'Yesterday'} · ${e.title}`, action: 'View', to: '/admin/reliability' });
+        for (const f of flagsOf(s).filter((x) => x.flag !== 'early' && x.flag !== 'late' && !x.free)) n.push({ key: s.id + f.flag, red: true, title: `⚑ ${s.staff?.full_name ?? '?'} · ${flagText(f).toLowerCase()}`, sub: `${e.event_date === today ? 'Today' : 'Yesterday'} · ${e.title}`, action: 'View', to: '/admin/reliability' });
       }
       for (const e of ahead.filter((x) => x.department !== 'bar')) {
         const booked = e.shifts.filter((s) => s.status !== 'declined').length;
@@ -200,7 +209,8 @@ export function Today() {
     })();
   }, [tick]);
 
-  const nsr = useNewStaffRatings(tick); const [nsrOpen, setNsrOpen] = useState(nsrOpenDefault);
+  const nsr = useNewStaffRatings(tick);
+  const { lay, save: saveLay, sorted, hidden: hiddenSecs } = useTodayLayout();
   const askNeeds = useAskNeeds(addDays(today, -1), addDays(today, 90), tick); // push 40 · No / no answer / nobody took the spot
   const tonight = (week ?? []).filter((e) => e.event_date === today);
   const hidden = (n: Need) => arch.some((a) => a.key === n.key && a.sig === sigOf(n));
@@ -218,84 +228,95 @@ export function Today() {
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(mon, i));
   const floorShort = (week ?? []).filter((e) => e.department !== 'bar' && e.event_date >= today).reduce((n, e) => n + Math.max(0, e.staff_needed - e.shifts.filter((s) => s.status !== 'declined').length), 0);
 
+  const tonightIds = tonight.map((e) => e.id);
+  const deb = useRecentDebriefs(tonightIds, tick);
+  const nEv = new Set(tonight.map((e) => e.title)).size;
+  const next7 = Array.from({ length: 7 }, (_, i) => addDays(today, i));
+  const needsN = shown.length + askNeeds.length + lm.length + (late.length ? 1 : 0);
+  const gone = (ids: string[]) => { setWeek((v) => (v ?? []).filter((x) => !ids.includes(x.id))); setAhead((v) => v.filter((x) => !ids.includes(x.id))); };
+  const doneV = (e: AEvent) => !!e.hours_submitted_at;
+  const tonightSorted = [...tonight].sort((a, b) => Number(doneV(a)) - Number(doneV(b)) || a.title.localeCompare(b.title) || (a.department === 'bar' ? 1 : -1));
+  const md = (k: SecKey) => lay.mode[k];
+
+  const SECS: Record<SecKey, () => JSX.Element> = {
+    needs: () => (
+      <Section k="needs" mode={md('needs')} title={<>Needs you {needsN > 0 && <b className="accent sm">{needsN}</b>}</>}
+        right={<span className="row" style={{ gap: 8 }}>{archivedToday.length > 0 && <button className="lnk sm" onClick={() => setShowArch(!showArch)}>Archived ({archivedToday.length})</button>}{shown.length > 0 && <button className="abtn sm" onClick={() => archive(shown)}>{ARCH_ICON} All</button>}</span>}>
+        <NicknameCards />
+        {lm.map(({ e, s }) => <CantMakeIt key={s.id} e={e} s={s} mgr={e.manager_id ? mgrs[e.manager_id] ?? null : null} ask={asks.find((a) => a.kind === 'fill' && a.status === 'open' && a.replace_for === s.id)} onFind={() => setRep({ s, e })} onChanged={() => setTick((t) => t + 1)} />)}
+        <NotConfirmed rows={late} seen={seen} nudged={nudged} asks={asks} onReplace={(r) => setRep({ s: r.s, e: r.e })} onChanged={() => setTick((t) => t + 1)} />
+        {askNeeds.map((a) => <AskNeed key={a.id} a={a} onChanged={() => setTick((t) => t + 1)} />)}
+        <LateEnds />
+        <div className="adm-card" style={{ padding: '4px 16px' }}>
+          {!shown.length && <div className="muted sm" style={{ padding: '12px 0' }}>All clear.</div>}
+          {shown.slice(0, 14).map((x) => <NeedRow key={x.key} x={x} onArchive={() => archive([x])} />)}
+        </div>
+        {showArch && archivedToday.length > 0 && (
+          <div className="arch-box">{archivedToday.map((a) => <div key={a.key} className="arch-row"><span className="grow">{a.label}</span><button className="abtn sm" onClick={() => restore(a.key)}>Restore</button></div>)}</div>
+        )}
+      </Section>),
+    ai: () => <AiPanel bare />,
+    tonight: () => (
+      <Section k="tonight" mode={md('tonight')} title="Tonight" right={<Link to={`/admin/day?d=${today}`}>Day view ›</Link>}>
+        {week === null && <div className="muted">Loading…</div>}
+        {week && !tonight.length && <div className="adm-card muted">No events today.</div>}
+        {tonight.length > 0 && <div className="adm-card t4-list">{tonightSorted.map((e) => <Live key={e.id} e={e} q={qBy[e.id] ?? 0} lateBy={lateBy} compact onDeleted={gone} />)}</div>}
+      </Section>),
+    debriefs: () => (
+      <Section k="debriefs" mode={md('debriefs')} title={<>Last night · debriefs {deb.rows.length > 0 && <b className="accent sm">{deb.rows.length}</b>}</>} right={<Link to="/admin/debriefs">Past debriefs ›</Link>}>
+        <div className="adm-card t4-card"><RecentDebriefs {...deb} /></div>
+      </Section>),
+    ratings: () => (
+      <Section k="ratings" mode={md('ratings')} title={<>New staff ratings {nsr.todayRows.length > 0 && <b className="accent sm">{nsr.todayRows.length}</b>}</>} right={<Link to="/admin/debriefs?tab=ratings">Past ratings ›</Link>}>
+        <div className="adm-card t4-card"><RatingsToday {...nsr} /></div>
+      </Section>),
+    late: () => (
+      <Section k="late" mode={md('late')} title={<>Late 30 min + {late30.length > 0 && <b className="accent sm">{late30.length}</b>}</>} right={<Link to="/admin/reliability">Reliability ›</Link>}>
+        <div className="adm-card t4-card">
+          <div className="muted sm">Last 7 days · only 30 min or more</div>
+          {!late30.length && <div className="muted sm" style={{ padding: '8px 0' }}>Nobody 30 min late this week.</div>}
+          {late30.map(({ e, s, min, told }) => <div key={s.id} className="t4-late"><b>{s.staff?.full_name ?? '?'}</b><span className="muted grow">{e.title} · {dLabel(e.event_date)}</span><span className="tag amber">{min} min late</span>{told && <span className="muted sm">told ahead</span>}</div>)}
+        </div>
+      </Section>),
+    week: () => (
+      <Section k="week" mode={md('week')} title="Next 7 days" right={<Link to="/admin/week">Week ›</Link>}>
+        <div className="strip">
+          {next7.map((d) => {
+            const evs = [...(week ?? []), ...ahead].filter((e, i, a) => e.event_date === d && a.findIndex((x) => x.id === e.id) === i);
+            const staff = evs.filter((e) => e.department !== 'bar').reduce((n, e) => n + e.shifts.filter((s) => s.status !== 'declined').length, 0);
+            const barN = evs.filter((e) => e.department === 'bar').reduce((n, e) => n + e.shifts.filter((s) => s.status !== 'declined').length, 0);
+            const short = evs.some((e) => e.department !== 'bar' && e.shifts.filter((s) => s.status !== 'declined').length < e.staff_needed);
+            return (
+              <Link key={d} to={`/admin/day?d=${d}`} className={'sd' + (d === today ? ' on' : '') + (short ? ' short' : '')}>
+                <small>{dLabel(d, { weekday: 'short' }).toUpperCase()}</small><b>{Number(d.slice(8))}</b><span>{evs.length ? `${new Set(evs.map((e) => e.title)).size} · ${staff}` : '–'}</span>{barN > 0 && <span className="accent" style={{ fontSize: 10 }}>bar {barN}</span>}
+              </Link>
+            );
+          })}
+        </div>
+        <div className="muted sm">events · floor staff booked, red = bar. Amber = still short.</div>
+      </Section>),
+    meetings: () => (
+      <Section k="meetings" mode={md('meetings')} title="Meetings" right={<Link to="/admin/meetings">All ›</Link>}>
+        <MeetingsStrip from={today} to={addDays(today, 7)} title="Next 7 days" />
+      </Section>),
+    sheet: () => (
+      <Section k="sheet" mode={md('sheet')} title="Sheet changes">
+        <SheetChanges arch={arch} onArchived={loadArch} />
+      </Section>),
+  };
+  const pinnedShown = sorted.filter((k) => lay.pinned.includes(k)); const restShown = sorted.filter((k) => !lay.pinned.includes(k));
+  const grid = (keys: SecKey[]) => <div className="t4-grid">{keys.map((k) => <div key={k} className={WIDE.includes(k) ? 't4-wide' : 't4-cell'}>{SECS[k]()}</div>)}</div>;
+
   return (
-    <div className="stack-lg">
+    <div className="stack-lg t4">
       <div className="toolbar">
-        <div><div className="kick">{dLabel(today, { weekday: 'long', month: 'long', day: 'numeric' }).toUpperCase()}</div><h1 className="serif-h">{hello}, Ronnie</h1></div>
-        <div className="row wrap"><Link className="abtn" to="/admin/availability">Ask availability</Link><Link className="abtn dark" to="/admin/week">Open the week</Link></div>
+        <div><div className="kick">{dLabel(today, { weekday: 'long', month: 'long', day: 'numeric' }).toUpperCase()}{nEv ? ` · ${nEv} EVENT${nEv > 1 ? 'S' : ''} TONIGHT` : ''}</div><h1 className="serif-h">{hello}, Ronnie</h1></div>
+        <div className="row wrap"><button className="abtn" onClick={() => setEditing(true)} aria-label="Edit layout">✎ <span className="t4-hide-ph">Edit layout</span></button><Link className="abtn t4-hide-ph" to="/admin/availability">Ask availability</Link><Link className="abtn dark t4-hide-ph" to="/admin/event/new">＋ New event</Link></div>
       </div>
-
-      <div className="kpi4">
-        <div className="k dark"><small>TONIGHT</small><b>{new Set(tonight.map((e) => e.title)).size} <span>event{new Set(tonight.map((e) => e.title)).size === 1 ? '' : 's'} · Floor {tonight.filter((e) => e.department !== 'bar').reduce((n, e) => n + e.shifts.filter((s) => s.status !== 'declined').length, 0)} · Bar {tonight.filter((e) => e.department === 'bar').reduce((n, e) => n + e.shifts.filter((s) => s.status !== 'declined').length, 0)}</span></b></div>
-        <div className={'k' + (floorShort ? ' amber' : '')}><small>STILL SHORT THIS WEEK</small><b>{floorShort} <span>shifts</span></b></div>
-        <Link to="/admin/availability" className="k"><small>AVAILABILITY ANSWERS</small><b>{answers} <span>said yes</span></b></Link>
-        <Link to="/admin/hours" className={'k' + (missing ? ' amber' : '')}><small>HOURS TO REVIEW</small><b>{missing} <span>missing end times</span></b></Link>
-      </div>
-
-      <AiPanel />
-
-      <div className="two-col">
-        <section className="stack">
-          <div className="sec"><span className="serif">Tonight</span><Link to={`/admin/day?d=${today}`}>Open day view ›</Link></div>
-          {week === null && <div className="muted">Loading…</div>}
-          {week && !tonight.length && <div className="adm-card muted">No events today.</div>}
-          {(() => {
-            const gone = (ids: string[]) => setWeek((v) => (v ?? []).filter((x) => !ids.includes(x.id)));
-            const venues = [...new Set(tonight.map((e) => e.title))].map((t) => tonight.filter((e) => e.title === t).sort((a) => (a.department === 'bar' ? 1 : -1)));
-            const doneV = (evs: AEvent[]) => evs.every((e) => !!e.hours_submitted_at);
-            return venues.sort((a, b) => Number(doneV(a)) - Number(doneV(b))).map((evs) => {
-              if (evs.length === 1) return <Live key={evs[0].id} e={evs[0]} q={qBy[evs[0].id] ?? 0} lateBy={lateBy} onDeleted={gone} />;
-              const e0 = evs[0]; const nOf = (d: string) => evs.filter((e) => (d === 'bar') === (e.department === 'bar')).reduce((n, e) => n + e.shifts.filter((x) => x.status !== 'declined' && !x.attendance).length, 0);
-              return (
-                <div key={e0.title} className="venue-block">
-                  <div className="vb-h"><span className="serif" style={{ fontSize: 24 }}>{e0.title}</span><span className="muted sm">{[e0.event_private?.client, e0.event_type, e0.guests ? `${e0.guests} guests` : null].filter(Boolean).join(' · ')}</span>
-                    <span className="grow" /><span className="sm strong">Floor {nOf('floor')} · <span className="accent">Bar {nOf('bar')}</span> · <Link to={`/admin/event/${e0.id}`}>Event page ›</Link></span></div>
-                  {evs.map((e) => <Live key={e.id} e={e} q={qBy[e.id] ?? 0} lateBy={lateBy} inBlock onDeleted={gone} />)}
-                </div>);
-            });
-          })()}
-          <RecentDebriefs skip={tonight.map((e) => e.id)} />
-          <MeetingsStrip from={today} to={addDays(today, 7)} title="Meetings · next 7 days" />
-        </section>
-        <section className="stack">
-          <NicknameCards />
-          <div className="sec"><span className="serif">Needs you <b className="accent sm">{shown.length + askNeeds.length + lm.length + (late.length ? 1 : 0) + (nsr.unseen.length ? 1 : 0) || ''}</b></span>{shown.length > 0 && <button className="abtn sm" onClick={() => archive(shown)}>{ARCH_ICON} Archive all</button>}</div>
-          {lm.map(({ e, s }) => <CantMakeIt key={s.id} e={e} s={s} mgr={e.manager_id ? mgrs[e.manager_id] ?? null : null} ask={asks.find((a) => a.kind === 'fill' && a.status === 'open' && a.replace_for === s.id)} onFind={() => setRep({ s, e })} onChanged={() => setTick((t) => t + 1)} />)}
-          <NotConfirmed rows={late} seen={seen} nudged={nudged} asks={asks} onReplace={(r) => setRep({ s: r.s, e: r.e })} onChanged={() => setTick((t) => t + 1)} />
-          {askNeeds.map((a) => <AskNeed key={a.id} a={a} onChanged={() => setTick((t) => t + 1)} />)}
-          <LateEnds />
-          <NewStaffGoldCard unseen={nsr.unseen} onOpen={() => { setNsrOpen(true); setTimeout(() => document.getElementById('nsr')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }} />
-          <div className="adm-card" style={{ padding: '4px 16px' }}>
-            {!shown.length && <div className="muted sm" style={{ padding: '12px 0' }}>All clear.</div>}
-            {shown.slice(0, 14).map((x) => <NeedRow key={x.key} x={x} onArchive={() => archive([x])} />)}
-          </div>
-          <NewStaffPanel {...nsr} open={nsrOpen} setOpen={setNsrOpen} />
-          {archivedToday.length > 0 && (
-            <div className="arch-box">
-              <button className="arch-toggle" onClick={() => setShowArch(!showArch)}>{showArch ? '▾' : '▸'} Archived today · {archivedToday.length}</button>
-              {showArch && archivedToday.map((a) => <div key={a.key} className="arch-row"><span className="grow">{a.label}</span><button className="abtn sm" onClick={() => restore(a.key)}>Restore</button></div>)}
-            </div>
-          )}
-          <div className="muted sm" style={{ padding: '0 6px' }}>Archiving only hides it here. It comes back if something new happens on it. On the phone, swipe a row left.</div>
-          <div className="sec"><span className="serif">This week</span><Link to="/admin/week">Week ›</Link></div>
-          <div className="strip">
-            {weekDays.map((d) => {
-              const evs = (week ?? []).filter((e) => e.event_date === d);
-              const staff = evs.filter((e) => e.department !== 'bar').reduce((n, e) => n + e.shifts.filter((s) => s.status !== 'declined').length, 0);
-              const barN = evs.filter((e) => e.department === 'bar').reduce((n, e) => n + e.shifts.filter((s) => s.status !== 'declined').length, 0);
-              const short = evs.some((e) => e.department !== 'bar' && e.shifts.filter((s) => s.status !== 'declined').length < e.staff_needed);
-              return (
-                <Link key={d} to={`/admin/day?d=${d}`} className={'sd' + (d === today ? ' on' : '') + (short && d >= today ? ' short' : '')}>
-                  <small>{dLabel(d, { weekday: 'short' }).toUpperCase()}</small><b>{Number(d.slice(8))}</b><span>{evs.length ? `${new Set(evs.map((e) => e.title)).size} · ${staff}` : '–'}</span>{barN > 0 && <span className="accent" style={{ fontSize: 10 }}>bar {barN}</span>}
-                </Link>
-              );
-            })}
-          </div>
-          <div className="muted sm">events · floor staff booked, red = bar. Amber = still short.</div>
-        </section>
-      </div>
-      {/* push 52 · full width: filters + one row per event */}
-      <SheetChanges arch={arch} onArchived={loadArch} />
+      {pinnedShown.length > 0 && <><div className="t4-band pin">📌 PINNED</div>{grid(pinnedShown)}</>}
+      {restShown.length > 0 && <>{pinnedShown.length > 0 && <div className="t4-band" />}{grid(restShown)}</>}
+      {hiddenSecs.length > 0 && <div className="muted sm" style={{ textAlign: "center" }}>{hiddenSecs.length} hidden · {hiddenSecs.map((k) => SEC_LABEL[k]).join(', ')} · <button className="lnk" onClick={() => setEditing(true)}>Edit layout</button></div>}
+      {editing && <EditLayout lay={lay} onSave={saveLay} onClose={() => setEditing(false)} />}
       {rep && <ReplaceSheet shift={rep.s} ev={rep.e} onClose={() => setRep(null)} onDone={(m) => { setRep(null); setToast(m); setTick((t) => t + 1); }} />}
       {toast && <div className="undo-bar" role="status"><span className="grow">{toast}</span></div>}
       {changeId && <ChangeAnswer id={changeId} onClose={() => { const p = new URLSearchParams(params); p.delete('change'); setParams(p, { replace: true }); }} onDone={() => { const p = new URLSearchParams(params); p.delete('change'); setParams(p, { replace: true }); setTick((t) => t + 1); }} />}
@@ -304,8 +325,8 @@ export function Today() {
 }
 
 type Box = { n: number; label: string; cls: string; rows: [string, string, string][] };
-function Live({ e, q = 0, inBlock = false, onDeleted, lateBy = {} }: { e: AEvent; q?: number; inBlock?: boolean; onDeleted: (ids: string[]) => void; lateBy?: Record<string, { eta: string; reason: string | null }> }) {
-  const [tab, setTab] = useState<string | null>(null);
+function Live({ e, q = 0, inBlock = false, compact = false, onDeleted, lateBy = {} }: { e: AEvent; q?: number; inBlock?: boolean; compact?: boolean; onDeleted: (ids: string[]) => void; lateBy?: Record<string, { eta: string; reason: string | null }> }) {
+  const [tab, setTab] = useState<string | null>(null); const [open, setOpen] = useState(false);
   const all = e.shifts.filter((s) => s.status !== 'declined');
   const now = Date.now();
   const firstStart = all.map((s) => new Date(s.planned_start).getTime()).sort((a, b) => a - b)[0] ?? 0;
@@ -355,12 +376,29 @@ function Live({ e, q = 0, inBlock = false, onDeleted, lateBy = {} }: { e: AEvent
   const openBox = boxes.find((b) => b.label === tab);
   const startsIn = Math.round((firstStart - now) / 60000);
   const phones = all.map((s) => s.staff?.phone?.replace(/[^\d+]/g, '')).filter(Boolean);
-  return (
+  const statusTag = status === 'done' ? <span className="tag done-tag">✓ Completed</span> : status === 'live' ? <span className="tag ok"><i className="pulse" />live</span> : status === 'notsent' ? <span className="tag amber">Hours not sent</span> : <span className="tag amber">in {Math.floor(startsIn / 60)} h {String(startsIn % 60).padStart(2, '0')}</span>;
+  // Nov 8 · Today v4: one line per event; click → the full card below it
+  if (compact) {
+    const two = [boxes[0], status === 'soon' ? boxes[2] : boxes[1]];
+    return (
+      <div className={'t4-ev edge-' + (e.department === 'bar' ? 'bar' : 'floor') + (open ? ' open' : '')}>
+        <button type="button" className="t4-line" onClick={() => setOpen(!open)} aria-expanded={open}>
+          <span className="grow t4-name"><span className="row" style={{ gap: 6 }}><b>{e.title}</b><DeptTag dept={e.department} /></span>
+            <small className="muted">{ap(e.start_time) || 'TBC'}{md ? ` · ${md.position_code} ${md.staff?.full_name.split(' ')[0]}` : ''}<span className="t4-ph"> · {two.map((b) => `${b.n} ${b.label}`).join(' · ')}</span></small></span>
+          <span className="t4-nums">{two.map((b) => <span key={b.label}><b className={b.n ? b.cls : ''}>{b.n}</b> {b.label}</span>)}</span>
+          {statusTag}<span className="muted t4-car">{open ? '▾' : '›'}</span>
+        </button>
+        {open && <div className="t4-body">{renderCard()}</div>}
+      </div>
+    );
+  }
+  return renderCard();
+  function renderCard() { return (
     <div className={'adm-card stack live-card edge-' + (e.department === 'bar' ? 'bar' : 'floor') + (completed ? ' completed' : '')} style={{ gap: 12 }}>
       <div className="row wrap" style={{ gap: 10, alignItems: 'flex-start' }}>
         <div className="grow" style={{ minWidth: 180 }}><div className="row" style={{ gap: 8, alignItems: 'center' }}>{!inBlock && <span className="serif" style={{ fontSize: 22 }}>{e.title}</span>}<DeptTag dept={e.department} /></div>
           <div className="muted sm">{!inBlock && e.event_private?.client ? e.event_private.client + ' · ' : ''}{ap(e.start_time) || 'TBC'}{e.ends_label ? ` · ends ${e.ends_label}` : e.end_time ? ` · ends ~ ${ap(e.end_time)}` : ''}{md ? ` · ${md.position_code} ${md.staff?.full_name.split(' ')[0]}` : ''}</div></div>
-        {status === 'done' ? <span className="tag done-tag">✓ Completed</span> : status === 'live' ? <span className="tag ok"><i className="pulse" />live</span> : status === 'notsent' ? <span className="tag amber">Hours not sent</span> : <span className="tag amber">in {Math.floor(startsIn / 60)} h {String(startsIn % 60).padStart(2, '0')}</span>}
+        {statusTag}
       </div>
       {completed && <div className="muted sm">Hours submitted by {e.shifts.find((s) => s.staff_id === e.hours_submitted_by)?.staff?.full_name ?? 'the manager'} at {tTime(e.hours_submitted_at)}</div>}
       {completed && <DebriefCards eventId={e.id} />}
@@ -383,7 +421,7 @@ function Live({ e, q = 0, inBlock = false, onDeleted, lateBy = {} }: { e: AEvent
         {completed ? <Link className="abtn sm dark" to={`/admin/hours?d=${e.event_date}`}>Hours ›</Link> : <Link className="abtn sm dark" to={`/manage/${e.id}`}>Check-in{started && <i className="live-dot" />}</Link>}
       </div>
     </div>
-  );
+  ); }
 }
 
 const ARCH_ICON = <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="4" rx="1" /><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4" /></svg>;

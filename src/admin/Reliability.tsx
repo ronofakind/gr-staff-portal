@@ -59,7 +59,7 @@ export function Reliability() {
           </div>
         ))}
       </div>
-      <p className="muted sm">No-shows and cancels come from the manager’s screen and from staff “Can’t make it”. Late cancel = cancelled after they confirmed; a cancel before confirming is listed but not counted. Late = started more than 10 min after their call; not counted when they said “I’m running late” and started by the time they gave. Early start = a manager started them before the call time.</p>
+      <p className="muted sm">No-shows and cancels come from the manager’s screen and from staff “Can’t make it”. Late cancel = cancelled after they confirmed; a cancel before confirming is listed but not counted. Late = started 30 min or more after their call (under 30 is not counted); not counted when they said “I’m running late” and started by the time they gave. Early start = a manager started them before the call time.</p>
     </div>
   );
 }

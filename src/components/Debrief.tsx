@@ -62,15 +62,18 @@ export function DebriefSheet({ eventId, onClose, onSent }: { eventId: string; on
   );
 }
 
-type Row = { id: string; event_id: string; night: string | null; client: string | null; difficulty: string | null; team_size: string | null; issues: string[]; what: string | null; note: string | null; created_at: string; staff: { full_name: string; nickname: string | null } | null; events?: { title: string; event_date: string } | null };
+export type DebriefRow = Row;
+type Row = { id: string; event_id: string; archived_at?: string | null; night: string | null; client: string | null; difficulty: string | null; team_size: string | null; issues: string[]; what: string | null; note: string | null; created_at: string; staff: { full_name: string; nickname: string | null } | null; events?: { title: string; event_date: string } | null };
+export const DEBRIEF_COLS = 'id,event_id,archived_at,';
 const COLS = 'id,event_id,night,client,difficulty,team_size,issues,what,note,created_at,staff:staff!event_debriefs_by_staff_fkey(full_name,nickname),events(title,event_date)';
-function Card({ r, withEvent }: { r: Row; withEvent?: boolean }) {
+export function DebriefCard({ r, withEvent, onArchive }: { r: Row; withEvent?: boolean; onArchive?: () => void }) {
   const tags = (['night', 'client', 'difficulty', 'team_size'] as const).map((k) => r[k] ? DEBRIEF_LABEL[k + ':' + r[k]] : null).filter(Boolean) as [string, Tone][];
   const who = r.staff ? (r.staff.nickname || r.staff.full_name.split(' ')[0]) : 'Manager';
   const day = r.events ? new Date(r.events.event_date + 'T12:00:00').toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' }) : '';
   return (
     <div className="dbr">
-      <div className="dbr-top"><span aria-hidden="true">📝</span><b>{withEvent && r.events ? `${r.events.title} · ${day} · ${who}` : `Debrief · ${who}`}</b><span className="muted sm">{new Date(r.created_at).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' })}</span></div>
+      <div className="dbr-top"><span aria-hidden="true">📝</span><b>{withEvent && r.events ? `${r.events.title} · ${day} · ${who}` : `Debrief · ${who}`}</b><span className="muted sm">{new Date(r.created_at).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' })}</span>
+        {onArchive && <button type="button" className="sq need-arch" aria-label="Archive" title="Archive · stays in Past debriefs" onClick={onArchive}>{ARCH_ICON}</button>}</div>
       {tags.length > 0 && <div className="dbr-tags">{tags.map(([l, t]) => <span key={l} className={t}>{l}</span>)}</div>}
       {(r.issues.length > 0 || r.what) && <div className="dbr-txt">{[r.issues.join(' · '), r.what ? `“${r.what}”` : ''].filter(Boolean).join(' · ')}</div>}
       {r.note && <div className="dbr-txt">💬 {r.note}</div>}
@@ -82,14 +85,28 @@ export function DebriefCards({ eventId }: { eventId: string }) {
   const [rows, setRows] = useState<Row[]>([]);
   useEffect(() => { supabase.from('event_debriefs').select(COLS).eq('event_id', eventId).order('created_at')
     .then(({ data, error }) => { if (!error) setRows((data ?? []) as unknown as Row[]); }); }, [eventId]);
-  return <>{rows.map((r) => <Card key={r.id} r={r} />)}</>;
+  return <>{rows.map((r) => <DebriefCard key={r.id} r={r} />)}</>;
 }
-/** Admin Today · debriefs sent in the last 36 h for events that are no longer on Tonight (last night's). */
-export function RecentDebriefs({ skip }: { skip: string[] }) {
-  const [rows, setRows] = useState<Row[]>([]);
-  useEffect(() => { supabase.from('event_debriefs').select(COLS).gte('created_at', new Date(Date.now() - 36 * 3600e3).toISOString()).order('created_at', { ascending: false })
-    .then(({ data, error }) => { if (!error) setRows((data ?? []) as unknown as Row[]); }); }, []);
+export const ARCH_ICON = <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="4" rx="1" /><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4" /></svg>;
+
+/** Nov 8 · Today v4 (080). Debriefs from the last 36 h that weren't archived, for events no longer on Tonight.
+ *  Archive by hand → Past debriefs (kept forever). After 36 h they leave Today by themselves. */
+export function useRecentDebriefs(skip: string[], tick = 0) {
+  const [rows, setRows] = useState<Row[]>([]); const [t, setT] = useState(0);
+  useEffect(() => {
+    const since = new Date(Date.now() - 36 * 3600e3).toISOString();
+    supabase.from('event_debriefs').select(DEBRIEF_COLS + COLS.slice('id,event_id,'.length)).gte('created_at', since).is('archived_at', null).order('created_at', { ascending: false })
+      .then(({ data, error }) => {
+        if (!error) { setRows((data ?? []) as unknown as Row[]); return; }
+        // before 080: no archived_at yet
+        supabase.from('event_debriefs').select(COLS).gte('created_at', since).order('created_at', { ascending: false }).then(({ data: d2 }) => setRows((d2 ?? []) as unknown as Row[]));
+      });
+  }, [tick, t]);
   const show = rows.filter((r) => !skip.includes(r.event_id));
-  if (!show.length) return null;
-  return <><div className="sec"><span className="serif">Last night · debriefs</span></div>{show.map((r) => <Card key={r.id} r={r} withEvent />)}</>;
+  const archive = async (id: string) => { setRows((v) => v.filter((x) => x.id !== id)); await supabase.from('event_debriefs').update({ archived_at: new Date().toISOString() }).eq('id', id); setT((x) => x + 1); };
+  return { rows: show, archive };
+}
+export function RecentDebriefs({ rows, archive }: ReturnType<typeof useRecentDebriefs>) {
+  if (!rows.length) return <div className="muted sm" style={{ padding: '10px 4px' }}>No debriefs from last night.</div>;
+  return <>{rows.map((r) => <DebriefCard key={r.id} r={r} withEvent onArchive={() => archive(r.id)} />)}</>;
 }

@@ -4,6 +4,7 @@ import { allStaff, addDays, isoDay, dLabel, type AStaff } from './api';
 import { loadScoreData, weights, type ScoreData, type Feedback } from './score';
 import { tabOf } from './Ranking';
 import { StaffProfile } from './StaffProfile';
+import { supabase } from '../lib/supabase';
 
 /** Nov 5 · every rating for new staff (good or bad): gold Needs-you card + fold-away panel on Today. */
 export const TAG_LABEL: Record<string, string> = { guests: 'Great with guests', wine: 'Knows wine', bar: 'Knows the bar', fast: 'Fast', team: 'Team player', on_time: 'Ready on time', trays: 'Good on trays', late: 'Late', uniform: 'Uniform / dress off', phone: 'On phone', coaching: 'Needs coaching', slow: 'Slow' };
@@ -13,13 +14,16 @@ const rd = (k: string) => { try { return localStorage.getItem(k); } catch { retu
 const wr = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } };
 export type NsrRow = { f: Feedback; s: AStaff; no: number; exp: string | null };
 
-export function useNewStaffRatings(tick = 0) {
+export function useNewStaffRatings(tick = 0, days = 30) {
   const [d, setD] = useState<ScoreData | null>(null); const [staff, setStaff] = useState<AStaff[]>([]);
   const [seen, setSeen] = useState(() => rd(SEEN) ?? '');
+  const [arch, setArch] = useState<Record<string, string>>({}); // Nov 8 · 080: archived from Today (still in Past ratings)
   useEffect(() => { Promise.all([loadScoreData(), allStaff()]).then(([x, s]) => { setD(x); setStaff(s); }); }, [tick]);
+  useEffect(() => { supabase.from('staff_feedback').select('id,today_archived_at').not('today_archived_at', 'is', null).limit(5000)
+    .then(({ data, error }) => { if (!error) setArch(Object.fromEntries(((data ?? []) as { id: string; today_archived_at: string }[]).map((x) => [x.id, x.today_archived_at]))); }); }, [tick]);
   const rows = useMemo<NsrRow[]>(() => {
     if (!d) return [];
-    const since = addDays(isoDay(new Date()), -30) + 'T00:00:00Z'; const by = Object.fromEntries(staff.map((s) => [s.id, s])); const W = weights();
+    const since = addDays(isoDay(new Date()), -days) + 'T00:00:00Z'; const by = Object.fromEntries(staff.map((s) => [s.id, s])); const W = weights();
     const out: NsrRow[] = [];
     for (const f of d.feedback) {
       if (f.archived_at || f.created_at < since || !f.overall_stars) continue;
@@ -31,10 +35,12 @@ export function useNewStaffRatings(tick = 0) {
       out.push({ f, s, no, exp: d.priv[s.id]?.experience ?? null });
     }
     return out;
-  }, [d, staff]);
-  const unseen = rows.filter((r) => r.f.created_at > seen);
+  }, [d, staff, days]);
+  const unseen = rows.filter((r) => r.f.created_at > seen && !arch[r.f.id]);
+  const todayRows = rows.filter((r) => !arch[r.f.id]);
+  const archive = async (id: string) => { const at = new Date().toISOString(); setArch((a) => ({ ...a, [id]: at })); await supabase.from('staff_feedback').update({ today_archived_at: at }).eq('id', id); };
   const markSeen = () => { const top = rows[0]?.f.created_at ?? new Date().toISOString(); wr(SEEN, top); setSeen(top); };
-  return { rows, unseen, markSeen, staff };
+  return { rows, unseen, markSeen, staff, todayRows, archive, arch };
 }
 
 const Stars = ({ v }: { v: number }) => <span className="nsr-stars" aria-label={`${v} of 5 stars`}>{[1, 2, 3, 4, 5].map((n) => <i key={n} className={n <= v ? 'on' : ''}>★</i>)}</span>;
@@ -80,3 +86,29 @@ export function NewStaffPanel({ rows, unseen, markSeen, staff, open, setOpen }: 
   );
 }
 export const nsrOpenDefault = () => rd(OPEN) !== '0';
+
+/** Nov 8 · Today v4 · one row per rating (new staff, last 30 days). Archive by hand only → stays in Past ratings. */
+export function RatingRow({ r, onOpen, onArchive, archivedAt }: { r: NsrRow; onOpen: () => void; onArchive?: () => void; archivedAt?: string }) {
+  const { f: x, s, no, exp } = r;
+  return (
+    <div className="nsr-row t4">
+      <button type="button" className="t4-open" onClick={onOpen}>
+        <Avatar name={s.full_name} url={s.photo_url} size={34} />
+        <div className="grow"><div className="row" style={{ gap: 8, flexWrap: 'wrap' }}><b>{s.full_name}</b><span className="nsr-tag">shift {no}{exp ? ` · ${EXP[exp] ?? exp}` : ''}</span><span className="grow" /><Stars v={x.overall_stars ?? 0} /></div>
+          <small className="muted">{x.by?.full_name?.split(' ')[0] ?? 'Manager'} · {x.events?.title ?? ''}{x.events?.event_date ? ` · ${dLabel(x.events.event_date)}` : ''}{tabOf(s) === 'bar' ? ' · bar' : ''}{archivedAt ? ` · archived ${dLabel(archivedAt.slice(0, 10))}` : ''}</small>
+          {(x.again || (x.tags ?? []).length > 0) && <small>{x.again && <b className={x.again === 'yes' ? 'okc' : x.again === 'no' ? 'accent' : 'gold'}>Want again: {AGAIN[x.again]}</b>}{x.again && (x.tags ?? []).length ? ' · ' : ''}{(x.tags ?? []).map((t) => TAG_LABEL[t] ?? t).join(' · ')}</small>}
+          {x.note && <small className="nsr-note">“{x.note}”</small>}</div>
+      </button>
+      {onArchive && <button type="button" className="sq need-arch" aria-label="Archive" title="Archive · stays in Past ratings" onClick={onArchive}>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="4" rx="1" /><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8M10 12h4" /></svg></button>}
+    </div>
+  );
+}
+export function RatingsToday({ todayRows, archive, staff }: ReturnType<typeof useNewStaffRatings>) {
+  const [prof, setProf] = useState<AStaff | null>(null);
+  return <>
+    {!todayRows.length && <div className="muted sm" style={{ padding: '10px 4px' }}>No new ratings.</div>}
+    {todayRows.map((r) => <RatingRow key={r.f.id} r={r} onOpen={() => setProf(r.s)} onArchive={() => archive(r.f.id)} />)}
+    {prof && <StaffProfile s={prof} all={staff} onClose={() => setProf(null)} onEdit={() => { window.location.href = `/admin/staff?open=${prof.id}`; }} />}
+  </>;
+}

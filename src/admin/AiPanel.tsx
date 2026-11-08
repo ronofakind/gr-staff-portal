@@ -26,7 +26,7 @@ function primary(i: Item): { to: string; label: string } | null {
   return null;
 }
 
-export function AiPanel() {
+export function AiPanel({ bare = false }: { bare?: boolean } = {}) {
   const [items, setItems] = useState<Item[] | null>(null); const [checked, setChecked] = useState<string | null>(null);
   const [open, setOpen] = useState(true); const [err, setErr] = useState('');
   const load = async () => {
@@ -53,6 +53,18 @@ export function AiPanel() {
     if (error) { setErr(error.message); load(); }
   };
   const next = checked ? new Date(Math.max(new Date(checked).getTime() + 3600e3, Date.now())) : null;
+  if (bare) return (
+    <section className="ai-bare">
+      <div className="sec ai-sec"><span className="serif"><span className="ai-spark-p" aria-hidden="true">✦</span> AI · to review {waiting.length > 0 && <b className="ai-n">{waiting.length}</b>}</span>
+        <span className="muted sm">{checked ? `inbox ${hm(checked)}` : 'inbox not connected'}</span></div>
+      <div className="adm-card ai-card">
+        {err && <p className="error">{err}</p>}
+        {!waiting.length && <div className="muted sm" style={{ padding: '10px 0' }}>Nothing waiting for your OK.</div>}
+        {waiting.map((i) => <Waiting key={i.id} i={i} set={set} />)}
+        {done.length > 0 && <details className="ai-dd"><summary>Done today · {done.length}</summary><DoneList done={done} load={load} /></details>}
+      </div>
+    </section>
+  );
   return (
     <section className="ai-panel">
       <button type="button" className="ai-bar" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
@@ -65,7 +77,17 @@ export function AiPanel() {
         <>
           {err && <p className="error">{err}</p>}
           {waiting.length > 0 && <div className="ai-lab">WAITING FOR YOUR OK</div>}
-          {waiting.map((i) => {
+          {waiting.map((i) => <Waiting key={i.id} i={i} set={set} />)}
+          {done.length > 0 && <div className="ai-lab">DONE TODAY</div>}
+          {done.length > 0 && <DoneList done={done} load={load} />}
+        </>
+      )}
+    </section>
+  );
+}
+
+function Waiting({ i, set }: { i: Item; set: (i: Item, st: 'done' | 'ignored', note?: string) => void }) {
+
             const [t, tone] = TAG[i.kind] ?? TAG.other; const p = primary(i);
             return (
               <div key={i.id} className="ai-item">
@@ -84,22 +106,18 @@ export function AiPanel() {
                 </div>
               </div>
             );
-          })}
-          {done.length > 0 && <div className="ai-lab">DONE TODAY</div>}
-          {done.length > 0 && (
-            <div className="ai-donelist">
-              {done.map((i) => (
-                <div key={i.id} className={i.status === 'ignored' ? 'ign' : ''}>
-                  <span className="ok">{i.status === 'done' ? '✓' : '·'}</span>
-                  <span className="grow">{i.who} · {(TAG[i.kind] ?? TAG.other)[0].toLowerCase()}{i.events ? ` · ${i.events.title}` : ''} · {i.status === 'done' ? 'done' : 'ignored'}</span>
-                  <span className="muted sm">{i.done_at ? hm(i.done_at) : ''}</span>
-                  <button className="ai-undo" onClick={async () => { await supabase.from('ai_items').update({ status: 'waiting', done_at: null }).eq('id', i.id); load(); }}>Undo</button>
-                </div>
-              ))}
-            </div>
-          )}
-        </>
-      )}
-    </section>
+          }
+function DoneList({ done, load }: { done: Item[]; load: () => void }) {
+  return (
+    <div className="ai-donelist">
+      {done.map((i) => (
+        <div key={i.id} className={i.status === 'ignored' ? 'ign' : ''}>
+          <span className="ok">{i.status === 'done' ? '✓' : '·'}</span>
+          <span className="grow">{i.who} · {(TAG[i.kind] ?? TAG.other)[0].toLowerCase()}{i.events ? ` · ${i.events.title}` : ''} · {i.status === 'done' ? 'done' : 'ignored'}</span>
+          <span className="muted sm">{i.done_at ? hm(i.done_at) : ''}</span>
+          <button className="ai-undo" onClick={async () => { await supabase.from('ai_items').update({ status: 'waiting', done_at: null }).eq('id', i.id); load(); }}>Undo</button>
+        </div>
+      ))}
+    </div>
   );
 }
