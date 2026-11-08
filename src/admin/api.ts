@@ -81,7 +81,7 @@ export const addDays = (iso: string, n: number) => {
 };
 export const hhmm = (t: string | null) => (t ? t.slice(0, 5) : '');
 
-/** Nov 8 · late = 30 min or more after call (Ronnie): under 30 is not flagged and doesn't count on reliability. */
+/** Nov 8 · late = more than 30 min after call (Ronnie): 30 and under is not flagged and doesn't count on reliability. */
 export const LATE_MIN = 30;
 /** Flags computed from a shift: no-show / cancelled / late (30+ min after call) / early start (started before call on purpose). */
 export type Flag = 'no_show' | 'cancelled' | 'late' | 'early';
@@ -96,8 +96,8 @@ export function flagsOf(s: { attendance: string | null; planned_start: string; p
   const pin = s.punches?.punch_in; if (!pin) return [];
   const diff = Math.round((new Date(pin).getTime() - new Date(s.planned_start).getTime()) / 60000);
   // push 32: Settings → "Count told ahead as late" (off by default) counts them even when they came by their ETA.
-  if (diff >= LATE_MIN && s.late_eta) { const byEta = new Date(pin).getTime() <= new Date(s.late_eta).getTime() + 10 * 60000; return [{ flag: 'late', min: diff, told: true, free: byEta && !setting('bookings.count_told_ahead') }]; }
-  if (diff >= LATE_MIN) return [{ flag: 'late', min: diff }];
+  if (diff > LATE_MIN && s.late_eta) { const byEta = new Date(pin).getTime() <= new Date(s.late_eta).getTime() + 10 * 60000; return [{ flag: 'late', min: diff, told: true, free: byEta && !setting('bookings.count_told_ahead') }]; }
+  if (diff > LATE_MIN) return [{ flag: 'late', min: diff }];
   if (diff < -1) return [{ flag: 'early', min: -diff }];
   return [];
 }

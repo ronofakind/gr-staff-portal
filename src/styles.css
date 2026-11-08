@@ -3501,7 +3501,7 @@ button.pf-go { border: none; background: none; padding: 4px 2px; font: 700 13px 
 .adm .t4-sec { display: flex; flex-direction: column; gap: 10px; }
 .adm .t4-h { align-items: center; gap: 8px; }
 .t4-fold { border: 0; background: none; padding: 0; font: inherit; color: inherit; display: inline-flex; align-items: baseline; gap: 7px; cursor: pointer; text-align: left; }
-.t4-fold .serif { font-size: 22px; } .t4-caret { font-size: 12px; color: var(--muted); width: 10px; }
+.t4-fold .serif { font-size: 22px; } .t4-caret { font-size: 13px; color: var(--ink); width: 12px; font-family: system-ui, sans-serif; }
 .t4-band { display: flex; align-items: center; gap: 10px; font-size: 10.5px; letter-spacing: .14em; font-weight: 800; color: var(--muted); margin-bottom: -6px; }
 .t4-band::after { content: ''; flex: 1; height: 1px; background: #DDD4C8; } .t4-band.pin { color: #B8892B; } .t4-band.pin::after { background: #E9D3A0; }
 .t4-card { padding: 4px 16px; } .t4-card .dbr { border: 0; border-top: 1px solid var(--line); border-radius: 0; padding: 10px 0; background: none; box-shadow: none; } .t4-card .dbr:first-child { border-top: 0; }
@@ -3518,7 +3518,7 @@ button.pf-go { border: none; background: none; padding: 4px 2px; font: 700 13px 
 .t4-nums { display: flex; gap: 12px; font-size: 12.5px; color: var(--muted); white-space: nowrap; } .t4-nums b { color: var(--ink); } .t4-nums b.ok { color: var(--ok); } .t4-nums b.amber { color: var(--amber); } .t4-nums b.red { color: var(--accent); }
 .t4-ph { display: none; } .t4-car { width: 12px; text-align: center; }
 .t4-body { padding: 0 0 12px; } .t4-body .live-card { box-shadow: none; border: 1px solid var(--line); }
-.t4-late { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 13px; flex-wrap: wrap; }
+.t4-lrow { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 13px; flex-wrap: wrap; }
 .ai-bare { display: flex; flex-direction: column; gap: 10px; }
 .ai-sec .serif { display: inline-flex; align-items: baseline; gap: 6px; } .ai-spark-p { color: #5B3FA0; font-size: 16px; } .ai-n { font-size: 12px; color: #5B3FA0; }
 .ai-card { padding: 6px 14px 10px; box-shadow: 0 1px 0 #E4DCD1, inset 0 0 0 1.5px #D9CFF0; }

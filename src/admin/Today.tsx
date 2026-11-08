@@ -273,9 +273,9 @@ export function Today() {
     late: () => (
       <Section k="late" mode={md('late')} title={<>Late 30 min + {late30.length > 0 && <b className="accent sm">{late30.length}</b>}</>} right={<Link to="/admin/reliability">Reliability ›</Link>}>
         <div className="adm-card t4-card">
-          <div className="muted sm">Last 7 days · only 30 min or more</div>
-          {!late30.length && <div className="muted sm" style={{ padding: '8px 0' }}>Nobody 30 min late this week.</div>}
-          {late30.map(({ e, s, min, told }) => <div key={s.id} className="t4-late"><b>{s.staff?.full_name ?? '?'}</b><span className="muted grow">{e.title} · {dLabel(e.event_date)}</span><span className="tag amber">{min} min late</span>{told && <span className="muted sm">told ahead</span>}</div>)}
+          <div className="muted sm">Last 7 days · only more than 30 min</div>
+          {!late30.length && <div className="muted sm" style={{ padding: '8px 0' }}>Nobody more than 30 min late this week.</div>}
+          {late30.map(({ e, s, min, told }) => <div key={s.id} className="t4-lrow"><b>{s.staff?.full_name ?? '?'}</b><span className="muted grow">{e.title} · {dLabel(e.event_date)}</span><span className="tag amber">{min} min late</span>{told && <span className="muted sm">told ahead</span>}</div>)}
         </div>
       </Section>),
     week: () => (
