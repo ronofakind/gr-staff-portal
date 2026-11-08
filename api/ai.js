@@ -27,6 +27,30 @@ export default async function handler(req, res) {
     const token = req.method === 'POST' ? body.token : req.query.token;
     if (!(await okToken(token))) return res.status(401).json({ error: 'bad token' });
 
+    // Nov 8 · push 55b · AI first read of new applications. GET ?apps=1 → new ones not read yet, with a 1-hour CV link.
+    if (req.method === 'GET' && req.query.apps) {
+      const apps = await get('applications?status=eq.new&ai_at=is.null&select=id,created_at,first_name,last_name,email,phone,roles,worked_in,years,lang_fr,lang_en,days,transport,neighbourhood,cv_path,cv_name,no_cv_note,referrer_id,referrer_text&order=created_at&limit=10');
+      const [past, staff] = await Promise.all([
+        get('applications?select=id,email,phone,status,created_at'),
+        get('staff?select=id,full_name,email,phone,active'),
+      ]);
+      const dg = (p) => (p || '').replace(/\D/g, '').replace(/^1(?=\d{10}$)/, '');
+      const out = [];
+      for (const a of apps) {
+        let cv_url = null;
+        if (a.cv_path) {
+          const r = await fetch(`${URL_}/storage/v1/object/sign/applications/${a.cv_path}`, { method: 'POST', headers: H(), body: JSON.stringify({ expiresIn: 3600 }) });
+          if (r.ok) { const j = await r.json(); cv_url = `${URL_}/storage/v1${j.signedURL}`; }
+        }
+        const same = (x) => (a.email && x.email && x.email.toLowerCase() === a.email.toLowerCase()) || (dg(a.phone) && dg(x.phone) === dg(a.phone));
+        out.push({ ...a, cv_path: undefined, cv_url,
+          applied_before: past.filter((x) => x.id !== a.id && x.created_at < a.created_at && same(x)).map((x) => ({ status: x.status, date: x.created_at.slice(0, 10) })),
+          staff_match: staff.filter(same).map((x) => ({ name: x.full_name, active: x.active })),
+          referrer: a.referrer_id ? staff.find((x) => x.id === a.referrer_id)?.full_name ?? null : null });
+      }
+      return res.json({ apps: out });
+    }
+
     if (req.method === 'GET') {
       const past = Math.min(Number(req.query.past) || 0, 90); // Nov 8 · ?past=45 → also past events (invoice matching)
       const today = new Date(Date.now() - past * 864e5).toLocaleDateString('en-CA', { timeZone: 'America/Toronto' });
@@ -73,6 +97,17 @@ export default async function handler(req, res) {
           invoices = inv.length;
         }
       }
+      // push 55b · AI first read: { apps: [{ id, summary, level: JUNIOR|MID|SENIOR, flags: [] }] }
+      let reads = 0;
+      if (Array.isArray(body.apps)) {
+        for (const a of body.apps.slice(0, 20)) {
+          if (!/^[0-9a-f-]{36}$/i.test(a?.id || '') || !a.summary) continue;
+          const flags = Array.isArray(a.flags) ? a.flags.slice(0, 4).map((f) => '⚠ ' + s(f, 160)).join('\n') : '';
+          const r = await fetch(`${URL_}/rest/v1/applications?id=eq.${a.id}`, { method: 'PATCH', headers: H({ Prefer: 'return=minimal' }),
+            body: JSON.stringify({ ai_summary: (s(a.summary, 600) + (flags ? '\n' + flags : '')), ai_level: ['JUNIOR', 'MID', 'SENIOR'].includes(a.level) ? a.level : null, ai_at: new Date().toISOString() }) });
+          if (r.ok) reads++;
+        }
+      }
       let added = 0;
       if (rows.length) {
         const r = await fetch(`${URL_}/rest/v1/ai_items?on_conflict=dedupe_key`, { method: 'POST', headers: H({ Prefer: 'resolution=ignore-duplicates,return=representation' }), body: JSON.stringify(rows) });
@@ -80,7 +115,7 @@ export default async function handler(req, res) {
         added = (await r.json()).length;
       }
       if (body.checked) await fetch(`${URL_}/rest/v1/ai_settings?id=eq.1`, { method: 'PATCH', headers: H(), body: JSON.stringify({ inbox_checked_at: new Date().toISOString() }) });
-      return res.json({ added, skipped: rows.length - added, invoices });
+      return res.json({ added, skipped: rows.length - added, invoices, reads });
     }
     return res.status(405).json({ error: 'GET or POST' });
   } catch (e) {

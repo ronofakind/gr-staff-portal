@@ -68,7 +68,7 @@ export function AppCard({ a, all, staff, full, onOpen }: { a: App; all: App[]; s
         <span className="grow"><b>{fullName(a)}</b><small className="muted">{line || '—'}</small></span>
         <span className="muted sm">{ago(a.created_at)}</span>
       </div>
-      {a.ai_summary ? <div className="hr-ai"><b>AI · {a.ai_level ?? 'first read'}</b><span>{a.ai_summary}</span></div> : full ? <div className="muted sm">AI first read: comes with the hourly check.</div> : null}
+      {a.ai_summary ? <div className="hr-ai"><b>AI · first read{a.ai_level ? ` · suggests ${a.ai_level.toLowerCase()}` : ''}</b><span style={{ whiteSpace: 'pre-line' }}>{a.ai_summary}</span></div> : full ? <div className="muted sm">AI first read: within the hour (the hourly check reads the CV).</div> : null}
       {(ref || flags.length > 0) && <div className="row wrap" style={{ gap: 6 }}>{ref && <i className="hr-tag ok">Referred by {ref}</i>}{flags.map((f) => <i key={f.t} className={'hr-tag ' + f.cls}>{f.t}</i>)}</div>}
       {full && <div className="hr-grid">
         <span>Worked in</span><b>{a.worked_in.map((w) => WORK[w] ?? w).join(' · ') || '—'}</b>
