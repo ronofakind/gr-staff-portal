@@ -26,7 +26,7 @@ export const ICONS = {
 /** push 47 · desktop left nav in 4 groups (Plan · People · Pay · Talk), setup pages greyed at the bottom. */
 export const NAV_GROUPS: { title: string; items: [string, string, keyof typeof ICONS][] }[] = [
   { title: 'PLAN', items: [['/admin', 'Today', 'today'], ['/admin/bookings', 'Bookings', 'book'], ['/admin/calendar', 'Calendar', 'week']] },
-  { title: 'PEOPLE', items: [['/admin/staff', 'Staff', 'staff'], ['/admin/availability', 'Availability', 'avail'], ['/admin/tiers', 'Tiers & ranking', 'tiers'], ['/admin/reliability', 'Reliability', 'flag'], ['/admin/debriefs', 'Debriefs & ratings', 'msg'], ['/admin/rates', 'Pay rates', 'hours']] },
+  { title: 'PEOPLE', items: [['/admin/staff', 'Staff', 'staff'], ['/admin/availability', 'Availability', 'avail'], ['/admin/tiers', 'Tiers & ranking', 'tiers'], ['/admin/reliability', 'Reliability', 'flag'], ['/admin/debriefs', 'Debriefs & ratings', 'msg'], ['/admin/rates', 'Pay rates', 'hours'], ['/admin/hiring', 'Hiring', 'staff']] },
   { title: 'PAY', items: [['/admin/hours', 'Hours', 'hours']] },
   { title: 'TALK', items: [['/admin/messages', 'Messages', 'msg'], ['/admin/meetings', 'Meetings', 'meet'], ['/admin/incidents', 'Incidents', 'alert']] },
 ];
@@ -78,7 +78,7 @@ export function AdminLayout() {
 export function More() {
   const needsReply = useInboxCount();
   const items: [string, string, keyof typeof ICONS][] = [
-    ['/admin/bookings', 'Bookings', 'book'], ['/admin/day', 'Day view', 'day'], ['/admin/hours', 'Hours & pay period', 'hours'], ['/admin/reliability', 'Reliability', 'flag'], ['/admin/debriefs', 'Debriefs & ratings', 'msg'], ['/admin/rates', 'Pay rates', 'hours'], ['/admin/incidents', 'Incidents', 'alert'], ['/admin/messages', 'Messages', 'msg'],
+    ['/admin/bookings', 'Bookings', 'book'], ['/admin/day', 'Day view', 'day'], ['/admin/hours', 'Hours & pay period', 'hours'], ['/admin/reliability', 'Reliability', 'flag'], ['/admin/debriefs', 'Debriefs & ratings', 'msg'], ['/admin/rates', 'Pay rates', 'hours'], ['/admin/hiring', 'Hiring', 'staff'], ['/admin/incidents', 'Incidents', 'alert'], ['/admin/messages', 'Messages', 'msg'],
     ['/admin/meetings', 'Meetings', 'meet'], ['/admin/tiers', 'Tiers', 'tiers'], ['/admin/ranking', 'Ranking · score', 'rank'], ['/admin/venues', 'Venues & clients', 'venue'], ['/admin/settings', 'Settings', 'gear'], ['/me', 'My shifts', 'today'],
   ];
   return (

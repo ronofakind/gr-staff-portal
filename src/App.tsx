@@ -10,6 +10,8 @@ import { AdminLayout, More } from './admin/AdminLayout';
 import { Today } from './admin/Today';
 import { Debriefs } from './admin/Debriefs';
 import { Rates } from './admin/Rates';
+import { Apply } from './pages/Apply';
+import { Hiring } from './admin/Hiring';
 import { Hours } from './admin/Hours';
 import { Reliability } from './admin/Reliability';
 import { Calendar, CalendarRedirect } from './admin/Calendar';
@@ -94,6 +96,7 @@ export function App() {
 
   const legal = window.location.pathname.replace(/\/$/, '');
   if (legal === '/privacy' || legal === '/terms') return <Legal kind={legal.slice(1) as 'privacy' | 'terms'} />;
+  if (legal === '/apply' || legal === '/postuler') return <Apply />; // push 55 · public, signed in or not
   // push 34b · personal invite link: its own screen, signed in or not (it signs them in at the end, then goes to '/')
   const go = /^\/go\/([A-Za-z0-9_-]{10,64})$/.exec(legal);
   if (go) return <LangContext.Provider value={lang}>{session === undefined ? <div className="loading" /> : <Go token={go[1]} />}</LangContext.Provider>;
@@ -125,6 +128,7 @@ export function App() {
             <Route path="reliability" element={<Reliability />} />
             <Route path="debriefs" element={<Debriefs />} />
             <Route path="rates" element={<Rates />} />
+            <Route path="hiring" element={<Hiring />} />
             <Route path="incidents" element={<Incidents />} />
             <Route path="more" element={<More />} />
             <Route path="day" element={<Calendar view="day" />} />

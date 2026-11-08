@@ -14,6 +14,7 @@ import { DeptTag } from './DeptTag';
 import { SheetChanges } from './SheetChanges';
 import { AiPanel } from './AiPanel';
 import { PayPeriod } from './PayPeriod';
+import { HiringToday, useNewApplicationsCount } from './Hiring';
 import { needsSend, hoursBetween } from './api';
 import { LateEnds } from './LateEnds';
 import { useNewStaffRatings, RatingsToday, TAG_LABEL, BAD_TAGS } from './NewStaffRatings';
@@ -211,6 +212,7 @@ export function Today() {
   }, [tick]);
 
   const nsr = useNewStaffRatings(tick);
+  const nApps = useNewApplicationsCount(tick);
   const { lay, save: saveLay, sorted, hidden: hiddenSecs } = useTodayLayout();
   const askNeeds = useAskNeeds(addDays(today, -1), addDays(today, 90), tick); // push 40 · No / no answer / nobody took the spot
   const tonight = (week ?? []).filter((e) => e.event_date === today);
@@ -295,6 +297,10 @@ export function Today() {
           })}
         </div>
         <div className="muted sm">events · floor staff booked, red = bar. Amber = still short.</div>
+      </Section>),
+    hiring: () => (
+      <Section k="hiring" mode={md('hiring')} title={<>Hiring {nApps > 0 && <b className="accent sm">{nApps}</b>}</>} right={<Link to="/admin/hiring">All applications ›</Link>}>
+        <HiringToday tick={tick} />
       </Section>),
     pay: () => (
       <Section k="pay" mode={md('pay')} title="Pay period" right={<span className="row" style={{ gap: 10 }}><Link to="/admin/rates">Rates ›</Link><Link to="/admin/hours">Hours ›</Link></span>}>

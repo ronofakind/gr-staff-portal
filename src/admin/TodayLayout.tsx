@@ -3,17 +3,17 @@ import { supabase } from '../lib/supabase';
 
 /** Nov 8 · Today v4 · ✎ Edit layout: order, 📌 pin, Open / Folded / Hidden. Saved per admin in admin_prefs (080),
  *  so desktop and phone match. Before 080 (or offline) it falls back to this browser only. */
-export type SecKey = 'needs' | 'ai' | 'tonight' | 'debriefs' | 'ratings' | 'late' | 'week' | 'meetings' | 'sheet' | 'pay';
+export type SecKey = 'needs' | 'ai' | 'tonight' | 'debriefs' | 'ratings' | 'late' | 'week' | 'meetings' | 'sheet' | 'pay' | 'hiring';
 export type Mode = 'open' | 'folded' | 'hidden';
 export type Layout = { order: SecKey[]; pinned: SecKey[]; mode: Partial<Record<SecKey, Mode>> };
 export const SEC_LABEL: Record<SecKey, string> = {
   needs: 'Needs you', ai: 'AI · to review', tonight: 'Tonight', debriefs: 'Last night · debriefs', ratings: 'New staff ratings',
-  late: 'Late 30 min +', week: 'Next 7 days', meetings: 'Meetings', sheet: 'Sheet changes', pay: 'Pay period',
+  late: 'Late 30 min +', week: 'Next 7 days', meetings: 'Meetings', sheet: 'Sheet changes', pay: 'Pay period', hiring: 'Hiring',
 };
 /** Full width on desktop (the rest fill 2 columns in order). */
 export const WIDE: SecKey[] = ['tonight', 'sheet'];
 export const DEFAULT_LAYOUT: Layout = {
-  order: ['needs', 'ai', 'tonight', 'debriefs', 'ratings', 'pay', 'week', 'late', 'meetings', 'sheet'],
+  order: ['needs', 'ai', 'hiring', 'tonight', 'debriefs', 'ratings', 'pay', 'week', 'late', 'meetings', 'sheet'],
   pinned: ['needs', 'ai'],
   mode: { late: 'folded', meetings: 'folded', sheet: 'folded' },
 };
@@ -21,7 +21,9 @@ const KEY = 'today_layout'; const LS = 'gr_today_layout';
 function clean(v: unknown): Layout {
   const all = DEFAULT_LAYOUT.order;
   const x = (v && typeof v === 'object' ? v : {}) as Partial<Layout>;
-  const order = [...(Array.isArray(x.order) ? x.order.filter((k): k is SecKey => all.includes(k as SecKey)) : []), ...all].filter((k, i, a) => a.indexOf(k) === i);
+  const order = (Array.isArray(x.order) ? x.order.filter((k): k is SecKey => all.includes(k as SecKey)) : []).filter((k, i, a) => a.indexOf(k) === i);
+  // A section added later (e.g. Hiring, push 55) goes right after the one before it in the default order, not at the bottom.
+  all.forEach((k, i) => { if (order.includes(k)) return; const prev = all.slice(0, i).reverse().find((p) => order.includes(p)); order.splice(prev ? order.indexOf(prev) + 1 : 0, 0, k); });
   const pinned = Array.isArray(x.pinned) ? x.pinned.filter((k): k is SecKey => all.includes(k as SecKey)) : DEFAULT_LAYOUT.pinned;
   const mode = { ...DEFAULT_LAYOUT.mode, ...(x.mode && typeof x.mode === 'object' ? x.mode : {}) };
   return { order, pinned, mode };
