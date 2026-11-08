@@ -3638,3 +3638,35 @@ button.pf-go { border: none; background: none; padding: 4px 2px; font: 700 13px 
 .hr-chips button.on { background: var(--ink); color: #fff; box-shadow: none; }
 .hr-list { display: flex; flex-direction: column; background: #fff; border-radius: 16px; padding: 4px 16px; }
 @media (max-width: 560px) { .hr-opts { grid-template-columns: 1fr; } }
+
+/* push 56 · handbook · tax & pay · Home to-do · admin onboarding progress */
+.hb-bar { display: flex; gap: 2px; } .hb-bar span { flex: 1; height: 4px; border-radius: 2px; background: #DCD3C7; } .hb-bar span.on { background: var(--ink); }
+.hb-card { background: #fff; border-radius: 22px; padding: 18px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 1px 0 #E4DCD1; min-height: 52vh; }
+.hb-card.must { box-shadow: 0 0 0 2px #9B2226; }
+.hb-must { font-size: 10.5px; font-weight: 800; letter-spacing: .1em; padding: 3px 8px; border-radius: 6px; background: #9B2226; color: #fff; }
+.hb-role { font-size: 10.5px; font-weight: 800; letter-spacing: .1em; color: var(--muted); }
+.hb-ic { font-size: 40px; line-height: 1; margin-top: 4px; } .hb-t { font-size: 27px; line-height: 1.12; }
+.hb-lines { display: flex; flex-direction: column; gap: 8px; } .hb-lines p { margin: 0; font-size: 16px; line-height: 1.5; }
+.hb-tick { margin-top: auto; display: flex; gap: 10px; align-items: center; border: 0; text-align: left; padding: 12px; border-radius: 14px; background: #F1ECE5; font: 700 14.5px Inter, system-ui, sans-serif; color: var(--ink); cursor: pointer; }
+.hb-tick.red { background: #F8E6E7; color: #9B2226; }
+.hb-tick > span { width: 24px; height: 24px; flex: none; border-radius: 7px; background: #fff; box-shadow: inset 0 0 0 2px currentColor; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+.hb-tick.on > span { background: currentColor; box-shadow: none; color: #fff; } .hb-tick.red.on > span { background: #9B2226; }
+.hb-tick.static { background: #E3F1E8; color: #2F6B4F; cursor: default; } .hb-tick.static > span { background: #2F6B4F; color: #fff; box-shadow: none; }
+.ob-todo { display: flex; flex-direction: column; gap: 10px; }
+.ob-card { border: 0; text-align: left; border-radius: 20px; padding: 14px; display: flex; flex-direction: column; gap: 10px; background: #fff; box-shadow: 0 1px 0 #E4DCD1; font: inherit; color: var(--ink); cursor: pointer; }
+.ob-card.dark { background: var(--ink); color: #F6F2EC; }
+.ob-top { display: flex; gap: 10px; align-items: center; } .ob-ic { font-size: 26px; }
+.ob-top .grow { display: flex; flex-direction: column; gap: 2px; } .ob-top b { font-size: 16px; } .ob-top .grow > span { font-size: 12.5px; opacity: .75; }
+.ob-bar { height: 6px; border-radius: 3px; background: #EEE8E0; overflow: hidden; } .ob-card.dark .ob-bar { background: #3A332D; } .ob-bar i { display: block; height: 6px; background: #C9A227; }
+.ob-bot { display: flex; align-items: center; gap: 8px; }
+.ob-tag { font-style: normal; font-size: 10.5px; font-weight: 800; padding: 3px 8px; border-radius: 7px; } .ob-tag.red { background: #F8E6E7; color: #9B2226; } .ob-tag.amber { background: #FBF3E0; color: #8A5A00; }
+.ob-go { font-size: 13px; font-weight: 800; padding: 9px 14px; border-radius: 12px; background: var(--ink); color: #fff; } .ob-card.dark .ob-go { background: #F6F2EC; color: var(--ink); }
+.ob-lock { border-radius: 16px; background: #F1ECE5; padding: 14px; text-align: center; font-size: 13px; color: var(--muted); line-height: 1.5; }
+.tx-cheque { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 16px; background: #fff; box-shadow: 0 1px 0 #E4DCD1; }
+.tx-cheque.ok { background: #E3F1E8; } .tx-ic { font-size: 22px; } .tx-cheque .grow { display: flex; flex-direction: column; } .tx-cheque small { font-size: 12px; color: var(--muted); }
+.tx-req { font-size: 10px; font-weight: 800; color: #9B2226; }
+.ap-lv button small { font-weight: 500; font-size: 11px; color: var(--muted); }
+.ob-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.ob-row .grow { display: flex; flex-direction: column; min-width: 160px; } .ob-row.stuck b { color: #9B2226; }
+.ob-steps { display: flex; gap: 4px; flex-wrap: wrap; } .ob-steps i { font-style: normal; font-size: 11px; font-weight: 700; padding: 3px 7px; border-radius: 7px; background: #EFEBE5; color: var(--muted); }
+.ob-steps i.ok { background: #E3F1E8; color: #2F6B4F; } .ob-steps i.mid { background: #FBF3E0; color: #6B4A12; }

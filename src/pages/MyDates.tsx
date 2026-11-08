@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { loadOnboarding } from '../lib/handbook';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase, type Staff } from '../lib/supabase';
 import { TabBar } from '../components/TabBar';
@@ -48,7 +49,11 @@ export function MyDates({ me, base = '', preview = false }: { me: Staff; base?: 
   const { cal, setCal } = useMyCalendar(preview);
   const { meetings } = useMyMeetings(me.id, preview); // push 38 · meetings in Booked (MEETING tag)
   // push 40 · "Can you work this shift?" asks sit on top of Answer (same card as Home and Messages)
-  const { asks: allAsks, reload: reloadAsks } = useMyAsks(preview || me.role === 'admin');
+  const { asks: allAsks0, reload: reloadAsks } = useMyAsks(preview || me.role === 'admin');
+  // push 56 · new hire with the handbook not done → no requests yet (Home explains why)
+  const [hbLocked, setHbLocked] = useState(false);
+  useEffect(() => { if (!preview) loadOnboarding().then((o) => setHbLocked(!!o && !o.hb_done_at)); }, [preview]);
+  const allAsks = hbLocked ? [] : allAsks0;
   const fills = allAsks.filter((a) => a.kind === 'fill');
   // push 51 · Past tab: my own past shifts, last 30 days (+ team / hours / rating status for the ones I managed)
   useSettings(); const fbOn = feedbackOn(me) && !preview; // admin view-as: ratings are per manager, not shown

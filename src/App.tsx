@@ -12,6 +12,8 @@ import { Debriefs } from './admin/Debriefs';
 import { Rates } from './admin/Rates';
 import { Apply } from './pages/Apply';
 import { Hiring } from './admin/Hiring';
+import { Handbook } from './pages/Handbook';
+import { TaxPay } from './pages/TaxPay';
 import { Hours } from './admin/Hours';
 import { Reliability } from './admin/Reliability';
 import { Calendar, CalendarRedirect } from './admin/Calendar';
@@ -163,6 +165,8 @@ export function App() {
         <Route path="/manage/:eventId/messages" element={<MgrMessages me={me} />} />
         <Route path="/messages" element={<StaffMessages me={me} />} />
         <Route path="/profile" element={<Profile me={me} />} />
+        <Route path="/handbook" element={<Handbook />} />
+        <Route path="/tax" element={<TaxPay me={me} />} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </BrowserRouter>

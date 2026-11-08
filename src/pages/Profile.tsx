@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase, type Staff } from '../lib/supabase';
 import { setting } from '../lib/settings';
 import { uploadPhoto } from '../lib/photo';
@@ -31,7 +31,7 @@ export function Profile({ me }: { me: Staff }) {
   const [nick, setNick] = useState(me.nickname ?? null); const [nickOpen, setNickOpen] = useState(false); // push 33d
   const { cal, setCal } = useMyCalendar(); const [calOpen, setCalOpen] = useState(opening === 'cal'); // push 33b
   useEffect(() => { if (opening) setParams((p) => { p.delete('open'); return p; }, { replace: true }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  const [phone, setPhone] = useState(me.phone ?? '');
+  const [phone, setPhone] = useState(me.phone ?? ''); const nav = useNavigate();
   const { info: cu, reload: reloadCu } = useCheckup(); const [emOpen, setEmOpen] = useState(false); const [whyOpen, setWhyOpen] = useState(false);
   const [pinLen, setPinLen] = useState<PinLen | null>(null);
   useEffect(() => { if (me.email) resolvePinLen(me.email).then((r) => setPinLen(r.known ? r.len : null)); }, [me.email]);
@@ -120,6 +120,13 @@ export function Profile({ me }: { me: Staff }) {
       </section>}
 
       {me.role !== 'admin' && <AlertsProfileRow me={me} />}
+
+      {/* push 56 · Refer a friend (their link fills "Referred by" on the apply page) + the handbook any time */}
+      <div className="sec-head"><span className="serif">Refer a friend</span></div>
+      <section className="sizes">
+        <ReferRow me={me} />
+        <button className="size-row edit-row" onClick={() => nav('/handbook')}><span className="row-l">Handbook</span><span className="row-v">G&R standards</span><span className="row-a">Read ›</span></button>
+      </section>
 
       <button className="btn" onClick={() => supabase.auth.signOut().then(() => window.location.replace('/'))}>Log out</button>
       <TabBar />
@@ -256,4 +263,15 @@ function NickSheet({ me, nick, onClose, onSaved }: { me: Staff; nick: string | n
       </div>
     </>
   );
+}
+
+function ReferRow({ me }: { me: Staff }) {
+  const [ok, setOk] = useState(false);
+  const link = `https://${window.location.host}/apply?r=${me.id}`;
+  const share = async () => {
+    const text = `G&R is hiring for events in Montreal. Apply here (3 min): ${link}`;
+    try { if (navigator.share) { await navigator.share({ text }); return; } } catch { return; }
+    try { await navigator.clipboard.writeText(text); setOk(true); setTimeout(() => setOk(false), 2000); } catch { /* */ }
+  };
+  return <button className="size-row edit-row" onClick={share}><span className="row-l">Your link</span><span className={'row-v' + (ok ? ' ok' : '')}>{ok ? '✓ Copied' : 'When they apply, we know you sent them'}</span><span className="row-a">Share ›</span></button>;
 }

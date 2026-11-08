@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { allStaff, isoDay, dLabel, type AStaff } from './api';
 import { InviteModal } from './Invite';
+import { cardsFor } from '../lib/handbook';
 
 /** Nov 8 · push 55 (migration 082) · Hiring: applications from /apply → Accept · Keep for later · Reject (nothing sent).
  *  Accept → adds them to Staff + their start rate, then the welcome text with their personal app link (copied, sent by Ronnie). */
@@ -141,6 +142,7 @@ export function AppSheet({ a, all, staff, onClose, onDone }: { a: App; all: App[
     // Application → profile check-up: neighbourhood + languages are already filled in for them (staff_private, same fields the check-up saves).
     const langs = a.lang_fr && a.lang_en ? { fr: a.lang_fr, en: a.lang_en } : null;
     await supabase.from('staff_private').upsert({ staff_id: sid, neighbourhood: a.neighbourhood?.trim() || null, ...(langs ? { languages: langs } : {}), notes: `Hired ${isoDay(new Date())} · ${lv.l} · ${paid === 'cash' ? 'cash' : 'payroll'}${refStaff ? ` · referred by ${refStaff.full_name}` : ''}` });
+    await supabase.from('staff_onboarding').upsert({ staff_id: sid, level, handbook_roles: hb, paid_by: paid }); // push 56 · handbook by role + tax & pay
     const up = await supabase.from('applications').update({ status: 'accepted', decided_at: new Date().toISOString(), level, start_rate: r, handbook_roles: hb, paid_by: paid, staff_id: sid, updated_at: new Date().toISOString() }).eq('id', a.id);
     setBusy(false); if (up.error) { setErr(up.error.message); return; }
     setInvite({ id: sid, full_name: row.full_name, email: row.email, phone: row.phone, language: row.language as 'fr' | 'en', department: dept as 'floor' | 'bar', role: 'staff', positions: row.positions, active: true, photo_url: null, staff_private: null });
@@ -184,14 +186,58 @@ function CopyLink() {
   return <button className="lnk" onClick={() => { navigator.clipboard?.writeText(applyLink()).then(() => { setOk(true); setTimeout(() => setOk(false), 1800); }); }}>{ok ? '✓ Link copied' : 'Copy apply link'}</button>;
 }
 
+/** push 56 · accepted, not finished: set up (check-up) · handbook x/N · tax & pay. 5 days + → red (your Needs you). */
+type ObRow = { staff_id: string; created_at: string; handbook_roles: string[]; paid_by: 'payroll' | 'cash'; hb_seen: string[]; hb_done_at: string | null; tax_done_at: string | null;
+  staff: { full_name: string; phone: string | null } | null; setup: boolean };
+export function useOnboardingProgress(tick = 0) {
+  const [rows, setRows] = useState<ObRow[] | null>(null);
+  useEffect(() => {
+    supabase.from('staff_onboarding').select('staff_id,created_at,handbook_roles,paid_by,hb_seen,hb_done_at,tax_done_at,staff:staff!staff_onboarding_staff_id_fkey(full_name,phone)').order('created_at', { ascending: false }).limit(100)
+      .then(async ({ data, error }) => {
+        if (error) { setRows(null); return; }
+        const list = (data ?? []) as unknown as Omit<ObRow, 'setup'>[];
+        const { data: sp } = list.length ? await supabase.from('staff_private').select('staff_id,checkup_done_at').in('staff_id', list.map((r) => r.staff_id)) : { data: [] };
+        const done = new Set(((sp ?? []) as { staff_id: string; checkup_done_at: string | null }[]).filter((x) => x.checkup_done_at).map((x) => x.staff_id));
+        setRows(list.map((r) => ({ ...r, setup: done.has(r.staff_id) })));
+      });
+  }, [tick]);
+  return rows;
+}
+const obOpen = (r: ObRow) => !r.setup || !r.hb_done_at || (r.paid_by === 'payroll' && !r.tax_done_at);
+const daysSince = (iso: string) => Math.floor((Date.now() - +new Date(iso)) / 864e5);
+export function OnboardingList({ rows, all }: { rows: ObRow[]; all?: boolean }) {
+  const list = all ? rows : rows.filter(obOpen);
+  if (!list.length) return null;
+  return (
+    <div className="stack" style={{ gap: 6 }}>
+      <span className="kick">GETTING STARTED · {list.length}</span>
+      {list.map((r) => {
+        const n = cardsFor(r).length; const read = Math.min(r.hb_seen.length, n); const d = daysSince(r.created_at); const stuck = obOpen(r) && d >= 5;
+        const where = !r.setup ? 'set up' : !r.hb_done_at ? 'handbook' : r.paid_by === 'payroll' && !r.tax_done_at ? 'tax & pay' : '';
+        return (
+          <div key={r.staff_id} className={'ob-row' + (stuck ? ' stuck' : '')}>
+            <span className="grow"><b>{r.staff?.full_name ?? '—'}</b><small className="muted">{obOpen(r) ? `${stuck ? 'stuck on' : 'on'} ${where} · accepted ${d === 0 ? 'today' : d + ' day' + (d > 1 ? 's' : '') + ' ago'}` : '✓ ready'} · {r.paid_by}</small></span>
+            <span className="ob-steps">
+              <i className={r.setup ? 'ok' : ''}>Set up</i>
+              <i className={r.hb_done_at ? 'ok' : read ? 'mid' : ''}>Handbook {r.hb_done_at ? '✓' : `${read}/${n}`}</i>
+              {r.paid_by === 'payroll' && <i className={r.tax_done_at ? 'ok' : ''}>Tax & pay{r.tax_done_at ? ' ✓' : ''}</i>}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 /** Today → Hiring section body. */
 export function HiringToday({ tick }: { tick: number }) {
-  const { rows, staff, reload } = useApplications(tick);
+  const { rows, staff, reload } = useApplications(tick); const ob = useOnboardingProgress(tick);
   const [open, setOpen] = useState<App | null>(null); const [toast, setToast] = useState('');
   if (rows === null) return <div className="muted sm">Hiring starts after migration 082.</div>;
   const fresh = rows.filter((a) => a.status === 'new'); const kept = rows.filter((a) => a.status === 'kept').length;
   return (
     <div className="adm-card t4-card stack" style={{ gap: 8 }}>
+      {ob && <OnboardingList rows={ob} />}
       {!fresh.length && <div className="muted sm" style={{ padding: '6px 0' }}>No new applications.{kept ? ` ${kept} kept for later.` : ''}</div>}
       {fresh.slice(0, 6).map((a) => <AppCard key={a.id} a={a} all={rows} staff={staff} onOpen={() => setOpen(a)} />)}
       <div className="row" style={{ justifyContent: 'space-between' }}><CopyLink />{fresh.length > 6 && <span className="muted sm">+{fresh.length - 6} more</span>}</div>
@@ -208,7 +254,7 @@ export function useNewApplicationsCount(tick: number) {
 
 /** /admin/hiring */
 export function Hiring() {
-  const { rows, staff, reload } = useApplications();
+  const { rows, staff, reload } = useApplications(); const ob = useOnboardingProgress();
   const [tab, setTab] = useState<App['status']>('new'); const [open, setOpen] = useState<App | null>(null); const [toast, setToast] = useState('');
   const counts = useMemo(() => (rows ?? []).reduce<Record<string, number>>((m, a) => { m[a.status] = (m[a.status] ?? 0) + 1; return m; }, {}), [rows]);
   const list = (rows ?? []).filter((a) => a.status === tab);
@@ -219,10 +265,34 @@ export function Hiring() {
       {rows === null ? <div className="muted">Hiring starts after migration 082.</div> : <>
         <div className="row wrap" style={{ gap: 6 }}>{(['new', 'kept', 'accepted', 'rejected'] as const).map((k) => <button key={k} className={'abtn sm' + (tab === k ? ' dark' : '')} onClick={() => setTab(k)}>{k === 'new' ? 'New' : k === 'kept' ? 'Kept for later' : k === 'accepted' ? 'Accepted' : 'Rejected'}{counts[k] ? ` · ${counts[k]}` : ''}</button>)}</div>
         {toast && <div className="cu-box ok">{toast}</div>}
+        {tab === 'accepted' && ob && ob.length > 0 && <div className="adm-card"><OnboardingList rows={ob} all /></div>}
         <div className="hr-list">{list.map((a) => <AppCard key={a.id} a={a} all={rows} staff={staff} onOpen={() => setOpen(a)} />)}
           {!list.length && <div className="muted sm">Nothing here.</div>}</div>
       </>}
       {open && rows && <AppSheet a={open} all={rows} staff={staff} onClose={() => setOpen(null)} onDone={(m) => { setOpen(null); setToast(m); reload(); }} />}
+    </div>
+  );
+}
+
+/** push 56 · staff profile: what they entered in Tax & pay (admin only). SIN hidden until Show. */
+export function TaxCard({ staffId }: { staffId: string }) {
+  type Tax = { legal_name: string; birthday: string | null; sin: string; address: string; pay_method: 'deposit' | 'paypal'; paypal_email: string | null; cheque_path: string | null; updated_at: string };
+  const [t, setT] = useState<Tax | null>(null); const [show, setShow] = useState(false);
+  useEffect(() => { supabase.from('staff_tax').select('legal_name,birthday,sin,address,pay_method,paypal_email,cheque_path,updated_at').eq('staff_id', staffId).maybeSingle().then(({ data }) => setT((data as Tax) ?? null)); }, [staffId]);
+  if (!t) return null;
+  const openCheque = async () => { if (!t.cheque_path) return; const w = window.open('', '_blank'); const { data } = await supabase.storage.from('tax-docs').createSignedUrl(t.cheque_path, 600); if (data && w) w.location.href = data.signedUrl; else w?.close(); };
+  const sin = t.sin.replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3');
+  return (
+    <div className="adm-card stack" style={{ gap: 6 }}>
+      <span className="kick">TAX & PAY · ONLY YOU SEE THIS · {dLabel(isoDay(new Date(t.updated_at)), { month: 'short', day: 'numeric' })}</span>
+      <div className="hr-grid">
+        <span>Legal name</span><b>{t.legal_name}</b>
+        <span>Birthday</span><b>{t.birthday ?? '—'}</b>
+        <span>SIN</span><b>{show ? sin : '••• ••• ' + t.sin.slice(-3)} <button className="lnk" onClick={() => setShow(!show)}>{show ? 'Hide' : 'Show'}</button></b>
+        <span>Address</span><b>{t.address}</b>
+        <span>Paid by</span><b>{t.pay_method === 'paypal' ? `PayPal · ${t.paypal_email ?? ''}` : 'Direct deposit'}</b>
+      </div>
+      {t.cheque_path && <button className="abtn sm" style={{ alignSelf: 'flex-start' }} onClick={openCheque}>🧾 Open void cheque</button>}
     </div>
   );
 }

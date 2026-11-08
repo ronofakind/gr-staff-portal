@@ -1,4 +1,5 @@
 import { RateCard } from './Rates';
+import { TaxCard } from './Hiring';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -128,6 +129,7 @@ export function StaffProfile({ s, onClose, onEdit, all }: { s: AStaff; onClose: 
                 onTier={() => supabase.from('staff_private').select('tier').eq('staff_id', s.id).maybeSingle().then(({ data }) => setTierNow(((data as { tier?: 'A' | 'B' | 'C' | null } | null)?.tier) ?? null))} /></div>}
             {sd && <MgrFeedback sid={s.id} d={sd} />}
             <RateCard s={s} />
+            <TaxCard staffId={s.id} />
             <div className="pcard">
               <div className="row" style={{ justifyContent: 'space-between' }}><span className="kick">RELIABILITY · {today.slice(0, 4)}</span><Link to="/admin/reliability" className="sm accent strong">Full log ›</Link></div>
               <div className="rel4">

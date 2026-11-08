@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { supabase, SHIFT_SELECT, isSetup, type ShiftRow, type Staff } from '../lib/supabase';
 import { setting, useSettings } from '../lib/settings';
 import { useLang } from '../lib/i18n';
+import { loadOnboarding, cardsFor, type Onboarding } from '../lib/handbook';
 import { time, longDate, dayBadge, minus, mapsUrl } from '../lib/format';
 import { ProfileButton } from '../components/ProfileMenu';
 import { TabBar } from '../components/TabBar';
@@ -131,6 +132,10 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
   const { meetings, setMeetings } = useMyMeetings(me.id, preview);
   // push 40 · "Can you do a new time?" / "Can you work this event instead?" / "Can you work this shift?" (gold cards, also in Messages)
   const { asks, reload: reloadAsks } = useMyAsks(preview || me.role === 'admin');
+  // push 56 · new hires: handbook before dates, tax & pay before the first shift (null = current staff, nothing to do)
+  const [ob, setOb] = useState<Onboarding | null>(null);
+  useEffect(() => { if (!preview) loadOnboarding().then(setOb); }, [preview]);
+  const hbLocked = !!ob && !ob.hb_done_at;
   const gotIt = async (id: string) => { setAlerts(alerts.filter((a) => a.id !== id)); if (!preview) await supabase.rpc('alert_seen', { p_id: id }); };
   const { dates: myDates, reload: reloadDates } = useMyDates(me.id, preview); // push 35 · My dates (count, reminder, said yes)
   const [notSure, setNotSure] = useState(false);
@@ -237,7 +242,23 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
         </div>
       ))}
 
-      {asks.map((a) => <AskCard key={a.ask_id} a={a} home preview={preview} onAnswered={(st) => { if (st !== 'gone') load(); setTimeout(reloadAsks, st === 'gone' ? 4000 : 2500); }} />)}
+      {ob && (!ob.hb_done_at || (ob.paid_by === 'payroll' && !ob.tax_done_at)) && (() => {
+        const n = cardsFor(ob).length; const read = Math.min(ob.hb_seen.length, n); const pct = Math.round((read / n) * 100);
+        return <div className="ob-todo">
+          {!ob.hb_done_at && <button className="ob-card dark" onClick={() => nav('/handbook')}>
+            <span className="ob-top"><span className="ob-ic">📖</span><span className="grow"><b>Complete your handbook</b><span>{n} short cards · about {Math.max(5, Math.round(n * 0.7))} min · stop anytime</span></span></span>
+            {read > 0 && <span className="ob-bar"><i style={{ width: pct + '%' }} /></span>}
+            <span className="ob-bot"><i className="ob-tag red">NEEDED BEFORE YOU GET DATES</i><span className="grow" /><span className="ob-go">{read > 0 ? `Continue · ${read}/${n} ›` : 'Start ›'}</span></span>
+          </button>}
+          {ob.paid_by === 'payroll' && !ob.tax_done_at && <button className="ob-card" onClick={() => nav('/tax')}>
+            <span className="ob-top"><span className="ob-ic">🧾</span><span className="grow"><b>Tax & pay</b><span>SIN, address, direct deposit / PayPal, void cheque · 4 min</span></span></span>
+            <span className="ob-bot"><i className="ob-tag amber">NEEDED BEFORE YOUR FIRST SHIFT</i><span className="grow" /><span className="ob-go">Start ›</span></span>
+          </button>}
+          {hbLocked && <div className="ob-lock">🔒 Event requests show up here<br />once your handbook is done.</div>}
+        </div>;
+      })()}
+
+      {!hbLocked && asks.map((a) => <AskCard key={a.ask_id} a={a} home preview={preview} onAnswered={(st) => { if (st !== 'gone') load(); setTimeout(reloadAsks, st === 'gone' ? 4000 : 2500); }} />)}
 
       {gone.filter((g) => !okd.includes(g.id)).map((g) => <CancelledCard key={g.id} title={g.title} date={g.date} late={g.late} onOk={() => okGone(g.id)} />)}
 
