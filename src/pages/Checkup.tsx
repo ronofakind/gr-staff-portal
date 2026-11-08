@@ -27,7 +27,10 @@ export function Checkup({ me, info, onFinish }: { me: Staff; info: CheckupInfo; 
   // Decided once (tapping Add mid-step must not remove the step under them).
   const [calOn, setCalOn] = useState<boolean | null>(null);
   useEffect(() => { if (cal !== undefined && calOn === null) setCalOn(!!cal && !cal.added_at); }, [cal, calOn]);
-  const ids = [1, 2, 3, 4, 5, ...(homeStepApplies() ? [6] : []), ...(calOn ? [8] : []), 9];
+  // push 55 · new hires already gave their languages on the application (Hiring → Accept saves them) → no Languages step.
+  // Decided once, so finishing the step mid-flow doesn't renumber the steps.
+  const [langsDone] = useState(() => !!(info.languages?.fr && info.languages?.en));
+  const ids = [1, 2, 3, ...(langsDone ? [] : [4]), 5, ...(homeStepApplies() ? [6] : []), ...(calOn ? [8] : []), 9];
   const startAt = (s: number) => (s === 7 ? 7 : ids.includes(s) ? s : ORDER.includes(s) ? ORDER.slice(ORDER.indexOf(s) + 1).find((x) => ids.includes(x)) ?? 7 : 1);
   const [step, setStep] = useState<number | null>(null);
   useEffect(() => { if (calOn !== null && step === null) setStep(startAt(info.step)); }, [calOn]); // eslint-disable-line react-hooks/exhaustive-deps
