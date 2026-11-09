@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { eventsBetween, addDays, isoDay, countOf, sendStateOf, type AEvent } from './api';
+import { addDays, isoDay, countOf, sendStateOf, type AEvent } from './api';
 
 /* Push 60 · Today → "This month" (board TodayMonthV1, compact v2). Small month on the left: date + one dot per event
    (amber = short). Click a date → its events on the right: venue · start · manager · booked/needed · SEND. Opens on today. */
@@ -12,6 +12,7 @@ const nameOf = (e: AEvent & { venues?: { name: string } | null }) => e.venues?.n
 const tShort = (t: string | null) => { if (!t) return ''; const [h, m] = t.slice(0, 5).split(':').map(Number); return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`; };
 const first = (n?: string | null) => (n ?? '').split(' ')[0];
 
+const LIGHT = 'id,event_date,title,department,start_time,staff_needed,staffing,manager_id,shifts(id,status,cancelled_at,attendance,notified_at,changed_at,responded_at)';
 export function MiniMonth() {
   const today = isoDay(new Date());
   const [mo, setMo] = useState(firstOf(today));
@@ -23,11 +24,13 @@ export function MiniMonth() {
   const weeks = Math.ceil((new Date(last + 'T12:00:00').getTime() - new Date(start + 'T12:00:00').getTime()) / (7 * 864e5) + 1 / 7);
   useEffect(() => {
     let live = true; setEvs(null);
-    eventsBetween(mo, last).then((r) => {
-      if (!live) return; setEvs(r);
+    // light query: only what the dots, counts and SEND need (the full event select took ~12 s for a month)
+    supabase.from('events').select(LIGHT).gte('event_date', mo).lte('event_date', last).order('event_date').order('start_time').then(({ data, error }) => {
+      if (!live) return; if (error) { setEvs([]); return; }
+      const r = (data ?? []) as unknown as AEvent[]; setEvs(r);
       const ids = [...new Set(r.map((e) => e.manager_id).filter(Boolean))] as string[];
       if (ids.length) supabase.from('staff').select('id,full_name,nickname').in('id', ids).then(({ data }) => live && setMgr(Object.fromEntries(((data ?? []) as { id: string; full_name: string; nickname: string | null }[]).map((s) => [s.id, s.nickname || first(s.full_name)]))));
-    }).catch(() => live && setEvs([]));
+    });
     return () => { live = false; };
   }, [mo, last]);
   const go = (n: number) => { const m = addMonths(mo, n); setMo(m); setSel(m === firstOf(today) ? today : m); };
