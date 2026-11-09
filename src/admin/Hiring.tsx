@@ -274,25 +274,42 @@ export function Hiring() {
   );
 }
 
-/** push 56 · staff profile: what they entered in Tax & pay (admin only). SIN hidden until Show. */
+/** push 58 · staff profile: tax and pay exactly as it goes to QuickBooks (ALL CAPS) + Add to QuickBooks. Admin only; SIN hidden until Show. */
+type Tax = { first_name: string | null; middle_name: string | null; last_name: string | null; legal_name: string | null; email: string | null; phone: string | null;
+  street: string | null; apt: string | null; city: string | null; province: string | null; postal_code: string | null; address: string | null; birthday: string | null;
+  sin: string; pay_method: 'deposit' | 'paypal'; paypal_email: string | null; cheque_path: string | null; sin_card_path: string | null; updated_at: string;
+  qb_status: 'sending' | 'done' | 'error' | null; qb_vendor_id: string | null; qb_note: string | null; qb_at: string | null };
 export function TaxCard({ staffId }: { staffId: string }) {
-  type Tax = { legal_name: string; birthday: string | null; sin: string; address: string; pay_method: 'deposit' | 'paypal'; paypal_email: string | null; cheque_path: string | null; updated_at: string };
-  const [t, setT] = useState<Tax | null>(null); const [show, setShow] = useState(false);
-  useEffect(() => { supabase.from('staff_tax').select('legal_name,birthday,sin,address,pay_method,paypal_email,cheque_path,updated_at').eq('staff_id', staffId).maybeSingle().then(({ data }) => setT((data as Tax) ?? null)); }, [staffId]);
+  const [t, setT] = useState<Tax | null>(null); const [show, setShow] = useState(false); const [tick, setTick] = useState(0);
+  useEffect(() => { supabase.from('staff_tax').select('*').eq('staff_id', staffId).maybeSingle().then(({ data }) => setT((data as Tax) ?? null)); }, [staffId, tick]);
   if (!t) return null;
-  const openCheque = async () => { if (!t.cheque_path) return; const w = window.open('', '_blank'); const { data } = await supabase.storage.from('tax-docs').createSignedUrl(t.cheque_path, 600); if (data && w) w.location.href = data.signedUrl; else w?.close(); };
+  const open = async (path: string | null) => { if (!path) return; const w = window.open('', '_blank'); const { data } = await supabase.storage.from('tax-docs').createSignedUrl(path, 600); if (data && w) w.location.href = data.signedUrl; else w?.close(); };
+  const up = (x: string | null | undefined) => (x ?? '').toUpperCase();
+  const name = up([t.first_name, t.middle_name, t.last_name].filter(Boolean).join(' ') || t.legal_name);
+  const addr = t.street ? up(`${t.street}${t.apt ? ', APT ' + t.apt : ''}, ${t.city} ${t.province} ${t.postal_code}, CANADA`) : up(t.address);
   const sin = t.sin.replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3');
+  const setQb = async (status: 'sending' | null) => { await supabase.from('staff_tax').update({ qb_status: status, qb_at: status ? new Date().toISOString() : null, qb_note: null }).eq('staff_id', staffId); setTick((x) => x + 1); };
+  const tag = t.qb_status === 'done' ? ['IN QUICKBOOKS', 'ok'] : t.qb_status === 'sending' ? ['SENDING', ''] : t.qb_status === 'error' ? ['QUICKBOOKS ERROR', 'red'] : ['READY FOR QUICKBOOKS', 'gold'];
   return (
-    <div className="adm-card stack" style={{ gap: 6 }}>
-      <span className="kick">TAX & PAY · ONLY YOU SEE THIS · {dLabel(isoDay(new Date(t.updated_at)), { month: 'short', day: 'numeric' })}</span>
+    <div className="adm-card stack" style={{ gap: 10 }}>
+      <div className="row" style={{ alignItems: 'center', gap: 8 }}><span className="kick grow">TAX AND PAY · ONLY YOU SEE THIS · {dLabel(isoDay(new Date(t.updated_at)), { month: 'short', day: 'numeric' })}</span><i className={'hr-tag ' + tag[1]}>{tag[0]}</i></div>
       <div className="hr-grid">
-        <span>Legal name</span><b>{t.legal_name}</b>
-        <span>Birthday</span><b>{t.birthday ?? '—'}</b>
+        <span>Supplier name</span><b>{name}</b>
+        {t.email && <><span>Email</span><b>{up(t.email)}</b></>}
+        {t.phone && <><span>Phone</span><b>{t.phone}</b></>}
+        <span>Address</span><b>{addr}</b>
         <span>SIN</span><b>{show ? sin : '••• ••• ' + t.sin.slice(-3)} <button className="lnk" onClick={() => setShow(!show)}>{show ? 'Hide' : 'Show'}</button></b>
-        <span>Address</span><b>{t.address}</b>
         <span>Paid by</span><b>{t.pay_method === 'paypal' ? `PayPal · ${t.paypal_email ?? ''}` : 'Direct deposit'}</b>
       </div>
-      {t.cheque_path && <button className="abtn sm" style={{ alignSelf: 'flex-start' }} onClick={openCheque}>🧾 Open void cheque</button>}
+      <div className="row wrap" style={{ gap: 8 }}>
+        {t.cheque_path && <button className="abtn sm" onClick={() => open(t.cheque_path)}>Open void cheque</button>}
+        {t.sin_card_path && <button className="abtn sm" onClick={() => open(t.sin_card_path)}>Open SIN card</button>}
+      </div>
+      {t.qb_status === null && <div className="row" style={{ gap: 10, alignItems: 'center' }}><button className="abtn dark" onClick={() => setQb('sending')}>Add to QuickBooks</button><span className="muted sm">Supplier · ALL CAPS · T4A on · Individual</span></div>}
+      {t.qb_status === 'sending' && <div className="cu-box amber"><span>Sending to QuickBooks · done within the hour (it checks for a duplicate first). <button className="lnk" onClick={() => setQb(null)}>Cancel</button></span></div>}
+      {t.qb_status === 'error' && <div className="cu-box amber"><b>QuickBooks didn’t take it</b><span>{t.qb_note}</span><button className="abtn sm" style={{ alignSelf: 'flex-start' }} onClick={() => setQb('sending')}>Try again</button></div>}
+      {t.qb_status === 'done' && <div className="cu-box ok"><b>✓ In QuickBooks{t.qb_vendor_id ? ` · supplier #${t.qb_vendor_id}` : ''}</b>
+        <span>{t.qb_note ?? 'T4A on.'} {t.qb_vendor_id && <a href={`https://qbo.intuit.com/app/vendordetail?nameId=${t.qb_vendor_id}`} target="_blank" rel="noreferrer">Open in QuickBooks ↗</a>}</span></div>}
     </div>
   );
 }

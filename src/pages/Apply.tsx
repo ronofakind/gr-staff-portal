@@ -1,40 +1,41 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { supabase } from '../lib/supabase';
+import { LineIcon } from '../components/LineIcon';
 
 /** Nov 8 · push 55 (082) · public apply page (ApplyFlowV2): landing → 4 steps → thank you. No login.
  *  Link only sent by Ronnie, or a staff member's Refer a friend (/apply?r=<staff id>). Nothing is texted or emailed. */
 type L = 'en' | 'fr';
 const T = {
   en: {
-    head: "Work Montreal's\nbest events", sub: 'Weddings, galas, corporate nights and private homes — with a team that has your back.',
-    r1: ['You choose', 'accept or decline each event'], r2: ['Paid twice', '1st + 16th · PayPal early'], r3: ['Top venues', 'galas · weddings · homes'],
-    start: 'Apply · 3 min', reply: 'We reply within a few days', invited: 'invited you', back: '‹ Back', apply: 'APPLY', of: 'OF', next: 'Next',
+    head: "Montreal’s finest rooms\nneed a great team.", sub: '',
+    r1: 'You choose the events you work', r2: 'Paid on the 1st and the 16th', r3: 'Galas, weddings, private homes',
+    start: 'Apply · 3 minutes', reply: 'We reply within a few days', invited: 'invited you', back: '‹ Back', apply: 'APPLY', of: 'OF', next: 'Next',
     t1: 'About you', s1: 'So we can reach you', first: 'First name', last: 'Last name', email: 'Email', phone: 'Mobile', hood: 'Neighbourhood · for rides', hoodPh: 'Plateau, Verdun, Laval…', adult: "I'm 18 or older",
     t2: 'Your experience', s2: 'No experience is OK', q_roles: 'I want to work as', q_worked: "I've worked in", q_years: 'Years', yearsNote: 'None yet → you start on cocktail events',
-    roles: { waiter: 'Waiter', bartender: 'Bartender', barback: 'Barback', cook: 'Cook', manager: 'Manager' },
+    roles: { waiter: 'Waiter', bartender: 'Bartender', barback: 'Barback', manager: 'Manager' },
     worked: { fine_dining: 'Fine dining', banquets: 'Banquets', catering: 'Catering', hotel: 'Hotel', cocktail_bar: 'Cocktail bar', cafe: 'Café', none: 'Not yet' },
     years: { none: 'None', lt1: '< 1', '1-2': '1–2', '3-5': '3–5', '5+': '5+' },
-    t3: 'Languages & days', s3: 'Helps us match you', lv: ['Basic', 'Good', 'Fluent'], q_days: 'I can usually work', q_go: 'Getting there',
+    t3: 'Languages', s3: 'And how you get around', lv: ['Basic', 'Good', 'Fluent'], q_days: 'I can usually work', q_go: 'Getting there',
     days: { weekday_days: 'Weekday days', weekday_evenings: 'Weekday evenings', weekends: 'Weekends', anytime: 'Anytime' }, go: { car: 'I have a car', transit: 'Transit' },
     t4: 'Your CV', s4: 'PDF, Word or a photo of it', photo: '📷 Photo', lib: '🖼 Library', files: '📁 Files', change: 'Change', added: 'added', uploading: 'Uploading…',
     nocv: 'No CV? Tell us in 2 lines', nocvPh: 'Where you worked, what you did…', withcv: 'I have a CV after all', refBy: 'Referred by', fromLink: '✓ from their link', refQ: 'Who told you about G&R? (optional)',
     consent: 'G&R keeps my application to review it. Not hired → deleted after 12 months.', send: 'Send my application', sending: 'Sending…',
-    thanks: 'Thanks', got: "We got your application.\nWe'll text you within a few days.", nextT: 'What happens next',
+    thanks: 'Thank you', got: "Your application is with Ronnie.\nYou'll hear from us by text within a few days.", nextT: 'What happens next',
     steps: ['We review your application', "If it's a fit, you get your G&R app link", 'Set up your profile + handbook (15 min)', 'Event requests start coming in'],
     noSin: "No SIN or bank info now — only after you're hired, in your own secure account.",
     existT: "You're already on the team", existS: 'This email or phone is already a G&R staff account. Sign in to the app instead.', signIn: 'Open the app',
     err: { name: 'Add your first and last name', email: 'Check your email', phone: 'Add your mobile number', adult: 'You need to be 18 or older', roles: 'Pick at least one role', years: 'Pick your years', cv: 'Add your CV, or tell us in 2 lines', consent: 'Tick the box to send', type: 'That file type doesn’t work. Use PDF, Word or a photo.', size: 'File too big (12 MB max)', net: 'Couldn’t send. Check your connection and try again.' },
   },
   fr: {
-    head: 'Travaillez les plus\nbeaux événements\nde Montréal', sub: 'Mariages, galas, soirées corporatives et résidences privées — avec une équipe qui vous soutient.',
-    r1: ['Vous choisissez', 'oui ou non à chaque événement'], r2: ['Payé 2 fois', '1er + 16 · PayPal plus tôt'], r3: ['Beaux lieux', 'galas · mariages · résidences'],
-    start: 'Postuler · 3 min', reply: 'On vous répond en quelques jours', invited: 'vous invite', back: '‹ Retour', apply: 'POSTULER', of: 'DE', next: 'Suivant',
+    head: 'Les plus beaux lieux\nde Montréal cherchent\nune belle équipe.', sub: '',
+    r1: 'Vous choisissez vos événements', r2: 'Payé le 1er et le 16', r3: 'Galas, mariages, résidences privées',
+    start: 'Postuler · 3 minutes', reply: 'On vous répond en quelques jours', invited: 'vous invite', back: '‹ Retour', apply: 'POSTULER', of: 'DE', next: 'Suivant',
     t1: 'À propos de vous', s1: 'Pour vous joindre', first: 'Prénom', last: 'Nom', email: 'Courriel', phone: 'Cellulaire', hood: 'Quartier · pour le covoiturage', hoodPh: 'Plateau, Verdun, Laval…', adult: "J'ai 18 ans ou plus",
     t2: 'Votre expérience', s2: "Pas d'expérience ? C'est correct", q_roles: 'Je veux travailler comme', q_worked: "J'ai travaillé en", q_years: 'Années', yearsNote: 'Aucune → vous commencez par des cocktails dînatoires',
-    roles: { waiter: 'Serveur·se', bartender: 'Barman·aid', barback: 'Barback', cook: 'Cuisinier·ère', manager: 'Gérant·e' },
+    roles: { waiter: 'Serveur·se', bartender: 'Barman·aid', barback: 'Barback', manager: 'Gérant·e' },
     worked: { fine_dining: 'Gastronomie', banquets: 'Banquets', catering: 'Traiteur', hotel: 'Hôtel', cocktail_bar: 'Bar à cocktails', cafe: 'Café', none: 'Pas encore' },
     years: { none: 'Aucune', lt1: '< 1', '1-2': '1–2', '3-5': '3–5', '5+': '5+' },
-    t3: 'Langues et disponibilités', s3: 'Pour mieux vous placer', lv: ['De base', 'Bon', 'Courant'], q_days: 'Je peux habituellement', q_go: 'Pour vous déplacer',
+    t3: 'Langues', s3: 'Et comment vous vous déplacez', lv: ['De base', 'Bon', 'Courant'], q_days: 'Je peux habituellement', q_go: 'Pour vous déplacer',
     days: { weekday_days: 'Jours de semaine', weekday_evenings: 'Soirs de semaine', weekends: 'Fins de semaine', anytime: 'En tout temps' }, go: { car: "J'ai une auto", transit: 'Transport en commun' },
     t4: 'Votre CV', s4: "PDF, Word ou une photo", photo: '📷 Photo', lib: '🖼 Photos', files: '📁 Fichiers', change: 'Changer', added: 'ajouté', uploading: 'Envoi…',
     nocv: 'Pas de CV ? Dites-le en 2 lignes', nocvPh: 'Où vous avez travaillé, ce que vous faisiez…', withcv: "J'ai un CV finalement", refBy: 'Référé·e par', fromLink: '✓ par son lien', refQ: 'Qui vous a parlé de G&R ? (facultatif)',
@@ -116,11 +117,10 @@ export function Apply() {
     <span className={'ap-lang' + (light ? ' light' : '')}>{(['en', 'fr'] as L[]).map((x) => <button key={x} className={lang === x ? 'on' : ''} onClick={() => setLang(x)}>{x.toUpperCase()}</button>)}</span>
   );
   const Head = ({ title, sub }: { title: string; sub: string }) => (
-    <div className="cu-head">
-      <div className="spread" style={{ alignItems: 'center' }}><span className="row" style={{ gap: 10, alignItems: 'center' }}><button type="button" className="cu-back" onClick={() => go(step - 1)}>{t.back}</button><span className="cu-kick">{t.apply} · {step} {t.of} 4</span></span><Lang /></div>
-      <div className="cu-bar">{[1, 2, 3, 4].map((i) => <span key={i} className={i <= step ? 'on' : ''} />)}</div>
-      <img src="/logo-mark.png" alt="G&R" className="ap-mark" />
-      <div className="serif cu-title" style={{ textAlign: 'center' }}>{title}</div><div className="cu-sub" style={{ textAlign: 'center' }}>{sub}</div>
+    <div className="ap2-head">
+      <div className="ap2-nav"><button type="button" onClick={() => go(step - 1)} aria-label={t.back}>‹</button><img src="/logo-mark.png" alt="G&R" /><span>{step} / 4</span></div>
+      <div className="ap2-bar"><i style={{ width: `${step * 25}%` }} /></div>
+      <div className="ap2-title"><h1>{title}</h1>{sub && <p>{sub}</p>}</div>
     </div>
   );
   const Foot = ({ children }: { children: ReactNode }) => <div className="cu-foot">{err && <p className="error" style={{ textAlign: 'center' }} role="alert">{err}</p>}{children}</div>;
@@ -138,34 +138,34 @@ export function Apply() {
   );
 
   if (done) return (
-    <main className="v2 cu ap">
-      <div className="ap-done">
-        <img src="/logo-mark.png" alt="G&R" className="ap-mark big" />
+    <main className="v2 hb2 dark">
+      <div className="hb2-frame" aria-hidden="true" />
+      <div className="hb2-center">
+        <img src="/logo-white.png" alt="G&R" className="hb2-logo" /><span className="hb2-rule" />
         {done === 'ok' ? <>
-          <span className="ap-tick">✓</span>
-          <div className="serif" style={{ fontSize: 30, lineHeight: 1.1 }}>{t.thanks}, {f.first_name.trim().split(' ')[0]}!</div>
-          <p className="ap-pre">{t.got}</p>
-          <div className="ap-card ap-next"><b>{t.nextT}</b>{t.steps.map((x, i) => <span key={i}>{i + 1} · {x}</span>)}</div>
+          <h1 className="hb2-h1">{t.thanks},<br />{f.first_name.trim().split(' ')[0]}.</h1>
+          <p className="hb2-p" style={{ whiteSpace: 'pre-line' }}>{t.got}</p>
+          <div className="ap2-steps">{t.steps.map((x, i) => <span key={i}><i>{i + 1}</i>{x}</span>)}</div>
         </> : <>
-          <div className="serif" style={{ fontSize: 28, lineHeight: 1.1, marginTop: 20 }}>{t.existT}</div>
-          <p className="ap-pre">{t.existS}</p>
-          <a className="cu-btn" href="/" style={{ maxWidth: 320 }}>{t.signIn}</a>
+          <h1 className="hb2-h1">{t.existT}</h1>
+          <p className="hb2-p">{t.existS}</p>
         </>}
       </div>
-      {done === 'ok' && <p className="cu-note" style={{ textAlign: 'center', padding: '0 24px 28px' }}>{t.noSin}</p>}
+      <div className="hb2-foot">{done === 'ok' ? <p className="hb2-p" style={{ fontSize: 12, textAlign: 'center' }}>{t.noSin}</p> : <a className="hb2-btn cream" href="/">{t.signIn}</a>}</div>
     </main>
   );
 
   if (step === 0) return (
-    <main className="v2 ap ap-land">
-      <div className="ap-hero"><Lang light /></div>
-      <div className="ap-land-b">
-        {ref && <span className="ap-inv"><span>{ref.first[0]}</span><span><b>{ref.first}</b> {t.invited}</span></span>}
-        <h1 className="serif ap-h1">{t.head.split('\n').map((x, i) => <span key={i}>{x}<br /></span>)}</h1>
-        <p className="ap-sub">{t.sub}</p>
-        <div className="ap-why">{[['🗓', t.r1], ['💸', t.r2], ['🥂', t.r3]].map(([e, [a, b]]) => <div key={a as string}><span>{e as string}</span><b>{a}</b><small>{b}</small></div>)}</div>
+    <main className="v2 ap2-land">
+      <div className="ap2-hero" />
+      <div className="ap2-langrow"><Lang light /></div>
+      <div className="ap2-land-b">
+        {ref && <span className="ap2-inv">{ref.first} {t.invited}</span>}
+        <h1>{t.head.split('\n').map((x, i) => <span key={i}>{x}<br /></span>)}</h1>
+        <div className="ap2-why">{[['cal', t.r1], ['pay', t.r2], ['wine', t.r3]].map(([k, x]) => <span key={k}><LineIcon name={k} size={17} color="#D9B76A" />{x}</span>)}</div>
+        <button className="hb2-btn cream" onClick={() => go(1)}>{t.start}</button>
+        <p>{t.reply}</p>
       </div>
-      <div className="cu-foot"><button className="cu-btn big ap-red" onClick={() => go(1)}>{t.start}</button><p className="cu-note" style={{ textAlign: 'center' }}>{t.reply}</p></div>
     </main>
   );
 
@@ -198,7 +198,6 @@ export function Apply() {
         <Head title={t.t3} sub={t.s3} />
         <div className="cu-body">
           <div className="ap-card"><Lv label="Français" v={f.lang_fr} onPick={(n) => set('lang_fr', n)} /><Lv label="English" v={f.lang_en} onPick={(n) => set('lang_en', n)} /></div>
-          <div className="ap-q"><b>{t.q_days}</b><Chips k="days" opts={t.days} /></div>
           <div className="ap-q"><b>{t.q_go}</b><One v={f.transport} opts={t.go} onPick={(x) => set('transport', f.transport === x ? '' : x)} /></div>
         </div>
         <Foot><button className="cu-btn" onClick={next}>{t.next}</button></Foot>

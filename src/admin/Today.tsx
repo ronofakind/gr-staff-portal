@@ -236,6 +236,15 @@ export function Today() {
         n.unshift({ key: 'ir' + r.id, red: true, title: `${st.full_name.split(' ')[0]}'s invite link expired`, sub: `Asked for a new link ${dLabel(isoDay(new Date(r.created_at)), { month: 'short', day: 'numeric' })} ${tTime(r.created_at)}`,
           action: 'Resend', to: `/admin/staff?invite=${st.id}` });
       }
+      // push 58 · tax and pay done → Add to QuickBooks (the hourly check creates the supplier); errors come back red
+      const { data: tx, error: txErr } = await supabase.from('staff_tax').select('staff_id,qb_status,qb_note,updated_at,staff:staff!staff_tax_staff_id_fkey(full_name)').or('qb_status.is.null,qb_status.eq.error');
+      if (!txErr) for (const r of (tx ?? []) as unknown as { staff_id: string; qb_status: string | null; qb_note: string | null; staff: { full_name: string } | null }[]) {
+        const nm = r.staff?.full_name ?? '?';
+        n.unshift(r.qb_status === 'error'
+          ? { key: 'qb' + r.staff_id, red: true, title: `${nm} · QuickBooks didn't take it`, sub: r.qb_note ?? 'Open the profile to see why', action: 'Open', to: `/admin/staff?open=${r.staff_id}` }
+          : { key: 'qb' + r.staff_id, title: `${nm} · tax and pay done`, sub: 'Ready to add to QuickBooks', action: 'Add to QuickBooks', to: `/admin/staff?open=${r.staff_id}`,
+            onAct: async () => { await supabase.from('staff_tax').update({ qb_status: 'sending', qb_at: new Date().toISOString(), qb_note: null }).eq('staff_id', r.staff_id); setTick((t) => t + 1); } });
+      }
       // push 36d · staff messages waiting on Ronnie (no email: the count lives here + on the Messages nav item)
       const { data: nr, error: nrErr } = await supabase.rpc('inbox_count');
       if (!nrErr && typeof nr === 'number' && nr > 0) n.unshift({ key: 'msgs', red: true, title: `${nr} staff message${nr > 1 ? 's' : ''} need${nr > 1 ? '' : 's'} a reply`, sub: 'Messages · Needs reply', action: 'Open', to: '/admin/messages' });

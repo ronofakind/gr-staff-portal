@@ -1,3 +1,4 @@
+import { loadOnboarding } from '../lib/handbook';
 import { useEffect, useState, type ReactNode } from 'react';
 import { supabase, type Staff } from '../lib/supabase';
 import { setting } from '../lib/settings';
@@ -35,6 +36,9 @@ export function Checkup({ me, info, onFinish }: { me: Staff; info: CheckupInfo; 
   const [step, setStep] = useState<number | null>(null);
   useEffect(() => { if (calOn !== null && step === null) setStep(startAt(info.step)); }, [calOn]); // eslint-disable-line react-hooks/exhaustive-deps
   const [photo, setPhoto] = useState(me.photo_url);
+  // push 58 · new hire (accepted through Hiring) → "Does this look right?" + the welcome note
+  const [isNew, setIsNew] = useState(false);
+  useEffect(() => { loadOnboarding().then((o) => setIsNew(!!o)); }, []);
   const go = (n: number) => {
     setStep(n); window.scrollTo(0, 0);
     setCheckupStep(n, n === 7).then(({ error }) => { if (error) console.warn('[checkup]', error.message); });
@@ -52,13 +56,13 @@ export function Checkup({ me, info, onFinish }: { me: Staff; info: CheckupInfo; 
       <div className="cu-foot"><button className="cu-btn green" onClick={onFinish}>Go to Home</button></div>
     </main>
   );
-  if (step === 9) return <RonnieNote name={first} onNext={() => go(7)} />;
+  if (step === 9) return <RonnieNote name={first} welcome={isNew} onNext={() => go(7)} />;
 
   const counted = ids.filter((x) => x !== 9);
   const n = counted.indexOf(step) + 1;
   const head = (title: string, sub: string, skippable = false, hero?: ReactNode) => (
     <div className="cu-head">
-      <div className="spread" style={{ alignItems: 'center' }}><span className="row" style={{ gap: 10, alignItems: 'center' }}>{n > 1 && <button type="button" className="cu-back" onClick={() => go(counted[n - 2])}>‹ Back</button>}<span className="cu-kick">PROFILE CHECK-UP · {n} OF {counted.length}</span></span><span className="cu-req">{skippable ? 'can skip' : 'required'}</span></div>
+      <div className="spread" style={{ alignItems: 'center' }}><span className="row" style={{ gap: 10, alignItems: 'center' }}>{n > 1 && <button type="button" className="cu-back" onClick={() => go(counted[n - 2])}>‹ Back</button>}<span className="cu-kick">{isNew ? 'SET UP' : 'PROFILE CHECK-UP'} · {n} OF {counted.length}</span></span><span className="cu-req">{skippable ? 'can skip' : 'required'}</span></div>
       <div className="cu-bar">{counted.map((x, i) => <span key={x} className={i < n ? 'on' : ''} />)}</div>
       {hero}
       <div className="serif cu-title">{brandify(title)}</div><div className="cu-sub">{sub}</div>
@@ -69,7 +73,7 @@ export function Checkup({ me, info, onFinish }: { me: Staff; info: CheckupInfo; 
   return (
     <main className="v2 cu">
       {step === 1 && <PhotoStep me={me} photo={photo} setPhoto={setPhoto} head={head('Add your photo', 'required · managers use it to find you at check-in')} onNext={() => go(nextOf(1))} />}
-      {step === 2 && <YouStep me={me} info={info} head={head('Is this still right?', 'we filled in what we have')} onNext={() => go(nextOf(2))} />}
+      {step === 2 && <YouStep me={me} info={info} head={head(isNew ? 'Does this look right?' : 'Is this still right?', isNew ? 'We filled in what you gave us. Tap anything to change it.' : 'we filled in what we have')} onNext={() => go(nextOf(2))} />}
       {step === 3 && <EmergencyStep info={info} head={head('Emergency contact', 'only used if something happens at an event', setting('checkup.emergency') !== 'required')} onNext={() => go(nextOf(3))} />}
       {step === 4 && <LangStep info={info} head={head('Languages', 'how well do you speak with guests?')} onNext={() => go(nextOf(4))} />}
       {step === 5 && <WeekStep me={me} head={head('Your usual week', 'flip on the days you can usually work', true)} onNext={() => go(nextOf(5))} />}
@@ -393,7 +397,7 @@ function CalendarStep({ me, cal, onCal, head, required = false, onDone }: { me: 
 /** Ronnie's own staff photo (public avatars bucket, same path his Profile photo upload overwrites). */
 const RONNIE_PHOTO = 'https://oigqdecyhmeuvrpoikdv.supabase.co/storage/v1/object/public/avatars/13791946-d8df-4146-b51e-0963f0324499.jpg';
 
-export function RonnieNote({ name, onNext }: { name: string; onNext: () => void }) {
+export function RonnieNote({ name, onNext, welcome }: { name: string; onNext: () => void; welcome?: boolean }) {
   return (
     <main className="v2 cu">
       <div className="cu-head"><span className="cu-kick">A NOTE FROM RONNIE</span>
@@ -402,10 +406,15 @@ export function RonnieNote({ name, onNext }: { name: string; onNext: () => void 
       <div className="cu-body">
         <div className="ronnie-note">
           <p>Hi {name},</p>
+          {welcome ? <>
+            <p>Welcome to the <Brand /> familia. Everything you need is here: your events, your hours and every detail of the night.</p>
+            <p>If something looks off, send me a screenshot. Ideas are welcome too.</p>
+          </> : <>
           <p>I built this app myself so everything you need (your shifts, hours and event details) is in one place. It’s brand new, and I’m still learning as I go, so thank you for your patience.</p>
           <p>If something looks off or doesn’t work, take a screenshot and send it to me. Ideas are welcome too. This app is for our <Brand /> familia, and your feedback makes it better.</p>
           <p>Thanks for being part of the team. ❤️</p>
-          <p className="sig">- Ronnie</p>
+          </>}
+          <p className="sig">Ronnie</p>
         </div>
       </div>
       <Foot><button className="cu-btn green" onClick={onNext}>Thanks, let’s go</button></Foot>
