@@ -3838,3 +3838,58 @@ button.pf-go { border: none; background: none; padding: 4px 2px; font: 700 13px 
 .cu .ronnie-note .sig { font-style: italic; font-size: 24px; color: var(--ink); }
 .cu .cu-lang { background: none; padding: 0; border-bottom: 1px solid #E7E0D6; border-radius: 0; padding-bottom: 12px; }
 .cu .cu-lang b { font-family: Fraunces, Georgia, serif; font-weight: 500; font-size: 18px; }
+/* push 59 · the G&R Standard, every page with its own picture (HandbookAllV1) */
+.hb2-story { display: flex; gap: 3px; } .hb2-story i { flex: 1; height: 3px; border-radius: 2px; background: #DED6CA; } .hb2-story i.on { background: var(--gold); }
+.hb2-chip-ic { width: 66px; height: 66px; border-radius: 33px; box-shadow: inset 0 0 0 1px var(--gold-l); display: flex; align-items: center; justify-content: center; }
+.hb2-dots { display: flex; gap: 5px; } .hb2-dots i { width: 28px; height: 3px; border-radius: 2px; background: rgba(217,183,106,.25); } .hb2-dots i.on { background: var(--gold-l); }
+.hv-kick { font-size: 10px; letter-spacing: .12em; font-weight: 800; color: var(--gold); } .hv-kick.gold { color: var(--gold-l); }
+.hv-serif { font-family: Fraunces, Georgia, serif; font-weight: 500; font-size: 18px; }
+.hv-muted { font-size: 12.5px; color: var(--muted); } .hv-muted.light { color: #F6F2EC; opacity: .75; }
+.hv-card { background: #fff; border-radius: 18px; padding: 14px; box-shadow: 0 1px 0 #E4DCD1; display: flex; flex-direction: column; gap: 6px; }
+.hv-card.dark { background: var(--night); color: var(--cream); box-shadow: none; } .hv-card.dark .hv-muted { color: #F6F2EC; opacity: .7; } .hv-card b { font-weight: 600; font-size: 15px; }
+.hv-flow { display: flex; flex-direction: column; gap: 6px; } .hv-flow > i { text-align: center; color: var(--gold); font-style: normal; }
+.hv-grid4 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.hv-grid4 > div { background: #fff; border-radius: 18px; padding: 16px 12px; box-shadow: 0 1px 0 #E4DCD1; display: flex; flex-direction: column; justify-content: space-between; gap: 14px; min-height: 92px; }
+.hv-grid4 > div.dark { background: var(--night); color: var(--cream); box-shadow: none; } .hv-grid4 b { font-family: Fraunces, Georgia, serif; font-weight: 500; font-size: 17px; line-height: 1.1; }
+.hv-step { display: flex; gap: 12px; } .hv-step-l { display: flex; flex-direction: column; align-items: center; }
+.hv-step-l span { width: 28px; height: 28px; border-radius: 14px; background: var(--night); color: var(--cream); font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex: none; }
+.hv-step-l i { flex: 1; width: 1px; background: var(--gold); margin: 4px 0; } .hv-step-r { padding-bottom: 16px; display: flex; flex-direction: column; gap: 2px; } .hv-step-r.last { padding-bottom: 0; }
+.hv-step-r b { font-size: 15px; font-weight: 600; } .hv-step-r small { font-size: 13px; color: var(--muted); line-height: 1.45; }
+.hv-req { background: #fff; border-radius: 20px; padding: 16px; box-shadow: 0 1px 0 #E4DCD1, 0 10px 24px rgba(26,23,20,.08); display: flex; flex-direction: column; gap: 8px; }
+.hv-yesno { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 4px; }
+.hv-yesno button, .hv-times button { height: 44px; border-radius: 12px; border: 0; background: none; box-shadow: inset 0 0 0 1px #CFC5B8; font: 700 14px Inter, system-ui, sans-serif; color: var(--ink); cursor: pointer; }
+.hv-yesno button.on.yes { background: #2F6B4F; color: #fff; box-shadow: none; } .hv-yesno button.on.maybe { background: #C9A227; color: #fff; box-shadow: none; } .hv-yesno button.on.no { background: var(--night); color: #fff; box-shadow: none; }
+.hv-times { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; } .hv-times button { height: 36px; padding: 0 12px; font-size: 13px; } .hv-times button.on { background: var(--night); color: #fff; box-shadow: none; }
+.hv-done { font-size: 13px; font-weight: 600; color: #2F6B4F; }
+.hv-chips { display: flex; flex-wrap: wrap; gap: 5px; } .hv-chips span { font-size: 11.5px; padding: 4px 9px; border-radius: 8px; background: #F1ECE5; }
+.hv-confirm { height: 42px; border-radius: 12px; background: #2F6B4F; color: #fff; font-weight: 700; font-size: 14px; display: flex; align-items: center; justify-content: center; margin-top: 4px; }
+.hv-clock { display: flex; gap: 18px; align-items: center; } .hv-clock > div { display: flex; flex-direction: column; gap: 2px; } .hv-clock small { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+.hv-big { font-family: Fraunces, Georgia, serif; font-weight: 500; font-size: 30px; line-height: 1; } .hv-big.gold { color: var(--gold); }
+.hv-late { display: flex; gap: 10px; align-items: center; padding: 12px 14px; border-radius: 14px; box-shadow: inset 0 0 0 1px #CFC5B8; } .hv-late span { padding: 6px 10px; border-radius: 9px; background: #FBF3E0; color: #6B4A12; font-weight: 800; font-size: 12px; white-space: nowrap; } .hv-late small { font-size: 12.5px; color: var(--muted); }
+.hv-mgr { display: flex; gap: 12px; align-items: center; } .hv-mgr .grow { display: flex; flex-direction: column; gap: 1px; } .hv-mgr small { font-size: 12px; color: var(--muted); }
+.hv-av { width: 46px; height: 46px; border-radius: 23px; background: linear-gradient(160deg,#5B5047,#2A241F); color: #F6F2EC; display: flex; align-items: center; justify-content: center; font-family: Fraunces, Georgia, serif; flex: none; box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px var(--gold); }
+.hv-av.light { background: #F1ECE5; color: var(--ink); box-shadow: none; } .hv-share { font-size: 13px; }
+.hv-shirt { width: 54px; height: 54px; border-radius: 27px; background: #fff; display: flex; align-items: center; justify-content: center; flex: none; }
+.hv-tag { font-style: normal; font-size: 10.5px; font-weight: 800; padding: 4px 8px; border-radius: 8px; background: #F1ECE5; white-space: nowrap; }
+.hv-tag.ok { background: #E3F1E8; color: #2F6B4F; } .hv-tag.amber { background: #FBF3E0; color: #6B4A12; } .hv-tag.red { background: #F8E9E9; color: #9B2226; }
+.hv-center { display: flex; justify-content: center; }
+.hv-cant { height: 44px; padding: 0 20px; border-radius: 12px; box-shadow: inset 0 0 0 1px var(--ink); font-weight: 700; font-size: 14px; display: flex; align-items: center; }
+.hv-scale i { display: block; height: 8px; border-radius: 4px; background: linear-gradient(90deg, #CFE3D6, #F3E2B8 60%, #EBC9C9); } .hv-scale div { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--muted); margin-top: 5px; }
+.hv-inline { display: flex; gap: 10px; align-items: center; font-size: 13.5px; }
+.hv-yn2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; } .hv-yn2 > div { display: flex; flex-direction: column; gap: 6px; } .hv-yn2 small { font-size: 11px; font-weight: 800; } .hv-yn2 small.ok { color: #2F6B4F; } .hv-yn2 small.no { color: #9B2226; }
+.hv-yn { display: flex; gap: 10px; align-items: center; padding: 11px 12px; border-radius: 14px; font-size: 13.5px; line-height: 1.35; } .hv-yn.ok { background: #E3F1E8; } .hv-yn.no { background: #F8E9E9; }
+.hv-yn > span { width: 22px; height: 22px; border-radius: 11px; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 12px; flex: none; } .hv-yn.ok > span { background: #2F6B4F; } .hv-yn.no > span { background: #9B2226; }
+.hv-col { display: flex; flex-direction: column; gap: 7px; }
+.hv-row { display: flex; gap: 12px; align-items: center; padding: 13px 0; border-bottom: 1px solid #E7E0D6; } .hv-row .grow { display: flex; flex-direction: column; gap: 2px; } .hv-row b { font-size: 15px; font-weight: 600; } .hv-row small { font-size: 12.5px; color: var(--muted); line-height: 1.4; }
+.hv-ring { width: 42px; height: 42px; border-radius: 21px; box-shadow: inset 0 0 0 1px var(--ink); display: flex; align-items: center; justify-content: center; flex: none; }
+.hv-uts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.hv-ut { background: #fff; border-radius: 16px; padding: 12px 6px 10px; box-shadow: 0 1px 0 #E4DCD1; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; font-size: 12px; font-weight: 600; line-height: 1.2; } .hv-ut i { font-style: normal; font-size: 10.5px; font-weight: 800; color: #9B2226; }
+.hv-quote { padding: 20px 0; border-top: 1px solid var(--gold); border-bottom: 1px solid var(--gold); text-align: center; display: flex; flex-direction: column; gap: 6px; } .hv-quote small { font-size: 12px; color: var(--muted); } .hv-quote span { font-family: Fraunces, Georgia, serif; font-style: italic; font-size: 32px; }
+.hv-menu { background: #fff; border-radius: 18px; padding: 4px 18px; box-shadow: 0 1px 0 #E4DCD1; } .hv-menu div { display: flex; gap: 12px; align-items: center; padding: 9px 0; border-bottom: 1px solid #E7E0D6; } .hv-menu div:last-child { border: 0; } .hv-menu span { font-family: Fraunces, Georgia, serif; font-size: 17px; }
+.hv-id { width: 200px; height: 120px; border-radius: 16px; background: var(--night); padding: 16px; box-sizing: border-box; display: flex; gap: 14px; align-items: center; }
+.hv-id > span { width: 46px; height: 58px; border-radius: 8px; background: #3A332D; display: flex; align-items: center; justify-content: center; } .hv-id > div { display: flex; flex-direction: column; gap: 7px; }
+.hv-id b { font-family: Fraunces, Georgia, serif; font-weight: 500; font-size: 36px; color: #D9B76A; line-height: 1; } .hv-id i { height: 3px; width: 64px; background: #3A332D; } .hv-id i.s { width: 46px; }
+.hv-t4a { width: 190px; background: #fff; border-radius: 12px; box-shadow: 0 1px 0 #E4DCD1, 0 10px 24px rgba(26,23,20,.08); padding: 14px; display: flex; flex-direction: column; gap: 7px; }
+.hv-t4a > div { display: flex; justify-content: space-between; align-items: baseline; } .hv-t4a b { font-family: Fraunces, Georgia, serif; font-weight: 500; font-size: 22px; } .hv-t4a small { font-size: 10px; color: var(--muted); } .hv-t4a i { height: 5px; border-radius: 3px; background: #EFE9E1; display: block; }
+.hv-route { display: flex; align-items: center; gap: 8px; padding: 8px 0; } .hv-route i { flex: 1; border-top: 1.5px dashed var(--gold); }
+.hv-route span { width: 38px; height: 38px; border-radius: 19px; box-shadow: inset 0 0 0 1px var(--ink); display: flex; align-items: center; justify-content: center; } .hv-route span.dark { width: 46px; height: 46px; border-radius: 23px; background: var(--night); box-shadow: none; }

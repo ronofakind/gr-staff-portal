@@ -3,17 +3,19 @@ import { useNavigate } from 'react-router-dom';
 import type { Staff } from '../lib/supabase';
 import { CARDS, CHAPTERS, CONTACTS, cardsFor, chapterTitle, loadOnboarding, saveHandbook, md, type Onboarding, type HbCard } from '../lib/handbook';
 import { LineIcon, CHAPTER_ICON } from '../components/LineIcon';
+import { HbVisual } from '../components/HbVisual';
 import { addToContacts } from '../lib/vcard';
 
 /** Nov 9 · push 58 · the G&R Standard (OnbPremiumV1): ink cover with a thin gold frame → chapters, one idea per page → sign → welcome.
  *  New hires: needed before they get dates, saved per page, "Later" any time. Everyone else can read it from Profile (no saving). */
 const Txt = ({ s }: { s: string }) => <>{md(s).map((p, j) => ('b' in p ? <b key={j}>{p.b}</b> : <span key={j}>{p.t}</span>))}</>;
+let swipeX = 0; // swipe left = next, right = back
 const today = () => new Date().toLocaleDateString('en-CA', { month: 'long', day: 'numeric', year: 'numeric' });
 
 export function Handbook({ me }: { me: Staff }) {
   const nav = useNavigate();
   const [ob, setOb] = useState<Onboarding | null | undefined>(undefined);
-  const [view, setView] = useState<'cover' | 'page' | 'done'>('cover');
+  const [view, setView] = useState<'cover' | 'page' | 'chapter' | 'done'>('cover');
   const [i, setI] = useState(0); const [seen, setSeen] = useState<string[]>([]);
   const [tick, setTick] = useState(false); const [busy, setBusy] = useState(false); const [err, setErr] = useState('');
   const [sheet, setSheet] = useState<(typeof CONTACTS)[number] | null>(null);
@@ -50,6 +52,7 @@ export function Handbook({ me }: { me: Staff }) {
     setTick(false);
     if (last) { if (!ob || signed) nav('/'); return; }
     setI(i + 1);
+    if (list[i + 1]?.ch !== c.ch) setView('chapter'); // push 59 · a moment after each chapter
   };
 
   if (view === 'done') {
@@ -89,23 +92,47 @@ export function Handbook({ me }: { me: Staff }) {
           <div className="hb2-toc">{chapters.map((x) => {
             const cs = list.filter((c2) => c2.ch === x.k); const n = cs.filter((c2) => seen.includes(c2.id)).length;
             return <button key={x.k} className={n === cs.length || (firstOpen?.k === x.k) || !ob ? 'on' : ''} onClick={() => { setI(list.findIndex((c2) => c2.ch === x.k)); setView('page'); }}>
-              <i>{x.n}</i><span>{chapterTitle(x.k, roles)}</span><small>{!ob ? '' : n === cs.length ? '✓' : n ? `${n} / ${cs.length}` : ''}</small></button>;
+              <span>{chapterTitle(x.k, roles)}</span><small>{!ob ? '' : n === cs.length ? '✓' : n ? `${n} / ${cs.length}` : ''}</small></button>;
           })}</div>
-          <button className="hb2-btn cream" onClick={() => setView('page')}>{signed || !ob ? 'Read' : started && firstOpen ? `Continue · chapter ${firstOpen.n}` : 'Begin'}</button>
+          <button className="hb2-btn cream" onClick={() => setView('page')}>{signed || !ob ? 'Read' : started ? 'Continue reading' : 'Begin'}</button>
         </div>
       </main>
     );
   }
 
+  if (view === 'chapter') {
+    const prev = list[i - 1]; const pch = CHAPTERS.find((x) => x.k === prev?.ch) ?? CHAPTERS[0];
+    const doneN = chapters.findIndex((x) => x.k === pch.k) + 1;
+    return (
+      <main className="v2 hb2 dark">
+        <div className="hb2-frame" aria-hidden="true" />
+        <div className="hb2-center">
+          <span className="hb2-chip-ic"><LineIcon name={CHAPTER_ICON[pch.k]} size={28} color="#D9B76A" /></span>
+          <h1 className="hb2-h1">{chapterTitle(pch.k, roles)},<br />done.</h1>
+          <div className="hb2-dots">{chapters.map((x, k) => <i key={x.k} className={k < doneN ? 'on' : ''} />)}</div>
+          <p className="hb2-p">{doneN} of {chapters.length} chapters done{ob ? ` · about ${left} min left` : ''}</p>
+        </div>
+        <div className="hb2-foot">
+          <button className="hb2-btn cream" onClick={() => setView('page')}>Next chapter · {chapterTitle(ch.k, roles)}</button>
+          <button className="hb2-link" onClick={later}>Take a break · it’s saved</button>
+        </div>
+      </main>
+    );
+  }
+
+  // story bar = pages of this chapter
+  const chList = list.filter((x) => x.ch === c.ch); const chIdx = chList.indexOf(c);
+  const vis = c.kind ? null : HbVisual({ id: c.id, me });
   return (
-    <main className="v2 hb2">
+    <main className="v2 hb2" onTouchStart={(e) => { swipeX = e.touches[0].clientX; }}
+      onTouchEnd={(e) => { const dx = e.changedTouches[0].clientX - swipeX; if (dx < -60 && !(needTick && !tick) && !busy) next(); else if (dx > 60 && i > 0) { setI(i - 1); setTick(false); } }}>
       <div className="hb2-head">
-        <div className="hb2-bar-row"><button onClick={() => setView('cover')}>✕ {ob && !signed ? 'Later' : 'Close'}</button><b>{ch.n} · {chapterTitle(ch.k, roles).toUpperCase()}</b><span>{i + 1}/{list.length}</span></div>
-        <div className="hb2-progress"><i style={{ width: `${((i + 1) / list.length) * 100}%` }} /></div>
+        <div className="hb2-bar-row"><button onClick={() => setView('cover')}>✕ {ob && !signed ? 'Later' : 'Close'}</button><b>{chapterTitle(ch.k, roles).toUpperCase()}</b><span>{i + 1}/{list.length}</span></div>
+        <div className="hb2-story">{chList.map((x, k) => <i key={x.id} className={k <= chIdx ? 'on' : ''} />)}</div>
       </div>
       <div className="hb2-body">
         {c.kind === 'must' ? <span className="hb2-req">Required before your first event</span>
-          : <span className="hb2-ic"><LineIcon name={c.agree ? 'pen' : c.kind === 'contacts' ? 'phone' : CHAPTER_ICON[c.ch ?? 'house']} size={20} /></span>}
+          : vis ? null : <span className="hb2-ic"><LineIcon name={c.agree ? 'pen' : c.kind === 'contacts' ? 'phone' : CHAPTER_ICON[c.ch ?? 'house']} size={20} /></span>}
         <h1 className="hb2-t">{c.title}</h1>
 
         {c.kind === 'must' && <div className="hb2-tiles">{[['plates', 'Carry three plates'], ['wine', 'Open and pour wine'], ['tray', 'Hold a tray']].map(([k, t]) => <div key={k}><LineIcon name={k} size={28} color="#D9B76A" w={1.3} /><span>{t}</span></div>)}</div>}
@@ -133,7 +160,7 @@ export function Handbook({ me }: { me: Staff }) {
             <span className="hb2-sigmeta"><span>{signed ? 'Signed' : tick ? 'Tap again to undo' : 'Tap to sign'}</span><span>{today()}</span></span>
           </button>}
         </> : <>
-          {c.lines.map((l, k) => <p key={k} className={'hb2-line' + (c.kind ? ' sm' : '')}><Txt s={l} /></p>)}
+          {vis ?? c.lines.map((l, k) => <p key={k} className={'hb2-line' + (c.kind ? ' sm' : '')}><Txt s={l} /></p>)}
           {c.quote && <div className="hb2-quote"><small>{c.quote.lead}</small><span>{c.quote.text}</span></div>}
           {c.kind === 'paydates' && <div className="hb2-payee"><small>ON YOUR BANK STATEMENT</small><b>9304-0160 Quebec Inc</b><span>That’s us: G&amp;R à votre service</span></div>}
         </>}
