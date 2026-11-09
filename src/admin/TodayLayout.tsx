@@ -3,17 +3,17 @@ import { supabase } from '../lib/supabase';
 
 /** Nov 8 · Today v4 · ✎ Edit layout: order, 📌 pin, Open / Folded / Hidden. Saved per admin in admin_prefs (080),
  *  so desktop and phone match. Before 080 (or offline) it falls back to this browser only. */
-export type SecKey = 'needs' | 'ai' | 'tonight' | 'debriefs' | 'ratings' | 'late' | 'week' | 'meetings' | 'sheet' | 'pay' | 'hiring';
+export type SecKey = 'needs' | 'ai' | 'tonight' | 'debriefs' | 'ratings' | 'late' | 'month' | 'meetings' | 'sheet' | 'pay' | 'hiring';
 export type Mode = 'open' | 'folded' | 'hidden';
 export type Layout = { order: SecKey[]; pinned: SecKey[]; mode: Partial<Record<SecKey, Mode>> };
 export const SEC_LABEL: Record<SecKey, string> = {
   needs: 'Needs you', ai: 'AI · to review', tonight: 'Tonight', debriefs: 'Last night · debriefs', ratings: 'New staff ratings',
-  late: 'Late 30 min +', week: 'Next 7 days', meetings: 'Meetings', sheet: 'Sheet changes', pay: 'Pay period', hiring: 'Hiring',
+  late: 'Late 30 min +', month: 'This month', meetings: 'Meetings', sheet: 'Sheet changes', pay: 'Pay period', hiring: 'Hiring',
 };
 /** Full width on desktop (the rest fill 2 columns in order). */
-export const WIDE: SecKey[] = ['sheet']; // Nov 8 · Tonight is half width now (beside Next 7 days)
+export const WIDE: SecKey[] = ['sheet']; // Nov 8 · Tonight is half width (push 60: beside This month; Next 7 days dropped)
 export const DEFAULT_LAYOUT: Layout = {
-  order: ['needs', 'ai', 'hiring', 'tonight', 'debriefs', 'ratings', 'pay', 'week', 'late', 'meetings', 'sheet'],
+  order: ['needs', 'ai', 'tonight', 'month', 'hiring', 'debriefs', 'ratings', 'pay', 'late', 'meetings', 'sheet'],
   pinned: ['needs', 'ai'],
   mode: { late: 'folded', meetings: 'folded', sheet: 'folded' },
 };

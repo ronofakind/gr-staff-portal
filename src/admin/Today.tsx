@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { DebriefCards, RecentDebriefs, useRecentDebriefs } from '../components/Debrief';
+import { MiniMonth } from './MiniMonth';
 import { useTodayLayout, Section, EditLayout, SEC_LABEL, WIDE, type SecKey } from './TodayLayout';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ChangeAnswer, CHANGE_COLS, isSelfCancel, isEventDayCancel, replacementOf, type ChangeRow } from './Changes';
@@ -323,22 +324,9 @@ export function Today() {
             <LateDecide shiftId={s.id} counted={null} onChange={() => setLate30((l) => l.filter((x) => x.s.id !== s.id))} /></div>)}
         </div>
       </Section>),
-    week: () => (
-      <Section k="week" mode={md('week')} title="Next 7 days" right={<Link to="/admin/week">Week ›</Link>}>
-        <div className="strip">
-          {next7.map((d) => {
-            const evs = [...(week ?? []), ...ahead].filter((e, i, a) => e.event_date === d && a.findIndex((x) => x.id === e.id) === i);
-            const staff = evs.filter((e) => e.department !== 'bar').reduce((n, e) => n + e.shifts.filter((s) => s.status !== 'declined').length, 0);
-            const barN = evs.filter((e) => e.department === 'bar').reduce((n, e) => n + e.shifts.filter((s) => s.status !== 'declined').length, 0);
-            const short = evs.some((e) => e.department !== 'bar' && e.shifts.filter((s) => s.status !== 'declined').length < e.staff_needed);
-            return (
-              <Link key={d} to={`/admin/day?d=${d}`} className={'sd' + (d === today ? ' on' : '') + (short ? ' short' : '')}>
-                <small>{dLabel(d, { weekday: 'short' }).toUpperCase()}</small><b>{Number(d.slice(8))}</b><span>{evs.length ? `${new Set(evs.map((e) => e.title)).size} · ${staff}` : '–'}</span>{barN > 0 && <span className="accent" style={{ fontSize: 10 }}>bar {barN}</span>}
-              </Link>
-            );
-          })}
-        </div>
-        <div className="muted sm">events · floor staff booked, red = bar. Amber = still short.</div>
+    month: () => (
+      <Section k="month" mode={md('month')} title="This month" right={<Link to="/admin/month">Full month ›</Link>}>
+        <MiniMonth />
       </Section>),
     hiring: () => (
       <Section k="hiring" mode={md('hiring')} title={<>Hiring {nApps > 0 && <b className="accent sm">{nApps}</b>}</>} right={<Link to="/admin/hiring">All applications ›</Link>}>

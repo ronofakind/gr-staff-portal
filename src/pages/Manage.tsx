@@ -640,7 +640,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
         </div>
         <button className="btn-ink" style={{ height: 46, padding: '0 18px', borderRadius: 23 }} onClick={() => (fbOn && !checkDone && newWorked.length ? setCheck(true) : setReview(true))}>{ev.hours_submitted_at ? 'Resubmit ›' : 'Submit hours ›'}</button>
       </div>)}
-      {ev.hours_submitted_at && dbDone === false && Date.now() < new Date(ev.event_date + 'T12:00:00-05:00').getTime() + 864e5 && (
+      {ev.hours_submitted_at && dbDone !== true && Date.now() < new Date(ev.event_date + 'T12:00:00-05:00').getTime() + 864e5 && (
         <button className="db-entry" onClick={() => setDbOpen(true)}>📝 How did tonight go? <span>Debrief ›</span></button>)}
       {dbOpen && <DebriefSheet eventId={ev.id} onClose={() => setDbOpen(false)} onSent={() => { setDbOpen(false); setDbDone(true); setThanks(true); }} />}
       {thanks && <div className="undo-bar" role="status"><span className="db-ok">✓</span><span className="grow">Thanks</span></div>}
@@ -675,7 +675,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
           if (error) { setErr(error.message); return; }
           const wasFirst = !ev.hours_submitted_at;
           setReview(false); await load();
-          if (wasFirst && dbDone === false) setDbOpen(true);
+          if (wasFirst && dbDone !== true) setDbOpen(true); // push 60 · also when the check failed to load
         };
         return (
           <div className="review">
