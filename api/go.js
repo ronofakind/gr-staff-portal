@@ -57,6 +57,25 @@ export default async function handler(req, res) {
   if (!ready) { res.status(503).json({ error: 'setup' }); return; }
   let body = req.body;
   if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = {}; } }
+
+  // Nov 9 · Delete my account (migration 085): after Ronnie's "Delete account" (admin_delete_staff), remove that sign-in.
+  // Lives here (not its own file) to stay under Vercel Hobby's 12-function limit. The caller's own token must belong to an
+  // admin, and admin_can_remove_login() checks the sign-in belongs to a deleted account that no staff row uses any more.
+  if (body?.removeLogin) {
+    const uid = String(body.removeLogin);
+    const bearer = String(req.headers.authorization || '');
+    if (!/^[0-9a-f-]{36}$/i.test(uid) || !/^Bearer\s+\S+$/.test(bearer)) { res.status(400).json({ error: 'bad request' }); return; }
+    try {
+      const anon = process.env.VITE_SUPABASE_KEY || '';
+      const ok = await fetch(`${URL_}/rest/v1/rpc/admin_can_remove_login`, { method: 'POST', headers: { apikey: anon, Authorization: bearer, 'Content-Type': 'application/json' }, body: JSON.stringify({ p_auth: uid }) });
+      if (!ok.ok || (await ok.json()) !== true) { res.status(403).json({ error: 'not allowed' }); return; }
+      const d = await auth(`admin/users/${uid}`, 'DELETE');
+      if (!d.ok && d.status !== 404) throw new Error(`delete user ${d.status}`);
+      res.status(200).json({ removed: true });
+    } catch (e) { console.error('[go] removeLogin', e.message); res.status(502).json({ error: 'failed' }); }
+    return;
+  }
+
   const t = String(body?.t || '');
   if (!TOKEN_RE.test(t)) { res.status(410).json({ error: 'expired' }); return; }
 

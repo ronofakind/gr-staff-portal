@@ -3676,3 +3676,26 @@ button.pf-go { border: none; background: none; padding: 4px 2px; font: 700 13px 
 .ld-seg button { border: 0; background: none; font: 700 11.5px Inter, system-ui, sans-serif; padding: 5px 9px; border-radius: 7px; color: var(--muted); cursor: pointer; white-space: nowrap; }
 .ld-seg button.on { background: #fff; color: var(--ink); box-shadow: 0 1px 0 #DDD4C8; } .ld-seg button.on.red { background: #9B2226; color: #fff; box-shadow: none; }
 .t4-lrow { flex-wrap: wrap; }
+
+/* Nov 9 · Delete my account (migration 085) */
+.del-link { border: 0; background: none; padding: 10px 14px; font: 500 13px Inter, system-ui, sans-serif; color: var(--muted); text-decoration: underline; cursor: pointer; }
+.del-bottom { display: block; margin: 18px auto 96px; }
+.del-line { text-align: center; font-size: 13px; color: var(--muted); margin: 18px 0 96px; }
+.del-line .del-link { padding: 0 4px; }
+.del-sheet { display: flex; flex-direction: column; gap: 10px; padding-bottom: 8px; }
+.del-sheet.center { align-items: center; text-align: center; }
+.del-sheet.center p { margin: 0; font-size: 14px; line-height: 1.5; color: #4A433C; }
+.del-sheet.center .cu-btn { align-self: stretch; }
+.del-box { background: #fff; border-radius: 14px; padding: 11px 13px; font-size: 13.5px; line-height: 1.5; box-shadow: inset 0 0 0 1px #EDE6DC; }
+.del-k { display: block; font-size: 11px; letter-spacing: .12em; font-weight: 800; color: #6B6359; margin-bottom: 3px; }
+.del-k.red { color: #B03A2E; }
+.del-lab { font-size: 13px; font-weight: 600; } .del-lab span { font-weight: 400; color: var(--muted); }
+.del-why { border-radius: 14px; border: 1.5px solid #DCD3C7; padding: 10px 14px; font: 400 15px Inter, system-ui, sans-serif; background: #fff; color: var(--ink); resize: vertical; }
+.del-ok { width: 56px; height: 56px; border-radius: 28px; background: #E8F2EC; color: #2E7D5B; font-size: 26px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+.cu-btn.red { background: #B03A2E; color: #fff; }
+.cu-btn.red:disabled { background: #D9D1C6; color: #8F867B; }
+.del-pub { padding-left: 20px; padding-right: 20px; box-sizing: border-box; gap: 16px; }
+.del-pub .del-logo { height: 64px; align-self: center; margin-top: 18px; mix-blend-mode: multiply; }
+.del-pub h1 { font-size: 26px; line-height: 1.15; margin: 4px 0 0; font-weight: 500; }
+.del-pub .del-intro { margin: 0 0 6px; font-size: 14px; line-height: 1.5; color: #4A433C; }
+.del-pub .del-note { text-align: center; color: var(--muted); font-size: 12px; }

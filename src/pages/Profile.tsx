@@ -14,6 +14,7 @@ import { CalendarBody, EmergencyForm } from './Checkup';
 import { useCheckup, setEmergencyReminder } from '../lib/checkup';
 import { AlertsProfileRow } from '../components/Alerts';
 import { Brand } from '../components/Brand';
+import { DeleteAccountLink } from './DeleteAccount';
 
 type Extra = { transport: string | null; positions: string[] | null; shirt_size: string | null; pants_size: string | null; dress_size: string | null };
 const POSITIONS = ['Waiter', 'Bartender', 'Barback'];
@@ -129,6 +130,7 @@ export function Profile({ me }: { me: Staff }) {
       </section>
 
       <button className="btn" onClick={() => supabase.auth.signOut().then(() => window.location.replace('/'))}>Log out</button>
+      {me.role !== 'admin' && <DeleteAccountLink />}
       <TabBar />
       {nickOpen && <NickSheet me={me} nick={nick} onClose={() => setNickOpen(false)} onSaved={(v) => { setNick(v); me.nickname = v; setMsg('✓ Saved'); setNickOpen(false); }} />}
       {calOpen && cal && <>

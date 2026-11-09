@@ -23,6 +23,7 @@ import { supabase } from '../lib/supabase';
 import { eventsBetween, addDays, isoDay, flagsOf, flagText, loadLateDecisions, LATE_DECISION, periodOf, dLabel, tTime, type AEvent, type AShift } from './api';
 
 type Need = { key: string; title: string; sub: string; action: string; to: string; red?: boolean; onAct?: () => Promise<void>; alt?: { label: string; to: string } };
+type DelReq = { id: string; source: 'app' | 'web'; email: string | null; phone: string | null; matched: boolean; reason: string | null; created_at: string; staff: { id: string; full_name: string; auth_user_id: string | null } | null };
 type ResetReq = { id: string; created_at: string; staff: { id: string; full_name: string; email: string | null } | null };
 type Arch = { key: string; sig: string; label: string | null; archived_at: string };
 const sigOf = (n: Need) => n.title + '|' + n.sub;
@@ -195,6 +196,36 @@ export function Today() {
             const { error } = await supabase.auth.signInWithOtp({ email: st.email, options: { shouldCreateUser: false, emailRedirectTo: window.location.origin } });
             if (error) { alert(error.message); return; }
             await supabase.from('reset_requests').update({ handled_at: new Date().toISOString(), handled_by: (await supabase.rpc('me')).data ?? null }).eq('id', r.id);
+            setTick((t) => t + 1);
+          } });
+      }
+      // Nov 9 · Delete my account (085): staff ask, Ronnie presses Delete account. Nothing is deleted on its own.
+      const { data: dr, error: drErr } = await supabase.from('delete_requests').select('id,source,email,phone,matched,reason,created_at,staff:staff!delete_requests_staff_id_fkey(id,full_name,auth_user_id)').is('handled_at', null).is('cancelled_at', null).order('created_at');
+      if (!drErr) for (const r of (dr ?? []) as unknown as DelReq[]) {
+        const st = r.staff; const at = `${dLabel(isoDay(new Date(r.created_at)), { month: 'short', day: 'numeric' })} ${tTime(r.created_at)}`;
+        const why = r.reason ? ` · “${r.reason.length > 80 ? r.reason.slice(0, 80) + '…' : r.reason}”` : '';
+        if (!st) {
+          n.unshift({ key: 'dr' + r.id, red: true, title: 'Delete request from the web · no match', sub: `${r.email ?? '?'} · ${r.phone ?? '?'} · ${at}${why} · email + phone don't match one staff member`,
+            action: 'Close', to: '/admin/staff', alt: { label: 'Find them', to: '/admin/staff' },
+            onAct: async () => { if (!confirm('Close this request without deleting anything?')) return; const { error } = await supabase.rpc('admin_close_delete_request', { p_request: r.id }); if (error) alert(error.message); setTick((t) => t + 1); } });
+          continue;
+        }
+        const fn = st.full_name.split(' ')[0];
+        const { data: up } = await supabase.from('shifts').select('status,events!inner(event_date,title)').eq('staff_id', st.id).neq('status', 'declined').gte('events.event_date', today);
+        const booked = ((up ?? []) as unknown as { events: { event_date: string; title: string } }[]).map((x) => `${dLabel(x.events.event_date, { month: 'short', day: 'numeric' })} · ${x.events.title}`).sort();
+        n.unshift({ key: 'dr' + r.id, red: true, title: `${fn} asked to delete their account`,
+          sub: `From the ${r.source === 'web' ? 'web page' : 'app'} · ${at}${why} · ${booked.length ? `Still booked: ${booked.join(', ')} · replace first` : 'no upcoming shifts'}`,
+          action: 'Delete account', to: `/admin/staff?open=${st.id}`, alt: { label: `Call ${fn} first`, to: `/admin/staff?open=${st.id}` },
+          onAct: async () => {
+            if (booked.length) { alert(`${fn} is still booked: ${booked.join(', ')}.\nReplace ${fn} on those first.`); return; }
+            if (!confirm(`Delete ${st.full_name}'s account? This can't be undone.\n\nDeleted: sign-in, photo, phone, email, emergency contact, availability, messages.\nKept: hours, pay and invoices (as "Former staff").`)) return;
+            const { data: au, error } = await supabase.rpc('admin_delete_staff', { p_staff: st.id, p_request: r.id });
+            if (error) { alert(error.message); return; }
+            if (au) { // remove the sign-in itself (service role on the server); the account is already unlinked if this fails
+              const tok = (await supabase.auth.getSession()).data.session?.access_token;
+              const res = await fetch('/api/go', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${tok}` }, body: JSON.stringify({ removeLogin: au }) }).catch(() => null);
+              if (!res?.ok) alert(`${fn}'s info is deleted. Removing the sign-in itself didn't go through; it no longer opens anything.`);
+            }
             setTick((t) => t + 1);
           } });
       }

@@ -10,6 +10,7 @@ import { AdminLayout, More } from './admin/AdminLayout';
 import { Today } from './admin/Today';
 import { Debriefs } from './admin/Debriefs';
 import { Rates } from './admin/Rates';
+import { DeleteAccountPublic } from './pages/DeleteAccount';
 import { Apply } from './pages/Apply';
 import { Hiring } from './admin/Hiring';
 import { Handbook } from './pages/Handbook';
@@ -99,6 +100,7 @@ export function App() {
   const legal = window.location.pathname.replace(/\/$/, '');
   if (legal === '/privacy' || legal === '/terms') return <Legal kind={legal.slice(1) as 'privacy' | 'terms'} />;
   if (legal === '/apply' || legal === '/postuler') return <Apply />; // push 55 · public, signed in or not
+  if (legal === '/delete-account') return <DeleteAccountPublic />; // Nov 9 · store rule: request deletion without the app
   // push 34b · personal invite link: its own screen, signed in or not (it signs them in at the end, then goes to '/')
   const go = /^\/go\/([A-Za-z0-9_-]{10,64})$/.exec(legal);
   if (go) return <LangContext.Provider value={lang}>{session === undefined ? <div className="loading" /> : <Go token={go[1]} />}</LangContext.Provider>;
@@ -192,7 +194,7 @@ function Legal({ kind }: { kind: 'privacy' | 'terms' }) {
     <div style={{ maxWidth: 640, margin: '0 auto', padding: '48px 20px', lineHeight: 1.6 }}>
       <h1 className="serif">{kind === 'privacy' ? 'Privacy' : 'Terms of use'}</h1>
       {kind === 'privacy'
-        ? <p>The G&amp;R Staff App is an internal tool of G&amp;R à votre service, used only by our staff and managers to schedule events and record hours. We keep the information needed for that (name, contact details, availability, shifts and hours) and do not sell or share it. When the owner connects Google Drive, the app uses that access only to create and list event folders in the company’s own Drive. Questions or requests to delete your data: rjladores@gmail.com.</p>
+        ? <p>The G&amp;R Staff App is an internal tool of G&amp;R à votre service, used only by our staff and managers to schedule events and record hours. We keep the information needed for that (name, contact details, availability, shifts and hours) and do not sell or share it. When the owner connects Google Drive, the app uses that access only to create and list event folders in the company’s own Drive. To delete your account: in the app, Profile → Delete my account, or <a href="/delete-account">gr-staff-portal.vercel.app/delete-account</a>. Your sign-in and personal info are deleted; hours and pay records are kept 6 years as tax law requires. Questions: rjladores@gmail.com.</p>
         : <p>The G&amp;R Staff App is for the staff, managers and owners of G&amp;R à votre service only. Use it to see your shifts, give your availability and record your hours accurately; do not share your access with anyone. The app is provided as is and may change at any time. Questions: rjladores@gmail.com.</p>}
     </div>
   );
