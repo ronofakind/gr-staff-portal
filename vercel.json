@@ -2,9 +2,56 @@
   "framework": "vite",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "rewrites": [{ "source": "/((?!assets/|api/|.*\\..*).*)", "destination": "/index.html" }],
+  "rewrites": [
+    {
+      "source": "/mcp",
+      "destination": "/api/ai?mcp=rpc"
+    },
+    {
+      "source": "/.well-known/oauth-protected-resource",
+      "destination": "/api/ai?mcp=prm"
+    },
+    {
+      "source": "/.well-known/oauth-protected-resource/mcp",
+      "destination": "/api/ai?mcp=prm"
+    },
+    {
+      "source": "/.well-known/oauth-authorization-server",
+      "destination": "/api/ai?mcp=as"
+    },
+    {
+      "source": "/.well-known/oauth-authorization-server/mcp",
+      "destination": "/api/ai?mcp=as"
+    },
+    {
+      "source": "/oauth/register",
+      "destination": "/api/ai?mcp=register"
+    },
+    {
+      "source": "/oauth/authorize",
+      "destination": "/api/ai?mcp=authorize"
+    },
+    {
+      "source": "/oauth/token",
+      "destination": "/api/ai?mcp=token"
+    },
+    {
+      "source": "/oauth/code",
+      "destination": "/api/ai?mcp=code"
+    },
+    {
+      "source": "/((?!assets/|api/|.*\\..*).*)",
+      "destination": "/index.html"
+    }
+  ],
   "crons": [
-    { "path": "/api/alerts?cron=7am", "schedule": "0 12 * * *" },
-    { "path": "/api/alerts?cron=8am", "schedule": "0 13 * * *" }
+    {
+      "path": "/api/alerts?cron=7am",
+      "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/alerts?cron=8am",
+      "schedule": "0 13 * * *"
+    }
   ]
 }

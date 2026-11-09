@@ -11,7 +11,7 @@ export default defineConfig({
       registerType: 'autoUpdate',
       injectRegister: false,
       // push 42 · phone alerts: push + notificationclick handlers live in public/push-sw.js
-      workbox: { clientsClaim: true, skipWaiting: true, navigateFallbackDenylist: [/^\/api\//], importScripts: ['push-sw.js'] },
+      workbox: { clientsClaim: true, skipWaiting: true, navigateFallbackDenylist: [/^\/api\//, /^\/oauth\//, /^\/mcp/, /^\/\.well-known\//], importScripts: ['push-sw.js'] },
       manifest: {
         name: 'G&R', short_name: 'G&R', lang: 'fr',
         theme_color: '#ffffff', background_color: '#ffffff', display: 'standalone', start_url: '/',

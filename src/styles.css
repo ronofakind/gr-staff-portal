@@ -3950,3 +3950,8 @@ button.pf-go { border: none; background: none; padding: 4px 2px; font: 700 13px 
 .ef-invc { display: flex; flex-direction: column; gap: 4px; padding: 12px; border-radius: 14px; background: #F7F3EE; }
 .ef-invc b { font-size: 12.5px; letter-spacing: .06em; display: flex; align-items: center; gap: 8px; } .ef-invc i { width: 4px; height: 14px; border-radius: 2px; } .ef-invc i.fl { background: #2F4F6B; } .ef-invc i.br { background: #9B2226; }
 .ef-bill { grid-template-columns: 1fr !important; }
+/* push 62 · Claude connector sign-in */
+.cc-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px 16px; background: #F6F2EC; }
+.cc-card { width: 100%; max-width: 440px; background: #fff; border-radius: 22px; padding: 26px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 20px 50px rgba(26,23,20,.08); }
+.cc-logo { width: 56px; height: auto; } .cc-k { font-size: 10.5px; letter-spacing: .14em; font-weight: 800; color: #B08D3C; }
+.cc-card h1 { font-size: 28px; font-weight: 500; margin: 0; } .cc-list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }

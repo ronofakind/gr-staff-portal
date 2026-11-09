@@ -19,7 +19,10 @@ async function okToken(t) {
   return rows[0]?.token === String(t);
 }
 
+import { mcpHandler } from './_mcp.js';
+
 export default async function handler(req, res) {
+  if (req.query.mcp) return mcpHandler(req, res); // push 62 · Claude connector (see _mcp.js)
   res.setHeader('Cache-Control', 'no-store');
   if (!URL_ || !SERVICE) return res.status(503).json({ error: 'not set up' });
   try {

@@ -1,3 +1,4 @@
+import { ConnectClaude } from './pages/ConnectClaude';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import type { Session } from '@supabase/supabase-js';
@@ -120,6 +121,7 @@ export function App() {
       <Routes>
         <Route path="/" element={me.role === 'admin' ? <Navigate to="/admin" /> : <Home me={me} />} />
         <Route path="/me" element={<Home me={me} />} />
+        {me.role === 'admin' && <Route path="/connect-claude" element={<ConnectClaude />} />}
         {me.role === 'admin' && (
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<Today />} />
