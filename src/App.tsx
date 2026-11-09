@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import type { Session } from '@supabase/supabase-js';
 import { supabase, type Staff } from './lib/supabase';
@@ -190,12 +190,49 @@ function NotStaff({ lang }: { lang: Lang }) {
 }
 
 function Legal({ kind }: { kind: 'privacy' | 'terms' }) {
-  return (
+  const S = ({ t, children }: { t: string; children: ReactNode }) => <><h2 className="serif" style={{ fontSize: 20, margin: '26px 0 6px' }}>{t}</h2>{children}</>;
+  if (kind === 'terms') return (
     <div style={{ maxWidth: 640, margin: '0 auto', padding: '48px 20px', lineHeight: 1.6 }}>
-      <h1 className="serif">{kind === 'privacy' ? 'Privacy' : 'Terms of use'}</h1>
-      {kind === 'privacy'
-        ? <p>The G&amp;R Staff App is an internal tool of G&amp;R à votre service, used only by our staff and managers to schedule events and record hours. We keep the information needed for that (name, contact details, availability, shifts and hours) and do not sell or share it. When the owner connects Google Drive, the app uses that access only to create and list event folders in the company’s own Drive. To delete your account: in the app, Profile → Delete my account, or <a href="/delete-account">gr-staff-portal.vercel.app/delete-account</a>. Your sign-in and personal info are deleted; hours and pay records are kept 6 years as tax law requires. Questions: rjladores@gmail.com.</p>
-        : <p>The G&amp;R Staff App is for the staff, managers and owners of G&amp;R à votre service only. Use it to see your shifts, give your availability and record your hours accurately; do not share your access with anyone. The app is provided as is and may change at any time. Questions: rjladores@gmail.com.</p>}
+      <h1 className="serif">Terms of use</h1>
+      <p>The G&amp;R Staff App is for the staff, managers and owners of G&amp;R à votre service only. Use it to see your shifts, give your availability and record your hours accurately; do not share your access with anyone. The app is provided as is and may change at any time. Questions: gravotreservice@gmail.com.</p>
+    </div>
+  );
+  // Nov 9 · full privacy page (Google Play / App Store: must say what is collected, why, who sees it, how long, how to delete)
+  return (
+    <div style={{ maxWidth: 680, margin: '0 auto', padding: '40px 20px 60px', lineHeight: 1.6 }}>
+      <img src="/logo-full.png" alt="G&amp;R à votre service" style={{ height: 56, display: 'block', margin: '0 auto 18px', mixBlendMode: 'multiply' }} />
+      <h1 className="serif" style={{ marginBottom: 4 }}>Privacy</h1>
+      <p style={{ marginTop: 0, color: 'var(--muted)' }}>G&amp;R Staff app · G&amp;R à votre service, Montréal · updated November 9, 2026</p>
+      <p>The G&amp;R Staff app is the private work app of G&amp;R à votre service, an event staffing company in Montréal. Only people who work with us (staff, managers and the owners) can sign in. This page explains what the app keeps about you, why, who can see it, and how to have it deleted.</p>
+      <S t="What we collect and why">
+        <ul style={{ paddingLeft: 20, margin: 0 }}>
+          <li><b>Your name, nickname, email and phone</b>: to sign you in, book you and reach you about your shifts.</li>
+          <li><b>Your photo</b>: so your manager and team recognise you on the night.</li>
+          <li><b>Your availability, shifts, check-in and end times, and hours</b>: to schedule events and pay you correctly.</li>
+          <li><b>Your messages</b> with the office and your team: to answer questions and organise each event.</li>
+          <li><b>Your emergency contact and neighbourhood</b> (optional): in case something happens at work, and to plan rides to far events.</li>
+          <li><b>Your sizes, languages and transport</b>: for uniforms, client needs and getting to events.</li>
+          <li><b>Pay and tax details</b>: legal name, date of birth, address, social insurance number (SIN), how you want to be paid, and a photo of a void cheque or your PayPal email. Used only to pay you and to prepare your tax slips.</li>
+          <li><b>Basic technical data</b>: when you last opened the app and, if you turn them on, the codes that let us send you phone notifications.</li>
+        </ul>
+        <p>We don’t use your location, we don’t track you on other apps or websites, and the app has no ads.</p>
+      </S>
+      <S t="Who can see it">
+        <p style={{ margin: 0 }}>The owners (Ronnie and Georges) can see everything. Managers only see, for their own team on the night: name, photo, position, start and end times and notes about the shift. Other staff only see the names and photos of people on the same event. Pay and tax details, your SIN, your emergency contact and your ratings are never shown to managers or other staff.</p>
+        <p>We do not sell or rent your information, and we don’t share it with anyone outside G&amp;R, except when the law requires it (for example tax slips sent to the government).</p>
+      </S>
+      <S t="Where it’s kept">
+        <p style={{ margin: 0 }}>The app runs on Vercel and stores its data with Supabase, both in North America. Everything travels encrypted (HTTPS) and access is limited by account. Sign-in codes are never stored in a readable form.</p>
+      </S>
+      <S t="How long we keep it">
+        <p style={{ margin: 0 }}>While you work with us. When your account is deleted, your sign-in and personal information are deleted. Hours, pay and tax records are kept for 6 years, as Canadian and Québec tax law requires, then deleted.</p>
+      </S>
+      <S t="Deleting your account">
+        <p style={{ margin: 0 }}>In the app: Profile → Delete my account. Without the app: <a href="/delete-account">gr-staff-portal.vercel.app/delete-account</a>. We confirm within 30 days. You can also ask us to see or correct what we hold about you.</p>
+      </S>
+      <S t="Contact">
+        <p style={{ margin: 0 }}>G&amp;R à votre service · Montréal, Québec · <a href="mailto:gravotreservice@gmail.com">gravotreservice@gmail.com</a></p>
+      </S>
     </div>
   );
 }
