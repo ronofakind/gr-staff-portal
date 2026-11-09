@@ -326,8 +326,16 @@ export function Today() {
         <div><div className="kick">{dLabel(today, { weekday: 'long', month: 'long', day: 'numeric' }).toUpperCase()}{nEv ? ` · ${nEv} EVENT${nEv > 1 ? 'S' : ''} TONIGHT` : ''}</div><h1 className="serif-h">{hello}, Ronnie</h1></div>
         <div className="row wrap"><button className="abtn" onClick={() => setEditing(true)} aria-label="Edit layout">✎ <span className="t4-hide-ph">Edit layout</span></button><Link className="abtn t4-hide-ph" to="/admin/availability">Ask availability</Link><Link className="abtn dark t4-hide-ph" to="/admin/event/new">＋ New event</Link></div>
       </div>
-      {pinnedShown.length > 0 && <><div className="t4-band pin">📌 PINNED</div>{grid(pinnedShown)}</>}
-      {restShown.length > 0 && <>{pinnedShown.length > 0 && <div className="t4-band" />}{grid(restShown)}</>}
+      {(() => {
+        // Nov 8 · Ronnie: Tonight beside Next 7 days. An empty half next to the last pinned tile is filled by the next (half-width) section.
+        const half = (ks: SecKey[]) => ks.filter((k) => !WIDE.includes(k)).length % 2 === 1 && !WIDE.includes(ks[ks.length - 1]);
+        const pull = pinnedShown.length > 0 && half(pinnedShown) && restShown.length > 0 && !WIDE.includes(restShown[0]);
+        const top = pull ? [...pinnedShown, restShown[0]] : pinnedShown; const rest = pull ? restShown.slice(1) : restShown;
+        return <>
+          {top.length > 0 && <><div className="t4-band pin">📌 PINNED</div>{grid(top)}</>}
+          {rest.length > 0 && <>{top.length > 0 && <div className="t4-band" />}{grid(rest)}</>}
+        </>;
+      })()}
       {hiddenSecs.length > 0 && <div className="muted sm" style={{ textAlign: "center" }}>{hiddenSecs.length} hidden · {hiddenSecs.map((k) => SEC_LABEL[k]).join(', ')} · <button className="lnk" onClick={() => setEditing(true)}>Edit layout</button></div>}
       {editing && <EditLayout lay={lay} onSave={saveLay} onClose={() => setEditing(false)} />}
       {rep && <ReplaceSheet shift={rep.s} ev={rep.e} onClose={() => setRep(null)} onDone={(m) => { setRep(null); setToast(m); setTick((t) => t + 1); }} />}

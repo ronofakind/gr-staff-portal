@@ -11,7 +11,7 @@ export const SEC_LABEL: Record<SecKey, string> = {
   late: 'Late 30 min +', week: 'Next 7 days', meetings: 'Meetings', sheet: 'Sheet changes', pay: 'Pay period', hiring: 'Hiring',
 };
 /** Full width on desktop (the rest fill 2 columns in order). */
-export const WIDE: SecKey[] = ['tonight', 'sheet'];
+export const WIDE: SecKey[] = ['sheet']; // Nov 8 · Tonight is half width now (beside Next 7 days)
 export const DEFAULT_LAYOUT: Layout = {
   order: ['needs', 'ai', 'hiring', 'tonight', 'debriefs', 'ratings', 'pay', 'week', 'late', 'meetings', 'sheet'],
   pinned: ['needs', 'ai'],
