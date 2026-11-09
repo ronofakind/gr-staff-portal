@@ -324,7 +324,7 @@ export function Today() {
     <div className="stack-lg t4">
       <div className="toolbar">
         <div><div className="kick">{dLabel(today, { weekday: 'long', month: 'long', day: 'numeric' }).toUpperCase()}{nEv ? ` · ${nEv} EVENT${nEv > 1 ? 'S' : ''} TONIGHT` : ''}</div><h1 className="serif-h">{hello}, Ronnie</h1></div>
-        <div className="row wrap"><button className="abtn" onClick={() => setEditing(true)} aria-label="Edit layout">✎ <span className="t4-hide-ph">Edit layout</span></button><Link className="abtn t4-hide-ph" to="/admin/availability">Ask availability</Link><Link className="abtn dark t4-hide-ph" to="/admin/event/new">＋ New event</Link></div>
+        <div className="row wrap"><button className="abtn" onClick={() => setEditing(true)} aria-label="Edit layout">✎ <span className="t4-hide-ph">Edit layout</span></button><Link className="abtn dark t4-hide-ph" to="/admin/event/new">＋ New event</Link></div>
       </div>
       {(() => {
         // Nov 8 · Ronnie: Tonight beside Next 7 days. An empty half next to the last pinned tile is filled by the next (half-width) section.
