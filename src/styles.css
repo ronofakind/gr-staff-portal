@@ -3670,3 +3670,9 @@ button.pf-go { border: none; background: none; padding: 4px 2px; font: 700 13px 
 .ob-row .grow { display: flex; flex-direction: column; min-width: 160px; } .ob-row.stuck b { color: #9B2226; }
 .ob-steps { display: flex; gap: 4px; flex-wrap: wrap; } .ob-steps i { font-style: normal; font-size: 11px; font-weight: 700; padding: 3px 7px; border-radius: 7px; background: #EFEBE5; color: var(--muted); }
 .ob-steps i.ok { background: #E3F1E8; color: #2F6B4F; } .ob-steps i.mid { background: #FBF3E0; color: #6B4A12; }
+
+/* push 57 · count a late arrival or not */
+.ld-seg { display: inline-flex; gap: 2px; padding: 2px; border-radius: 9px; background: #F1ECE5; align-items: center; flex: none; }
+.ld-seg button { border: 0; background: none; font: 700 11.5px Inter, system-ui, sans-serif; padding: 5px 9px; border-radius: 7px; color: var(--muted); cursor: pointer; white-space: nowrap; }
+.ld-seg button.on { background: #fff; color: var(--ink); box-shadow: 0 1px 0 #DDD4C8; } .ld-seg button.on.red { background: #9B2226; color: #fff; box-shadow: none; }
+.t4-lrow { flex-wrap: wrap; }

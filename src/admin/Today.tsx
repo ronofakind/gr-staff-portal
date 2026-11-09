@@ -14,12 +14,13 @@ import { DeptTag } from './DeptTag';
 import { SheetChanges } from './SheetChanges';
 import { AiPanel } from './AiPanel';
 import { PayPeriod } from './PayPeriod';
+import { LateDecide } from './Reliability';
 import { HiringToday, useNewApplicationsCount } from './Hiring';
 import { needsSend, hoursBetween } from './api';
 import { LateEnds } from './LateEnds';
 import { useNewStaffRatings, RatingsToday, TAG_LABEL, BAD_TAGS } from './NewStaffRatings';
 import { supabase } from '../lib/supabase';
-import { eventsBetween, addDays, isoDay, flagsOf, flagText, periodOf, dLabel, tTime, type AEvent, type AShift } from './api';
+import { eventsBetween, addDays, isoDay, flagsOf, flagText, loadLateDecisions, periodOf, dLabel, tTime, type AEvent, type AShift } from './api';
 
 type Need = { key: string; title: string; sub: string; action: string; to: string; red?: boolean; onAct?: () => Promise<void>; alt?: { label: string; to: string } };
 type ResetReq = { id: string; created_at: string; staff: { id: string; full_name: string; email: string | null } | null };
@@ -29,7 +30,7 @@ const sigOf = (n: Need) => n.title + '|' + n.sub;
 export function Today() {
   const today = isoDay(new Date());
   const [week, setWeek] = useState<AEvent[] | null>(null);
-  const [ahead, setAhead] = useState<AEvent[]>([]); const [late30, setLate30] = useState<{ e: AEvent; s: AShift; min: number; told?: boolean }[]>([]); // Nov 8 · Today v4
+  const [ahead, setAhead] = useState<AEvent[]>([]); const [late30, setLate30] = useState<{ e: AEvent; s: AShift; min: number; told?: boolean; free?: boolean }[]>([]); // Nov 8 · Today v4
   const [editing, setEditing] = useState(false);
   const [needs, setNeeds] = useState<Need[]>([]);
   const [answers, setAnswers] = useState(0); const [qBy, setQBy] = useState<Record<string, number>>({});
@@ -61,15 +62,15 @@ export function Today() {
       setWeek(evs); setAhead(ahead); setAnswers(ans.count ?? 0);
       // Missing end times in this + last pay period
       const cur = periodOf(today); const prev = periodOf(addDays(cur.start, -1));
-      const past = await eventsBetween(prev.start, addDays(today, -1));
+      const [past] = await Promise.all([eventsBetween(prev.start, addDays(today, -1)), loadLateDecisions()]);
       const miss = past.flatMap((e) => e.shifts.filter((s) => !s.attendance && s.punches?.punch_in && !s.punches.punch_out).map((s) => ({ e, s })));
       setMissing(miss.length);
 
       const n: Need[] = [];
       { // Nov 8 · Late 30 min + · last 7 days (its own section, not in Needs you)
-        const ids = new Set<string>(); const out: { e: AEvent; s: AShift; min: number; told?: boolean }[] = [];
+        const ids = new Set<string>(); const out: { e: AEvent; s: AShift; min: number; told?: boolean; free?: boolean }[] = [];
         for (const e of [...evs, ...past]) { if (e.event_date < addDays(today, -7) || e.event_date > today) continue;
-          for (const s of e.shifts) { if (ids.has(s.id)) continue; ids.add(s.id); const f = flagsOf(s).find((x) => x.flag === 'late'); if (f) out.push({ e, s, min: f.min ?? 0, told: f.told }); } }
+          for (const s of e.shifts) { if (ids.has(s.id)) continue; ids.add(s.id); const f = flagsOf(s).find((x) => x.flag === 'late'); if (f) out.push({ e, s, min: f.min ?? 0, told: f.told, free: f.free }); } }
         setLate30(out.sort((a, b) => b.e.event_date.localeCompare(a.e.event_date)));
       }
       // Flags from today and yesterday
@@ -278,7 +279,8 @@ export function Today() {
         <div className="adm-card t4-card">
           <div className="muted sm">Last 7 days · only more than 30 min</div>
           {!late30.length && <div className="muted sm" style={{ padding: '8px 0' }}>Nobody more than 30 min late this week.</div>}
-          {late30.map(({ e, s, min, told }) => <div key={s.id} className="t4-lrow"><b>{s.staff?.full_name ?? '?'}</b><span className="muted grow">{e.title} · {dLabel(e.event_date)}</span><span className="tag amber">{min} min late</span>{told && <span className="muted sm">told ahead</span>}</div>)}
+          {late30.map(({ e, s, min, told, free }) => <div key={s.id} className="t4-lrow"><b>{s.staff?.full_name ?? '?'}</b><span className="muted grow">{e.title} · {dLabel(e.event_date)}</span><span className="tag amber">{min} min late</span>{told && <span className="muted sm">told ahead</span>}
+            <LateDecide shiftId={s.id} counted={!free} onChange={(c) => setLate30((l) => l.map((x) => (x.s.id === s.id ? { ...x, free: !c } : x)))} /></div>)}
         </div>
       </Section>),
     week: () => (

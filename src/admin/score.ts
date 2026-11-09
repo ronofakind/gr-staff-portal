@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import { addDays, isoDay, flagsOf, type AStaff } from './api';
+import { addDays, isoDay, flagsOf, loadLateDecisions, type AStaff } from './api';
 import { setting, loadSettings } from '../lib/settings';
 
 /* Push 27c · one score per person (admin only). Computed on load from the app data.
@@ -62,7 +62,7 @@ const arr = <T,>(x: unknown, ok: (y: Record<string, unknown>) => boolean): T[] =
 
 /** Everything the score needs, in 4 reads. Shapes are checked (the mock harness can return junk). */
 export async function loadScoreData(): Promise<ScoreData> {
-  await loadSettings();
+  await Promise.all([loadSettings(), loadLateDecisions()]);
   const today = isoDay(new Date()); const since = addDays(today, -weights().reliability.days);
   const shq = (extra: string) => supabase.from('shifts').select('id,staff_id,attendance,planned_start,status,punches(punch_in,punch_out),events!inner(event_date)' + extra).neq('status', 'declined').gte('events.event_date', since).lte('events.event_date', today);
   const [p, s0, f, c, ln, cr, av] = await Promise.all([

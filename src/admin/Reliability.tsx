@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { eventsBetween, isoDay, flagsOf, flagText, dLabel, type AEvent, type AShift, type Flag } from './api';
+import { eventsBetween, isoDay, flagsOf, flagText, dLabel, loadLateDecisions, setLateDecision, type AEvent, type AShift, type Flag } from './api';
 
 type Item = { e: AEvent; s: AShift; flag: Flag; min?: number; nth: number; free?: boolean; told?: boolean };
 const FILTERS: [string, Flag[] | null][] = [['All', null], ['No-shows', ['no_show']], ['Cancels', ['cancelled']], ['Late', ['late']], ['Early starts', ['early']]];
@@ -10,9 +10,9 @@ export function Reliability() {
   const today = isoDay(new Date());
   const [events, setEvents] = useState<AEvent[] | null>(null);
   const [f, setF] = useState(0); const [q, setQ] = useState('');
-  const [eta, setEta] = useState<Record<string, string>>({});
+  const [eta, setEta] = useState<Record<string, string>>({}); const [tick, setTick] = useState(0);
   const load = () => {
-    eventsBetween(today.slice(0, 4) + '-01-01', today).then(setEvents);
+    Promise.all([eventsBetween(today.slice(0, 4) + '-01-01', today), loadLateDecisions()]).then(([e]) => setEvents(e));
     // push 28e · "told ahead" (late_notices is new in 034: errors → none)
     supabase.from('late_notices').select('shift_id,eta').then(({ data, error }) => { if (!error && Array.isArray(data)) setEta(Object.fromEntries((data as { shift_id: string; eta: string }[]).map((x) => [x.shift_id, x.eta]))); });
   };
@@ -25,7 +25,7 @@ export function Reliability() {
     const count = new Map<string, number>();
     for (const it of out) { if (it.free) continue; const k = it.s.staff_id + it.flag; count.set(k, (count.get(k) ?? 0) + 1); it.nth = count.get(k)!; }
     return out.reverse();
-  }, [events, eta]);
+  }, [events, eta, tick]);
   const shown = items.filter((it) => (!FILTERS[f][1] || FILTERS[f][1]!.includes(it.flag)) && (!q || (it.s.staff?.full_name ?? '').toLowerCase().includes(q.toLowerCase())));
   const clear = async (it: Item) => {
     if (!window.confirm(`Remove the ${flagText(it).toLowerCase()} for ${it.s.staff?.full_name}?`)) return;
@@ -55,11 +55,31 @@ export function Reliability() {
               {!it.free && <span className={it.nth > 1 ? 'accent strong' : ''}>{ord(it.nth)}</span>}
             </div>
             <Link className="abtn sm" to={`/admin/day?d=${it.e.event_date}`}>Open</Link>
+            {it.flag === 'late' && <LateDecide shiftId={it.s.id} counted={!it.free} onChange={() => setTick((t) => t + 1)} />}
             {(it.flag === 'no_show' || it.flag === 'cancelled') && <button className="abtn sm" onClick={() => clear(it)}>Remove</button>}
           </div>
         ))}
       </div>
       <p className="muted sm">No-shows and cancels come from the manager’s screen and from staff “Can’t make it”. Late cancel = cancelled after they confirmed; a cancel before confirming is listed but not counted. Late = started more than 30 min after their call (30 min and under is not counted); not counted when they said “I’m running late” and started by the time they gave. Early start = a manager started them before the call time.</p>
     </div>
+  );
+}
+
+/** push 57 · count this late arrival in their reliability, or not. Saved per shift (084); the score updates on the next load. */
+export function LateDecide({ shiftId, counted, onChange }: { shiftId: string; counted: boolean; onChange: (counted: boolean) => void }) {
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState('');
+  const pick = async (c: boolean) => {
+    if (c === counted || busy) return;
+    setBusy(true); setErr('');
+    const e = await setLateDecision(shiftId, c ? 'count' : 'skip');
+    setBusy(false); if (e) { setErr(/late_decisions/.test(e.message) ? 'needs 084' : 'not saved'); return; }
+    onChange(c);
+  };
+  return (
+    <span className="ld-seg" title="Count this late arrival in their reliability score?">
+      <button className={counted ? 'on red' : ''} disabled={busy} onClick={() => pick(true)}>Count it</button>
+      <button className={!counted ? 'on' : ''} disabled={busy} onClick={() => pick(false)}>Don’t count</button>
+      {err && <small className="error">{err}</small>}
+    </span>
   );
 }

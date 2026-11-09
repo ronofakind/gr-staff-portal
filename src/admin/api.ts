@@ -90,14 +90,28 @@ export const FLAG_LABEL: Record<Flag, string> = { no_show: 'NO-SHOW', cancelled:
  * push 28: `free` = shown but not counted in Reliability — a cancel made before they confirmed (cancel_self and not
  * cancel_late), or late but started by the ETA they gave in "I'm running late" (late_eta, within the same 10 min).
  */
-export function flagsOf(s: { attendance: string | null; planned_start: string; punches: { punch_in: string | null } | null; cancel_self?: boolean; cancel_late?: boolean; late_eta?: string | null }): { flag: Flag; min?: number; free?: boolean; told?: boolean }[] {
+/** push 57 (084) · Ronnie decides each late arrival: 'count' · 'skip'. No entry → Settings default. Cached here so flagsOf stays sync. */
+export const LATE_DECISION: Record<string, 'count' | 'skip'> = {};
+export async function loadLateDecisions() {
+  const { data, error } = await supabase.from('late_decisions').select('shift_id,decision');
+  if (error || !Array.isArray(data)) return; // before 084
+  for (const k of Object.keys(LATE_DECISION)) delete LATE_DECISION[k];
+  for (const r of data as { shift_id: string; decision: 'count' | 'skip' }[]) LATE_DECISION[r.shift_id] = r.decision;
+}
+export async function setLateDecision(shiftId: string, d: 'count' | 'skip') {
+  const { error } = await supabase.from('late_decisions').upsert({ shift_id: shiftId, decision: d, decided_at: new Date().toISOString() });
+  if (!error) LATE_DECISION[shiftId] = d;
+  return error;
+}
+const lateFree = (id: string | undefined, dflt: boolean) => (id && LATE_DECISION[id] ? LATE_DECISION[id] === 'skip' : dflt);
+export function flagsOf(s: { id?: string; attendance: string | null; planned_start: string; punches: { punch_in: string | null } | null; cancel_self?: boolean; cancel_late?: boolean; late_eta?: string | null }): { flag: Flag; min?: number; free?: boolean; told?: boolean }[] {
   if (s.attendance === 'no_show') return [{ flag: 'no_show' }];
   if (s.attendance === 'cancelled') return [s.cancel_self && !s.cancel_late ? { flag: 'cancelled', free: true } : { flag: 'cancelled' }];
   const pin = s.punches?.punch_in; if (!pin) return [];
   const diff = Math.round((new Date(pin).getTime() - new Date(s.planned_start).getTime()) / 60000);
   // push 32: Settings → "Count told ahead as late" (off by default) counts them even when they came by their ETA.
-  if (diff > LATE_MIN && s.late_eta) { const byEta = new Date(pin).getTime() <= new Date(s.late_eta).getTime() + 10 * 60000; return [{ flag: 'late', min: diff, told: true, free: !setting('bookings.count_late') || (byEta && !setting('bookings.count_told_ahead')) }]; }
-  if (diff > LATE_MIN) return [{ flag: 'late', min: diff, ...(setting('bookings.count_late') ? {} : { free: true }) }];
+  if (diff > LATE_MIN && s.late_eta) { const byEta = new Date(pin).getTime() <= new Date(s.late_eta).getTime() + 10 * 60000; return [{ flag: 'late', min: diff, told: true, free: lateFree(s.id, !setting('bookings.count_late') || (byEta && !setting('bookings.count_told_ahead'))) }]; }
+  if (diff > LATE_MIN) return [{ flag: 'late', min: diff, free: lateFree(s.id, !setting('bookings.count_late')) }];
   if (diff < -1) return [{ flag: 'early', min: -diff }];
   return [];
 }
