@@ -308,7 +308,7 @@ export function Today() {
         {tonight.length > 0 && <div className="adm-card t4-list">{tonightSorted.map((e) => <Live key={e.id} e={e} q={qBy[e.id] ?? 0} lateBy={lateBy} compact onDeleted={gone} />)}</div>}
       </Section>),
     debriefs: () => (
-      <Section k="debriefs" mode={md('debriefs')} title={<>Last night · debriefs {deb.rows.length > 0 && <b className="accent sm">{deb.rows.length}</b>}</>} right={<Link to="/admin/debriefs">Past debriefs ›</Link>}>
+      <Section k="debriefs" mode={md('debriefs')} title={<>Last night · debriefs {deb.rows.length + deb.miss.length > 0 && <b className="accent sm">{deb.rows.length} of {deb.rows.length + deb.miss.length}</b>}</>} right={<Link to="/admin/debriefs">Past debriefs ›</Link>}>
         <div className="adm-card t4-card"><RecentDebriefs {...deb} /></div>
       </Section>),
     ratings: () => (

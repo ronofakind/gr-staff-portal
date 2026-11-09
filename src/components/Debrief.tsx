@@ -20,6 +20,9 @@ export function DebriefSheet({ eventId, onClose, onSent }: { eventId: string; on
   const [busy, setBusy] = useState(false); const [err, setErr] = useState('');
   const bad = a.night === 'rough' || a.night === 'issues' || a.client === 'mixed' || a.client === 'no';
   const n = QS.filter((q) => a[q.key]).length;
+  // push 60 (087) · log that the question opened, and Skip. Errors (before 087) are ignored.
+  useEffect(() => { supabase.rpc('debrief_mark', { p_event: eventId, p_skip: false, p_build: __BUILD__ }).then(() => {}); }, [eventId]);
+  const skip = () => { supabase.rpc('debrief_mark', { p_event: eventId, p_skip: true, p_build: __BUILD__ }).then(() => {}); onClose(); };
   const send = async () => {
     setBusy(true); setErr('');
     const { error } = await supabase.rpc('manager_send_debrief', { p_event: eventId, p_night: a.night ?? null, p_client: a.client ?? null, p_difficulty: a.difficulty ?? null,
@@ -29,10 +32,10 @@ export function DebriefSheet({ eventId, onClose, onSent }: { eventId: string; on
     onSent();
   };
   return (
-    <SwipeSheet onClose={onClose} label="How did tonight go?" x={false}>
+    <SwipeSheet onClose={skip} label="How did tonight go?" x={false}>
       <div className="db-head">
         <div className="grow"><span className="pf-st ok">✓ HOURS SENT</span><div className="serif db-title">How did tonight go?</div></div>
-        <button type="button" className="db-skip" onClick={onClose}>Skip</button>
+        <button type="button" className="db-skip" onClick={skip}>Skip</button>
       </div>
       <div className="db-card">
         {QS.map((q, i) => (
@@ -102,11 +105,41 @@ export function useRecentDebriefs(skip: string[], tick = 0) {
         supabase.from('event_debriefs').select(COLS).gte('created_at', since).order('created_at', { ascending: false }).then(({ data: d2 }) => setRows((d2 ?? []) as unknown as Row[]));
       });
   }, [tick, t]);
+  // push 60 (087) · managers who sent hours in the last 36 h but didn't answer: skipped, or never saw it.
+  const [miss, setMiss] = useState<Miss[]>([]);
+  useEffect(() => {
+    const since = new Date(Date.now() - 36 * 3600e3).toISOString();
+    supabase.from('events').select('id,title,hours_submitted_at,hours_submitted_by').gte('hours_submitted_at', since).not('hours_submitted_by', 'is', null).then(async ({ data, error }) => {
+      if (error || !data?.length) { setMiss([]); return; }
+      const evs = data as { id: string; title: string; hours_submitted_at: string; hours_submitted_by: string }[];
+      const ids = evs.map((e) => e.id);
+      const [{ data: seen, error: e2 }, { data: done }, { data: st }] = await Promise.all([
+        supabase.from('debrief_seen').select('event_id,staff_id,shown_at,skipped_at').in('event_id', ids),
+        supabase.from('event_debriefs').select('event_id').in('event_id', ids),
+        supabase.from('staff').select('id,full_name,nickname').in('id', [...new Set(evs.map((e) => e.hours_submitted_by))]),
+      ]);
+      if (e2) { setMiss([]); return; } // before 087
+      const answered = new Set(((done ?? []) as { event_id: string }[]).map((d) => d.event_id));
+      const who = Object.fromEntries(((st ?? []) as { id: string; full_name: string; nickname: string | null }[]).map((s) => [s.id, s.nickname || s.full_name]));
+      const sn = (seen ?? []) as { event_id: string; staff_id: string; shown_at: string; skipped_at: string | null }[];
+      setMiss(evs.filter((e) => !answered.has(e.id)).map((e) => {
+        const s = sn.find((x) => x.event_id === e.id && x.staff_id === e.hours_submitted_by);
+        return { event_id: e.id, title: e.title, who: who[e.hours_submitted_by] ?? 'Manager', sent: e.hours_submitted_at, status: s?.skipped_at ? 'skipped' : s ? 'open' : 'never', at: s?.skipped_at ?? s?.shown_at ?? null };
+      }));
+    });
+  }, [tick, t]);
   const show = rows.filter((r) => !skip.includes(r.event_id));
   const archive = async (id: string) => { setRows((v) => v.filter((x) => x.id !== id)); await supabase.from('event_debriefs').update({ archived_at: new Date().toISOString() }).eq('id', id); setT((x) => x + 1); };
-  return { rows: show, archive };
+  return { rows: show, archive, miss: miss.filter((m) => !skip.includes(m.event_id)) };
 }
-export function RecentDebriefs({ rows, archive }: ReturnType<typeof useRecentDebriefs>) {
-  if (!rows.length) return <div className="muted sm" style={{ padding: '10px 4px' }}>No debriefs from last night.</div>;
-  return <>{rows.map((r) => <DebriefCard key={r.id} r={r} withEvent onArchive={() => archive(r.id)} />)}</>;
+type Miss = { event_id: string; title: string; who: string; sent: string; status: 'skipped' | 'open' | 'never'; at: string | null };
+const hm = (iso: string) => new Date(iso).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' });
+export function RecentDebriefs({ rows, archive, miss }: ReturnType<typeof useRecentDebriefs>) {
+  if (!rows.length && !miss.length) return <div className="muted sm" style={{ padding: '10px 4px' }}>No debriefs from last night.</div>;
+  return <>{rows.map((r) => <DebriefCard key={r.id} r={r} withEvent onArchive={() => archive(r.id)} />)}
+    {miss.map((m) => (
+      <div key={m.event_id} className="dbr dbr-miss">
+        <div className="dbr-top"><span aria-hidden="true">📝</span><b>{m.title} · {m.who}</b><span className={'dbm ' + m.status}>{m.status === 'skipped' ? 'SKIPPED' : m.status === 'open' ? 'NOT ANSWERED' : 'NEVER SAW IT'}</span></div>
+        <div className="dbr-txt muted">{m.status === 'skipped' ? `Saw it at ${hm(m.at!)} and tapped Skip` : m.status === 'open' ? `Opened at ${hm(m.at!)} · no answer yet` : `Hours sent ${hm(m.sent)} · the question never opened on their phone`}</div>
+      </div>))}</>;
 }
