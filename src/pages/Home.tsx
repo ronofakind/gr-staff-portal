@@ -5,6 +5,7 @@ import { supabase, SHIFT_SELECT, isSetup, type ShiftRow, type Staff } from '../l
 import { setting, useSettings } from '../lib/settings';
 import { useLang } from '../lib/i18n';
 import { loadOnboarding, cardsFor, type Onboarding } from '../lib/handbook';
+import { LineIcon } from '../components/LineIcon';
 import { time, longDate, dayBadge, minus, mapsUrl } from '../lib/format';
 import { ProfileButton } from '../components/ProfileMenu';
 import { TabBar } from '../components/TabBar';
@@ -243,18 +244,21 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
       ))}
 
       {ob && (!ob.hb_done_at || (ob.paid_by === 'payroll' && !ob.tax_done_at)) && (() => {
-        const n = cardsFor(ob).length; const read = Math.min(ob.hb_seen.length, n); const pct = Math.round((read / n) * 100);
-        return <div className="ob-todo">
-          {!ob.hb_done_at && <button className="ob-card dark" onClick={() => nav('/handbook')}>
-            <span className="ob-top"><span className="ob-ic">📖</span><span className="grow"><b>Complete your handbook</b><span>{n} short cards · about {Math.max(5, Math.round(n * 0.7))} min · stop anytime</span></span></span>
-            {read > 0 && <span className="ob-bar"><i style={{ width: pct + '%' }} /></span>}
-            <span className="ob-bot"><i className="ob-tag red">NEEDED BEFORE YOU GET DATES</i><span className="grow" /><span className="ob-go">{read > 0 ? `Continue · ${read}/${n} ›` : 'Start ›'}</span></span>
+        // push 58 · premium: the Standard as a dark card with a gold ring, tax and pay as a calm row, requests locked with a quiet note
+        const n = cardsFor(ob).length; const read = Math.min(ob.hb_seen.length, n); const r = 25; const C = 2 * Math.PI * r;
+        return <div className="ob2">
+          {!ob.hb_done_at && <button className="ob2-card" onClick={() => nav('/handbook')}>
+            <span className="ob2-top">
+              <svg width="62" height="62" viewBox="0 0 62 62" aria-hidden="true"><circle cx="31" cy="31" r={r} fill="none" stroke="rgba(217,183,106,.25)" strokeWidth="3" />
+                <circle cx="31" cy="31" r={r} fill="none" stroke="#D9B76A" strokeWidth="3" strokeLinecap="round" strokeDasharray={`${(C * read) / n} ${C}`} transform="rotate(-90 31 31)" />
+                <text x="31" y="36" textAnchor="middle" fontFamily="Fraunces, Georgia, serif" fontSize="16" fill="#F6F2EC">{read}</text></svg>
+              <span className="grow"><em>Before you get dates</em><b>The G&amp;R Standard</b><small>{read} of {n} · about {Math.max(1, Math.round((n - read) * 0.35))} min left</small></span>
+            </span>
+            <span className="ob2-go">{read ? 'Continue reading' : 'Begin'}</span>
           </button>}
-          {ob.paid_by === 'payroll' && !ob.tax_done_at && <button className="ob-card" onClick={() => nav('/tax')}>
-            <span className="ob-top"><span className="ob-ic">🧾</span><span className="grow"><b>Tax & pay</b><span>SIN, address, direct deposit / PayPal, void cheque · 4 min</span></span></span>
-            <span className="ob-bot"><i className="ob-tag amber">NEEDED BEFORE YOUR FIRST SHIFT</i><span className="grow" /><span className="ob-go">Start ›</span></span>
-          </button>}
-          {hbLocked && <div className="ob-lock">🔒 Event requests show up here<br />once your handbook is done.</div>}
+          {ob.paid_by === 'payroll' && !ob.tax_done_at && <button className="ob2-row" onClick={() => nav('/tax')}>
+            <LineIcon name="cheque" size={24} /><span className="grow"><b>Tax and pay</b><small>Before your first shift · 4 min</small></span><span style={{ fontSize: 18 }}>›</span></button>}
+          {hbLocked && <div className="ob2-lock"><LineIcon name="lock" size={22} color="#7A7268" /><span>Event requests arrive here<br />once you’ve finished the Standard.</span></div>}
         </div>;
       })()}
 

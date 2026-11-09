@@ -165,7 +165,7 @@ export function App() {
         <Route path="/manage/:eventId/messages" element={<MgrMessages me={me} />} />
         <Route path="/messages" element={<StaffMessages me={me} />} />
         <Route path="/profile" element={<Profile me={me} />} />
-        <Route path="/handbook" element={<Handbook />} />
+        <Route path="/handbook" element={<Handbook me={me} />} />
         <Route path="/tax" element={<TaxPay me={me} />} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>

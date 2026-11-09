@@ -27,6 +27,13 @@ export default async function handler(req, res) {
     const token = req.method === 'POST' ? body.token : req.query.token;
     if (!(await okToken(token))) return res.status(401).json({ error: 'bad token' });
 
+    // Nov 9 · push 58 · new suppliers for QuickBooks: Ronnie clicked "Add to QuickBooks" (staff_tax.qb_status = 'sending').
+    // Full fields incl. SIN (the task puts it straight into QuickBooks and never prints it).
+    if (req.method === 'GET' && req.query.vendors) {
+      const rows = await get('staff_tax?qb_status=eq.sending&select=staff_id,first_name,middle_name,last_name,legal_name,email,phone,street,apt,city,province,postal_code,address,sin,qb_at');
+      return res.json({ vendors: rows });
+    }
+
     // Nov 8 · push 55b · AI first read of new applications. GET ?apps=1 → new ones not read yet, with a 1-hour CV link.
     if (req.method === 'GET' && req.query.apps) {
       const apps = await get('applications?status=eq.new&ai_at=is.null&select=id,created_at,first_name,last_name,email,phone,roles,worked_in,years,lang_fr,lang_en,days,transport,neighbourhood,cv_path,cv_name,no_cv_note,referrer_id,referrer_text&order=created_at&limit=10');
@@ -108,6 +115,16 @@ export default async function handler(req, res) {
           if (r.ok) reads++;
         }
       }
+      // push 58 · QuickBooks results: { vendors: [{ staff_id, status: 'done'|'error', qb_vendor_id, note }] }
+      let vendors = 0;
+      if (Array.isArray(body.vendors)) {
+        for (const v of body.vendors.slice(0, 30)) {
+          if (!/^[0-9a-f-]{36}$/i.test(v?.staff_id || '') || !['done', 'error'].includes(v.status)) continue;
+          const r = await fetch(`${URL_}/rest/v1/staff_tax?staff_id=eq.${v.staff_id}&qb_status=eq.sending`, { method: 'PATCH', headers: H({ Prefer: 'return=minimal' }),
+            body: JSON.stringify({ qb_status: v.status, qb_vendor_id: s(v.qb_vendor_id, 40), qb_note: s(v.note, 300), qb_at: new Date().toISOString() }) });
+          if (r.ok) vendors++;
+        }
+      }
       let added = 0;
       if (rows.length) {
         const r = await fetch(`${URL_}/rest/v1/ai_items?on_conflict=dedupe_key`, { method: 'POST', headers: H({ Prefer: 'resolution=ignore-duplicates,return=representation' }), body: JSON.stringify(rows) });
@@ -115,7 +132,7 @@ export default async function handler(req, res) {
         added = (await r.json()).length;
       }
       if (body.checked) await fetch(`${URL_}/rest/v1/ai_settings?id=eq.1`, { method: 'PATCH', headers: H(), body: JSON.stringify({ inbox_checked_at: new Date().toISOString() }) });
-      return res.json({ added, skipped: rows.length - added, invoices, reads });
+      return res.json({ added, skipped: rows.length - added, invoices, reads, vendors });
     }
     return res.status(405).json({ error: 'GET or POST' });
   } catch (e) {
