@@ -20,7 +20,7 @@ import { needsSend, hoursBetween } from './api';
 import { LateEnds } from './LateEnds';
 import { useNewStaffRatings, RatingsToday, TAG_LABEL, BAD_TAGS } from './NewStaffRatings';
 import { supabase } from '../lib/supabase';
-import { eventsBetween, addDays, isoDay, flagsOf, flagText, loadLateDecisions, periodOf, dLabel, tTime, type AEvent, type AShift } from './api';
+import { eventsBetween, addDays, isoDay, flagsOf, flagText, loadLateDecisions, LATE_DECISION, periodOf, dLabel, tTime, type AEvent, type AShift } from './api';
 
 type Need = { key: string; title: string; sub: string; action: string; to: string; red?: boolean; onAct?: () => Promise<void>; alt?: { label: string; to: string } };
 type ResetReq = { id: string; created_at: string; staff: { id: string; full_name: string; email: string | null } | null };
@@ -70,7 +70,7 @@ export function Today() {
       { // Nov 8 · Late 30 min + · last 7 days (its own section, not in Needs you)
         const ids = new Set<string>(); const out: { e: AEvent; s: AShift; min: number; told?: boolean; free?: boolean }[] = [];
         for (const e of [...evs, ...past]) { if (e.event_date < addDays(today, -7) || e.event_date > today) continue;
-          for (const s of e.shifts) { if (ids.has(s.id)) continue; ids.add(s.id); const f = flagsOf(s).find((x) => x.flag === 'late'); if (f) out.push({ e, s, min: f.min ?? 0, told: f.told, free: f.free }); } }
+          for (const s of e.shifts) { if (ids.has(s.id)) continue; ids.add(s.id); const f = flagsOf(s).find((x) => x.flag === 'late'); if (f && !LATE_DECISION[s.id]) out.push({ e, s, min: f.min ?? 0, told: f.told, free: f.free }); } } // decided → gone (still on Reliability)
         setLate30(out.sort((a, b) => b.e.event_date.localeCompare(a.e.event_date)));
       }
       // Flags from today and yesterday
@@ -277,10 +277,10 @@ export function Today() {
     late: () => (
       <Section k="late" mode={md('late')} title={<>Late 30 min + {late30.length > 0 && <b className="accent sm">{late30.length}</b>}</>} right={<Link to="/admin/reliability">Reliability ›</Link>}>
         <div className="adm-card t4-card">
-          <div className="muted sm">Last 7 days · only more than 30 min</div>
-          {!late30.length && <div className="muted sm" style={{ padding: '8px 0' }}>Nobody more than 30 min late this week.</div>}
-          {late30.map(({ e, s, min, told, free }) => <div key={s.id} className="t4-lrow"><b>{s.staff?.full_name ?? '?'}</b><span className="muted grow">{e.title} · {dLabel(e.event_date)}</span><span className="tag amber">{min} min late</span>{told && <span className="muted sm">told ahead</span>}
-            <LateDecide shiftId={s.id} counted={!free} onChange={(c) => setLate30((l) => l.map((x) => (x.s.id === s.id ? { ...x, free: !c } : x)))} /></div>)}
+          <div className="muted sm">Last 7 days · more than 30 min · answer each one, it goes away (all of them stay on Reliability)</div>
+          {!late30.length && <div className="muted sm" style={{ padding: '8px 0' }}>Nothing to decide.</div>}
+          {late30.map(({ e, s, min, told }) => <div key={s.id} className="t4-lrow"><b>{s.staff?.full_name ?? '?'}</b><span className="muted grow">{e.title} · {dLabel(e.event_date)}</span><span className="tag amber">{min} min late</span>{told && <span className="muted sm">told ahead</span>}
+            <LateDecide shiftId={s.id} counted={null} onChange={() => setLate30((l) => l.filter((x) => x.s.id !== s.id))} /></div>)}
         </div>
       </Section>),
     week: () => (

@@ -66,7 +66,8 @@ export function Reliability() {
 }
 
 /** push 57 · count this late arrival in their reliability, or not. Saved per shift (084); the score updates on the next load. */
-export function LateDecide({ shiftId, counted, onChange }: { shiftId: string; counted: boolean; onChange: (counted: boolean) => void }) {
+/** counted null = not decided yet (Today): neither button is lit. */
+export function LateDecide({ shiftId, counted, onChange }: { shiftId: string; counted: boolean | null; onChange: (counted: boolean) => void }) {
   const [busy, setBusy] = useState(false); const [err, setErr] = useState('');
   const pick = async (c: boolean) => {
     if (c === counted || busy) return;
@@ -77,8 +78,8 @@ export function LateDecide({ shiftId, counted, onChange }: { shiftId: string; co
   };
   return (
     <span className="ld-seg" title="Count this late arrival in their reliability score?">
-      <button className={counted ? 'on red' : ''} disabled={busy} onClick={() => pick(true)}>Count it</button>
-      <button className={!counted ? 'on' : ''} disabled={busy} onClick={() => pick(false)}>Don’t count</button>
+      <button className={counted === true ? 'on red' : ''} disabled={busy} onClick={() => pick(true)}>Count it</button>
+      <button className={counted === false ? 'on' : ''} disabled={busy} onClick={() => pick(false)}>Don’t count</button>
       {err && <small className="error">{err}</small>}
     </span>
   );
