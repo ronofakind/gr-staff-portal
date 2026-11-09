@@ -108,7 +108,8 @@ export function useRecentDebriefs(skip: string[], tick = 0) {
   // push 60 (087) · managers who sent hours in the last 36 h but didn't answer: skipped, or never saw it.
   const [miss, setMiss] = useState<Miss[]>([]);
   useEffect(() => {
-    const since = new Date(Date.now() - 36 * 3600e3).toISOString();
+    // only hours sent after 087 went live (Nov 9, 11:45 AM) — before that nothing was recorded
+    const since = new Date(Math.max(Date.now() - 36 * 3600e3, Date.parse('2026-11-09T16:45:00Z'))).toISOString();
     supabase.from('events').select('id,title,hours_submitted_at,hours_submitted_by').gte('hours_submitted_at', since).not('hours_submitted_by', 'is', null).then(async ({ data, error }) => {
       if (error || !data?.length) { setMiss([]); return; }
       const evs = data as { id: string; title: string; hours_submitted_at: string; hours_submitted_by: string }[];
