@@ -9,8 +9,9 @@ import {
 } from './api';
 import { tiersFor } from './Availability';
 import { AddressInput, type AddressParts } from '../components/AddressInput';
-import { defaultPieces, defaultItems, type UniItems, type UniItemsMap, type UniLineKey } from '../components/Uniform';
-import { setting, autoExtras } from '../lib/settings';
+import { defaultPieces, defaultItems, UniformIcon, TieIcon, ApronIcon, PantsIcon, ShoesIcon, WineKeyIcon, PIECE, type UniformKind, type UniItems, type UniItemsMap, type UniLineKey } from '../components/Uniform';
+import { useEventLayout, EditEventLayout, type BlockKey } from './EventLayout';
+import { setting } from '../lib/settings';
 import { AlsoWorking, type OtherShift } from './alsoWorking';
 
 export const MEN: [string, string][] = [['white_shirt', 'White dress shirt'], ['black_shirt', 'Black dress shirt'], ['black_tshirt', 'Black T-shirt']];
@@ -73,15 +74,30 @@ export function UniDept({ label, sub, bar, men, women, setMen, setWomen, items, 
 }
 
 /** A numbered block that folds; open/closed is remembered in this browser. */
-function Fold({ n, title, summary, open, setOpen, children, id }: { n: number; title: string; summary: string; open: boolean; setOpen: (o: boolean) => void; children: React.ReactNode; id?: string }) {
+function Fold({ n, title, summary, open, setOpen, children, id, state }: { n: number; title: string; summary: string; open: boolean; setOpen: (o: boolean) => void; children: React.ReactNode; id?: string; state?: 'ok' | 'miss' }) {
   return (
     <section className={'fold' + (open ? ' open' : '')} id={id}>
       <button type="button" className="fold-h" onClick={() => setOpen(!open)} aria-expanded={open}>
         <span className="fold-c">{open ? '▾' : '▸'}</span><span className="fold-n">{n}</span><b className="fold-t">{title}</b>
-        <span className="fold-s">{summary}</span>
+        <span className="fold-s">{summary}</span>{state && <span className={'fold-st ' + state}>{state === 'ok' ? '✓ done' : '● missing'}</span>}
       </button>
       {open && <div className="fold-b">{children}</div>}
     </section>
+  );
+}
+/** Push 61 · uniform at a glance, with the app's own icons (board EventPageV3). */
+const PIECE_ICON: Record<string, (p: { size?: number }) => React.ReactElement> = { [PIECE.tie]: TieIcon, [PIECE.apron]: ApronIcon, [PIECE.pants]: PantsIcon, [PIECE.key]: WineKeyIcon };
+function UniLook({ t, sub, kind, it, bar }: { t: string; sub?: string; kind: string; it: UniItems; bar?: boolean }) {
+  const name = kind.startsWith('custom:') ? kind.slice(7) || 'See notes' : ({ white_shirt: 'WHITE dress shirt', black_shirt: 'BLACK dress shirt', black_tshirt: 'Black T-shirt', dress: 'Black cocktail dress' } as Record<string, string>)[kind] ?? kind;
+  return (
+    <div className="ul-card">
+      <UniformIcon kind={kind as UniformKind} size={58} />
+      <div className="stack" style={{ gap: 4, minWidth: 0 }}>
+        <span className={'ul-t' + (bar ? ' ul-bar' : '')}>{t}{sub ? <small> · {sub}</small> : null}</span>
+        <b className="ul-n">{name}</b>
+        <span className="row" style={{ gap: 4, alignItems: 'center' }}>{it.on.map((p) => { const I = PIECE_ICON[p]; return I ? <I key={p} size={24} /> : p === PIECE.shoes ? <ShoesIcon key={p} size={24} who={t.includes('WOMEN') ? 'women' : 'men'} /> : <small key={p} className="muted">{p}</small>; })}{it.extra.map((p) => <small key={p} className="muted">+ {p}</small>)}</span>
+      </div>
+    </div>
   );
 }
 const FOLD_KEY = 'gr-ef-fold';
@@ -152,7 +168,11 @@ export function EventForm() {
   const [fold, setFoldMap] = useState<Record<number, boolean>>(readFold);
   const isOpen = (n: number) => fold[n] ?? true;
   const setFold = (n: number, o: boolean) => { const f = { ...fold, [n]: o }; setFoldMap(f); try { localStorage.setItem(FOLD_KEY, JSON.stringify(f)); } catch { /* private mode */ } };
-  const allFold = (o: boolean) => { const f = Object.fromEntries([1, 2, 3, 4, 5, 6].map((n) => [n, o])); setFoldMap(f); try { localStorage.setItem(FOLD_KEY, JSON.stringify(f)); } catch { /* private mode */ } };
+  const elay = useEventLayout(); const [editLay, setEditLay] = useState(false); const [uniEdit, setUniEdit] = useState(false);
+  const [openB, setOpenBMap] = useState<Partial<Record<BlockKey, boolean>>>({});
+  const isOpenB = (k: BlockKey) => openB[k] ?? (elay.lay.mode[k] ?? 'open') === 'open';
+  const setOpenB = (k: BlockKey, o: boolean) => setOpenBMap((m) => ({ ...m, [k]: o }));
+  void fold; void isOpen; void setFold;
   const [privateId, setPrivateId] = useState<string | null>(null); // a private-home client used as the venue
   const [guests, setGuests] = useState(''); const [eventType, setEventType] = useState(''); const [types, setTypes] = useState<{ name: string; main: boolean }[]>([]);
   const [tr, setTr] = useState<{ on: boolean | null; travel: number; gas: string; billing: 'client' | 'gr'; rides: boolean }>(() => ({ on: null, travel: 60, gas: '20', billing: setting('transport.client_pays') ? 'client' : 'gr', rides: true }));
@@ -205,7 +225,7 @@ export function EventForm() {
       setFolder(e.drive_folder_url ?? ''); setShowFolder(!!e.drive_folder_url); setItemsMap((e.uniform_items ?? {}) as UniItemsMap);
       setNote(e.description ?? ''); setStaffNote(e.notes ?? ''); setShowStaffNote(!!e.notes);
       const ordered = [...evs].sort((a) => (a.department === 'floor' ? -1 : 1));
-      const ls = ordered.flatMap((x) => linesFor(x, shifts)); setLines(ls);
+      const ls = ordered.flatMap((x) => linesFor(x, shifts).map((l) => ({ ...l, tbc: l.tbc ?? !!(x as unknown as { start_tbc?: boolean }).start_tbc }))); setLines(ls);
       setModeRaw(ls.some((l) => l.dept === 'bar') ? (ls.some((l) => l.dept === 'floor') ? 'both' : 'bar') : 'floor');
       setLoaded(true);
     })();
@@ -306,6 +326,50 @@ export function EventForm() {
   const tiers = askTiers ?? tiersFor(floorN || 1);
   const named = (l: Line) => staff.filter((s) => l.names.includes(s.id));
 
+  // ── Push 61 · staffing from the guest count (board GuestStaffingV1) ──
+  const sug = (() => {
+    const g = Number(guests); if (!g || g < 1) return null;
+    const R = setting('staffing.ratios'); const up = (n: number) => Math.ceil(n * (1 + R.buffer / 100));
+    const cocktail = /cocktail/i.test(eventType);
+    let base = showFloor ? Math.ceil(g / (cocktail ? R.cocktail : R.seated)) : 0; let floor = showFloor ? up(base) : 0;
+    if (showFloor && g < R.small) { base = Math.max(base, 3); floor = Math.max(floor, 3); }
+    const md = showFloor ? (g >= R.md2 ? 2 : 1) : 0;
+    const bt0 = showBar ? Math.max(1, Math.ceil(g / R.bar)) : 0; const bt = showBar ? up(bt0) : 0; const bb = bt;
+    return { g, floor, md, base, bt0, bt, bb, hold: floor - base + (bt - bt0) * 2 };
+  })();
+  const useSug = () => {
+    if (!sug) return;
+    if (lines.some((l) => l.names.length) && !confirm('Replace the staffing lines? Names already on the lines are kept where the role matches.')) return;
+    const st = [...lines.map((l) => l.start)].sort()[0] ?? '17:00';
+    const keepNames = (dept: 'floor' | 'bar', code: string) => lines.filter((l) => l.dept === dept && l.code === code).flatMap((l) => l.names);
+    const mk = (dept: 'floor' | 'bar', code: string, count: number, hold = 0): Line => { const names = keepNames(dept, code).slice(0, count); return { dept, code, start: st, count: Math.max(count, names.length), names, tbc: true, hold }; };
+    const next: Line[] = [];
+    if (showFloor) { next.push(mk('floor', 'MD', sug.md)); next.push(mk('floor', 'W', Math.max(0, sug.floor - sug.md), sug.floor - sug.base)); }
+    for (const l of lines) if (l.dept === 'bar' && l.code === 'WW') next.push(l); // wine lines stay as they are
+    if (showBar) { next.push(mk('bar', 'BM', 1)); if (sug.bt > 1) next.push(mk('bar', 'BT', sug.bt - 1, sug.bt - sug.bt0)); next.push(mk('bar', 'BB', sug.bb, sug.bt - sug.bt0)); }
+    setLines(next);
+  };
+  const tbcRows = pendingDetails ? 0 : lines.filter((l) => l.tbc && l.count > 0).length;
+  const holdN = lines.reduce((n, l) => n + (l.hold ?? 0), 0);
+  const isWine = (l: Line) => l.dept === 'bar' && l.code === 'WW';
+  const billF = lines.filter((l) => l.dept === 'floor').reduce((n, l) => n + l.count, 0);
+  const billB = lines.filter((l) => l.dept === 'bar').reduce((n, l) => n + l.count, 0);
+  const wineN = lines.filter(isWine).reduce((n, l) => n + l.count, 0);
+  const roleMix = (ls: Line[]) => ROLES.map((r) => { const k = ls.filter((l) => l.code === r.code).reduce((n, l) => n + l.count, 0); return k ? `${r.label.toLowerCase()} ${k}` : ''; }).filter(Boolean).join(' · ') || '—';
+  const uniWarn = (() => {
+    const tops = [...(showFloor ? [uFloor, uFloorW] : []), ...(showBar ? [uBar, uBarW] : [])];
+    const w: string[] = [];
+    const shirt = tops.some((t) => t === 'white_shirt' || t === 'black_shirt');
+    if (tops.includes('black_tshirt') && shirt) w.push('A T-shirt and a dress shirt on the same event');
+    if (!shirt) w.push('No dress shirt (black or white) on this event');
+    return w;
+  })();
+  const missing = [
+    ...(pendingDetails || !title.trim() ? ['Venue'] : []),
+    ...(tbcRows ? [`Start times · ${tbcRows} row${tbcRows === 1 ? '' : 's'} TBC`] : []),
+    ...(!guests ? ['Guest count'] : []),
+  ];
+
   // ── Save ──
   const saveAll = async (forDate: string, asNew: boolean, namesMode: 'all' | 'leads' | 'none') => {
     // venue + client lists
@@ -341,10 +405,10 @@ export function EventForm() {
       const lead = ls.find((l) => l.code === (dept === 'floor' ? 'MD' : 'BM'));
       const start = ls.map((l) => l.start).sort()[0] ?? '17:00';
       const row = {
-        event_date: forDate, title: title.trim() || (pendingDetails ? 'Details to come' : ''), venue_id: vId, details_pending: pendingDetails, tentative, start_tbc: startTbc && !pendingDetails, links, address: (address + (unit.trim() ? `, ${unit.trim()}` : '')) || null, department: dept,
+        event_date: forDate, title: title.trim() || (pendingDetails ? 'Details to come' : ''), venue_id: vId, details_pending: pendingDetails, tentative, start_tbc: ls.some((l) => l.tbc) && !pendingDetails, links, address: (address + (unit.trim() ? `, ${unit.trim()}` : '')) || null, department: dept,
         start_time: start, end_time: endT, ends_label: ends, staff_needed: ls.reduce((n, l) => n + l.count, 0),
         manager_id: lead ? keep(lead)[0] ?? null : null, description: note || null, notes: staffNote || null,
-        uniform_floor: uFloor, uniform_bar: uBar, uniform_floor_w: uFloorW, uniform_bar_w: uBarW, uniform_items: lineItems(), drive_folder_url: folder.trim() || null, staffing: ls.map(({ dept: d, code, start: s, end, count }) => ({ dept: d, code, start: s, end: end || null, count })), guests: guests ? Number(guests) : null, event_type: eventType || null, extras: extras === '' ? null : Number(extras), extras_billing: extrasBill,
+        uniform_floor: uFloor, uniform_bar: uBar, uniform_floor_w: uFloorW, uniform_bar_w: uBarW, uniform_items: lineItems(), drive_folder_url: folder.trim() || null, staffing: ls.map(({ dept: d, code, start: s, end, count, tbc, hold }) => ({ dept: d, code, start: s, end: end || null, count, ...(tbc ? { tbc: true } : {}), ...(hold ? { hold } : {}) })), guests: guests ? Number(guests) : null, event_type: eventType || null, extras: extras === '' ? null : Number(extras), extras_billing: 'client', // push 61 · extras always on the invoice for now
         transport: trOn, travel_min: trOn ? tr.travel : null, paid_travel_min: trOn ? paidTravel : null, gas_per_car: trOn ? Number(tr.gas) || 0 : null, transport_billing: trOn ? tr.billing : null, rides: trOn && tr.rides,
       };
       const res = old ? await supabase.from('events').update(row).eq('id', old.id).select('id').single() : await supabase.from('events').insert(row).select('id').single();
@@ -380,7 +444,7 @@ export function EventForm() {
 
       // Ask availability (staff only see the date)
       if (askWhen === 'save' && (dept === 'floor' || askBar === 'team')) await ask(forDate, dept, row.staff_needed, start);
-      if (pendingDetails || wasPending || startTbc || wasTbc) await supabase.from('shifts').update({ time_tbc: pendingDetails || startTbc }).eq('event_id', evId);
+      { const tb = ls.some((l) => l.tbc); if (pendingDetails || wasPending || tb || wasTbc) await supabase.from('shifts').update({ time_tbc: pendingDetails || tb }).eq('event_id', evId); }
     }
     return firstId;
   };
@@ -456,30 +520,20 @@ export function EventForm() {
       </div>
       {err && <p className="error">{err}</p>}
 
-      <div className="row" style={{ gap: 8, justifyContent: 'flex-end' }}>
-        <button type="button" className="abtn sm" onClick={() => allFold(true)}>Expand all</button>
-        <button type="button" className="abtn sm" onClick={() => allFold(false)}>Collapse all</button>
+      <div className="ef-laybar">
+        <button type="button" className="abtn sm" onClick={() => setEditLay(true)}>✎ Edit layout</button>
       </div>
-
-      <Fold n={1} title="Event & client" open={isOpen(1)} setOpen={(o) => setFold(1, o)}
-        summary={[dLabel(date, { weekday: 'short', month: 'short', day: 'numeric' }), title || 'no venue yet', client && client.name !== title ? client.name : privateId ? 'private home' : '', guests ? `${guests} guests` : '', eventType].filter(Boolean).join(' · ')}>
-        {/* Nov 6 · section 1 in the order you think about an event: Status · When & where · The event · Team */}
+      {editLay && <EditEventLayout lay={elay.lay} onSave={elay.save} onClose={() => setEditLay(false)} />}
+      <div className="ef-main"><div className="ef-blocks">
+      {elay.sorted.map((k, i) => { const n = i + 1; const op = isOpenB(k); const so = (o: boolean) => setOpenB(k, o); switch (k) {
+      case 'event': return (
+      <Fold key={k} n={n} title="The event" open={op} setOpen={so} state={guests && title !== '' ? 'ok' : undefined}
+        summary={[dLabel(date, { weekday: 'short', month: 'short', day: 'numeric' }), client?.name ?? (privateId ? 'private home' : ''), guests ? `${guests} guests` : '', eventType, showFloor && showBar ? 'floor + bar' : showBar ? 'bar' : 'floor'].filter(Boolean).join(' · ')}>
         <div className="ef-g"><div className="ef-gh">STATUS <span>is it happening?</span></div>
           <div className="seg3 ef-status"><button type="button" className={!tentative ? 'on' : ''} onClick={() => setTentative(false)}>✓ Confirmed</button><button type="button" className={tentative ? 'on tbc' : ''} onClick={() => setTentative(true)}>⏳ To be confirmed</button></div>
           {tentative && <small className="muted">Staff see ⏳ To be confirmed and “Keep the date for G&amp;R”. You answer It’s confirmed / Not happening on the event page.</small>}</div>
-        <div className="ef-g"><div className="ef-gh">WHEN &amp; WHERE <span>what staff see</span></div>
-          <div className="ef-row3">
-            <label className="ef-f"><span>DATE</span><input type="date" required value={date} onChange={(e) => setDate(e.target.value)} /></label>
-            <div className="ef-f ef-venue"><span>VENUE · title staff see</span><VenuePicker venues={venues} privates={privates} value={title} venue={venue} privateId={privateId} onPick={pickVenue} onPrivate={pickPrivate} onNew={(name) => { setVenueId(null); setPrivateId(null); setTitle(name); }} /></div>
-            <label className="ef-f"><span>ENDS · approx.</span><select value={ends} onChange={(e) => setEnds(e.target.value)}>{ENDS.map(([l]) => <option key={l}>{l}</option>)}</select></label>
-          </div>
-          <div className="ef-f ef-wide"><span>ADDRESS · {venue?.address || privateId ? 'auto' : 'start typing, pick from the list'}</span><div className="row" style={{ gap: 8, alignItems: 'flex-start' }}><div style={{ flex: '1 1 auto' }}><AddressInput value={address} onChange={(v) => { setAddress(v); setParts(null); }} onPick={(p) => { setParts(p); if (p.unit) setUnit(p.unit); }} placeholder="Start typing the address…" /></div><input aria-label="Apt / unit / floor" style={{ width: 150, flex: '0 0 auto' }} value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="Apt / unit / floor" /></div></div>
-          <LinksEditor links={links} set={setLinks} venueName={venue?.name ?? null} alsoVenue={linksVenue} setAlsoVenue={setLinksVenue} />
-          <div className="ef-opts">
-            <label className={'ef-opt' + (startTbc ? ' on' : '')}><input type="checkbox" checked={startTbc} disabled={pendingDetails} onChange={(e) => setStartTbc(e.target.checked)} /><span><b>Start time to come</b><small>Venue and address show. The start reads “Time TBC” for everyone booked, also people added later. Staff can still confirm.</small></span></label>
-            <label className={'ef-opt' + (pendingDetails ? ' on' : '')}><input type="checkbox" checked={pendingDetails} onChange={(e) => setPendingDetails(e.target.checked)} /><span><b>Venue not known yet</b><small>Staff see “Place to come · details coming”, no Confirm button, until you untick this.</small></span></label>
-          </div></div>
         <div className="ef-g"><div className="ef-gh">THE EVENT <span>only you see the client</span></div>
+          <label className="ef-f" style={{ maxWidth: 220 }}><span>DATE</span><input type="date" required value={date} onChange={(e) => setDate(e.target.value)} /></label>
           <div className="ef-row3">
             <label className="ef-f"><span>CLIENT · only you</span>
             {newClient !== null ? <div className="row"><input autoFocus value={newClient} onChange={(e) => setNewClient(e.target.value)} placeholder="New client name" /><button type="button" className="abtn sm" onClick={() => setNewClient(null)}>×</button></div>
@@ -510,43 +564,90 @@ export function EventForm() {
             <label className="ef-f"><span>GUESTS</span><input type="number" min={0} value={guests} onChange={(e) => setGuests(e.target.value)} placeholder="e.g. 220" /></label>
           </div>
           <label className="ef-f"><span>EVENT NOTE (optional)</span><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Sit-down dinner · 250 guests" /></label></div>
-        <div className="ef-g"><div className="ef-gh">TEAM <span>sets the staffing lines and which uniforms show</span></div>
-          <div className="seg3">{(['floor', 'bar', 'both'] as Mode[]).map((m) => <button type="button" key={m} className={mode === m ? 'on' : ''} onClick={() => setMode(m)}>{m === 'floor' ? 'Floor' : m === 'bar' ? 'Bar' : 'Floor + Bar'}</button>)}</div></div>
-        <div className={'tr-card' + (trOn ? ' on' : '')}>
-          <div className="sw-row">
-            <button type="button" role="switch" aria-checked={trOn} className={'sw' + (trOn ? ' on' : '')} onClick={() => setTr({ ...tr, on: !trOn })}><span className="sw-track"><span className="sw-knob" /></span><span className="sw-lbl">{trOn ? 'ON' : 'OFF'}</span></button>
-            <b>Transport</b><span className="muted sm">far event · rides, paid travel time, gas</span>
-            {trSuggested && <span className="tag" style={{ height: 22 }}>{venue?.name} · always offer rides · suggested ON</span>}
+        <div className="ef-g"><div className="ef-gh">SERVICES <span>each one = its own invoice and booking board · wine staff are booked with the floor, billed on the bar</span></div>
+          <div className="row wrap" style={{ gap: 18 }}>
+            <label className="ef-chk"><input type="checkbox" checked={showFloor} onChange={(e) => (e.target.checked ? setMode(showBar ? 'both' : 'floor') : showBar && setMode('bar'))} /> <b>Floor</b></label>
+            <label className="ef-chk"><input type="checkbox" checked={showBar} onChange={(e) => (e.target.checked ? setMode(showFloor ? 'both' : 'bar') : showFloor && setMode('floor'))} /> <b>Bar</b></label>
+          </div></div>
+      </Fold>);
+      case 'place': return (
+      <Fold key={k} n={n} title="Place & time" open={op} setOpen={so} state={pendingDetails || !title ? 'miss' : 'ok'}
+        summary={[pendingDetails ? 'venue to come' : title || 'no venue yet', ends].filter(Boolean).join(' · ')}>
+        <div className="ef-g"><div className="ef-gh">WHERE <span>what staff see</span></div>
+          <div className="ef-row3 ef-row2">
+            <div className="ef-f ef-venue"><span>VENUE · title staff see</span><VenuePicker venues={venues} privates={privates} value={title} venue={venue} privateId={privateId} onPick={pickVenue} onPrivate={pickPrivate} onNew={(name) => { setVenueId(null); setPrivateId(null); setTitle(name); }} /></div>
+            <label className="ef-f"><span>ENDS · approx.</span><select value={ends} onChange={(e) => setEnds(e.target.value)}>{ENDS.map(([l]) => <option key={l}>{l}</option>)}</select></label>
           </div>
-          {trOn && (() => { const first = [...lines.map((l) => l.start)].sort()[0] ?? '17:00'; const [h, m] = first.split(':').map(Number); const leave = ((h * 60 + m - tr.travel) % 1440 + 1440) % 1440; const fmt = (min: number) => `${Math.floor(min / 60)} h${min % 60 ? ` ${min % 60}` : ''}`; return (
-            <div className="tr-grid">
-              <label className="ef-f"><span>TRAVEL TIME · ONE WAY</span><select value={tr.travel} onChange={(e) => setTr({ ...tr, travel: Number(e.target.value) })}>{Array.from({ length: 16 }, (_, i) => (i + 1) * 15).map((n) => <option key={n} value={n}>{fmt(n)}</option>)}</select></label>
-              <div className="ef-f"><span>PAID TRAVEL · BOTH WAYS</span><b className="tr-v">{fmt(paidTravel)}</b><small className="muted">one way × 2, nearest 15 min</small></div>
-              <label className="ef-f"><span>GAS PER CAR</span><input inputMode="decimal" value={tr.gas} onChange={(e) => setTr({ ...tr, gas: e.target.value.replace(/[^\d.]/g, '') })} /></label>
-              <div className="ef-f"><span>SUGGESTED LEAVE</span><b className="tr-v">{ap12(`${String(Math.floor(leave / 60)).padStart(2, '0')}:${String(leave % 60).padStart(2, '0')}`)}</b><small className="muted">first start {ap12(first)} − travel</small></div>
-              <div className="ef-f"><span>CLIENT PAYS TRANSPORT?</span><div className="seg3">{(['client', 'gr'] as const).map((b) => <button type="button" key={b} className={tr.billing === b ? 'on' : ''} onClick={() => setTr({ ...tr, billing: b })}>{b === 'client' ? 'Yes · on the invoice' : 'No · on G&R'}</button>)}</div></div>
-              <div className="ef-f"><span>RIDES</span><div className="sw-row"><button type="button" role="switch" aria-checked={tr.rides} className={'sw' + (tr.rides ? ' on' : '')} onClick={() => setTr({ ...tr, rides: !tr.rides })}><span className="sw-track"><span className="sw-knob" /></span><span className="sw-lbl">{tr.rides ? 'ON' : 'OFF'}</span></button><b>Offer rides on the staff app</b></div></div>
-              <small className="muted tr-wide">Everyone on the event gets {fmt(paidTravel)} added to their paid hours; drivers get the gas per car. Staff see hours only, never dollars. Travel time from the office isn’t looked up automatically yet (needs the Google Maps key): set it here.</small>
-            </div>); })()}
-        </div>
-      </Fold>
-
-      <Fold n={2} id="uni-card" title="Uniforms" open={isOpen(2)} setOpen={(o) => setFold(2, o)}
+          <div className="ef-f ef-wide"><span>ADDRESS · {venue?.address || privateId ? 'auto' : 'start typing, pick from the list'}</span><div className="row" style={{ gap: 8, alignItems: 'flex-start' }}><div style={{ flex: '1 1 auto' }}><AddressInput value={address} onChange={(v) => { setAddress(v); setParts(null); }} onPick={(p) => { setParts(p); if (p.unit) setUnit(p.unit); }} placeholder="Start typing the address…" /></div><input aria-label="Apt / unit / floor" style={{ width: 150, flex: '0 0 auto' }} value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="Apt / unit / floor" /></div></div>
+          <LinksEditor links={links} set={setLinks} venueName={venue?.name ?? null} alsoVenue={linksVenue} setAlsoVenue={setLinksVenue} />
+          <div className="ef-opts">
+            <label className={'ef-opt' + (pendingDetails ? ' on' : '')}><input type="checkbox" checked={pendingDetails} onChange={(e) => setPendingDetails(e.target.checked)} /><span><b>Venue not known yet</b><small>Staff see “Place to come · details coming”, no Confirm button, until you untick this.</small></span></label>
+          </div></div>
+      </Fold>);
+      case 'staff': return (
+      <Fold key={k} n={n} title="Staffing" open={op} setOpen={so} state={tbcRows ? 'miss' : 'ok'}
+        summary={(() => { const t = lines.reduce((x, l) => x + l.count, 0); const nm = lines.reduce((x, l) => x + l.names.length, 0); return `${t} staff · ${nm} named${holdN ? ` · ${holdN} on hold` : ''}${tbcRows ? ` · ${tbcRows} time TBC` : ''}`; })()}>
+        {sug && (
+          <div className="ef-sug">
+            <span className="ef-sug-k">FROM {sug.g} GUESTS</span>
+            <span>Floor <b>{sug.floor}</b>{sug.md === 2 ? ' (2 MD)' : ''}{showBar ? <> · Bar <b>{sug.bt}</b> + <b>{sug.bb}</b></> : ''} · <span className="amber">{sug.hold} on hold</span></span>
+            <span className="grow" />
+            <button type="button" className="abtn sm dark" onClick={useSug}>Use this</button>
+          </div>)}
+        <Grid date={date} lines={lines} setLines={setLines} staff={staff} day={day} mode={mode} />
+      </Fold>);
+      case 'uni': return (
+      <Fold key={k} id="uni-card" n={n} title="Uniforms" open={op} setOpen={so} state={uniWarn.length ? 'miss' : 'ok'}
         summary={[showFloor && `Floor · men ${uniName(uFloor)} · women ${uniName(uFloorW)}`, showBar && `Bar · men ${uniName(uBar)} · women ${uniName(uBarW)}`].filter(Boolean).join('  ·  ')}>
+        <div className="ul-grid">
+          {showFloor && <><UniLook t="FLOOR · MEN" sub="+ wine staff" kind={uFloor} it={itemsOf(items, 'floor_m', uFloor)} /><UniLook t="FLOOR · WOMEN" sub="+ wine staff" kind={uFloorW} it={itemsOf(items, 'floor_w', uFloorW)} /></>}
+          {showBar && <><UniLook t="BAR · MEN" bar kind={uBar} it={itemsOf(items, 'bar_m', uBar)} /><UniLook t="BAR · WOMEN" bar kind={uBarW} it={itemsOf(items, 'bar_w', uBarW)} /></>}
+        </div>
+        {uniWarn.map((w) => <div key={w} className="ul-warn">⚠ {w}</div>)}
+        {!uniEdit ? <button type="button" className="lnk" style={{ marginTop: 8 }} onClick={() => setUniEdit(true)}>Edit uniforms ›</button> : <>
         <div className="uni-card">
           <div className="muted sm" style={{ paddingBottom: 6 }}>Showing <b>{mode === 'both' ? 'Floor + Bar' : mode === 'bar' ? 'Bar' : 'Floor'}</b> · from the Staffing toggle above{venue || privateId ? ' · filled from the ' + (privateId ? 'client card' : 'venue') : ''}</div>
           {showFloor && <UniDept label="Floor" sub="MD · waiters · busboys" bar={false} men={uFloor} women={uFloorW} setMen={setUFloor} setWomen={setUFloorW} items={items} setItems={setItems} />}
           {showBar && <UniDept label="Bar" sub="BM · bartenders · barbacks" bar men={uBar} women={uBarW} setMen={setUBar} setWomen={setUBarW} items={items} setItems={setItems} />}
           <small className="muted"><b className="okc">Green ✓</b> = they wear it · tap to switch off (crossed out) · tap again to switch on. <b style={{ color: '#8A6A12' }}>Gold</b> = something you added for this event · × removes it. Staff see exactly the pieces left on for their line.</small>
         </div>
-      </Fold>
-
-      <Fold n={3} title="Staffing" open={isOpen(3)} setOpen={(o) => setFold(3, o)}
-        summary={(() => { const t = lines.reduce((x, l) => x + l.count, 0); const nm = lines.reduce((x, l) => x + l.names.length, 0); return `${floorN} floor · ${t - floorN} bar · ${t} total · ${nm} of ${t} named`; })()}>
-        <Grid date={date} lines={lines} setLines={setLines} staff={staff} day={day} mode={mode} tbc={startTbc && !pendingDetails} />
-      </Fold>
-
-      <Fold n={4} title="Event folder" open={isOpen(4)} setOpen={(o) => setFold(4, o)} summary={folder.trim() ? 'Google Drive · folder linked' : `Google Drive · ${driveWanted ? 'create on Save' : 'off'}${drive ? '' : ' · not connected'}`}>
+        <button type="button" className="abtn sm" style={{ marginTop: 8 }} onClick={() => setUniEdit(false)}>Done</button></>}
+      </Fold>);
+      case 'bill': return (
+      <Fold key={k} n={n} title="Billing & extras" open={op} setOpen={so} state="ok"
+        summary={[payMethod === 'cash' ? 'Cash' : 'Invoice · QuickBooks', showFloor && showBar ? `floor ${billF} · bar ${billB}${wineN ? ` (incl. ${wineN} wine)` : ''}` : '', 'extras on the invoice'].filter(Boolean).join(' · ')}>
+        <div className="ef-inv">
+          {showFloor && <div className="ef-invc"><b><i className="fl" />FLOOR INVOICE</b><span className="muted sm">{billF} staff · {roleMix(lines.filter((l) => l.dept === 'floor'))}</span></div>}
+          {showBar && <div className="ef-invc"><b><i className="br" />BAR INVOICE</b><span className="muted sm">{billB} staff · {roleMix(lines.filter((l) => l.dept === 'bar'))}</span></div>}
+        </div>
+        <div className="ef-2 ef-bill">
+          <div className="stack" style={{ gap: 10 }}>
+            <div className="sec" style={{ padding: 0 }}><span className="serif">Billing</span><span className="muted sm">only you see it</span></div>
+            <span className="kick" style={{ fontSize: 11 }}>HOW THE CLIENT PAYS</span>
+            <div className="seg3">{(['invoice', 'cash'] as const).map((m) => <button type="button" key={m} className={payMethod === m ? 'on' : ''} onClick={() => setPayMethod(m)}>{m === 'invoice' ? 'Invoice · QuickBooks' : 'Cash'}</button>)}</div>
+            {payMethod === 'cash' && <small className="muted">No QuickBooks invoice is made or filled for this event. Amount to collect = hours × rate + admin fee, no GST / QST. “Mark cash received” is on the event page.</small>}
+            {client && client.rate_sets.length >= 2 && client.rate_sets.map((r, i) => (
+              <label key={r.key} className={'bill' + ((rateSet ?? client.rate_sets[0].key) === r.key ? ' on' : '')}>
+                <input type="radio" checked={(rateSet ?? client.rate_sets[0].key) === r.key} onChange={() => setRateSet(r.key)} />
+                <span><b>{r.label}{i === 0 && !r.label.includes('default') ? ' (default)' : ''}</b><small>{Object.entries(r.rates).map(([k, v]) => `${k} $${v}`).join(' · ')} / h</small></span>
+              </label>
+            ))}
+            <span className="kick" style={{ fontSize: 11 }}>QUICKBOOKS LINK (OPTIONAL)</span>
+            <div className="row" style={{ gap: 8 }}>
+              <select value={qbType} onChange={(e) => setQbType(e.target.value as 'estimate' | 'invoice')} style={{ height: 40, borderRadius: 10, border: '1.5px solid #DCD3C7', padding: '0 8px' }}><option value="estimate">Estimate #</option><option value="invoice">Invoice #</option></select>
+              <input value={qbNum} onChange={(e) => setQbNum(e.target.value.replace(/[^\d]/g, ''))} placeholder="e.g. 3317" style={{ height: 40, borderRadius: 10, border: '1.5px solid #DCD3C7', padding: '0 10px', width: 120 }} />
+            </div>
+            <small className="muted">{payMethod === 'cash'
+              ? 'Cash: nothing is made or filled in QuickBooks. After “Mark cash received”, Needs-you reminds you to remove the estimate yourself.'
+              : qbNum ? (qbType === 'estimate' ? 'The invoice is made from this estimate.' : 'The invoice runs fill this invoice instead of making a new one.') : 'Empty = automatic, as today.'}</small>
+            <span className="kick" style={{ marginTop: 10 }}>EXTRAS</span>
+            <small className="muted">Extras go on the invoice (client pays). Book them on the Bookings side.</small>
+          </div>
+        </div>
+      </Fold>);
+      default: return (
+      <Fold key={k} n={n} title="Folder, transport & notes" open={op} setOpen={so}
+        summary={[folder.trim() ? 'folder linked' : driveWanted ? 'folder on Save' : 'no folder', trOn ? 'transport ON' : '', askWhen === 'save' ? 'ask on Save' : 'ask later'].filter(Boolean).join(' · ')}>
         <div className="stack" style={{ gap: 12, paddingTop: 14 }}>
           <div className="row wrap" style={{ justifyContent: 'space-between', gap: 8 }}>
             <span className="sw-row sm">
@@ -577,50 +678,23 @@ export function EventForm() {
             </div>
           </div>
         </div>
-      </Fold>
-
-      <Fold n={5} title="Alerts & billing" open={isOpen(5)} setOpen={(o) => setFold(5, o)}
-        summary={['Changes recorded on Save', client && client.rate_sets.length >= 2 ? `${client.name} rates: ${client.rate_sets.find((r) => r.key === (rateSet ?? client.rate_sets[0].key))?.label ?? ''}` : ''].filter(Boolean).join(' · ')}>
-        <div className="ef-2">
-          <div className="stack" style={{ gap: 8 }}>
-            <span className="serif" style={{ fontSize: 20 }}>Alerts</span>
-            <span className="muted sm">Booked / moved / removed people are recorded when you press Save. They get a red card on their Home only if this event’s confirmations were already sent. Nothing goes out until you press Save.</span>
+        <div className={'tr-card' + (trOn ? ' on' : '')}>
+          <div className="sw-row">
+            <button type="button" role="switch" aria-checked={trOn} className={'sw' + (trOn ? ' on' : '')} onClick={() => setTr({ ...tr, on: !trOn })}><span className="sw-track"><span className="sw-knob" /></span><span className="sw-lbl">{trOn ? 'ON' : 'OFF'}</span></button>
+            <b>Transport</b><span className="muted sm">far event · rides, paid travel time, gas</span>
+            {trSuggested && <span className="tag" style={{ height: 22 }}>{venue?.name} · always offer rides · suggested ON</span>}
           </div>
-          <div className="stack" style={{ gap: 10 }}>
-            <div className="sec" style={{ padding: 0 }}><span className="serif">Billing</span><span className="muted sm">only you see it</span></div>
-            <span className="kick" style={{ fontSize: 11 }}>HOW THE CLIENT PAYS</span>
-            <div className="seg3">{(['invoice', 'cash'] as const).map((m) => <button type="button" key={m} className={payMethod === m ? 'on' : ''} onClick={() => setPayMethod(m)}>{m === 'invoice' ? 'Invoice · QuickBooks' : 'Cash'}</button>)}</div>
-            {payMethod === 'cash' && <small className="muted">No QuickBooks invoice is made or filled for this event. Amount to collect = hours × rate + admin fee, no GST / QST. “Mark cash received” is on the event page.</small>}
-            {client && client.rate_sets.length >= 2 && client.rate_sets.map((r, i) => (
-              <label key={r.key} className={'bill' + ((rateSet ?? client.rate_sets[0].key) === r.key ? ' on' : '')}>
-                <input type="radio" checked={(rateSet ?? client.rate_sets[0].key) === r.key} onChange={() => setRateSet(r.key)} />
-                <span><b>{r.label}{i === 0 && !r.label.includes('default') ? ' (default)' : ''}</b><small>{Object.entries(r.rates).map(([k, v]) => `${k} $${v}`).join(' · ')} / h</small></span>
-              </label>
-            ))}
-            <span className="kick" style={{ fontSize: 11 }}>QUICKBOOKS LINK (OPTIONAL)</span>
-            <div className="row" style={{ gap: 8 }}>
-              <select value={qbType} onChange={(e) => setQbType(e.target.value as 'estimate' | 'invoice')} style={{ height: 40, borderRadius: 10, border: '1.5px solid #DCD3C7', padding: '0 8px' }}><option value="estimate">Estimate #</option><option value="invoice">Invoice #</option></select>
-              <input value={qbNum} onChange={(e) => setQbNum(e.target.value.replace(/[^\d]/g, ''))} placeholder="e.g. 3317" style={{ height: 40, borderRadius: 10, border: '1.5px solid #DCD3C7', padding: '0 10px', width: 120 }} />
-            </div>
-            <small className="muted">{payMethod === 'cash'
-              ? 'Cash: nothing is made or filled in QuickBooks. After “Mark cash received”, Needs-you reminds you to remove the estimate yourself.'
-              : qbNum ? (qbType === 'estimate' ? 'The invoice is made from this estimate.' : 'The invoice runs fill this invoice instead of making a new one.') : 'Empty = automatic, as today.'}</small>
-            {(() => { const fl = lines.filter((l) => l.dept === 'floor').reduce((n, l) => n + l.count, 0); const rule = setting('extras.rule'); const auto = autoExtras(fl); return (<>
-              <span className="kick" style={{ marginTop: 10 }}>EXTRAS</span>
-              <div className="row wrap" style={{ gap: 8, alignItems: 'center' }}>
-                <select value={extras} onChange={(e) => setExtras(e.target.value)} style={{ height: 40, borderRadius: 10, border: '1.5px solid #DCD3C7', padding: '0 8px' }}>
-                  <option value="">+{auto} ({rule.pct}%{fl > rule.over ? '' : `, ${rule.over} or fewer = none`})</option>{[0, 1, 2, 3, 4, 5, 6, 8, 10].map((n) => <option key={n} value={String(n)}>+{n}</option>)}
-                </select>
-                <div className="seg3">{(['gr', 'client'] as const).map((m) => <button type="button" key={m} className={extrasBill === m ? 'on' : ''} onClick={() => setExtrasBill(m)}>{m === 'gr' ? 'On G&R' : 'Client pays'}</button>)}</div>
-              </div>
-              <small className="muted">Events over {rule.over} staff get {rule.pct}% extras, rounded up (Settings). On G&R: extras stay off the invoice unless one replaces a no-show. Client pays: invoiced like the other waiters.</small>
-            </>); })()}
-          </div>
+          {trOn && (() => { const first = [...lines.map((l) => l.start)].sort()[0] ?? '17:00'; const [h, m] = first.split(':').map(Number); const leave = ((h * 60 + m - tr.travel) % 1440 + 1440) % 1440; const fmt = (min: number) => `${Math.floor(min / 60)} h${min % 60 ? ` ${min % 60}` : ''}`; return (
+            <div className="tr-grid">
+              <label className="ef-f"><span>TRAVEL TIME · ONE WAY</span><select value={tr.travel} onChange={(e) => setTr({ ...tr, travel: Number(e.target.value) })}>{Array.from({ length: 16 }, (_, i) => (i + 1) * 15).map((n) => <option key={n} value={n}>{fmt(n)}</option>)}</select></label>
+              <div className="ef-f"><span>PAID TRAVEL · BOTH WAYS</span><b className="tr-v">{fmt(paidTravel)}</b><small className="muted">one way × 2, nearest 15 min</small></div>
+              <label className="ef-f"><span>GAS PER CAR</span><input inputMode="decimal" value={tr.gas} onChange={(e) => setTr({ ...tr, gas: e.target.value.replace(/[^\d.]/g, '') })} /></label>
+              <div className="ef-f"><span>SUGGESTED LEAVE</span><b className="tr-v">{ap12(`${String(Math.floor(leave / 60)).padStart(2, '0')}:${String(leave % 60).padStart(2, '0')}`)}</b><small className="muted">first start {ap12(first)} − travel</small></div>
+              <div className="ef-f"><span>CLIENT PAYS TRANSPORT?</span><div className="seg3">{(['client', 'gr'] as const).map((b) => <button type="button" key={b} className={tr.billing === b ? 'on' : ''} onClick={() => setTr({ ...tr, billing: b })}>{b === 'client' ? 'Yes · on the invoice' : 'No · on G&R'}</button>)}</div></div>
+              <div className="ef-f"><span>RIDES</span><div className="sw-row"><button type="button" role="switch" aria-checked={tr.rides} className={'sw' + (tr.rides ? ' on' : '')} onClick={() => setTr({ ...tr, rides: !tr.rides })}><span className="sw-track"><span className="sw-knob" /></span><span className="sw-lbl">{tr.rides ? 'ON' : 'OFF'}</span></button><b>Offer rides on the staff app</b></div></div>
+              <small className="muted tr-wide">Everyone on the event gets {fmt(paidTravel)} added to their paid hours; drivers get the gas per car. Staff see hours only, never dollars. Travel time from the office isn’t looked up automatically yet (needs the Google Maps key): set it here.</small>
+            </div>); })()}
         </div>
-      </Fold>
-
-      <Fold n={6} title="Ask availability & more" open={isOpen(6)} setOpen={(o) => setFold(6, o)}
-        summary={`${showFloor ? `Floor ${tiers.join('+')}` : ''}${showFloor && showBar ? ' · ' : ''}${showBar ? (askBar === 'team' ? 'Bar team' : 'Georges books bar') : ''} · ${askWhen === 'save' ? 'ask on Save' : 'later'}`}>
         <div className="ef-2">
           <div className="stack" style={{ gap: 12 }}>
             <div className="sec" style={{ padding: 0 }}><span className="serif">Ask availability</span><span className="muted sm">staff only see the date</span></div>
@@ -640,7 +714,24 @@ export function EventForm() {
               : <label className="ef-f"><span>NOTE FOR STAFF · shows in their event details</span><textarea rows={2} value={staffNote} onChange={(e) => setStaffNote(e.target.value)} placeholder="Enter by the loading dock on Cathcart." /></label>}
           </div>
         </div>
-      </Fold>
+        <small className="muted">Booked / moved / removed people are recorded when you press Save. They get a red card on their Home only if this event’s confirmations were already sent.</small>
+      </Fold>); } })}
+      </div>
+      <aside className="ef-side">
+        <div className="ef-sidec">
+          <span className="kick">{dLabel(date, { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase()} · {(pendingDetails || !title ? 'VENUE TO COME' : title.toUpperCase())}</span>
+          <b className="serif" style={{ fontSize: 21 }}>{client?.name ?? (privateId ? title : 'No client yet')}</b>
+          <span className="muted sm">{[guests ? `${guests} guests` : '', eventType, showFloor && showBar ? 'floor + bar' : showBar ? 'bar' : 'floor'].filter(Boolean).join(' · ')}</span>
+          <i className="ef-hr" />
+          {missing.length ? <><span className="kick amber">STILL MISSING · {missing.length}</span>{missing.map((m) => <span key={m} className="sm">● {m}</span>)}<small className="muted">From 5 days out these show in Needs you with “Ask client”.</small></> : <span className="kick okc">NOTHING MISSING</span>}
+          {uniWarn.length > 0 && <>{uniWarn.map((w) => <span key={w} className="sm amber">⚠ {w}</span>)}</>}
+          <i className="ef-hr" />
+          <span className="sm">Staff <b>{lines.reduce((x, l) => x + l.count, 0)}</b> · named <b>{lines.reduce((x, l) => x + l.names.length, 0)}</b>{holdN ? <> · <span className="amber">{holdN} on hold</span></> : null}</span>
+          {showFloor && showBar && <span className="muted sm">Floor bill {billF} · Bar bill {billB}{wineN ? ` (incl. ${wineN} wine)` : ''}</span>}
+          <span className="muted sm">Ask availability: {askWhen === 'save' ? <b>on Save{showFloor ? ` · floor ${tiers.join('+')}` : ''}</b> : 'later'} · <button type="button" className="lnk" onClick={() => setAskWhen(askWhen === 'save' ? 'later' : 'save')}>{askWhen === 'save' ? 'Not now' : 'Ask on Save'}</button></span>
+          <button className="abtn dark" disabled={busy} style={{ marginTop: 6 }}>{busy ? 'Saving…' : 'Save event'}</button>
+        </div>
+      </aside></div>
       <div className="ef-float">
         {!isNew && id && <DeleteEvent id={id} />}
         <span className="grow" />
@@ -687,7 +778,7 @@ function VenuePicker({ venues, privates, value, venue, privateId, onPick, onPriv
 const ROLE_KEYS: Record<string, string> = { md: 'MD', w: 'W', waiter: 'W', waiters: 'W', bus: 'BUS', busboy: 'BUS', bm: 'BM', 'bar manager': 'BM', bt: 'BT', bartender: 'BT', bartenders: 'BT', bb: 'BB', barback: 'BB', barbacks: 'BB' };
 
 /** The staffing grid: one line per role + start time. */
-function Grid({ date, lines, setLines, staff, day, mode, tbc }: { date: string; lines: Line[]; setLines: (l: Line[]) => void; staff: AStaff[]; day: DayInfo; mode: Mode; tbc?: boolean }) {
+function Grid({ date, lines, setLines, staff, day, mode }: { date: string; lines: Line[]; setLines: (l: Line[]) => void; staff: AStaff[]; day: DayInfo; mode: Mode }) {
   const wrap = useRef<HTMLDivElement>(null);
   const upd = (i: number, p: Partial<Line>) => setLines(lines.map((l, k) => (k === i ? { ...l, ...p } : l)));
   const focusRow = (i: number) => setTimeout(() => wrap.current?.querySelector<HTMLElement>(`[data-row="${i}"] select`)?.focus(), 0);
@@ -724,6 +815,14 @@ function Grid({ date, lines, setLines, staff, day, mode, tbc }: { date: string; 
 
   const floor = lines.filter((l) => l.dept === 'floor'); const bar = lines.filter((l) => l.dept === 'bar');
   const n = (ls: Line[]) => ls.reduce((a, l) => a + l.count, 0);
+  // Push 61 · floor / wine / bar groups (wine = floor staff billed on the bar invoice, report to the MD)
+  const [wineView, setWineView] = useState<'own' | 'floor'>(() => { try { return localStorage.getItem('gr-ef-wine') === 'floor' ? 'floor' : 'own'; } catch { return 'own'; } });
+  const setWine = (v: 'own' | 'floor') => { setWineView(v); try { localStorage.setItem('gr-ef-wine', v); } catch { /* private mode */ } };
+  const ix = (f: (l: Line) => boolean) => lines.map((l, i) => (f(l) ? i : -1)).filter((i) => i >= 0);
+  const wineIx = ix((l) => l.dept === 'bar' && l.code === 'WW');
+  const groups = wineView === 'floor'
+    ? [{ k: 'g-floor', label: 'FLOOR + WINE', idx: [...ix((l) => l.dept === 'floor'), ...wineIx] }, { k: 'g-bar', label: 'BAR', idx: ix((l) => l.dept === 'bar' && l.code !== 'WW') }]
+    : [{ k: 'g-floor', label: 'FLOOR', idx: ix((l) => l.dept === 'floor') }, { k: 'g-wine', label: 'WINE · booked with floor · reports to the MD · bar bill', idx: wineIx }, { k: 'g-bar', label: 'BAR', idx: ix((l) => l.dept === 'bar' && l.code !== 'WW') }];
   const floorBits = [...new Set(floor.map((l) => l.start))].sort().map((st) => { const c = floor.filter((l) => l.start === st && l.code !== 'MD'); return c.length ? `${n(c)} at ${ap12(st).replace(':00', '')}` : ''; }).filter(Boolean);
   const barBits = ['BM', 'BT', 'BB'].map((c) => { const k = n(bar.filter((l) => l.code === c)); return k ? `${k} ${c}` : ''; }).filter(Boolean);
   const md = n(floor.filter((l) => l.code === 'MD'));
@@ -732,19 +831,24 @@ function Grid({ date, lines, setLines, staff, day, mode, tbc }: { date: string; 
     <div className="grid-card" ref={wrap}>
       <div className="sec" style={{ padding: '4px 4px 10px' }}><span className="serif">Staffing · one line per start time</span><span className="muted sm hide-sm">Tab → next cell · Enter → new line · ⌘D duplicate line · paste rows from the sheet</span></div>
       <div className="sg">
-        <div className="sg-h"><span>DEPT</span><span>ROLE</span><span>{tbc ? 'START · TBC' : 'START'}</span><span>END ~</span><span>HOW MANY</span><span>NAMES</span><span /></div>
-        {lines.map((l, i) => (
-          <div key={i} className={'sg-r ' + (l.dept === 'bar' ? 'is-bar' : 'is-floor')} data-row={i} onKeyDown={keys(i)} onPaste={paste(i)}>
+        <div className="row wrap" style={{ gap: 8, alignItems: 'center', padding: '0 4px 8px' }}><span className="muted sm">Show wine</span><span className="seg3 sm">{(['own', 'floor'] as const).map((x) => <button type="button" key={x} className={wineView === x ? 'on' : ''} onClick={() => setWine(x)}>{x === 'own' ? 'Own group' : 'With floor'}</button>)}</span></div>
+        <div className="sg-h"><span>DEPT</span><span>ROLE</span><span>START</span><span>END ~</span><span>HOW MANY</span><span>NAMES</span><span /></div>
+        {groups.map((g) => g.idx.length > 0 && <div key={g.k} className={'sg-grp ' + g.k}><div className="sg-gh"><i />{g.label}<span className="grow" /><small>{g.idx.reduce((a, i) => a + lines[i].count, 0)} · {g.idx.reduce((a, i) => a + lines[i].names.length, 0)} named</small></div>
+        {g.idx.map((i) => { const l = lines[i]; return (
+          <div key={i} className={'sg-r ' + (l.dept === 'bar' ? (l.code === 'WW' ? 'is-wine' : 'is-bar') : 'is-floor')} data-row={i} onKeyDown={keys(i)} onPaste={paste(i)}>
             <select aria-label="Department" value={l.dept} onChange={(e) => { const d = e.target.value as 'floor' | 'bar'; upd(i, { dept: d, code: d === 'bar' ? 'BT' : 'W', names: [] }); }}>{(mode !== 'bar' || l.dept === 'floor') && <option value="floor">● Floor</option>}{(mode !== 'floor' || l.dept === 'bar') && <option value="bar">● Bar</option>}</select>
-            <select aria-label="Role" value={l.code} onChange={(e) => upd(i, { code: e.target.value, names: [] })} className={l.code === 'MD' || l.code === 'BM' ? 'strong' : ''}>{ROLES.filter((r) => r.dept === l.dept).map((r) => <option key={r.code} value={r.code}>{r.label}</option>)}</select>
-            <span className={tbc ? 'sg-tbc' : 'sg-tc'}><TimeCell value={l.start} onChange={(v) => upd(i, { start: v })} />{tbc && <em title="Start time to come · staff see Time TBC">TBC</em>}</span>
+            <select aria-label="Role" value={l.code} onChange={(e) => upd(i, { code: e.target.value, names: [] })} className={l.code === 'MD' || l.code === 'BM' ? 'strong' : ''}>{ROLES.filter((r) => r.dept === l.dept).map((r) => <option key={r.code} value={r.code}>{r.code === 'WW' ? 'Wine waiter · bar bill' : r.label}</option>)}</select>
+            <span className={l.tbc ? 'sg-tbc' : 'sg-tc'}><TimeCell value={l.start} onChange={(v) => upd(i, { start: v, tbc: false })} /><button type="button" className={'sg-tbcb' + (l.tbc ? ' on' : '')} title={l.tbc ? 'Start time still to come · staff see Time TBC · tap when you know it' : 'Mark the start time as TBC'} onClick={() => upd(i, { tbc: !l.tbc })}>TBC</button></span>
             <TimeCell value={l.end ?? ''} optional onChange={(v) => upd(i, { end: v || null })} />
             <input aria-label="How many" type="number" min={0} value={l.count} onChange={(e) => upd(i, { count: Math.max(0, Number(e.target.value)) })} className={l.count >= 10 ? 'strong' : ''} />
             <NamePicker line={l} date={date} staff={staff} day={day} taken={lines.flatMap((x, k) => (k === i ? [] : x.names))} onChange={(names) => upd(i, { names, count: Math.max(l.count, names.length) })} />
             <button type="button" className="sg-x" aria-label="Remove line" onClick={() => setLines(lines.filter((_, k) => k !== i))}>×</button>
-          </div>
-        ))}
-        <button type="button" className="sg-add" onClick={() => addAfter(lines.length - 1)}>+ new line <span className="muted">· times like "545" → 5:45 PM</span></button>
+          </div>); })}</div>)}
+        <div className="row wrap" style={{ gap: 6 }}>
+          {mode !== 'bar' && <button type="button" className="sg-add" onClick={() => setLines([...lines, { ...blankLine('floor', 'W', lines[0]?.start ?? '17:00'), tbc: lines.some((x) => x.tbc) }])}>+ Floor row</button>}
+          {mode !== 'floor' && <button type="button" className="sg-add" onClick={() => setLines([...lines, { ...blankLine('bar', 'WW', lines[0]?.start ?? '17:00'), tbc: lines.some((x) => x.tbc) }])}>+ Wine row</button>}
+          {mode !== 'floor' && <button type="button" className="sg-add" onClick={() => setLines([...lines, { ...blankLine('bar', 'BT', lines[0]?.start ?? '17:00'), tbc: lines.some((x) => x.tbc) }])}>+ Bar row</button>}
+          <span className="muted sm" style={{ alignSelf: 'center' }}>· times like "545" → 5:45 PM</span></div>
       </div>
       <div className="sg-tot">
         <span><b>{n(floor)}</b> floor <small>({[md ? `${md} MD` : '', ...floorBits].filter(Boolean).join(' · ') || '—'})</small></span>

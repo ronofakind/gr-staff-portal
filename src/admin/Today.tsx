@@ -249,6 +249,27 @@ export function Today() {
       // push 36d · staff messages waiting on Ronnie (no email: the count lives here + on the Messages nav item)
       const { data: nr, error: nrErr } = await supabase.rpc('inbox_count');
       if (!nrErr && typeof nr === 'number' && nr > 0) n.unshift({ key: 'msgs', red: true, title: `${nr} staff message${nr > 1 ? 's' : ''} need${nr > 1 ? '' : 's'} a reply`, sub: 'Messages · Needs reply', action: 'Open', to: '/admin/messages' });
+      // push 61 · 5 days out: anything still missing from the client (start times TBC, venue, guest count) → Ask client
+      const { data: mi, error: miErr } = await supabase.from('events').select('id,event_date,title,department,start_tbc,details_pending,guests,created_at').gte('event_date', today).lte('event_date', addDays(today, 5)).order('event_date');
+      if (!miErr) {
+        const byKey = new Map<string, { id: string; date: string; title: string; miss: Set<string> }>();
+        for (const e of (mi ?? []) as { id: string; event_date: string; title: string; department: string; start_tbc: boolean | null; details_pending: boolean | null; guests: number | null; created_at: string }[]) {
+          // guest count is only asked on events made from push 61 on (older ones never had it filled)
+          const miss = [...(e.start_tbc ? ['start times'] : []), ...(e.details_pending ? ['venue / address'] : []), ...(e.guests == null && e.created_at >= '2026-11-09T22:00:00Z' ? ['final guest count'] : [])];
+          if (!miss.length) continue;
+          const k = e.event_date + '|' + (e.details_pending ? e.id : e.title);
+          const cur = byKey.get(k) ?? { id: e.id, date: e.event_date, title: e.details_pending ? 'Venue to come' : e.title, miss: new Set<string>() };
+          miss.forEach((m) => cur.miss.add(m)); byKey.set(k, cur);
+        }
+        for (const x of byKey.values()) {
+          const when = x.date === today ? 'today' : x.date === addDays(today, 1) ? 'tomorrow' : dLabel(x.date);
+          const list = [...x.miss];
+          const msg = `Hi! For ${x.title} on ${dLabel(x.date)}, could you confirm the ${list.join(', the ').replace(/, the ([^,]*)$/, ' and the $1')}? Thank you!`;
+          n.push({ key: 'mi' + x.id, red: x.date <= addDays(today, 2), title: `${x.title} · ${when} · missing from the client`, sub: list.join(' · '), action: 'Copy ask', to: `/admin/event/${x.id}/edit`,
+            alt: { label: 'Open', to: `/admin/event/${x.id}/edit` },
+            onAct: async () => { try { await navigator.clipboard.writeText(msg); alert('Copied. Paste it to the client (or send it to Georges):\n\n' + msg); } catch { prompt('Copy this message:', msg); } } });
+        }
+      }
       setNeeds(n);
     })();
   }, [tick]);

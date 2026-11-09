@@ -131,10 +131,13 @@ export const tTime = (iso: string | null) => iso ? new Date(iso).toLocaleTimeStr
 export const dLabel = (iso: string, o: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric' }) => new Date(iso + 'T12:00:00').toLocaleDateString('en-CA', o).replace(/\./g, '');
 
 /** One line of the staffing grid: one role at one start time. */
-export type Line = { dept: 'floor' | 'bar'; code: string; start: string; end?: string | null; count: number; names: string[] };
+/** Push 61 · tbc = start time still to come (a placeholder time is kept for shifts); hold = how many of `count` are the +15% on hold. */
+export type Line = { dept: 'floor' | 'bar'; code: string; start: string; end?: string | null; count: number; names: string[]; tbc?: boolean; hold?: number };
 export const ROLES: { dept: 'floor' | 'bar'; code: string; label: string }[] = [
   { dept: 'floor', code: 'MD', label: 'MD' }, { dept: 'floor', code: 'W', label: 'Waiter' }, { dept: 'floor', code: 'BUS', label: 'Busboy' },
   { dept: 'bar', code: 'BM', label: 'Bar manager' }, { dept: 'bar', code: 'BT', label: 'Bartender' }, { dept: 'bar', code: 'BB', label: 'Barback' },
+  /** Push 61 · wine staff: floor staff (floor uniform, report to the MD) billed on the bar invoice, so they live on the bar event. */
+  { dept: 'bar', code: 'WW', label: 'Wine waiter' },
 ];
 export const roleName = (code: string | null) => ROLES.find((r) => r.code === code)?.label ?? (code && /^\d+$/.test(code) ? 'Waiter' : code ?? '');
 export const roleOfShift = (code: string | null) => (code && /^\d+$/.test(code) ? 'W' : code ?? 'W');

@@ -3918,3 +3918,35 @@ button.pf-go { border: none; background: none; padding: 4px 2px; font: 700 13px 
 /* push 60 · debriefs not answered */
 .dbm { font-size: 10px; font-weight: 800; padding: 3px 7px; border-radius: 7px; white-space: nowrap; margin-left: auto; }
 .dbm.skipped, .dbm.open { background: #FBF3E0; color: #6B4A12; } .dbm.never { background: #F8E9E9; color: #9B2226; }
+/* push 61 · event page v3 (board EventPageV3): blocks + side summary, guest suggestion, floor/wine/bar groups, per-line TBC, visual uniforms */
+.ef-laybar { display: flex; justify-content: flex-end; }
+.ef-main { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; align-items: start; }
+.ef-blocks { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.ef-side { display: none; }
+@media (min-width: 1180px) { .ef-main { grid-template-columns: minmax(0, 1fr) 300px; } .ef-side { display: block; position: sticky; top: 16px; } .ef .ef-float { display: none; } }
+.ef-sidec { background: #fff; border-radius: 20px; padding: 16px; display: flex; flex-direction: column; gap: 6px; }
+.ef-sidec .kick { font-size: 10.5px; letter-spacing: .12em; font-weight: 800; color: var(--muted); }
+.ef-hr { display: block; height: 1px; background: var(--line); margin: 6px 0; }
+.amber { color: #B7791F; } .kick.amber { color: #B7791F; } .kick.okc { color: #2F6B4F; }
+.ef .fold-st { font-size: 11px; font-weight: 800; white-space: nowrap; margin-left: 8px; } .ef .fold-st.ok { color: #2F6B4F; } .ef .fold-st.miss { color: #B7791F; }
+.ef-row2 { grid-template-columns: 1.6fr .8fr !important; }
+.ef-chk { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; } .ef-chk input { width: 18px; height: 18px; accent-color: #1A1714; }
+.ef-sug { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 14px; margin: 4px 0 12px; border-radius: 14px; background: #FFF8E8; box-shadow: inset 0 0 0 1px #E9D3A0; font-size: 13.5px; }
+.ef-sug-k { font-size: 10.5px; letter-spacing: .1em; font-weight: 800; color: #8A6A1F; }
+.sg-grp { border-radius: 14px; padding: 4px 0; margin-top: 8px; } .sg-grp.g-floor { background: #F3F6F9; } .sg-grp.g-wine { background: #F6E9EE; } .sg-grp.g-bar { background: #FBF1F1; }
+.sg-gh { display: flex; align-items: center; gap: 8px; padding: 6px 10px; font-size: 11.5px; font-weight: 800; letter-spacing: .08em; }
+.sg-gh i { width: 4px; height: 14px; border-radius: 2px; background: #2F4F6B; } .g-wine .sg-gh i { background: #7A2E4A; } .g-bar .sg-gh i { background: #9B2226; }
+.sg-gh small { font-weight: 600; letter-spacing: 0; color: var(--muted); }
+.sg-grp .sg-r { background: transparent; } .sg-r.is-wine { background: transparent; }
+.sg-tc, .sg-tbc { display: flex !important; align-items: center; gap: 4px; } .sg-tc > :first-child, .sg-tbc > :first-child { flex: 1; min-width: 0; width: auto !important; }
+.sg-tbcb { flex: none; width: auto !important; border: 0; border-radius: 6px; padding: 3px 5px; font: 800 9.5px Inter, system-ui, sans-serif; letter-spacing: .05em; background: #EFE9E1; color: #A79D91; cursor: pointer; }
+.sg-tbcb.on { background: #C9A227; color: #1A1714; }
+.ul-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.ul-card { display: flex; gap: 12px; align-items: center; padding: 12px; border-radius: 14px; background: #fff; box-shadow: 0 1px 0 #E4DCD1, inset 0 0 0 1px #EFE9E1; }
+.ul-t { font-size: 11px; font-weight: 800; letter-spacing: .06em; color: #2F4F6B; } .ul-t.ul-bar { color: #9B2226; } .ul-t small { font-weight: 600; letter-spacing: 0; color: var(--muted); }
+.ul-n { font-size: 15px; }
+.ul-warn { margin-top: 8px; padding: 8px 12px; border-radius: 10px; background: #FBF3E0; color: #6B4A12; font-size: 13px; font-weight: 600; }
+.ef-inv { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin-bottom: 10px; }
+.ef-invc { display: flex; flex-direction: column; gap: 4px; padding: 12px; border-radius: 14px; background: #F7F3EE; }
+.ef-invc b { font-size: 12.5px; letter-spacing: .06em; display: flex; align-items: center; gap: 8px; } .ef-invc i { width: 4px; height: 14px; border-radius: 2px; } .ef-invc i.fl { background: #2F4F6B; } .ef-invc i.br { background: #9B2226; }
+.ef-bill { grid-template-columns: 1fr !important; }

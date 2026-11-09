@@ -43,6 +43,14 @@ const SECTIONS: Section[] = [
     { label: 'Extras', k: 'extras.rule', kind: 'obj', fields: [{ f: 'pct', label: 'Percent', unit: '%' }], show: ((v: S['extras.rule']) => `${v.pct}% · rounded up`) as (v: never) => string },
     { label: 'Default billing', sub: 'each client can override', k: 'extras.default_billing', kind: 'choice', choices: [['gr', 'On G&R'], ['client', 'Client pays']], show: ((v: string) => (v === 'client' ? 'Client pays' : 'On G&R')) as (v: never) => string },
   ] },
+  { title: 'Staffing from guests', rows: [
+    { label: 'Floor · seated', sub: 'MD included · Reception and everything not cocktail', k: 'staffing.ratios', kind: 'obj', fields: [{ f: 'seated', label: '1 per', unit: 'guests' }], show: ((v: S['staffing.ratios']) => `1 per ${v.seated} guests`) as (v: never) => string },
+    { label: 'Floor · cocktail', sub: 'Cocktail dînatoire, Cocktail', k: 'staffing.ratios', kind: 'obj', fields: [{ f: 'cocktail', label: '1 per', unit: 'guests' }], show: ((v: S['staffing.ratios']) => `1 per ${v.cocktail} guests`) as (v: never) => string },
+    { label: 'Bartenders', sub: '+ 1 barback per bartender · only with Bar service', k: 'staffing.ratios', kind: 'obj', fields: [{ f: 'bar', label: '1 per', unit: 'guests' }], show: ((v: S['staffing.ratios']) => `1 per ${v.bar} guests`) as (v: never) => string },
+    { label: 'On hold on top', sub: 'until the client confirms numbers', k: 'staffing.ratios', kind: 'obj', fields: [{ f: 'buffer', label: '+', unit: '%' }], show: ((v: S['staffing.ratios']) => `+${v.buffer}% · rounded up`) as (v: never) => string },
+    { label: '2nd MD', k: 'staffing.ratios', kind: 'obj', fields: [{ f: 'md2', label: 'From', unit: 'guests' }], show: ((v: S['staffing.ratios']) => `ticked from ${v.md2} guests`) as (v: never) => string },
+    { label: 'Small events', sub: '1 MD + 2 waiters minimum', k: 'staffing.ratios', kind: 'obj', fields: [{ f: 'small', label: 'Under', unit: 'guests' }], show: ((v: S['staffing.ratios']) => `under ${v.small} guests`) as (v: never) => string },
+  ] },
   { title: 'Transport', rows: [
     { label: 'Office (start point)', k: 'transport.office', kind: 'text', storedOnly: true, show: ((v: string) => v) as (v: never) => string },
     { label: 'Far event from', k: 'transport.far_min', kind: 'num', unit: 'min drive', min: 10, max: 240, step: 5, storedOnly: true, show: ((v: number) => `${v} min drive`) as (v: never) => string },
