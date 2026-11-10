@@ -30,7 +30,7 @@ export type Staff = {
 export type ShiftRow = {
   id: string; status: 'booked' | 'confirmed' | 'declined';
   position_code: string | null; position_detail: string | null;
-  planned_start: string; planned_end: string | null; arrive_before_min: number; uniform: string | null; me?: { sex?: string | null } | null; time_tbc?: boolean; plan?: unknown; cal_token?: string; attendance?: 'no_show' | 'cancelled' | null; punches?: { punch_in: string | null; punch_out: string | null } | null; ends_own?: boolean; cut_first_at?: string | null;
+  planned_start: string; planned_end: string | null; arrive_before_min: number; uniform: string | null; me?: { sex?: string | null } | null; time_tbc?: boolean; start_label?: string | null; plan?: unknown; cal_token?: string; attendance?: 'no_show' | 'cancelled' | null; punches?: { punch_in: string | null; punch_out: string | null } | null; ends_own?: boolean; cut_first_at?: string | null;
   events: {
     id: string; event_date: string; title: string; address: string | null; department: string; manager_id: string | null; co_manager_ids?: string[] | null; tentative?: boolean;
     description: string | null; dress_code: string | null; bring: string | null; notes?: string | null;
@@ -40,7 +40,7 @@ export type ShiftRow = {
   };
 };
 
-export const SHIFT_SELECT = `id,status,attendance,me:staff!shifts_staff_id_fkey(sex),position_code,position_detail,planned_start,planned_end,arrive_before_min,uniform,time_tbc,plan,cal_token,ends_own,cut_first_at,
+export const SHIFT_SELECT = `id,status,attendance,me:staff!shifts_staff_id_fkey(sex),position_code,position_detail,planned_start,planned_end,arrive_before_min,uniform,time_tbc,start_label,plan,cal_token,ends_own,cut_first_at,
   events(id,event_date,title,address,department,description,dress_code,bring,notes,timeline,manager_id,co_manager_ids,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,uniform_items,event_type,guests,transport,travel_min,paid_travel_min,rides,drive_folder_url,plan,hours_submitted_at,details_pending,tentative,links,
     venues(name,address,staff_notes,no_outside_food,pin_lat,pin_lng,pin_label,links),
     manager:staff!events_manager_id_fkey(full_name,photo_url,phone))`;

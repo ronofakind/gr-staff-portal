@@ -197,7 +197,7 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team, past }
       </> : <section className="d3-hero">
         <div className="d3-kick">{dayWord.toUpperCase()}{cd ? ` · ${cd.toUpperCase()}` : ''}</div>
         <div><div className="serif d3-venue">{venueName}</div>{(facts || ev.description) && <div className="d3-sub">{facts || ev.description}</div>}</div>
-        <StartPos start={s.time_tbc ? null : s.planned_start} role={role} />
+        <StartPos start={s.time_tbc ? null : s.planned_start} role={role} label={s.start_label} />
         {!setup && (
           <div className="d37-uni" role="button" tabIndex={0} onClick={seeUniform} onKeyDown={(e) => { if (e.key === 'Enter') seeUniform(); }}>
             <div className="d37-uni-ics">

@@ -166,8 +166,8 @@ export const ap12 = (t: string | null | undefined) => { if (!t) return ''; const
 export const confirmationsSent = (e: { shifts: { notified_at: string | null }[] }) => e.shifts.some((s) => s.notified_at);
 const aDate = (iso: string) => new Date(iso + 'T12:00:00').toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' }).replace(/\./g, '');
 /**
- * Record a booking change and, if that event's confirmations were already sent, alert the person (Home card).
- * Not sent yet → silent; they get the details when confirmations go out.
+ * Record a booking change and, if that event's confirmations were already sent, stage a note for the person (push 72:
+ * it waits in change_outbox until a send button). Not sent yet → silent; they get the details when confirmations go out.
  */
 export async function bookingChange(kind: 'booked' | 'moved' | 'removed', p: {
   staff_id: string; shift_id?: string | null; to?: { id: string; event_date: string; title: string; sent: boolean; start: string };
@@ -184,7 +184,8 @@ export async function bookingChange(kind: 'booked' | 'moved' | 'removed', p: {
   if (kind === 'removed' && p.from?.sent) alert = { title: `You're no longer on ${aDate(p.from.event_date)}`, body: `${p.from.title} · that shift was removed. Questions? Text Ronnie.`, event_id: null };
   if (kind === 'moved' && p.pos && p.to && (p.to.sent || p.from?.sent) && !alert) alert = { title: 'Your shift changed', body: `${aDate(p.to.event_date)} · ${p.to.title} · now ${p.pos.new} (was ${p.pos.old})`, event_id: p.to.id };
   if (!alert) return;
-  const { data: al } = await supabase.from('staff_alerts').insert({ staff_id: p.staff_id, kind, ...alert }).select('id').maybeSingle();
+  // push 72 · nothing goes out on Save: the change waits in the outbox until Ronnie presses a send button (Home card + note + alert then).
+  const al = null as { id: string } | null;
   // push 40 · the same change as a note in their conversation with Ronnie (Got it / Can't make it). Errors (044 not applied) are ignored.
   const lines: { label: string; old: string | null; new: string | null }[] = [];
   if (kind === 'moved' && p.from && p.to) {
@@ -195,8 +196,8 @@ export async function bookingChange(kind: 'booked' | 'moved' | 'removed', p: {
   const at = kind === 'removed' ? p.from : p.to;
   if (at) await supabase.rpc('admin_shift_note', {
     p_staff: p.staff_id, p_kind: kind === 'moved' ? 'changed' : kind === 'booked' ? 'new' : 'removed', p_shift: kind === 'removed' ? null : p.shift_id ?? null,
-    p_alert: (al as { id: string } | null)?.id ?? null,
-    p_meta: { date: at.event_date, venue: at.title, start: at.start, position: p.position ?? null, lines },
+    p_alert: al?.id ?? null,
+    p_meta: { date: at.event_date, venue: at.title, start: at.start, position: p.position ?? null, lines, event_id: at.id, shift_ref: p.shift_id ?? null },
   }).then(() => {}, () => {});
 }
 

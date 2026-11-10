@@ -45,7 +45,7 @@ const readComgr = (): string[] => { try { const v = JSON.parse(localStorage.getI
 
 /** push 33 shift columns (migration 039), read on their own so Home still loads before it is applied. */
 type Prev = { start?: string | null; end?: string | null; position?: string | null; place?: string | null; address?: string | null; uniform?: string | null; uniform_new?: string | null };
-type P33 = { confirm_sent_at: string | null; confirm_by: string | null; change_prev: Prev | null; change_seen_at: string | null };
+type P33 = { confirm_sent_at: string | null; confirm_by: string | null; change_prev: Prev | null; change_seen_at: string | null; change_sent_at?: string | null };
 type Mate = { full_name: string; photo_url: string | null; position_code: string | null; position_detail: string | null; punches: { punch_in: string | null; punch_out: string | null } | null };
 type Q = { shift_id: string; status: 'open' | 'fixed' | 'correct' };
 const q15 = (iso: string) => new Date(Math.round(new Date(iso).getTime() / 900000) * 900000).toISOString();
@@ -100,7 +100,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
     const rows = all.filter((r) => new Date(r.planned_start).getTime() >= since12 || (r.events.event_date === td && nToday >= 2) || (!!r.punches?.punch_in && !r.punches.punch_out));
     setShifts(rows);
     shiftNotes(rows.map((r) => r.id)).then(setGNotes);
-    if (rows.length) supabase.from('shifts').select('id,confirm_sent_at,confirm_by,change_prev,change_seen_at').in('id', rows.map((r) => r.id))
+    if (rows.length) supabase.from('shifts').select('id,confirm_sent_at,confirm_by,change_prev,change_seen_at,change_sent_at').in('id', rows.map((r) => r.id))
       .then(({ data: d, error }) => { if (!error && Array.isArray(d)) setX33(Object.fromEntries((d as (P33 & { id: string })[]).map((x) => [x.id, x]))); });
     // push 28 · "Shift cancelled · Ronnie has been told" for 24 h (cancelled_at is new in 034: errors → none)
     const cut = new Date(Date.now() - 24 * 3600e3).toISOString();
@@ -183,7 +183,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
   const notFinal = (s: ShiftRow) => !!s.events.details_pending || !!s.time_tbc;
   const soon = (s: ShiftRow) => !!s.events.details_pending || (!!s.time_tbc && s.status === 'booked');
   const pending = shifts.filter((s) => s.status === 'booked' && !notFinal(s) && s !== next); // the next shift confirms on its own card
-  const changed = (s: ShiftRow) => { const x = x33[s.id]; return s.status === 'confirmed' && x?.change_prev && !x.change_seen_at ? x.change_prev : null; };
+  const changed = (s: ShiftRow) => { const x = x33[s.id]; return s.status === 'confirmed' && x?.change_prev && x.change_sent_at && !x.change_seen_at ? x.change_prev : null; }; // push 72 · only once sent
   const toAns = (myDates ?? []).filter((d) => toAnswer(d));
   // push 35d · Maybe reminder: on (or after) the knows-by day, a gold card instead of the red bubble for those dates
   const dueMaybes = toAns.filter((d) => d.status === 'maybe');
@@ -308,7 +308,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
         <div key={s.id} className="todo">
           <div className="grow">
             <b>{pending.length > 1 ? 'Shift needs your answer' : '1 shift needs your answer'}</b>
-            <span>{dayBadge(s.events.event_date, lang).dow} {dayBadge(s.events.event_date, lang).day} · {s.events.title} · {s.time_tbc ? 'time TBC' : time(s.planned_start, lang)} · {role(s)}</span>
+            <span>{dayBadge(s.events.event_date, lang).dow} {dayBadge(s.events.event_date, lang).day} · {s.events.title} · {s.time_tbc ? (s.start_label ? `${startWord(s.start_label).toLowerCase()} · exact time coming` : 'time TBC') : time(s.planned_start, lang)} · {role(s)}</span>
           </div>
           <div className="row">
             <button className="pill-line" onClick={() => respond(s.id, 'declined')}>Can't</button>
@@ -424,7 +424,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
                   <div><small>Started</small><BigTime iso={next.punches!.punch_in!} small /></div>
                   <div><small>On the clock</small><span className="big serif sm-big mint"><Elapsed iso={next.punches!.punch_in!} /></span></div>
                 </> : <>
-                  <div><small>Starts</small>{next.time_tbc ? <span className="big serif sm-big">TBC</span> : <BigTime iso={next.planned_start} small />}</div>
+                  <div><small>Starts</small>{next.time_tbc ? <><span className="big serif sm-big">{startWord(next.start_label)}</span>{next.start_label && <small className="sp-coming">exact time coming</small>}</> : <BigTime iso={next.planned_start} small />}</div>
                   <div><small>{next.planned_end && !next.time_tbc ? 'Ends ~ estimate' : 'Ends'}</small>{next.planned_end && !next.time_tbc ? <BigTime iso={next.planned_end} small /> : <span className="big serif sm-big">TBC</span>}</div>
                 </>}
               </div>
@@ -623,10 +623,12 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
 }
 
 /** push 33a · Shift starts + Your position in one light row (position centred under its label). */
-export function StartPos({ start, role, mgr = false }: { start: string | null; role: string; mgr?: boolean }) {
+/** push 72 · a rough start ("Evening") when the exact time isn't set yet. */
+export const startWord = (l?: string | null) => (l ? l[0].toUpperCase() + l.slice(1) : 'TBC');
+export function StartPos({ start, role, mgr = false, label }: { start: string | null; role: string; mgr?: boolean; label?: string | null }) {
   return (
     <div className="start-pos">
-      <div><small>Shift starts</small>{start ? <BigTime iso={start} small /> : <span className="big serif sm-big">TBC</span>}</div>
+      <div><small>Shift starts</small>{start ? <BigTime iso={start} small /> : <><span className="big serif sm-big">{startWord(label)}</span>{label && <small className="sp-coming">exact time coming</small>}</>}</div>
       <div className="sp-pos"><small>Your position</small><span className={'pos-pill-dark' + (mgr ? ' mgr' : '')}>{role}</span></div>
     </div>
   );

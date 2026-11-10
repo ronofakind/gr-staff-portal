@@ -11,6 +11,7 @@ import { misfits, linksOf, other, condShort, RuleIcons, outOfArea, areasOf, type
 import { loadScoreData, scoreOf, type ScoreData } from './score';
 import { overBy } from './NightOff';
 import { useNewHires, juniorClash, missingFor, missingText } from '../lib/newHires'; // push 71
+import { SendBox, PendingBar, StartLabelGuard } from './SendBox'; // push 72
 import { locksBetween, setLock, lockTitle, NO_LOCKS, type Locks } from './locks';
 
 /* Push 23 · Bookings (admin). Practice mode by default: every change lives in a draft (booking_drafts) layered
@@ -73,6 +74,7 @@ export function Bookings() {
   const [rl, setRl] = useState<SLink[]>([]); const [clients, setClients] = useState<Client[]>([]); const [venues, setVenues] = useState<Venue[]>([]);
   const [sd, setSd] = useState<ScoreData | null>(null); const [warns, setWarns] = useState<Warn[]>([]);
   const nh = useNewHires(); // push 71 · Junior = cocktail only · missing tax & pay
+  const [sendEvs, setSendEvs] = useState<string[] | null>(null); const [guard, setGuard] = useState<string[] | null>(null); const [pTick, setPTick] = useState(0); // push 72
   const [shifts30, setShifts30] = useState<Record<string, number>>({}); const [yesRate, setYesRate] = useState<Record<string, number>>({});
   const [base, setBase] = useState<Record<string, Pl[]>>({});
   const [draft, setDraft] = useState<Record<string, Draft>>({});
@@ -307,8 +309,11 @@ export function Bookings() {
         }
         await supabase.from('booking_drafts').delete().eq('admin_id', me).eq('for_date', c.d);
       }
-      setMsg(`${n} change${n === 1 ? '' : 's'} saved to the schedule.${send ? ' Send the confirmations from the Day view.' : ''}`);
-      await load();
+      const touched = [...new Set(allChanges.flatMap((c) => [...c.added, ...c.moved, ...c.removed, ...c.reroled].map((p) => p.event_id)
+        .concat(c.moved.map((p) => (base[c.d] ?? []).find((x) => x.shift_id === p.shift_id)?.event_id ?? ''))))].filter(Boolean);
+      setMsg(`${n} change${n === 1 ? '' : 's'} saved to the schedule. Nobody is told until you send.`);
+      await load(); setPTick((x) => x + 1);
+      if (send) setSendEvs(touched); // push 72 · Save + send → the "About to send" box
     }
     setBusy(false); setReview(false);
   };
@@ -645,18 +650,21 @@ export function Bookings() {
         const list = e.shifts.filter((x) => liveShift(x) && !x.attendance && needsSend(x));
         const told = list.filter((x) => x.status === 'confirmed');
         const why = (x: typeof list[number]) => (x.status !== 'confirmed' ? (x.notified_at ? 'changed after it was sent' : 'not sent yet') : x.notified_at ? 'changed after it was sent' : 'changed after they confirmed');
-        const mark = async (ids: string[]) => { if (!ids.length) return; setSendBusy(true); const { error } = await supabase.from('shifts').update({ notified_at: new Date().toISOString() }).in('id', ids); setSendBusy(false); if (error) { setHint(error.message); return; } setSendOf(null); await load(); };
+        const mark = async (ids: string[], ok = false) => { if (!ids.length) return; if (!ok) { setGuard(ids); return; } setSendBusy(true); const { error } = await supabase.from('shifts').update({ notified_at: new Date().toISOString() }).in('id', ids); setSendBusy(false); if (error) { setHint(error.message); return; } setSendOf(null); await load(); };
         return (
           <div className="bk-sendm">
             <div className="bk-sendm-h"><b>{seeTitle(e)} · {dLabel(e.event_date, { weekday: 'short', month: 'short', day: 'numeric' })}</b><button className="lnk" aria-label="Close" onClick={() => setSendOf(null)}>×</button></div>
             {list.length ? <ul>{list.map((x) => <li key={x.id}><b>{x.staff?.full_name ?? '?'}</b><small>{why(x)}</small></li>)}</ul> : <small className="muted">Nothing to send.</small>}
             <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
               <button className="abtn dark" disabled={sendBusy || !list.length} onClick={() => mark(list.map((x) => x.id))}>Send to {list.length}</button>
-              {told.length > 0 && <button className="abtn" disabled={sendBusy} onClick={() => mark(told.map((x) => x.id))}>Already told them{told.length < list.length ? ` · ${told.length}` : ''}</button>}
+              {told.length > 0 && <button className="abtn" disabled={sendBusy} onClick={() => mark(told.map((x) => x.id), true)}>Already told them{told.length < list.length ? ` · ${told.length}` : ''}</button>}
             </div>
             <small className="muted">Already told them clears SEND for people who confirmed with you, without sending anything.{told.length < list.length ? ' People still to confirm need the real send.' : ''}</small>
           </div>);
       })()}
+      {guard && <StartLabelGuard ids={guard} onCancel={() => setGuard(null)} onAddTimes={() => { const id = sendOf; setGuard(null); if (id) navB(`/admin/event/${id}/edit`); }}
+        onOk={async () => { const ids = guard; setGuard(null); setSendBusy(true); const { error } = await supabase.from('shifts').update({ notified_at: new Date().toISOString() }).in('id', ids); setSendBusy(false); if (error) { setHint(error.message); return; } setSendOf(null); await load(); }} />}
+      {sendEvs && <SendBox events={sendEvs} onClose={() => { setSendEvs(null); setPTick((x) => x + 1); }} onSent={() => { setMsg('Sent.'); load(); }} />}
       {hint && <div className="bk-hint" onClick={() => setHint('')}>{hint} ×</div>}
       {undoConf && <div className="bk-undo"><span>✓ {undoConf.ids.length} confirmed · {undoConf.title}</span><button type="button" onClick={undoConfirmAll}>Undo</button></div>}
       {warns.length > 0 && <div className="bk-warns">{warns.map((w) => <div key={w.key} className={'bk-warn ' + w.cls}><span className="grow">{w.text}</span><button className="lnk" aria-label="Dismiss" onClick={() => setWarns(warns.filter((x) => x.key !== w.key))}>×</button></div>)}<small className="muted">Warnings never block you; you can still book.</small></div>}
@@ -773,6 +781,7 @@ export function Bookings() {
         </div>
       )}
 
+      {mode !== 'practice' && <PendingBar tick={pTick} onSent={load} />}{/* push 72 */}
       {nChanges > 0 && (
         <div className="bk-tray">
           <b>{nChanges} change{nChanges > 1 ? 's' : ''}</b>
@@ -908,7 +917,7 @@ export function Bookings() {
           </div>)}
           <div className="row" style={{ gap: 8, justifyContent: 'flex-end' }}>
             <button className="abtn" onClick={() => save(false)}>Save, send later</button>
-            <button className="abtn dark" disabled={busy} onClick={() => save(true)}>{mode === 'practice' ? 'Practice · nothing sent' : `Save ${nChanges} now`}</button>
+            <button className="abtn dark" disabled={busy} onClick={() => save(true)}>{mode === 'practice' ? 'Practice · nothing sent' : `Save ${nChanges} + choose who's told`}</button>
           </div>
         </div></div>
       )}
