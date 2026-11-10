@@ -1,4 +1,5 @@
 import { AREAS, AREA_HINT, areaFromPostal } from './rules';
+import { BarList } from './BarReport';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { PinEditor, type Pin } from '../components/VenuePin';
@@ -264,6 +265,7 @@ function VenueCard({ v, clients, count, has038, all, onSaved, onGone, onClient }
             <Sw on={noFood} set={setNoFood} label="No outside food" sub="synagogues / Chabad · staff see the no-outside-food icon on every event here" />
             <small className="muted">Far event = {far} min+ drive from the office (<Link to="/admin/settings">Settings</Link>). Drive time from the office isn’t stored on venues yet (needs the Google Maps key), so it isn’t shown here.</small>
           </Sec>
+          {v && <Sec title="BAR COUNT" sub="bottles on the bar count at this venue · supplies on / off"><BarList venueId={v.id} clientId={null} /></Sec>}{/* push 69b */}
           <Sec title="FROM THE CLIENT" sub={client ? undefined : 'pick a usual client'}>
             {client ? <>
               <div className="spread"><b>{client.name}</b><button className="link-btn" onClick={() => onClient(client.id)}>edit in Clients ›</button></div>
@@ -477,6 +479,7 @@ function ClientCard({ c, home, venues, all, count, has038, onSaved, onGone }: { 
               <label className="ef-f" style={{ maxWidth: 320, marginTop: 8 }}><span>AREA</span><select value={area} onChange={(e) => setArea(e.target.value)}><option value="">— not set (no filter)</option>{AREAS.map((a) => <option key={a} value={a}>{a}</option>)}</select></label>
             </Sec>
             <Sec title="USUAL UNIFORMS" sub="pre-filled on New event"><Uniforms u={u} set={setU} /></Sec>
+            {c && <Sec title="BAR COUNT" sub="bottles for events with this client and no venue"><BarList venueId={null} clientId={c.id} /></Sec>}
           </>}
           {!isHome && <small className="muted" style={{ padding: '0 4px' }}>Private homes use this same card, plus the address and uniforms (they live on the client).</small>}
           {isHome && <small className="muted" style={{ padding: '0 4px' }}>{uniSummary(u)}</small>}
