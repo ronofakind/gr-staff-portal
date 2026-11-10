@@ -282,12 +282,12 @@ export function Today() {
       if (!naErr) { const vs = new Map<string, string>(); for (const r of (na ?? []) as unknown as { venues: { id: string; name: string; postal_code: string | null } }[]) if (!areaFromPostal(r.venues.postal_code)) vs.set(r.venues.id, r.venues.name);
         if (vs.size) n.push({ key: 'area-venues', title: `${vs.size} venue${vs.size === 1 ? ' has' : 's have'} no area`, sub: [...vs.values()].slice(0, 4).join(' · ') + (vs.size > 4 ? ' …' : '') + ' · needed for “only these areas” staff', action: 'Set them', to: '/admin/venues' }); }
       // push 61 · 5 days out: anything still missing from the client (start times TBC, venue, guest count) → Ask client
-      const { data: mi, error: miErr } = await supabase.from('events').select('id,event_date,title,department,start_tbc,details_pending,guests,created_at').gte('event_date', today).lte('event_date', addDays(today, 5)).order('event_date');
+      const { data: mi, error: miErr } = await supabase.from('events').select('id,event_date,title,department,start_tbc,details_pending,guests,guests_final,created_at').gte('event_date', today).lte('event_date', addDays(today, 5)).order('event_date');
       if (!miErr) {
         const byKey = new Map<string, { id: string; date: string; title: string; miss: Set<string> }>();
-        for (const e of (mi ?? []) as { id: string; event_date: string; title: string; department: string; start_tbc: boolean | null; details_pending: boolean | null; guests: number | null; created_at: string }[]) {
+        for (const e of (mi ?? []) as { id: string; event_date: string; title: string; department: string; start_tbc: boolean | null; details_pending: boolean | null; guests: number | null; guests_final?: boolean; created_at: string }[]) {
           // guest count is only asked on events made from push 61 on (older ones never had it filled)
-          const miss = [...(e.start_tbc ? ['start times'] : []), ...(e.details_pending ? ['venue / address'] : []), ...(e.guests == null && e.created_at >= '2026-11-09T22:00:00Z' ? ['final guest count'] : [])];
+          const miss = [...(e.start_tbc ? ['start times'] : []), ...(e.details_pending ? ['venue / address'] : []), ...(!e.guests_final && e.created_at >= '2026-11-09T22:00:00Z' ? ['final guest count'] : [])];
           if (!miss.length) continue;
           const k = e.event_date + '|' + (e.details_pending ? e.id : e.title);
           const cur = byKey.get(k) ?? { id: e.id, date: e.event_date, title: e.details_pending ? 'Venue to come' : e.title, miss: new Set<string>() };

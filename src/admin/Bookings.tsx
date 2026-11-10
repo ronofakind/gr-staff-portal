@@ -6,7 +6,7 @@ import { supabase } from '../lib/supabase';
 import { setting, autoExtras } from '../lib/settings';
 import { DeptTag } from './DeptTag';
 import { BoardAlso, type OtherShift } from './alsoWorking';
-import { needsSend, liveShift, doesBar, eventsBetween, allStaff, addDays, isoDay, dLabel, ap12, startIso, endIso, roleName, bookingChange, confirmationsSent, countOf, sendStateOf, type AEvent, type AStaff, type Client, type Venue } from './api';
+import { needsSend, liveShift, doesBar, eventsBetween, allStaff, addDays, isoDay, dLabel, ap12, startIso, endIso, roleName, bookingChange, confirmationsSent, countOf, sendStateOf, guestsText, type AEvent, type AStaff, type Client, type Venue } from './api';
 import { misfits, linksOf, other, condShort, RuleIcons, outOfArea, areasOf, type SLink, type SCond } from './rules';
 import { loadScoreData, scoreOf, type ScoreData } from './score';
 import { overBy } from './NightOff';
@@ -524,7 +524,7 @@ export function Bookings() {
         <div className="bk-colh">
           <div className="bk-see">{dept === 'both' && <i className={'bk-dtag' + (isBarEv(e) ? ' is-bar' : '')}>{isBarEv(e) ? 'BAR' : 'FLOOR'}</i>}AS STAFF SEE IT</div>
           <Link to={`/admin/event/${e.id}`} className="serif bk-title">{e.tentative ? '⏳ ' : ''}{seeTitle(e)}</Link>
-          <div className="muted sm">{[e.event_private?.client, e.event_type, e.guests ? `${e.guests} guests` : null].filter(Boolean).join(' · ')}</div>
+          <div className="muted sm">{[e.event_private?.client, e.event_type, guestsText(e)].filter(Boolean).join(' · ')}</div>
           <div className="bk-cc">
             <span className="bk-ccn">{client > 0 ? <><b>{placed} / {client}</b> <span className="muted sm">client count</span></> : <><b>{placed}</b> <Link to={`/admin/event/${e.id}/edit`} className="gold sm strong">client count not set ›</Link></>}</span>
             <span className="bk-xs">+ {st.extrasPlaced} / <span className="bk-step" onClick={(ev) => ev.stopPropagation()}>

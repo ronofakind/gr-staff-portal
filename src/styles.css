@@ -4092,3 +4092,4 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; }
 .sb-seen { display: flex; flex-direction: column; gap: 4px; }
 .sp-coming { display: block; font-size: 11px; opacity: .75; margin-top: 2px; }
 .gt-gotit { margin: 6px 0; } /* push 73 */
+.ef-final { border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 6px 12px; font: 700 12px Inter, system-ui, sans-serif; cursor: pointer; } .ef-final.on { background: #1b7f5c; color: #fff; border-color: #1b7f5c; } /* push 74 */

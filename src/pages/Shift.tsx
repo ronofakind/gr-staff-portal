@@ -159,7 +159,7 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team, past }
   const mins = Math.round((new Date(s.planned_start).getTime() - Date.now()) / 60000);
   const cd = s.punches?.punch_in ? 'working now' : mins <= 0 ? 'started' : mins < 60 ? `in ${mins} min` : mins < 48 * 60 ? `in ${Math.round(mins / 60)} h` : '';
   const setup = isSetup(ev);
-  const facts = [ev.event_type, ev.guests ? `${ev.guests} guests` : null].filter(Boolean).join(' · ');
+  const facts = [ev.event_type, ev.guests && ev.guests_final && s.status === 'confirmed' ? `${ev.guests} guests` : null].filter(Boolean).join(' · '); // push 74 · only the final count, never a range
   const [street, ...cityParts] = (address || venueName).split(',');
   const city = cityParts.join(',').trim();
   const area = cityParts[0]?.trim() ?? '';

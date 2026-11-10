@@ -179,7 +179,7 @@ export function EventForm() {
   const setOpenB = (k: BlockKey, o: boolean) => setOpenBMap((m) => ({ ...m, [k]: o }));
   void fold; void isOpen; void setFold;
   const [privateId, setPrivateId] = useState<string | null>(null); // a private-home client used as the venue
-  const [guests, setGuests] = useState(''); const [eventType, setEventType] = useState(''); const [types, setTypes] = useState<{ name: string; main: boolean }[]>([]);
+  const [guests, setGuests] = useState(''); const [guestsMax, setGuestsMax] = useState(''); const [gFinal, setGFinal] = useState(false); const [eventType, setEventType] = useState(''); const [types, setTypes] = useState<{ name: string; main: boolean }[]>([]);
   const [tr, setTr] = useState<{ on: boolean | null; travel: number; gas: string; billing: 'client' | 'gr'; rides: boolean }>(() => ({ on: null, travel: 60, gas: '20', billing: setting('transport.client_pays') ? 'client' : 'gr', rides: true }));
   const [extras, setExtras] = useState(''); const [extrasBill, setExtrasBill] = useState<'gr' | 'client'>(() => setting('extras.default_billing'));
   const [payMethod, setPayMethod] = useState<'invoice' | 'cash'>('invoice'); const [qbType, setQbType] = useState<'estimate' | 'invoice'>('estimate'); const [qbNum, setQbNum] = useState('');
@@ -247,7 +247,7 @@ export function EventForm() {
       setClientId(e.event_private?.client_id ?? ''); setRateSet(e.event_private?.rate_set ?? null);
       setTr({ on: !!e.transport, travel: e.travel_min ?? 60, gas: String(e.gas_per_car ?? 20), billing: e.transport_billing ?? 'client', rides: e.rides ?? !!e.transport });
       setExtras(e.extras != null ? String(e.extras) : ''); setExtrasBill(e.extras_billing ?? 'gr');
-      setGuests(e.guests ? String(e.guests) : ''); setEventType(e.event_type ?? ''); setPayMethod(e.event_private?.pay_method ?? 'invoice');
+      setGuests(e.guests ? String(e.guests) : ''); setGuestsMax(e.guests_max ? String(e.guests_max) : ''); setGFinal(!!e.guests_final); setEventType(e.event_type ?? ''); setPayMethod(e.event_private?.pay_method ?? 'invoice');
       if (e.event_private?.qb_doc_type) setQbType(e.event_private.qb_doc_type); setQbNum(e.event_private?.qb_doc_number ?? ''); setDriveOn(e.drive_folder_url ? false : null);
       setEnds(e.ends_label ?? (ENDS.find(([, t]) => t && e.end_time?.startsWith(t))?.[0] ?? '~ midnight'));
       setUFloor(e.uniform_floor ?? 'white_shirt'); setUBar(e.uniform_bar ?? 'black_shirt');
@@ -359,7 +359,7 @@ export function EventForm() {
 
   // ── Push 61 · staffing from the guest count (board GuestStaffingV1) ──
   const sug = (() => {
-    const g = Number(guests); if (!g || g < 1) return null;
+    const g = Math.max(Number(guests) || 0, gFinal ? 0 : Number(guestsMax) || 0); if (!g || g < 1) return null; // push 74 · worst case = top of the range
     const R = setting('staffing.ratios'); const up = (n: number) => Math.ceil(n * (1 + R.buffer / 100));
     const cocktail = /cocktail/i.test(eventType);
     let base = showFloor ? Math.ceil(g / (cocktail ? R.cocktail : R.seated)) : 0; let floor = showFloor ? up(base) : 0;
@@ -440,7 +440,7 @@ export function EventForm() {
         event_date: forDate, title: title.trim() || (pendingDetails ? 'Details to come' : ''), venue_id: vId, details_pending: pendingDetails, tentative, start_tbc: ls.some((l) => l.tbc) && !pendingDetails, links, address: (address + (unit.trim() ? `, ${unit.trim()}` : '')) || null, department: dept,
         start_time: start, end_time: endT, ends_label: ends, staff_needed: ls.reduce((n, l) => n + l.count, 0),
         manager_id: lead ? keep(lead)[0] ?? null : null, description: note || null, notes: staffNote || null,
-        uniform_floor: uFloor, uniform_bar: uBar, uniform_floor_w: uFloorW, uniform_bar_w: uBarW, uniform_items: lineItems(), drive_folder_url: folder.trim() || null, staffing: ls.map(({ dept: d, code, start: s, end, count, tbc, hold }) => ({ dept: d, code, start: s, end: end || null, count, ...(tbc ? { tbc: true } : {}), ...(hold ? { hold } : {}) })), guests: guests ? Number(guests) : null, event_type: eventType || null, extras: extras === '' ? null : Number(extras), extras_billing: 'client', // push 61 · extras always on the invoice for now
+        uniform_floor: uFloor, uniform_bar: uBar, uniform_floor_w: uFloorW, uniform_bar_w: uBarW, uniform_items: lineItems(), drive_folder_url: folder.trim() || null, staffing: ls.map(({ dept: d, code, start: s, end, count, tbc, hold }) => ({ dept: d, code, start: s, end: end || null, count, ...(tbc ? { tbc: true } : {}), ...(hold ? { hold } : {}) })), guests: guests ? Number(guests) : null, guests_max: !gFinal && guestsMax && Number(guestsMax) > Number(guests || 0) ? Number(guestsMax) : null, guests_final: gFinal && !!guests, event_type: eventType || null, extras: extras === '' ? null : Number(extras), extras_billing: 'client', // push 61 · extras always on the invoice for now
         transport: trOn, travel_min: trOn ? tr.travel : null, paid_travel_min: trOn ? paidTravel : null, gas_per_car: trOn ? Number(tr.gas) || 0 : null, transport_billing: trOn ? tr.billing : null, rides: tr.rides && (trOn || carpool),
       };
       const res = old ? await supabase.from('events').update(row).eq('id', old.id).select('id').single() : await supabase.from('events').insert(row).select('id').single();
@@ -565,7 +565,7 @@ export function EventForm() {
       {elay.sorted.map((k, i) => { const n = i + 1; const op = isOpenB(k); const so = (o: boolean) => setOpenB(k, o); switch (k) {
       case 'event': return (
       <Fold key={k} n={n} title="The event" open={op} setOpen={so} state={guests && title !== '' ? 'ok' : undefined}
-        summary={[dLabel(date, { weekday: 'short', month: 'short', day: 'numeric' }), client?.name ?? (privateId ? 'private home' : ''), guests ? `${guests} guests` : '', eventType, showFloor && showBar ? 'floor + bar' : showBar ? 'bar' : 'floor'].filter(Boolean).join(' · ')}>
+        summary={[dLabel(date, { weekday: 'short', month: 'short', day: 'numeric' }), client?.name ?? (privateId ? 'private home' : ''), guests ? `${guests}${!gFinal && guestsMax ? '–' + guestsMax : ''} guests${gFinal ? ' · final' : ''}` : '', eventType, showFloor && showBar ? 'floor + bar' : showBar ? 'bar' : 'floor'].filter(Boolean).join(' · ')}>
         <div className="ef-g"><div className="ef-gh">STATUS <span>is it happening?</span></div>
           <div className="seg3 ef-status"><button type="button" className={!tentative ? 'on' : ''} onClick={() => setTentative(false)}>✓ Confirmed</button><button type="button" className={tentative ? 'on tbc' : ''} onClick={() => setTentative(true)}>⏳ To be confirmed</button></div>
           {tentative && <small className="muted">Staff see ⏳ To be confirmed and “Keep the date for G&amp;R”. You answer It’s confirmed / Not happening on the event page.</small>}</div>
@@ -598,7 +598,13 @@ export function EventForm() {
               {eventType && !types.some((t) => t.name === eventType) && <option>{eventType}</option>}
               <option value="__new">+ New type (saved for next time)</option>
             </select></label>
-            <label className="ef-f"><span>GUESTS</span><input type="number" min={0} value={guests} onChange={(e) => setGuests(e.target.value)} placeholder="e.g. 220" /></label>
+            <div className="ef-f"><span>GUESTS <i className="only">only you</i></span>{/* push 74 · range + Final */}
+              <div className="row" style={{ gap: 6, alignItems: 'center' }}>
+                <input type="number" min={0} value={guests} onChange={(e) => setGuests(e.target.value)} placeholder={gFinal ? 'e.g. 140' : 'from'} style={{ width: gFinal ? 120 : 84 }} />
+                {!gFinal && <><span className="muted">–</span><input type="number" min={0} value={guestsMax} onChange={(e) => setGuestsMax(e.target.value)} placeholder="to" style={{ width: 84 }} /></>}
+                <button type="button" className={'ef-final' + (gFinal ? ' on' : '')} onClick={() => setGFinal(!gFinal)}>{gFinal ? '✓ Final' : 'Final?'}</button>
+              </div>
+              <small className="muted">{gFinal ? 'Staff see this number once confirmations go out.' : 'Not final: staff and MDs see no guest number.'}</small></div>
           </div>
           <label className="ef-f"><span>EVENT NOTE (optional)</span><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Sit-down dinner · 250 guests" /></label></div>
         <div className="ef-g"><div className="ef-gh">SERVICES <span>each one = its own invoice and booking board · wine staff are booked with the floor, billed on the bar</span></div>
@@ -760,7 +766,7 @@ export function EventForm() {
         <div className="ef-sidec">
           <span className="kick">{dLabel(date, { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase()} · {(pendingDetails || !title ? 'VENUE TO COME' : title.toUpperCase())}</span>
           <b className="serif" style={{ fontSize: 21 }}>{client?.name ?? (privateId ? title : 'No client yet')}</b>
-          <span className="muted sm">{[guests ? `${guests} guests` : '', eventType, showFloor && showBar ? 'floor + bar' : showBar ? 'bar' : 'floor'].filter(Boolean).join(' · ')}</span>
+          <span className="muted sm">{[guests ? `${guests}${!gFinal && guestsMax ? '–' + guestsMax : ''} guests${gFinal ? ' · final' : ''}` : '', eventType, showFloor && showBar ? 'floor + bar' : showBar ? 'bar' : 'floor'].filter(Boolean).join(' · ')}</span>
           <i className="ef-hr" />
           {missing.length ? <><span className="kick amber">STILL MISSING · {missing.length}</span>{missing.map((m) => <span key={m} className="sm">● {m}</span>)}<small className="muted">From 5 days out these show in Needs you with “Ask client”.</small></> : <span className="kick okc">NOTHING MISSING</span>}
           {uniWarn.length > 0 && <>{uniWarn.map((w) => <span key={w} className="sm amber">⚠ {w}</span>)}</>}

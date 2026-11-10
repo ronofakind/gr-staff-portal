@@ -11,7 +11,7 @@ import { ConfirmTracker } from './Confirmations';
 import { RidesAdmin } from './Rides';
 import { ShiftView } from '../pages/Shift';
 import { UniformIcon, PantsIcon, ShoesIcon, ApronIcon, TieIcon, WineKeyIcon, PIECE, defaultItems, uniformLabel, type UniItemsMap, type UniLineKey, type UniformKind } from '../components/Uniform';
-import { EVENT_SELECT, EVENT_SELECT_28, missing034, ap12, dLabel, roleName, type AEvent } from './api';
+import { EVENT_SELECT, EVENT_SELECT_28, missing034, ap12, dLabel, roleName, guestsText, type AEvent } from './api';
 import { ReplacedBanners } from './Replace';
 import { TeamLocks } from './TeamLocks';
 import { NightOff } from './NightOff';
@@ -80,7 +80,7 @@ export function EventDetail() {
           <div className="row wrap" style={{ gap: 6, marginTop: 8 }}>
             <span className="tag">{dLabel(e.event_date, { weekday: 'short', month: 'short', day: 'numeric' })}</span>
             {e.event_type && <span className="tag">{e.event_type}</span>}
-            {e.guests ? <span className="tag">{e.guests} guests</span> : null}
+            {guestsText(e) ? <span className="tag">{guestsText(e)}</span> : null}
             {floor && <span className="tag">Floor {nFloor}</span>}
             {bar && <span className="tag bar-tag">Bar {nBar}</span>}
           </div>
@@ -107,14 +107,14 @@ export function EventDetail() {
 
       <div className="ed2-grid">
         {e.event_date >= new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' }) && <TentativeCard evs={evs} onChange={load} />}
-        <Sec k="event" title="Event" open={isOpen('event')} setOpen={setFold} summary={[dLabel(e.event_date, { month: 'short', day: 'numeric' }), x?.venue?.name ?? e.title, e.guests ? `${e.guests} guests` : null].filter(Boolean).join(' · ')}>
+        <Sec k="event" title="Event" open={isOpen('event')} setOpen={setFold} summary={[dLabel(e.event_date, { month: 'short', day: 'numeric' }), x?.venue?.name ?? e.title, guestsText(e)].filter(Boolean).join(' · ')}>
           <div className="ed2-facts">
             <F l="Date" v={dLabel(e.event_date, { weekday: 'long', month: 'long', day: 'numeric' })} />
             <F l="Venue" v={x?.venue?.name ?? e.title} />
             <F l={<>Client <i className="only">only you</i></>} v={p?.client ?? '—'} />
             <F l="Address" v={e.address ?? x?.venue?.address ?? '—'} />
             <F l="Event type" v={e.event_type ?? '—'} />
-            <F l="Guests" v={e.guests ? String(e.guests) : '—'} />
+            <F l="Guests" v={guestsText(e) ?? '—'} />
             <F l="First start" v={floor && bar && firstOf(floor) !== firstOf(bar) ? `Floor ${ap12(firstOf(floor))} · Bar ${ap12(firstOf(bar))}` : ap12(firstOf(floor ?? bar)) || 'TBC'} />
             <F l="Ends" v={ends} />
           </div>
