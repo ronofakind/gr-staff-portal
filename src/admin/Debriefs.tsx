@@ -14,6 +14,9 @@ export function Debriefs() {
   const [f, setF] = useState<'all' | 'rough'>('all'); const [who, setWho] = useState(''); const [q, setQ] = useState('');
   const cols = DEBRIEF_COLS + 'night,client,difficulty,team_size,issues,what,note,created_at,staff:staff!event_debriefs_by_staff_fkey(full_name,nickname),events(title,event_date)';
   useEffect(() => { supabase.from('event_debriefs').select(cols).order('created_at', { ascending: false }).limit(1000).then(({ data, error }) => setRows(error ? [] : ((data ?? []) as unknown as DebriefRow[]))); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // push 70 · MDs whose debriefs you often correct: 2+ of their last 5
+  const often = useMemo(() => { const by: Record<string, DebriefRow[]> = {}; for (const r of rows ?? []) if (r.staff) (by[r.staff.full_name] ??= []).push(r);
+    return Object.fromEntries(Object.entries(by).map(([n, rs]) => [n, rs.slice(0, 5).filter((r) => r.edited_at).length]).filter(([, c]) => (c as number) >= 2)) as Record<string, number>; }, [rows]);
   const mds = useMemo(() => [...new Set((rows ?? []).map((r) => r.staff?.full_name).filter(Boolean))].sort() as string[], [rows]);
   const list = (rows ?? []).filter((r) => (f === 'all' || ROUGH(r)) && (!who || r.staff?.full_name === who)
     && (!q || [r.events?.title, r.what, r.note, ...(r.issues ?? [])].join(' ').toLowerCase().includes(q.toLowerCase())));
@@ -33,10 +36,11 @@ export function Debriefs() {
           <select className="abtn sm" value={who} onChange={(e) => setWho(e.target.value)} aria-label="Manager"><option value="">Manager: any</option>{mds.map((m) => <option key={m} value={m}>{m}</option>)}</select>
           <input className="t4-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="🔍 Search event, notes" />
         </div>
-        <div className="muted sm">Every debrief, kept forever · newest first{rows ? ` · ${list.length}` : ''}</div>
+        <div className="muted sm">Every debrief, kept forever · newest first{rows ? ` · ${list.length}` : ''} · ✎ Edit any of them (the MD isn’t told)</div>
+        {Object.keys(often).length > 0 && <div className="br-flag red">⚠ Debriefs often corrected: {Object.entries(often).map(([n, c]) => `${n} (${c} of last 5)`).join(' · ')}</div>}
         {rows === null && <div className="muted">Loading…</div>}
         {rows && !list.length && <div className="adm-card muted">No debriefs{f === 'rough' || who || q ? ' for this filter' : ' yet'}.</div>}
-        {list.length > 0 && <div className="adm-card t4-card">{list.map((r) => <div key={r.id}><DebriefCard r={r} withEvent />{r.event_id && <Link className="lnk sm t4-evlink" to={`/admin/event/${r.event_id}`}>Event ›</Link>}</div>)}</div>}
+        {list.length > 0 && <div className="adm-card t4-card">{list.map((r) => <div key={r.id}><DebriefCard r={r} withEvent flagged={!!(r.staff && often[r.staff.full_name])} />{r.event_id && <Link className="lnk sm t4-evlink" to={`/admin/event/${r.event_id}`}>Event ›</Link>}</div>)}</div>}
       </> : <>
         <div className="muted sm">New staff (first shifts) · last 12 months · archived ones included</div>
         {!nsr.rows.length && <div className="adm-card muted">No ratings yet.</div>}

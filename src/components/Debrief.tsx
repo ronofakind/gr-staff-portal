@@ -66,21 +66,57 @@ export function DebriefSheet({ eventId, onClose, onSent }: { eventId: string; on
 }
 
 export type DebriefRow = Row;
-type Row = { id: string; event_id: string; archived_at?: string | null; night: string | null; client: string | null; difficulty: string | null; team_size: string | null; issues: string[]; what: string | null; note: string | null; created_at: string; staff: { full_name: string; nickname: string | null } | null; events?: { title: string; event_date: string } | null };
-export const DEBRIEF_COLS = 'id,event_id,archived_at,';
-const COLS = 'id,event_id,night,client,difficulty,team_size,issues,what,note,created_at,staff:staff!event_debriefs_by_staff_fkey(full_name,nickname),events(title,event_date)';
-export function DebriefCard({ r, withEvent, onArchive }: { r: Row; withEvent?: boolean; onArchive?: () => void }) {
+type Row = { id: string; event_id: string; archived_at?: string | null; night: string | null; client: string | null; difficulty: string | null; team_size: string | null; issues: string[]; what: string | null; note: string | null; created_at: string; staff: { full_name: string; nickname: string | null } | null; events?: { title: string; event_date: string } | null;
+  /** push 70 · Ronnie's edit: the MD's original answers + when */ original?: Partial<Record<'night' | 'client' | 'difficulty' | 'team_size' | 'what' | 'note', string | null>> & { issues?: string[] } | null; edited_at?: string | null };
+export const DEBRIEF_COLS = 'id,event_id,archived_at,original,edited_at,';
+const COLS = 'id,event_id,original,edited_at,night,client,difficulty,team_size,issues,what,note,created_at,staff:staff!event_debriefs_by_staff_fkey(full_name,nickname),events(title,event_date)';
+export function DebriefCard({ r: r0, withEvent, onArchive, flagged }: { r: Row; withEvent?: boolean; onArchive?: () => void; flagged?: boolean }) {
+  const [r, setR] = useState(r0); const [edit, setEdit] = useState(false); useEffect(() => setR(r0), [r0]);
   const tags = (['night', 'client', 'difficulty', 'team_size'] as const).map((k) => r[k] ? DEBRIEF_LABEL[k + ':' + r[k]] : null).filter(Boolean) as [string, Tone][];
   const who = r.staff ? (r.staff.nickname || r.staff.full_name.split(' ')[0]) : 'Manager';
   const day = r.events ? new Date(r.events.event_date + 'T12:00:00').toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' }) : '';
   return (
     <div className="dbr">
       <div className="dbr-top"><span aria-hidden="true">📝</span><b>{withEvent && r.events ? `${r.events.title} · ${day} · ${who}` : `Debrief · ${who}`}</b><span className="muted sm">{new Date(r.created_at).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' })}</span>
+        <button type="button" className="lnk sm" onClick={() => setEdit(true)} title="Edit this debrief · the MD isn’t told">✎ Edit</button>
         {onArchive && <button type="button" className="sq need-arch" aria-label="Archive" title="Archive · stays in Past debriefs" onClick={onArchive}>{ARCH_ICON}</button>}</div>
       {tags.length > 0 && <div className="dbr-tags">{tags.map(([l, t]) => <span key={l} className={t}>{l}</span>)}</div>}
       {(r.issues.length > 0 || r.what) && <div className="dbr-txt">{[r.issues.join(' · '), r.what ? `“${r.what}”` : ''].filter(Boolean).join(' · ')}</div>}
       {r.note && <div className="dbr-txt">💬 {r.note}</div>}
+      {(r.edited_at || flagged) && <div className="dbr-ed">{r.edited_at && <i>EDITED BY YOU · {new Date(r.edited_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', timeZone: 'America/Toronto' })}</i>}{r.edited_at && r.original && <span className="muted sm"> MD said: {(['night', 'client', 'difficulty', 'team_size'] as const).filter((k) => (r.original?.[k] ?? null) !== (r[k] ?? null)).map((k) => r.original?.[k] ? DEBRIEF_LABEL[k + ':' + r.original[k]]?.[0] : '—').join(' · ') || 'same answers'}{r.original.note && r.original.note !== r.note ? ` · “${r.original.note}”` : ''}</span>}{flagged && <i className="red">DEBRIEFS OFTEN CORRECTED</i>}</div>}
+      {edit && <DebriefEdit r={r} onClose={() => setEdit(false)} onSaved={(x) => { setR(x); setEdit(false); }} />}
     </div>
+  );
+}
+
+/** push 70 · Ronnie edits the MD's answers directly (rankings / reviews read these). The MD's original stays for Ronnie; the MD isn't told. */
+function DebriefEdit({ r, onClose, onSaved }: { r: Row; onClose: () => void; onSaved: (r: Row) => void }) {
+  const [a, setA] = useState<Record<string, string | null>>({ night: r.night, client: r.client, difficulty: r.difficulty, team_size: r.team_size });
+  const [what, setWhat] = useState(r.what ?? ''); const [note, setNote] = useState(r.note ?? ''); const [issues, setIssues] = useState<string[]>(r.issues ?? []);
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState('');
+  const orig = r.original ?? { night: r.night, client: r.client, difficulty: r.difficulty, team_size: r.team_size, issues: r.issues, what: r.what, note: r.note };
+  const save = async (back = false) => {
+    setBusy(true); setErr('');
+    const { data: me } = await supabase.rpc('me');
+    const v = back ? { night: orig.night ?? null, client: orig.client ?? null, difficulty: orig.difficulty ?? null, team_size: orig.team_size ?? null, issues: orig.issues ?? [], what: orig.what ?? null, note: orig.note ?? null, original: null, edited_at: null, edited_by: null }
+      : { ...a, issues, what: what.trim() || null, note: note.trim() || null, original: orig, edited_at: new Date().toISOString(), edited_by: me };
+    const { error } = await supabase.from('event_debriefs').update(v).eq('id', r.id);
+    setBusy(false); if (error) { setErr(error.message); return; }
+    onSaved({ ...r, ...(v as Partial<Row>) } as Row);
+  };
+  return (
+    <div className="bk-modal" onClick={onClose}><div className="adm-card db-edit" onClick={(e) => e.stopPropagation()}>
+      <div className="spread"><b className="serif" style={{ fontSize: 22 }}>Edit debrief{r.staff ? ` · ${r.staff.full_name.split(' ')[0]}` : ''}</b><button className="abtn sm" onClick={onClose}>✕</button></div>
+      <span className="muted sm">Your answers replace the MD’s, so anything that reads debriefs (ranking reviews) uses yours. The MD’s original stays here for you. The MD isn’t told.</span>
+      {QS.map((q) => (
+        <div key={q.key} className="db-edrow"><b>{q.label}</b><div className="row wrap" style={{ gap: 6 }}>{q.opts.map(([v, l]) => <button key={v} type="button" className={'abtn sm' + (a[q.key] === v ? ' dark' : '')} onClick={() => setA({ ...a, [q.key]: v })}>{l}</button>)}</div>
+          {(orig[q.key] ?? null) !== (a[q.key] ?? null) && <small className="gold">MD said: {orig[q.key] ? q.opts.find((o) => o[0] === orig[q.key])?.[1] : '—'}</small>}</div>))}
+      <div className="db-edrow"><b>What happened</b><div className="row wrap" style={{ gap: 6 }}>{ISSUES.map((i) => <button key={i} type="button" className={'abtn sm' + (issues.includes(i) ? ' dark' : '')} onClick={() => setIssues(issues.includes(i) ? issues.filter((x) => x !== i) : [...issues, i])}>{i}</button>)}</div>
+        <input className="db-edin" value={what} onChange={(e) => setWhat(e.target.value)} placeholder="What happened (optional)" /></div>
+      <div className="db-edrow"><b>Note</b><input className="db-edin" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note" />{(orig.note ?? '') !== note && <small className="gold">MD wrote: {orig.note ? `“${orig.note}”` : '—'}</small>}</div>
+      {err && <p className="error">{err}</p>}
+      <div className="row" style={{ gap: 8 }}><button className="abtn dark" disabled={busy} onClick={() => save(false)}>Save</button>{r.edited_at && <button className="abtn" disabled={busy} onClick={() => save(true)}>Back to the MD’s answers</button>}<button className="abtn" onClick={onClose}>Cancel</button></div>
+    </div></div>
   );
 }
 /** Admin · the debrief(s) for one event (Today card). Nothing shown before 077 or when none was sent. */
