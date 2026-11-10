@@ -4097,3 +4097,10 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; }
 .cu-lang-sw { display: inline-flex; background: #EEE9E2; border-radius: 999px; padding: 2px; }
 .cu-lang-sw button { border: none; background: none; font: 800 11px Inter, system-ui, sans-serif; letter-spacing: .06em; padding: 4px 9px; border-radius: 999px; color: #7A7268; cursor: pointer; }
 .cu-lang-sw button.on { background: #1A1714; color: #fff; }
+
+/* push 78 · App colours picker */
+.th-pick { display: flex; flex-direction: column; gap: 8px; }
+.th-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.th-opt { border: 0; border-radius: 14px; padding: 10px; text-align: left; cursor: pointer; box-shadow: 0 0 0 1px #E4DCD1; font: 600 13px Inter, system-ui, sans-serif; display: flex; flex-direction: column; gap: 6px; }
+.th-opt.on { box-shadow: 0 0 0 2px #C9A227; }
+.th-opt i { display: block; height: 40px; border-radius: 8px; }

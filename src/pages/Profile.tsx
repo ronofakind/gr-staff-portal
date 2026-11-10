@@ -1,3 +1,4 @@
+import { ThemePicker } from '../components/ThemePicker';
 import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase, type Staff } from '../lib/supabase';
@@ -121,6 +122,10 @@ export function Profile({ me }: { me: Staff }) {
       </section>}
 
       {me.role !== 'admin' && <AlertsProfileRow me={me} />}
+
+      {/* push 78 · App colours */}
+      <div className="sec-head"><span className="serif">{me.language === 'fr' ? 'Couleurs de l’app' : 'App colours'}</span></div>
+      <section className="card"><ThemePicker staffId={me.id} fr={me.language === 'fr'} /></section>
 
       {/* push 56 · Refer a friend (their link fills "Referred by" on the apply page) + the handbook any time */}
       <div className="sec-head"><span className="serif">Refer a friend</span></div>

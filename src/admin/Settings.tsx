@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { ThemePicker } from '../components/ThemePicker';
+import { useEffect, useState } from 'react';
+import { supabase } from '../lib/supabase';
 import { DEFAULTS, saveSetting, savedAt, useSettings, type SettingKey, type Settings as S } from '../lib/settings';
 import { signed } from './score';
 import { PhoneAlertsCard } from './PhoneAlerts';
@@ -97,6 +99,8 @@ const tLabel = (iso: string) => new Date(iso).toLocaleTimeString('en-CA', { hour
 
 export function Settings() {
   const get = useSettings();
+  const [myId, setMyId] = useState<string | null>(null);
+  useEffect(() => { supabase.rpc('me').then(({ data }) => setMyId((data as string) ?? null)); }, []);
   const [open, setOpen] = useState<string | null>(null);
   const [saved, setSaved] = useState<string | null>(null); const [err, setErr] = useState('');
   const last = Object.keys(DEFAULTS).map((k) => savedAt(k as SettingKey)).filter(Boolean).sort().pop() ?? null;
@@ -112,6 +116,7 @@ export function Settings() {
         {saved ? <span className="okc strong sm">✓ Saved {saved}</span> : last ? <span className="muted sm">Last change {new Date(last).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }).replace('.', '')} · {tLabel(last)}</span> : null}
       </div>
       {err && <p className="error">{err}</p>}
+      {myId && <section className="adm-card st-sec"><div className="st-sec-h"><span className="serif">App colours</span><small className="muted">your own dashboard (desktop + phone) · staff pick theirs in Profile</small></div><ThemePicker staffId={myId} /></section>}
       <div className="st-grid">
         {SECTIONS.map((sec) => (
           <section key={sec.title} className={'adm-card st-sec' + (sec.off ? ' off' : '')} aria-disabled={sec.off ? true : undefined}>

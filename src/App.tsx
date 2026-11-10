@@ -1,3 +1,4 @@
+import { loadTheme } from './lib/theme';
 import { ConnectClaude } from './pages/ConnectClaude';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
@@ -77,7 +78,7 @@ export function App() {
 
   const loadMe = (uid: string) => supabase.from('staff').select('id,full_name,nickname,email,phone,language,role,photo_url')
     .eq('auth_user_id', uid).maybeSingle()
-    .then(({ data }) => setMe((data as Staff) ?? null));
+    .then(({ data }) => { setMe((data as Staff) ?? null); if (data) loadTheme((data as Staff).id); });
   const sessionUid = session?.user.id ?? (session === null ? null : undefined);
   useEffect(() => {
     if (!session) { setMe(session === null ? null : undefined); return; }
