@@ -1,3 +1,4 @@
+import { loadRules, outOfArea, areasOf, type SCond } from './rules';
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { tiersForCount } from '../lib/settings';
@@ -31,6 +32,8 @@ export function Availability() {
   const [asks, setAsks] = useState<Ask[]>([]);
   const [rows, setRows] = useState<Row[]>([]);
   const [aEvents, setAEvents] = useState<AEvent[]>([]);
+  // push 63 · only-these-areas rule
+  const [areaCtx, setAreaCtx] = useState<{ conds: SCond[]; venues: { id: string; area?: string | null; postal_code?: string | null }[]; clients: { id: string; name: string; area?: string | null }[] }>({ conds: [], venues: [], clients: [] });
   const [sel, setSel] = useState<Record<string, Tier[]>>({});
   const [include, setInclude] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false); const [msg, setMsg] = useState(''); const [err, setErr] = useState('');
@@ -48,6 +51,7 @@ export function Availability() {
       supabase.from('availability').select('id,staff_id,for_date,status,tier,from_time,until_time,ask_id,note,answer_by,knows_by,knows_note').not('ask_id', 'is', null).gte('for_date', today),
       supabase.from('avail_exceptions').select('staff_id,for_date').gte('for_date', today),
     ]);
+    loadRules().then(async ({ conds }) => { const [v, c] = await Promise.all([supabase.from('venues').select('id,area,postal_code'), supabase.from('clients').select('id,name,area')]); setAreaCtx({ conds, venues: (v.data ?? []) as never[], clients: (c.data ?? []) as never[] }); });
     setOpened(new Set(((x.data ?? []) as { staff_id: string; for_date: string }[]).map((e) => `${e.staff_id}|${e.for_date}`)));
     setEvents(ev.filter((e) => e.department !== 'bar')); setStaff(st);
     setWeekly((w.data ?? []) as Weekly[]); setOff((o.data ?? []) as Off[]);
@@ -71,6 +75,8 @@ export function Availability() {
     if (o) return `Day off${o.reason ? ` (${o.reason})` : ''}`;
     const w = weekly.find((x) => x.staff_id === s.id && x.dow === dow(d));
     if (w?.status === 'no' && !opened.has(`${s.id}|${d}`)) return `Not on ${D(d).toLocaleDateString('en-CA', { weekday: 'long' })}s`;
+    const evs = byDate[d] ?? [];
+    if (evs.length && evs.every((e) => outOfArea(s.id, e, areaCtx))) return `⌖ Outside their area (${(areasOf(areaCtx.conds, s.id) ?? []).join(', ')})`;
     return null;
   };
   const freeFrom = (s: AStaff, d: string) => { const w = weekly.find((x) => x.staff_id === s.id && x.dow === dow(d)); return w && w.status !== 'no' ? w.from_time : null; };

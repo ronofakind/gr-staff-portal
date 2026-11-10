@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { Avatar } from '../components/Avatar';
 import { isoDay, flagsOf, hoursBetween, dLabel, allStaff, type AStaff, type Flag, type Venue } from './api';
-import { loadRules, linksOf, other, condLabel, DOW3, type SLink, type SCond, type LinkKind, type CondKind } from './rules';
+import { loadRules, linksOf, other, condLabel, DOW3, AREAS as WORK_AREAS, AREA_HINT, type SLink, type SCond, type LinkKind, type CondKind } from './rules';
 import { loadScoreData, scoreOf, AREAS, avgStars, isStar, type ScoreData } from './score';
 import { ScoreWhy, tabOf } from './Ranking';
 import { ReminderList } from './StaffRemind';
@@ -156,7 +156,7 @@ export function StaffProfile({ s, onClose, onEdit, all }: { s: AStaff; onClose: 
                 </div>); })}
               {conds.some((c) => c.staff_id === s.id) && <div className="ru-grp"><div className="ru-h gold">WHEN TO BOOK · {conds.filter((c) => c.staff_id === s.id).length}</div>
                 {conds.filter((c) => c.staff_id === s.id).map((c) => (
-                  <div key={c.id} className="ru-row when"><span className="ru-ic">{c.kind === 'not_venue' || c.kind === 'private_only' ? '⌂' : c.kind === 'big_dates_only' ? '◆' : c.kind === 'only_if_needed' ? '…' : c.kind === 'not_weekday' ? '◷' : '#'}</span>
+                  <div key={c.id} className="ru-row when"><span className="ru-ic">{c.kind === 'areas' ? '⌖' : c.kind === 'not_venue' || c.kind === 'private_only' ? '⌂' : c.kind === 'big_dates_only' ? '◆' : c.kind === 'only_if_needed' ? '…' : c.kind === 'not_weekday' ? '◷' : '#'}</span>
                     <div className="grow"><b>{condLabel(c)}</b>{c.reason && <small>{c.reason}</small>}</div>
                     {c.kind !== 'min_guests' ? <button className="ru-x" aria-label="Remove rule" onClick={async () => { await supabase.from('staff_conditions').delete().eq('id', c.id); reloadRules(); }}>×</button> : <small className="muted">read-only</small>}</div>))}
               </div>}
@@ -218,13 +218,14 @@ const KINDS: { k: LinkKind | CondKind; label: string; ic: string; cls: string }[
   { k: 'not_venue', label: 'Not at a venue', ic: '⌂', cls: 'gold' }, { k: 'private_only', label: 'Private houses only', ic: '⌂', cls: 'gold' },
   { k: 'big_dates_only', label: 'Big dates only', ic: '◆', cls: 'gold' }, { k: 'only_if_needed', label: 'Only if needed', ic: '…', cls: 'gold' },
   { k: 'not_weekday', label: 'Not on certain days', ic: '◷', cls: 'gold' },
+  { k: 'areas', label: 'Only these areas', ic: '⌖', cls: 'gold' }, // push 63 · default is anywhere
 ];
 
 /** + Add a booking rule: kind → who / venue / days → optional reason → Save. Pairs are one row (shows on both profiles). */
 function AddRule({ s, people, venues, links, onClose, onSaved }: { s: AStaff; people: AStaff[]; venues: Venue[]; links: SLink[]; onClose: () => void; onSaved: () => void }) {
   const [kind, setKind] = useState<LinkKind | CondKind>('together');
   const [q, setQ] = useState(''); const [who, setWho] = useState<AStaff | null>(null);
-  const [venue, setVenue] = useState(''); const [days, setDays] = useState<string[]>([]); const [reason, setReason] = useState('');
+  const [venue, setVenue] = useState(''); const [days, setDays] = useState<string[]>([]); const [reason, setReason] = useState(''); const [areas, setAreas] = useState<string[]>([]);
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
   const pair = kind === 'together' || kind === 'apart';
   const norm = (x: string) => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -235,6 +236,7 @@ function AddRule({ s, people, venues, links, onClose, onSaved }: { s: AStaff; pe
     if (pair && !who) return setErr('Pick who.');
     if (kind === 'not_venue' && !venue) return setErr('Pick the venue.');
     if (kind === 'not_weekday' && !days.length) return setErr('Pick at least one day.');
+    if (kind === 'areas' && !areas.length) return setErr('Pick at least one area.');
     setBusy(true);
     let error;
     if (pair) {
@@ -243,7 +245,8 @@ function AddRule({ s, people, venues, links, onClose, onSaved }: { s: AStaff; pe
       if (had && had.kind !== kind && !confirm(`They already have a "${had.kind === 'together' ? 'works well with' : 'keep apart'}" rule. Replace it?`)) { setBusy(false); return; }
       ({ error } = await supabase.from('staff_links').upsert({ staff_a: a, staff_b: b, kind, reason: reason.trim() || null }, { onConflict: 'staff_a,staff_b' }));
     } else {
-      const value = kind === 'not_venue' ? venue : kind === 'not_weekday' ? DOW3.filter((d) => days.includes(d)).join(',') : null;
+      const value = kind === 'not_venue' ? venue : kind === 'not_weekday' ? DOW3.filter((d) => days.includes(d)).join(',') : kind === 'areas' ? WORK_AREAS.filter((a) => areas.includes(a)).join('|') : null;
+      if (kind === 'areas') await supabase.from('staff_conditions').delete().eq('staff_id', s.id).eq('kind', 'areas'); // one areas rule per person
       ({ error } = await supabase.from('staff_conditions').insert({ staff_id: s.id, kind, value, reason: reason.trim() || null }));
     }
     setBusy(false);
@@ -265,7 +268,10 @@ function AddRule({ s, people, venues, links, onClose, onSaved }: { s: AStaff; pe
         <select value={venue} onChange={(e) => setVenue(e.target.value)}><option value="">Pick a venue…</option>{venues.map((v) => <option key={v.id} value={v.name}>{v.name}</option>)}</select></>}
       {kind === 'not_weekday' && <><div className="kick">WHICH DAYS</div>
         <div className="row wrap" style={{ gap: 6 }}>{DOW3.map((d) => <button key={d} className={'chipb' + (days.includes(d) ? ' on' : '')} onClick={() => setDays(days.includes(d) ? days.filter((x) => x !== d) : [...days, d])}>{d}</button>)}</div></>}
-      <input className="search" placeholder={pair ? 'Why? (optional · e.g. friend, carpool)' : 'Why? (optional)'} value={reason} onChange={(e) => setReason(e.target.value)} />
+      {kind === 'areas' && <><div className="kick">ONLY THESE AREAS · everyone else stays “anywhere”</div>
+        <div className="row wrap" style={{ gap: 6 }}>{WORK_AREAS.map((a) => <button key={a} className={'chipb' + (areas.includes(a) ? ' on' : '')} title={AREA_HINT[a]} onClick={() => setAreas(areas.includes(a) ? areas.filter((x) => x !== a) : [...areas, a])}>{a}</button>)}</div>
+        <div className="muted sm">Not asked for events outside these areas, skipped by auto-fill and Ask more · asked again when the event is still short 3 days out · a warning if you book them by hand.</div></>}
+      <input className="search" placeholder={kind === 'areas' ? 'Note (optional · e.g. asked Nov 9 · downtown only)' : pair ? 'Why? (optional · e.g. friend, carpool)' : 'Why? (optional)'} value={reason} onChange={(e) => setReason(e.target.value)} />
       {pair && who && <div className="muted sm">✓ Also shows on {f(who.full_name)}’s profile (one rule for the pair).</div>}
       {err && <p className="error">{err}</p>}
       <button className="abtn dark" style={{ height: 46 }} disabled={busy} onClick={save}>{busy ? 'Saving…' : 'Save rule'}</button>
