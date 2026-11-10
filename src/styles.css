@@ -4074,3 +4074,6 @@ button.pf-go { border: none; background: none; padding: 4px 2px; font: 700 13px 
 .nh-card.stuck .nh-bar i { background: var(--accent); }
 .nh-acts { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .pay-miss { background: var(--accent-bg); border-radius: 12px; padding: 10px 12px; font-size: 13px; display: flex; flex-direction: column; gap: 4px; } .pay-miss b { color: var(--accent); }
+/* Nov 10 · iOS date / time inputs overflowed their card (native width) */
+input[type="date"], input[type="time"], input[type="datetime-local"] { max-width: 100%; min-width: 0; box-sizing: border-box; -webkit-appearance: none; appearance: none; }
+input[type="date"]::-webkit-date-and-time-value { text-align: left; }
