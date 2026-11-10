@@ -14,6 +14,7 @@ import { useEventLayout, EditEventLayout, type BlockKey } from './EventLayout';
 import { loadRules, outOfArea, type SCond } from './rules';
 import { setting } from '../lib/settings';
 import { AlsoWorking, type OtherShift } from './alsoWorking';
+import { takeAiApply, endLabelFor, hhmm, AI_APPLY_KEY, type AApply } from './EmailReview';
 
 export const MEN: [string, string][] = [['white_shirt', 'White dress shirt'], ['black_shirt', 'Black dress shirt'], ['black_tshirt', 'Black T-shirt']];
 export const WOMEN: [string, string][] = [['white_shirt', 'White dress shirt'], ['black_shirt', 'Black dress shirt'], ['dress', 'Black cocktail dress'], ['black_tshirt', 'Black T-shirt']];
@@ -191,6 +192,30 @@ export function EventForm() {
   const [dup, setDup] = useState<{ dates: string[]; pick: string; names: 'none' | 'leads' | 'all' } | null>(null);
   const [lastAt, setLastAt] = useState<{ date: string; lines: Line[] } | null>(null);
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false); const [loaded, setLoaded] = useState(isNew);
+  // push 67 · a reviewed client email → fill the form once loaded (nothing saved until Save)
+  const [aiApply, setAiApply] = useState<AApply | null>(null); const [aiSkipped, setAiSkipped] = useState<string[]>([]);
+  useEffect(() => {
+    if (!loaded || params.get('ai') !== '1' || aiApply) return;
+    const a = takeAiApply(isNew ? null : id!); if (!a) return;
+    const skipped: string[] = [];
+    for (const c of a.changes) {
+      if (c.field === 'guests') { const n = parseInt(c.value, 10); if (n > 0) setGuests(String(n)); else skipped.push(c.label); }
+      else if (c.field === 'address') setAddress(c.value);
+      else if (c.field === 'venue') { setTitle(c.value); setVenueId(null); }
+      else if (c.field === 'date' && isNew) { if (/^\d{4}-\d{2}-\d{2}$/.test(c.value)) setDate(c.value); else skipped.push(c.label); }
+      else if (c.field === 'end') { const l = endLabelFor(c.value); if (l) setEnds(l); else skipped.push(`${c.label} (${c.value})`); }
+      else if (c.field === 'notes') setNote((n) => (n ? n + '\n' : '') + c.value);
+      else if (c.field === 'guests_arrive') { const t = hhmm(c.value); setNote((n) => (n ? n.replace(/^Guests arrive.*$/im, '').trim() + '\n' : '') + `Guests arrive ${t ? ap12(t) : c.value}`); }
+      else if (c.field === 'staff_start') {
+        const t = hhmm(c.value); if (!t) { skipped.push(`${c.label} (${c.value})`); continue; }
+        setLines((ls) => { const st = ls.filter((l) => l.count > 0).map((l) => l.start).filter(Boolean).sort(); const first = st[0];
+          if (!first) return ls.map((l) => ({ ...l, start: t }));
+          const [h1, m1] = first.split(':').map(Number); const [h2, m2] = t.split(':').map(Number); const d = (h2 * 60 + m2) - (h1 * 60 + m1);
+          return ls.map((l) => { if (!l.start) return { ...l, start: t }; const [h, m] = l.start.split(':').map(Number); const x = (h * 60 + m + d + 1440) % 1440; return { ...l, start: `${String(Math.floor(x / 60)).padStart(2, '0')}:${String(x % 60).padStart(2, '0')}` }; }); });
+      }
+    }
+    setAiApply(a); setAiSkipped(skipped);
+  }, [loaded]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (loaded && params.get('dup') === '1' && date) setDup((d) => d ?? { dates: [], pick: addDays(date, 1), names: 'none' }); }, [loaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Lists
@@ -483,6 +508,7 @@ export function EventForm() {
         const r = await fetch('/api/drive/folder', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ses.session?.access_token}` }, body: JSON.stringify({ event_id: evId, month: driveMonth(date), name: driveName(date, title, client?.name ?? null, !!privateId) }) });
         if (!r.ok) setErr('Saved, but the Drive folder was not created: ' + (await r.text()));
       }
+      if (aiApply) { await supabase.from('ai_items').update({ status: 'done', done_at: new Date().toISOString(), done_note: `applied ${aiApply.changes.length} change(s)` }).eq('id', aiApply.item); try { sessionStorage.removeItem(AI_APPLY_KEY); } catch { /* */ } }
       setBusy(false); if (evId) nav(`/admin/event/${evId}`);
     }
     catch (e) { setBusy(false); setErr((e as Error).message); }
@@ -500,6 +526,7 @@ export function EventForm() {
 
   return (
     <form className="stack-lg ef" onSubmit={save}>
+      {aiApply && <div className="ef-aibar">✉ <b>From {aiApply.who ?? 'a client'}’s email:</b> {aiApply.changes.map((c) => c.label).join(' · ')} filled in{aiSkipped.length ? <> · <span>couldn’t fill: {aiSkipped.join(', ')}</span></> : null}. Check and press Save. Staff hear about time changes only from 4 days before.</div>}
       <div className="toolbar">
         <div><div className="row wrap" style={{ gap: 6 }}>{!isNew && <Link to={`/admin/bookings?date=${date}&view=board&ev=${id}`} className="abtn sm back-btn">‹ Back to Bookings · {dLabel(date, { weekday: 'short', month: 'short', day: 'numeric' })}</Link>}<Link to={isNew ? (date ? `/admin/bookings?date=${date}` : '/admin/week') : `/admin/event/${id}`} className="abtn sm back-btn ghost">{isNew ? '‹ Back' : 'Event details'}</Link></div><h1 className="serif-h">{isNew ? 'New event' : `Edit · ${title}`}</h1></div>
         <div className="row wrap" style={{ position: 'relative' }}>

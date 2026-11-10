@@ -3999,3 +3999,13 @@ button.pf-go { border: none; background: none; padding: 4px 2px; font: 700 13px 
 .no-done { padding: 12px 14px; border-radius: 14px; background: #F1ECE5; font-size: 13.5px; } .no-done.ok { background: #E6F2EA; color: #2F6B4F; }
 .sn-btns .sn-yes.dark { background: #1F1A17; color: #fff; }
 .sn.sn-ask.home.no-ask { border: 1.5px solid #9B2226 !important; box-shadow: none !important; background: #fff; }
+
+/* push 67 · client email review */
+.er-card { width: min(880px, 94vw); display: flex; flex-direction: column; gap: 12px; }
+.er-quote { font-size: 13px; color: var(--muted, #7A7168); background: #F6F2EC; border-radius: 12px; padding: 10px 12px; font-style: italic; }
+.er-grid { display: grid; grid-template-columns: 24px 130px 1fr 20px 1fr; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid #EEE7DD; font-size: 13.5px; }
+.er-grid.er-h { border: 0; padding-bottom: 0; } .er-grid small { font-size: 10.5px; letter-spacing: .1em; font-weight: 800; color: var(--muted, #7A7168); } .er-blue { color: #2B4C7E !important; }
+.er-grid.off { opacity: .45; } .er-grid input[type=checkbox] { width: 18px; height: 18px; accent-color: #2F6B4F; }
+.er-val { font: inherit; font-weight: 700; padding: 7px 10px; border-radius: 9px; border: 1px solid #CFC5B8; background: #fff; }
+.er-flag { background: #FBF3E0; color: #6B4A12; border-radius: 10px; padding: 9px 6px; }
+.ef-aibar { background: #E5ECF6; color: #2B4C7E; border-radius: 12px; padding: 10px 14px; font-size: 13.5px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }

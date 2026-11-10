@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { EmailReview, type ALine } from './EmailReview';
 
 /** Nov 7 · AI plan step 1 (migration 079). Top of Today: "✦ AI · n waiting for your OK" + Done today.
  *  ✉ client emails (hourly Claude task via /api/ai) · ⚡ app changes (trigger, instant). Nothing is applied by itself. */
 type Item = {
   id: string; source: 'email' | 'app'; kind: string; event_id: string | null; shift_id: string | null; staff_id: string | null;
-  who: string | null; quote: string | null; lines: { label: string; old?: string | null; new?: string | null }[]; event_hint: string | null;
+  who: string | null; quote: string | null; lines: ALine[]; event_hint: string | null;
   email_url: string | null; sure: boolean; status: 'waiting' | 'done' | 'ignored'; done_note: string | null; created_at: string; done_at: string | null;
   events: { title: string; event_date: string } | null;
 };
@@ -87,6 +88,7 @@ export function AiPanel({ bare = false }: { bare?: boolean } = {}) {
 }
 
 function Waiting({ i, set }: { i: Item; set: (i: Item, st: 'done' | 'ignored', note?: string) => void }) {
+  const [rev, setRev] = useState(false); const canReview = i.source === 'email' && i.lines.some((l) => l.field) && ['count_change', 'time_change', 'address', 'new_event', 'other'].includes(i.kind);
 
             const [t, tone] = TAG[i.kind] ?? TAG.other; const p = primary(i);
             return (
@@ -98,12 +100,14 @@ function Waiting({ i, set }: { i: Item; set: (i: Item, st: 'done' | 'ignored', n
                   <div key={k} className="ai-line"><span>{l.label}</span><span>{l.old ? <><s>{l.old}</s> → </> : null}<b>{l.new}</b></span></div>
                 ))}
                 <div className="ai-acts">
-                  {p && <Link className="abtn dark sm" to={p.to}>{p.label}</Link>}
+                  {canReview ? <button className="abtn dark sm" onClick={() => setRev(true)}>{i.kind === 'new_event' ? 'Review & create ›' : 'Review changes ›'}</button> : p && <Link className="abtn dark sm" to={p.to}>{p.label}</Link>}
+                  {canReview && i.kind === 'count_change' && i.event_id && <Link className="abtn sm" to={`/admin/event/${i.event_id}/change`}>Client change ›</Link>}
                   <button className="abtn sm" onClick={() => set(i, 'done')}>Done</button>
                   <button className="abtn sm" onClick={() => set(i, 'ignored')}>Ignore</button>
                   <span className="grow" />
                   {i.email_url && <a className="ai-link" href={i.email_url} target="_blank" rel="noreferrer">Open email ›</a>}
                 </div>
+                {rev && <EmailReview item={i} onClose={() => setRev(false)} />}
               </div>
             );
           }

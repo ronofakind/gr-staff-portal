@@ -12,6 +12,8 @@ const H = (extra = {}) => ({ apikey: SERVICE, Authorization: `Bearer ${SERVICE}`
 const get = async (path) => { const r = await fetch(`${URL_}/rest/v1/${path}`, { headers: H() }); if (!r.ok) throw new Error(`${path.split('?')[0]} ${r.status}`); return r.json(); };
 const KINDS = new Set(['count_change', 'time_change', 'address', 'new_event', 'cancel', 'question', 'other']);
 const s = (v, n) => (v == null ? null : String(v).slice(0, n));
+// push 67 · machine-readable field per line so Ronnie's review can compare with the app and fill the event form
+const FIELDS = new Set(['staff_start', 'guests_arrive', 'end', 'guests', 'address', 'venue', 'date', 'notes']);
 
 async function okToken(t) {
   if (!t || String(t).length < 20) return false;
@@ -67,7 +69,7 @@ export default async function handler(req, res) {
       const until = new Date(Date.now() + 60 * 864e5).toLocaleDateString('en-CA', { timeZone: 'America/Toronto' });
       const since = new Date(Date.now() - 14 * 864e5).toISOString();
       const [evs, priv, items, clients, st] = await Promise.all([
-        get(`events?event_date=gte.${today}&event_date=lte.${until}&select=id,event_date,title,address,guests,department,venues(name)&order=event_date`),
+        get(`events?event_date=gte.${today}&event_date=lte.${until}&select=id,event_date,title,address,guests,department,start_time,end_time,staffing,venues(name)&order=event_date`),
         get('event_private?select=event_id,clients(name)'),
         get(`ai_items?created_at=gte.${since}&select=dedupe_key`),
         get('clients?archived_at=is.null&select=name'),
@@ -76,7 +78,9 @@ export default async function handler(req, res) {
       const cl = Object.fromEntries(priv.map((p) => [p.event_id, p.clients?.name ?? null]));
       return res.json({
         events: evs.map((e) => ({ id: e.id, date: e.event_date, title: e.title, venue: e.venues?.name ?? null, client: cl[e.id] ?? null,
-          guests: e.guests ?? null, dept: e.department, address: e.address ?? null })),
+          guests: e.guests ?? null, dept: e.department, address: e.address ?? null,
+          start: e.start_time ? e.start_time.slice(0, 5) : null, end: e.end_time ? e.end_time.slice(0, 5) : null,
+          staff_starts: [...new Set((e.staffing ?? []).filter((l) => !['MD', 'BM'].includes(l.code) && l.count > 0).map((l) => l.start))].sort() })),
         keys: items.map((i) => i.dedupe_key).filter(Boolean),
         clients: clients.map((c) => c.name),
         inbox_checked_at: st[0]?.inbox_checked_at ?? null,
@@ -89,7 +93,7 @@ export default async function handler(req, res) {
         source: 'email', kind: KINDS.has(i.kind) ? i.kind : 'other', dedupe_key: s(i.dedupe_key, 200),
         event_id: /^[0-9a-f-]{36}$/i.test(i.event_id || '') ? i.event_id : null,
         who: s(i.who, 120), quote: s(i.quote, 400), event_hint: s(i.event_hint, 160), email_url: /^https:\/\/mail\.google\.com\//.test(i.email_url || '') ? s(i.email_url, 400) : null,
-        lines: Array.isArray(i.lines) ? i.lines.slice(0, 6).map((l) => ({ label: s(l?.label, 40), old: s(l?.old, 120), new: s(l?.new, 160) })) : [],
+        lines: Array.isArray(i.lines) ? i.lines.slice(0, 6).map((l) => ({ label: s(l?.label, 40), old: s(l?.old, 120), new: s(l?.new, 160), ...(FIELDS.has(l?.field) ? { field: l.field, value: s(l?.value, 160) } : {}) })) : [],
         sure: i.sure !== false,
       }));
       // Nov 8 · push 54 (081) · QuickBooks invoices once SENT → profit per event. { qb_id, doc_number, event_id, customer, txn_date, sent_at, subtotal, total }
