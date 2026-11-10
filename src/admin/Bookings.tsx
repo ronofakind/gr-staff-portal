@@ -379,6 +379,8 @@ export function Bookings() {
   const nLocked = (d: string) => plOf(d).filter((p) => isLocked(d, p)).length;
 
   // ── board pieces ───────────────────────────────────────────────
+  /** push 65 · latest staff start that day (to flag yes-answers that no longer fit after a time change) */
+  const lastStart = (d: string) => { const st = (events ?? []).filter((e) => e.event_date === d && !isBarEv(e)).flatMap((e) => (e.staffing ?? []).filter((l) => !['MD', 'BM'].includes(l.code) && l.count > 0).map((l) => l.start)).sort(); return st.length ? st[st.length - 1] : null; };
   const dayEvs = (d: string) => (events ?? []).filter((e) => e.event_date === d && (dept === 'both' || evDept(e) === dept)).sort((a, b) => (isBarEv(a) ? 1 : 0) - (isBarEv(b) ? 1 : 0));
   /** Ronnie, Nov 4 · automatic extras: when more people are booked than the client count, the extra ones go in the Extras box:
    *  people who finish early first, then the lowest ranked. Never MDs, never padlocked people, never someone you dragged onto a line. */
@@ -686,7 +688,7 @@ export function Bookings() {
                   <div key={s.id} className={'bk-av' + (dept === 'both' && s.department === 'bar' ? ' bar-p' : '')} draggable onDragStart={(ev) => dragStart(ev, { staff_id: s.id })} onDragEnd={() => setDrag(null)}>
                     <i className={'bk-t t' + (t ?? 'x')} />
                     <div className="grow"><b>{s.full_name}<RuleIcons sid={s.id} links={rl} conds={conds} /></b>
-                      <small>{a?.status === 'yes' ? (a.until_time ? <b className="amberc">day only · {a.from_time ? t12(a.from_time) : 'any'}–{t12(a.until_time)}</b> : a.from_time ? `from ${t12(a.from_time)}` : 'any time') : a?.status === 'asked' ? 'asked · no reply' : u?.status === 'yes' ? `usual week · ${u.until_time ? `day only ${u.from_time ? t12(u.from_time) : ''}–${t12(u.until_time)}` : u.from_time ? 'from ' + t12(u.from_time) : 'any time'}` : 'not asked'}
+                      <small>{a?.status === 'yes' ? (a.until_time ? <b className="amberc">day only · {a.from_time ? t12(a.from_time) : 'any'}–{t12(a.until_time)}</b> : a.from_time ? <>from {t12(a.from_time)}{lastStart(date) && toMin(a.from_time) > toMin(lastStart(date)!) + 15 && <b className="amberc"> · later than the start</b>}</> : 'any time') : a?.status === 'asked' ? 'asked · no reply' : u?.status === 'yes' ? `usual week · ${u.until_time ? `day only ${u.from_time ? t12(u.from_time) : ''}–${t12(u.until_time)}` : u.from_time ? 'from ' + t12(u.from_time) : 'any time'}` : 'not asked'}
                         {part.length > 0 && ` · 🔗 ${part.map((x) => name(x).split(' ')[0]).join(', ')}`}{c.length > 0 && ` · ${c.map(condShort).join(', ')}`}{apartOf(s.id).length > 0 && ` · ⊘ ${apartOf(s.id).map((x) => name(x).split(' ')[0]).join(', ')}`}</small>
                       {a?.note && <i className="av-note-adm">“{a.note}”</i>}</div>
                   </div>); })}
@@ -936,12 +938,15 @@ function AskMore({ date, dept, events, staff, av, wk, off, conds, links, booked,
   const main = cands.filter((c) => !c.held); const held = cands.filter((c) => c.held);
   const [pick, setPick] = useState<Set<string>>(() => { const p = new Set<string>(); let sum = 0; for (const c of main) { if (sum >= need) break; p.add(c.s.id); sum += c.rate; } return p; });
   const [busy, setBusy] = useState(false); const [msg, setMsg] = useState('');
+  // push 65 · show the place and start times (only when every event that night is final)
+  const timesOk = evs.length > 0 && evs.every((e) => !e.details_pending && (e.start_time || (e.staffing ?? []).length));
+  const [showTimes, setShowTimes] = useState(false);
   const text = `Hey! G&R has a new date for you: ${dLabel(date, { weekday: 'long', month: 'long', day: 'numeric' })}. Let me know in the app (My dates) 👉 https://gr-staff-portal.vercel.app/my-dates`;
   const ask = async () => {
     if (practice) return;
     setBusy(true); setMsg('');
     const people = staff.filter((s) => pick.has(s.id));
-    const { data: a, error } = await supabase.from('avail_asks').upsert({ for_date: date, department: dept, label: evs.length === 1 ? 'Evening event' : `${evs.length} events`, approx_start: evs[0]?.start_time ?? null, staff_needed: target }, { onConflict: 'for_date,department' }).select('id').single();
+    const { data: a, error } = await supabase.from('avail_asks').upsert({ for_date: date, department: dept, label: evs.length === 1 ? 'Evening event' : `${evs.length} events`, approx_start: evs[0]?.start_time ?? null, staff_needed: target, show_times: showTimes && timesOk }, { onConflict: 'for_date,department' }).select('id').single();
     if (error || !a) { setMsg(error?.message ?? 'Could not save'); setBusy(false); return; }
     const r = await supabase.from('availability').upsert(people.map((s) => ({ staff_id: s.id, for_date: date, part: 'evening', status: 'asked', ask_id: a.id, tier: s.staff_private?.tier ?? null, asked_at: new Date().toISOString() })), { onConflict: 'staff_id,for_date,part', ignoreDuplicates: true });
     setBusy(false); if (r.error) setMsg(r.error.message); else { setMsg(`${people.length} people asked. They see it in the app.`); onAsked(); }
@@ -968,6 +973,7 @@ function AskMore({ date, dept, events, staff, av, wk, off, conds, links, booked,
       {msg && <div className="okc sm">{msg}</div>}
       <div className="row" style={{ gap: 8, justifyContent: 'flex-end' }}>
         <button className="abtn" onClick={() => navigator.clipboard?.writeText(text)}>Copy text</button>
+        <label className={'ask-times' + (timesOk ? '' : ' off')} title={timesOk ? '' : 'Place and time still to come for an event that night'}><input type="checkbox" disabled={!timesOk} checked={showTimes && timesOk} onChange={(e) => setShowTimes(e.target.checked)} /> <span><b>Show the place and start times</b><small>{timesOk ? evs.map((e) => `${e.title} · ${[...new Set((e.staffing ?? []).filter((l) => !['MD', 'BM'].includes(l.code) && l.count > 0).map((l) => t12(l.start)))].join(' or ') || (e.start_time ? t12(e.start_time) : '')}`).join(' · ') : 'only when the place and times are final'}</small></span></label>
         <button className="abtn dark" disabled={busy || practice || !pick.size} onClick={ask}>{practice ? 'Practice · no asks sent' : `Ask ${pick.size} people`}</button>
       </div>
     </div></div>

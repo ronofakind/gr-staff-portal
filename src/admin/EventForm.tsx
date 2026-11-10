@@ -186,6 +186,7 @@ export function EventForm() {
   const [existing, setExisting] = useState<Ev[]>([]); const [oldShifts, setOldShifts] = useState<Sh[]>([]);
   const [askTiers, setAskTiers] = useState<Tier[] | null>(null); const [askBar, setAskBar] = useState<'georges' | 'team'>('georges');
   const [askWhen, setAskWhen] = useState<'save' | 'later'>(isNew ? 'save' : 'later');
+  const [showTimes, setShowTimes] = useState(false); // push 65 · date ask shows the place and start times
   const [day, setDay] = useState<DayInfo>({ avail: {}, booked: {}, off: new Set(), weeklyNo: new Set() });
   const [dup, setDup] = useState<{ dates: string[]; pick: string; names: 'none' | 'leads' | 'all' } | null>(null);
   const [lastAt, setLastAt] = useState<{ date: string; lines: Line[] } | null>(null);
@@ -353,6 +354,7 @@ export function EventForm() {
     setLines(next);
   };
   const tbcRows = pendingDetails ? 0 : lines.filter((l) => l.tbc && l.count > 0).length;
+  const timesOk = !pendingDetails && !!title.trim() && !tbcRows && lines.some((l) => l.count > 0 && !!l.start); // push 65
   const holdN = lines.reduce((n, l) => n + (l.hold ?? 0), 0);
   const isWine = (l: Line) => l.dept === 'bar' && l.code === 'WW';
   const billF = lines.filter((l) => l.dept === 'floor').reduce((n, l) => n + l.count, 0);
@@ -459,7 +461,7 @@ export function EventForm() {
       .filter((s) => !outOfArea(s.id, { event_date: d, venue_id: venueId, event_private: { client_id: clientId || null, client: client?.name ?? null } } as unknown as Parameters<typeof outOfArea>[1], areaCtx)); // push 63
     const { data: prev } = await supabase.from('avail_asks').select('tiers_sent').eq('for_date', d).eq('department', dept).maybeSingle();
     const { data: a, error } = await supabase.from('avail_asks').upsert({
-      for_date: d, department: dept, label: 'Evening event', approx_start: start, staff_needed: needed,
+      for_date: d, department: dept, label: 'Evening event', approx_start: start, staff_needed: needed, show_times: showTimes && timesOk,
       tiers_sent: Array.from(new Set([...((prev?.tiers_sent as string[]) ?? []), ...(dept === 'bar' ? [] : tiers)])).sort(),
     }, { onConflict: 'for_date,department' }).select('id').single();
     if (error || !a) throw error ?? new Error('Could not ask');
@@ -711,6 +713,7 @@ export function EventForm() {
             <div className="row" style={{ gap: 18 }}>
               <label className="radio"><input type="radio" checked={askWhen === 'save'} onChange={() => setAskWhen('save')} /> Ask when I save</label>
               <label className="radio"><input type="radio" checked={askWhen === 'later'} onChange={() => setAskWhen('later')} /> Later</label></div>
+            {askWhen === 'save' && <label className={'ask-times' + (timesOk ? '' : ' off')}><input type="checkbox" disabled={!timesOk} checked={showTimes && timesOk} onChange={(e) => setShowTimes(e.target.checked)} /> <span><b>Show the place and start times</b><small>{timesOk ? `${title.trim()} · ${[...new Set(lines.filter((l) => l.count > 0 && !['MD', 'BM'].includes(l.code)).map((l) => ap12(l.start)))].join(' or ')}` : 'only when the place and times are final'}</small></span></label>}
           </div>
           <div className="stack" style={{ gap: 10 }}>
             <span className="serif" style={{ fontSize: 20 }}>More (optional)</span>

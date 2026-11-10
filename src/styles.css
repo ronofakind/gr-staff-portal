@@ -3979,3 +3979,9 @@ button.pf-go { border: none; background: none; padding: 4px 2px; font: 700 13px 
 .md-day { border-top: 1px solid var(--line, #E8E0D5); padding-top: 10px; display: flex; flex-direction: column; gap: 8px; }
 .md-day .k { font-size: 10.5px; letter-spacing: .1em; font-weight: 800; color: #6B4A12; }
 .next .fc-link { color: rgba(255,255,255,.65); } .next .fc-link b { color: #fff; }
+
+/* push 65 · show the place and start times on a date ask */
+.ask-times { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 12px; background: #F6F2EC; cursor: pointer; }
+.ask-times input { width: 18px; height: 18px; accent-color: #2F6B4F; flex: none; }
+.ask-times span { display: flex; flex-direction: column; gap: 1px; } .ask-times b { font-size: 13.5px; } .ask-times small { font-size: 12px; color: var(--muted, #7A7168); }
+.ask-times.off { opacity: .55; cursor: not-allowed; }
