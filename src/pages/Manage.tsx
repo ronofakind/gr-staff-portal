@@ -579,7 +579,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
               return (
                 <SwipeRow key={r.id} on={canUndo(r)} label={pout ? 'Undo end' : 'Undo start'} onAct={() => (pout ? undoEnd(r) : undoStart(r))}>
                 <div className={'crew' + (r.attendance ? ' flagged' : '') + (r.left_early ? ' left' : '')}>
-                  <button className={'ring tap ' + ring + (isNew ? ' newp' : '')} aria-label={`Options for ${r.staff?.full_name}`} onClick={() => openRow(r, isNew)}>
+                  <button className={'ring tap ' + ring + (isNew && !pin ? ' newp' : '')} aria-label={`Options for ${r.staff?.full_name}`} onClick={() => openRow(r, isNew)}>
                     <Avatar name={r.staff?.full_name ?? '?'} url={r.staff?.photo_url} size={44} />
                     {isNew && <i className="new-badge">NEW</i>}
                   </button>
