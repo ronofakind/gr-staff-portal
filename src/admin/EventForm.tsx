@@ -495,7 +495,7 @@ export function EventForm() {
   return (
     <form className="stack-lg ef" onSubmit={save}>
       <div className="toolbar">
-        <div><Link to={isNew ? '/admin/week' : `/admin/event/${id}`} className="muted sm strong">‹ {isNew ? 'Back to week' : 'Back to event'}</Link><h1 className="serif-h">{isNew ? 'New event' : `Edit · ${title}`}</h1></div>
+        <div><div className="row wrap" style={{ gap: 6 }}>{!isNew && <Link to={`/admin/bookings?date=${date}&view=board&ev=${id}`} className="abtn sm back-btn">‹ Back to Bookings · {dLabel(date, { weekday: 'short', month: 'short', day: 'numeric' })}</Link>}<Link to={isNew ? (date ? `/admin/bookings?date=${date}` : '/admin/week') : `/admin/event/${id}`} className="abtn sm back-btn ghost">{isNew ? '‹ Back' : 'Event details'}</Link></div><h1 className="serif-h">{isNew ? 'New event' : `Edit · ${title}`}</h1></div>
         <div className="row wrap" style={{ position: 'relative' }}>
           {lastAt && <button type="button" className="abtn" onClick={() => setLines(lastAt.lines.map((l) => ({ ...l, names: [] })))}>Copy last {title} ({dLabel(lastAt.date, { month: 'short', day: 'numeric' })})</button>}
           <button type="button" className="abtn" style={{ borderColor: 'var(--ink)' }} onClick={() => setDup(dup ? null : { dates: [], pick: addDays(date, 1), names: 'none' })}>Duplicate to another day…</button>

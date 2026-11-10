@@ -72,7 +72,7 @@ export function EventDetail() {
     <div className="stack-lg ed2">
       <div className="toolbar">
         <div>
-          <Link to={`/admin/bookings?date=${e.event_date}`} className="muted sm strong">‹ Bookings · {dLabel(e.event_date, { weekday: 'long', month: 'short', day: 'numeric' })}</Link>
+          <Link to={`/admin/bookings?date=${e.event_date}&view=board&ev=${e.id}`} className="abtn sm back-btn">‹ Back to Bookings · {dLabel(e.event_date, { weekday: 'short', month: 'short', day: 'numeric' })}</Link>
           <h1 className="serif-h">{x?.venue?.name ?? e.title}</h1>
           <div className="row wrap" style={{ gap: 6, marginTop: 8 }}>
             <span className="tag">{dLabel(e.event_date, { weekday: 'short', month: 'short', day: 'numeric' })}</span>
