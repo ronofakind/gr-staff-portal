@@ -572,7 +572,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
               const ended = !!pout && new Date(pout).getTime() <= nowMs; const endsLater = !!pout && !ended;
               const isEarly = !!pin && new Date(pin).getTime() < callMs - 60000; const wasLate = !!pin && new Date(pin).getTime() > callMs + 10 * 60000;
               const ln = lateOf(r); const lnPassed = !!ln && !pin && new Date(ln.eta).getTime() < Date.now();
-              const ring = r.attendance ? '' : ended ? 'done' : pin ? (isEarly || (wasLate && !ln) ? 'flag' : 'working') : ln && !lnPassed ? 'told' : isLate ? 'late' : '';
+              const ring = r.attendance ? '' : ended ? 'done' : pin ? 'working' : ln && !lnPassed ? 'told' : isLate ? 'late' : '';
               const fromRonnie = !!r.cancel_self && !!r.cancel_sent_to_manager;
               const tel = r.staff?.phone?.replace(/[^\d+]/g, '');
               const inf = infoOf(r); const isNew = !!inf?.is_new && inf.done_before < newUnder;
