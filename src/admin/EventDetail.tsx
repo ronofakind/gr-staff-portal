@@ -15,6 +15,7 @@ import { EVENT_SELECT, EVENT_SELECT_28, missing034, ap12, dLabel, roleName, type
 import { ReplacedBanners } from './Replace';
 import { TeamLocks } from './TeamLocks';
 import { NightOff } from './NightOff';
+import { BarReport } from './BarReport';
 
 const FOLD_KEY = 'gr-ed-fold';
 const readFold = (): Record<string, boolean> => { try { return JSON.parse(localStorage.getItem(FOLD_KEY) || '{}'); } catch { return {}; } };
@@ -67,7 +68,7 @@ export function EventDetail() {
   const uniRows = uniformRows(evs, x?.uniform_items ?? null);
   const fee = /brera/i.test(x?.client?.name ?? p?.client ?? '') ? 8 : 10;
   const rateLabel = x?.client && x.client.rate_sets.length >= 2 ? x.client.rate_sets.find((r) => r.key === (x.rate_set ?? x.client!.rate_sets[0].key))?.label : null;
-  const keys = ['event', 'confirm', 'locks', 'staffing', 'managers', 'team', 'uniforms', 'folder', 'billing', 'rides', 'lands'];
+  const keys = ['event', 'confirm', 'locks', 'staffing', 'managers', 'team', 'uniforms', 'folder', 'billing', 'rides', 'barcount', 'lands'];
 
   return (
     <div className="stack-lg ed2">
@@ -178,6 +179,9 @@ export function EventDetail() {
           <Billing evs={evs} onChange={load} />
         </Sec>}
 
+        {evs.filter((v) => v.department === 'bar').map((b) => <Sec key={'bar' + b.id} k="barcount" title="Bar count" wide open={isOpen('barcount')} setOpen={setFold} summary="Out · more · back · used · CSV">
+          <BarReport e={b} />
+        </Sec>)}{/* push 69 */}
         {evs.some((v) => v.transport || v.rides) && <Sec k="rides" title="Rides" wide open={isOpen('rides')} setOpen={setFold} summary={evs.some((v) => v.transport) ? 'Transport · cars and riders' : 'Carpool · cars and riders'}>
           <RidesAdmin evs={evs} />
         </Sec>}
