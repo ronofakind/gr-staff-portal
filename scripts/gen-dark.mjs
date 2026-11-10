@@ -80,6 +80,6 @@ root.walkRules((rule) => {
 });
 dark.append(postcss.parse(`html[data-theme="dark"] { color-scheme: dark; }
 html[data-theme="dark"] body { background: ${P.bg}; color: ${P.ink}; }
-html[data-theme="dark"] img.logo-ink, html[data-theme="dark"] .logo-ink { filter: invert(1) hue-rotate(180deg); }`));
+html[data-theme="dark"] img[src$="logo-mark.png"]:not(.adm-side img):not(.side-logo), html[data-theme="dark"] img[src$="logo-full.png"] { filter: invert(1) hue-rotate(180deg); mix-blend-mode: normal !important; }`));
 fs.writeFileSync(OUT, dark.toString());
 console.log('theme-dark.css', dark.nodes.length, 'rules');
