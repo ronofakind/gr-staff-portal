@@ -19,6 +19,7 @@ import { mtlToday, addDays } from '../lib/myDates';
 import { shiftNotes, noteSeen, type ShiftNote } from '../lib/staffNotes';
 import { PinMap, pinDirections } from '../components/VenuePin';
 import { StaffLinks, mergeLinks } from '../components/Links';
+import { FirstCut } from '../components/FirstCut';
 
 export function Shift({ backTo = '/' }: { backTo?: string }) {
   const { id } = useParams();
@@ -217,6 +218,7 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team, past }
           </a>
         )}
         {lead_ && !preview && <Link className="d3-team" to={`/manage/${ev.id}`}>My team{team ? ` · ${team.reduce((n, g) => n + g.n, 0)}` : ''} ›</Link>}
+        {canChange && !lead_ && !ev.tentative && s.status !== 'declined' && <FirstCut shiftId={s.id} at={s.cut_first_at} start={s.planned_start} mgr={ev.manager?.full_name} preview={preview} />}{/* push 64 */}
         {canChange && <>
           <span className="d3-hl" />
           <NeedChange canSchedule={!(req?.status === 'pending' || (req?.status === 'keep' && !req.keep_reply))} onSchedule={() => setSheet('change')} onCancel={() => setSheet('cancel')} />

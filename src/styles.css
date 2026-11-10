@@ -3958,3 +3958,24 @@ button.pf-go { border: none; background: none; padding: 4px 2px; font: 700 13px 
 /* Nov 9 · clear way back to the Bookings day */
 .back-btn { display: inline-flex; align-items: center; height: 32px; padding: 0 12px; margin-bottom: 6px; text-decoration: none; font-weight: 700; }
 .back-btn.ghost { background: none; box-shadow: none; color: var(--muted); }
+
+/* push 64 · ask to be first cut */
+.fc-card { background: #fff; border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 6px; box-shadow: 0 0 0 1px #E8E0D5; }
+.fc-card b { font-size: 15px; color: var(--ink); } .fc-card span { font-size: 13px; color: var(--muted); }
+.fc-card button { margin-top: 6px; height: 44px; border-radius: 12px; border: 1.5px solid var(--ink); background: #fff; font: inherit; font-weight: 700; color: var(--ink); cursor: pointer; }
+.fc-done { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: var(--ok-bg); color: var(--ok); border-radius: 14px; padding: 11px 13px; font-size: 13px; }
+.fc-done.compact { padding: 9px 11px; font-size: 12.5px; }
+.fc-done button { border: 0; background: #fff; color: var(--ink); font: inherit; font-weight: 700; font-size: 12.5px; padding: 6px 12px; border-radius: 10px; cursor: pointer; }
+.fc-done .err, .fc-card .err { width: 100%; color: #A3322A; }
+.fc-link { border: 0; background: transparent; text-align: left; font: inherit; font-size: 13px; color: var(--muted); padding: 2px 0; cursor: pointer; }
+.fc-link b { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+.fc-tag { display: inline-flex; align-items: center; gap: 3px; font-size: 10.5px; font-weight: 800; letter-spacing: .04em; padding: 3px 7px; border-radius: 7px; background: #FBF3E0; color: #6B4A12; white-space: nowrap; }
+.wk-mode { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; background: #EFE8DE; border-radius: 12px; padding: 4px; }
+.wk-mode button { border: 0; background: transparent; height: 38px; border-radius: 9px; font: inherit; font-weight: 700; font-size: 14px; color: var(--muted); cursor: pointer; }
+.wk-mode button.on { background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.wk-two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.wk-two small { display: block; font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 0 0 4px 4px; }
+.wk-time.day { background: #FBF3E0; color: #6B4A12; }
+.md-day { border-top: 1px solid var(--line, #E8E0D5); padding-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+.md-day .k { font-size: 10.5px; letter-spacing: .1em; font-weight: 800; color: #6B4A12; }
+.next .fc-link { color: rgba(255,255,255,.65); } .next .fc-link b { color: #fff; }

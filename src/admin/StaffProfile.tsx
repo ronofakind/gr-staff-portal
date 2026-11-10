@@ -19,7 +19,7 @@ const TAG_LABEL: Record<string, string> = { guests: 'Great with guests', wine: '
 
 export function StaffProfile({ s, onClose, onEdit, all }: { s: AStaff; onClose: () => void; onEdit: () => void; all?: AStaff[] }) {
   const today = isoDay(new Date());
-  const [week, setWeek] = useState<Record<number, { status: string; from_time: string | null }>>({});
+  const [week, setWeek] = useState<Record<number, { status: string; from_time: string | null; until_time?: string | null }>>({});
   const [off, setOff] = useState<{ id: string; from_date: string; to_date: string; reason: string | null; every_dow: number | null; added_by_admin: boolean; created_at: string; days_off_private: { note: string | null } | null }[]>([]);
   const [toff, setToff] = useState<{ mode: 'day' | 'range' | 'week'; from: string; to: string; dow: number; note: string }>({ mode: 'day', from: today, to: today, dow: 0, note: '' });
   const [toffMsg, setToffMsg] = useState('');
@@ -44,7 +44,7 @@ export function StaffProfile({ s, onClose, onEdit, all }: { s: AStaff; onClose: 
   useEffect(() => {
     setNotes(s.staff_private?.notes ?? ''); setSaved(true);
     Promise.all([
-      supabase.from('staff_weekly').select('dow,status,from_time').eq('staff_id', s.id),
+      supabase.from('staff_weekly').select('dow,status,from_time,until_time').eq('staff_id', s.id),
       supabase.from('days_off').select('id,from_date,to_date,reason,every_dow,added_by_admin,created_at,days_off_private(note)').eq('staff_id', s.id).gte('to_date', today).order('from_date'),
       supabase.from('shifts').select('id,planned_start,attendance,left_early,punches(punch_in,punch_out),events!inner(event_date,title)').eq('staff_id', s.id).neq('status', 'declined')
         .gte('events.event_date', today.slice(0, 4) + '-01-01'),
@@ -183,7 +183,7 @@ export function StaffProfile({ s, onClose, onEdit, all }: { s: AStaff; onClose: 
             </div>
             <div className="pcard">
               <div className="kick">USUAL WEEK</div>
-              <div className="wk7">{DOW.map((d, i) => { const w = week[i]; return <span key={i} className={w?.status ?? 'unset'} title={w && w.status !== 'no' && w.from_time ? `from ${ampm(w.from_time)}` : ''}>{d}{w && w.status !== 'no' && w.from_time ? <small>{ampm(w.from_time).replace(' ', '')}</small> : null}</span>; })}</div>
+              <div className="wk7">{DOW.map((d, i) => { const w = week[i]; return <span key={i} className={w?.status ?? 'unset'} title={w && w.status !== 'no' ? (w.until_time ? `day only · ${w.from_time ? ampm(w.from_time) : 'any'}–${ampm(w.until_time)}` : w.from_time ? `from ${ampm(w.from_time)}` : '') : ''}>{d}{w && w.status !== 'no' && w.until_time ? <small>day</small> : w && w.status !== 'no' && w.from_time ? <small>{ampm(w.from_time).replace(' ', '')}</small> : null}</span>; })}</div>
               {!Object.keys(week).length && <div className="muted sm">Not set yet.</div>}
             </div>
             <div className="pcard">

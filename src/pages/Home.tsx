@@ -33,6 +33,7 @@ import { managesShift } from '../lib/pastEvents';
 import { NeedChange, CancelSheet, ChangeSheet, LateSheet, LateBlock, ChangeCard, CancelledCard, useShiftChanges, t12 as t12c, type LateNotice } from '../components/ShiftChange';
 import { Brand } from '../components/Brand';
 import { CantMakeIt } from '../components/ShiftNotes';
+import { FirstCut } from '../components/FirstCut';
 
 type MgrLate = { id: string; shift_id: string; event_id: string; name: string; eta: string; reason: string | null; note?: string | null };
 type Gone = { id: string; title: string; date: string; late: boolean };
@@ -422,7 +423,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
                   <div><small>On the clock</small><span className="big serif sm-big mint"><Elapsed iso={next.punches!.punch_in!} /></span></div>
                 </> : <>
                   <div><small>Starts</small>{next.time_tbc ? <span className="big serif sm-big">TBC</span> : <BigTime iso={next.planned_start} small />}</div>
-                  <div><small>Ends</small>{next.planned_end && !next.time_tbc ? <BigTime iso={next.planned_end} small /> : <span className="big serif sm-big">TBC</span>}</div>
+                  <div><small>{next.planned_end && !next.time_tbc ? 'Ends ~ estimate' : 'Ends'}</small>{next.planned_end && !next.time_tbc ? <BigTime iso={next.planned_end} small /> : <span className="big serif sm-big">TBC</span>}</div>
                 </>}
               </div>
               {myAlerts.map((a) => (
@@ -514,6 +515,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
             </div>
             {isLead(next) && next.events.drive_folder_url && <a className="home-folder" href={next.events.drive_folder_url} target="_blank" rel="noreferrer">📁 Event Folder</a>}
               <HomeLink s={next} />
+            {!started && !managesIt && !isLead(next) && next.events.event_date === today && !next.events.tentative && <FirstCut compact shiftId={next.id} at={next.cut_first_at} start={next.planned_start} mgr={mgrName} preview={preview} />}{/* push 64 */}
             {needChange}
           </section>
         );

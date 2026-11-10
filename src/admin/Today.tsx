@@ -45,6 +45,7 @@ export function Today() {
   const changeId = params.get('change');
   const [lm, setLm] = useState<{ e: AEvent; s: AShift }[]>([]); const [mgrs, setMgrs] = useState<Record<string, string>>({});
   const [lateBy, setLateBy] = useState<Record<string, { eta: string; reason: string | null }>>({});
+  const [cutBy, setCutBy] = useState<Record<string, string>>({}); // push 64 · asked to be first cut
   const [tick, setTick] = useState(0);
   // push 47 · Can't make it / Not confirmed → Find replacement
   const [late, setLate] = useState<Late[]>([]); const [seen, setSeen] = useState<Record<string, string | null>>({}); const [nudged, setNudged] = useState<Record<string, string>>({});
@@ -173,6 +174,7 @@ export function Today() {
       }
       // e · running late notices for tonight ("late · told ahead" on the Tonight cards)
       const tonightIds = evs.filter((e) => e.event_date === today).flatMap((e) => e.shifts.map((s) => s.id));
+      if (tonightIds.length) supabase.from('shifts').select('id,cut_first_at').in('id', tonightIds).not('cut_first_at', 'is', null).then(({ data, error }) => { if (!error && Array.isArray(data)) setCutBy(Object.fromEntries((data as { id: string; cut_first_at: string }[]).map((x) => [x.id, x.cut_first_at]))); });
       if (tonightIds.length) supabase.from('late_notices').select('shift_id,eta,reason').in('shift_id', tonightIds).then(({ data, error }) => { if (!error && Array.isArray(data)) setLateBy(Object.fromEntries((data as { shift_id: string; eta: string; reason: string | null }[]).map((x) => [x.shift_id, x]))); });
       // f · extras & cancellations: 6 PM on the event day or once hours are in, until confirmed / logged (yesterday's stay until the 5 AM log)
       const exEvs = [...evs, ...past].filter((e, i, a) => a.findIndex((x) => x.id === e.id) === i && (e.event_date === addDays(today, -1) || (e.event_date === today && (!!e.hours_submitted_at || new Date().toLocaleTimeString('en-GB', { timeZone: 'America/Toronto', hour: '2-digit' }) >= '18'))) && e.shifts.some((s) => s.status !== 'declined'));
@@ -331,7 +333,7 @@ export function Today() {
       <Section k="tonight" mode={md('tonight')} title="Tonight" right={<Link to={`/admin/day?d=${today}`}>Day view ›</Link>}>
         {week === null && <div className="muted">Loading…</div>}
         {week && !tonight.length && <div className="adm-card muted">No events today.</div>}
-        {tonight.length > 0 && <div className="adm-card t4-list">{tonightSorted.map((e) => <Live key={e.id} e={e} q={qBy[e.id] ?? 0} lateBy={lateBy} compact onDeleted={gone} />)}</div>}
+        {tonight.length > 0 && <div className="adm-card t4-list">{tonightSorted.map((e) => <Live key={e.id} e={e} q={qBy[e.id] ?? 0} lateBy={lateBy} cutBy={cutBy} compact onDeleted={gone} />)}</div>}
       </Section>),
     debriefs: () => (
       <Section k="debriefs" mode={md('debriefs')} title={<>Last night · debriefs {deb.rows.length + deb.miss.length > 0 && <b className="accent sm">{deb.rows.length} of {deb.rows.length + deb.miss.length}</b>}</>} right={<Link to="/admin/debriefs">Past debriefs ›</Link>}>
@@ -400,7 +402,7 @@ export function Today() {
 }
 
 type Box = { n: number; label: string; cls: string; rows: [string, string, string][] };
-function Live({ e, q = 0, inBlock = false, compact = false, onDeleted, lateBy = {} }: { e: AEvent; q?: number; inBlock?: boolean; compact?: boolean; onDeleted: (ids: string[]) => void; lateBy?: Record<string, { eta: string; reason: string | null }> }) {
+function Live({ e, q = 0, inBlock = false, compact = false, onDeleted, lateBy = {}, cutBy = {} }: { e: AEvent; q?: number; inBlock?: boolean; compact?: boolean; onDeleted: (ids: string[]) => void; lateBy?: Record<string, { eta: string; reason: string | null }>; cutBy?: Record<string, string> }) {
   const [tab, setTab] = useState<string | null>(null); const [open, setOpen] = useState(false);
   const all = e.shifts.filter((s) => s.status !== 'declined');
   const now = Date.now();
@@ -448,6 +450,7 @@ function Live({ e, q = 0, inBlock = false, compact = false, onDeleted, lateBy = 
       { n: done.length, label: 'done', cls: '', rows: done.map((s) => r(s, `${tTime(s.punches!.punch_in)} → ${tTime(s.punches!.punch_out)}`)) },
     ];
   }
+  const cuts = all.filter((s) => cutBy[s.id] && !s.attendance && !s.punches?.punch_out); // push 64 · just see it
   const openBox = boxes.find((b) => b.label === tab);
   const startsIn = Math.round((firstStart - now) / 60000);
   const phones = all.map((s) => s.staff?.phone?.replace(/[^\d+]/g, '')).filter(Boolean);
@@ -459,7 +462,7 @@ function Live({ e, q = 0, inBlock = false, compact = false, onDeleted, lateBy = 
       <div className={'t4-ev edge-' + (e.department === 'bar' ? 'bar' : 'floor') + (open ? ' open' : '')}>
         <button type="button" className="t4-line" onClick={() => setOpen(!open)} aria-expanded={open}>
           <span className="grow t4-name"><span className="row" style={{ gap: 6 }}><b>{e.title}</b><DeptTag dept={e.department} /></span>
-            <small className="muted">{ap(e.start_time) || 'TBC'}{md ? ` · ${md.position_code} ${md.staff?.full_name.split(' ')[0]}` : ''}<span className="t4-ph"> · {two.map((b) => `${b.n} ${b.label}`).join(' · ')}</span></small></span>
+            <small className="muted">{ap(e.start_time) || 'TBC'}{md ? ` · ${md.position_code} ${md.staff?.full_name.split(' ')[0]}` : ''}<span className="t4-ph"> · {two.map((b) => `${b.n} ${b.label}`).join(' · ')}</span>{cuts.length > 0 && <> · <i className="fc-tag">✋ {cuts.length} asked first cut</i></>}</small></span>
           <span className="t4-nums">{two.map((b) => <span key={b.label}><b className={b.n ? b.cls : ''}>{b.n}</b> {b.label}</span>)}</span>
           {statusTag}<span className="muted t4-car">{open ? '▾' : '›'}</span>
         </button>
@@ -477,6 +480,7 @@ function Live({ e, q = 0, inBlock = false, compact = false, onDeleted, lateBy = 
       </div>
       {completed && <div className="muted sm">Hours submitted by {e.shifts.find((s) => s.staff_id === e.hours_submitted_by)?.staff?.full_name ?? 'the manager'} at {tTime(e.hours_submitted_at)}</div>}
       {completed && <DebriefCards eventId={e.id} />}
+      {!completed && cuts.length > 0 && <div className="muted sm">✋ <b>Asked to be first cut:</b> {cuts.map((s) => `${name(s)} (${tTime(cutBy[s.id])})`).join(', ')} · the MD decides on the night</div>}
       <div className="cnt4" role="tablist">{boxes.map((b) => (
         <button key={b.label} role="tab" aria-selected={tab === b.label} disabled={!b.n} className={b.cls + (tab === b.label ? ' on' : '')} onClick={() => setTab(tab === b.label ? null : b.label)}>
           <b>{b.n}</b><small>{b.label}{tab === b.label ? ' ▴' : ''}</small>

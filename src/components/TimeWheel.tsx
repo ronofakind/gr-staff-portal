@@ -26,7 +26,8 @@ export function TimeWheel({ value, onChange, rest = '17:00' }: { value: string |
     <div className={'twheel' + (value ? ' set' : '')}>
       <div className="twheel-band" />
       <div className="twheel-scroll" ref={box} onScroll={onScroll} role="listbox" aria-label="From what time">
-        <div style={{ height: ROW * 2 }} />
+        {/* two snap stops so the first two times (8:00, 8:15) can sit in the band (push 64) */}
+        <div style={{ height: ROW, scrollSnapAlign: 'start' }} /><div style={{ height: ROW, scrollSnapAlign: 'start' }} />
         {WHEEL_TIMES.map((t, i) => <button key={t} type="button" role="option" aria-selected={i === cur} className={i === cur ? 'on' : ''} onClick={() => pick(i)}>{ampm15(t)}</button>)}
         <div style={{ height: ROW * 2 }} />
       </div>

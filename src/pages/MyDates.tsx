@@ -5,7 +5,7 @@ import { supabase, type Staff } from '../lib/supabase';
 import { TabBar } from '../components/TabBar';
 import { PageHead } from '../components/ProfileMenu';
 import { SwipeSheet } from '../components/SwipeSheet';
-import { FromPicker, ampm15 } from '../components/TimeWheel';
+import { FromPicker, TimeWheel, ampm15 } from '../components/TimeWheel';
 import { ConfirmThanks } from '../components/ConfirmThanks';
 import { useMyCalendar } from '../lib/calendar';
 import { callName } from '../lib/nickname';
@@ -24,7 +24,7 @@ import { Brand, brandify } from '../components/Brand';
 /** Booked tab rows (shifts from today on). confirm_by is push 33 (039). */
 type Shift = { id: string; status: 'booked' | 'confirmed' | 'declined'; confirmed_by?: string | null; attendance: string | null; planned_start: string; time_tbc: boolean;
   confirm_by: string | null; events: { id: string; event_date: string; title: string; details_pending?: boolean | null; venues: { name: string } | null } };
-type Week = { dow: number; status: 'yes' | 'from' | 'no'; from_time: string | null };
+type Week = { dow: number; status: 'yes' | 'from' | 'no'; from_time: string | null; until_time?: string | null };
 type Tab = 'answer' | 'booked' | 'answered' | 'past';
 
 const t12 = (iso: string) => new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' });
@@ -40,6 +40,7 @@ export function MyDates({ me, base = '', preview = false }: { me: Staff; base?: 
   const { dates, setDates, reload } = useMyDates(me.id, preview);
   const [shifts, setShifts] = useState<Shift[] | null>(null);
   const [week, setWeek] = useState<Record<number, Week>>({});
+  const [untilBy, setUntilBy] = useState<Record<string, string>>({}); // push 64
   const [err, setErr] = useState('');
   const [justDone, setJustDone] = useState<Set<string>>(new Set()); // answered on this visit: stay in Answer, in their new colour
   const [sheet, setSheet] = useState<{ d: MyDate; mode: 'pick' | 'yes' | 'maybe' } | null>(null);
@@ -68,8 +69,11 @@ export function MyDates({ me, base = '', preview = false }: { me: Staff; base?: 
     });
   useEffect(() => {
     loadShifts();
-    supabase.from('staff_weekly').select('dow,status,from_time').eq('staff_id', me.id)
+    supabase.from('staff_weekly').select('dow,status,from_time,until_time').eq('staff_id', me.id)
       .then(({ data }) => setWeek(Object.fromEntries(((data ?? []) as Week[]).map((w) => [w.dow, w]))));
+    // push 64 · day-only answers (my_dates doesn't return until_time)
+    supabase.from('availability').select('id,until_time').eq('staff_id', me.id).gte('for_date', today).not('until_time', 'is', null)
+      .then(({ data, error }) => { if (!error) setUntilBy(Object.fromEntries(((data ?? []) as { id: string; until_time: string }[]).map((x) => [x.id, x.until_time.slice(0, 5)]))); });
   }, [me.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const all = dates ?? [];
@@ -94,16 +98,20 @@ export function MyDates({ me, base = '', preview = false }: { me: Staff; base?: 
   const setTab = (t: Tab) => { setTabState(t); setParams((p) => { p.set('tab', t); p.delete('view'); return p; }, { replace: true }); };
   const setView = (v: 'list' | 'cal') => setParams((p) => { if (v === 'cal') p.set('view', 'cal'); else p.delete('view'); return p; }, { replace: true });
 
+  const usualDayFor = (iso: string): [string, string] | null => { const w = week[dowMon0(iso)]; return w && w.status !== 'no' && w.until_time ? [w.from_time?.slice(0, 5) ?? '08:00', w.until_time.slice(0, 5)] : null; };
   const usualFor = (iso: string): string | null | undefined => { const w = week[dowMon0(iso)]; return !w || w.status === 'no' ? undefined : w.from_time ? w.from_time.slice(0, 5) : null; };
 
   /** One answer: optimistic, then the RPC (answer_my_date, 041). */
-  const save = async (d: MyDate, status: 'yes' | 'maybe' | 'no', extra: { from?: string | null; knows?: string } = {}) => {
+  const save = async (d: MyDate, status: 'yes' | 'maybe' | 'no', extra: { from?: string | null; knows?: string; until?: string | null } = {}) => {
     setSheet(null); setErr('');
     if (preview) return;
     setJustDone((s) => new Set(s).add(d.id));
     setDates((list) => (list ?? []).map((x) => x.id === d.id ? { ...x, status, from_time: status === 'yes' ? (extra.from ?? null) : null, knows_by: status === 'maybe' ? extra.knows ?? null : null } : x));
+    const until = status === 'yes' ? extra.until ?? null : null;
+    setUntilBy((m) => { const n = { ...m }; if (until) n[d.id] = until; else delete n[d.id]; return n; });
     const { error } = await supabase.rpc('answer_my_date', { p_id: d.id, p_status: status, p_from: status === 'yes' ? (extra.from ?? null) : null, p_knows_by: status === 'maybe' ? extra.knows : null, p_note: null });
-    if (error) { setErr(error.message); reload(); }
+    if (error) { setErr(error.message); reload(); return; }
+    if (until) { const r = await supabase.rpc('set_my_until', { p_id: d.id, p_from: extra.from ?? null, p_until: until }); if (r.error) setErr(r.error.message); }
   };
   const dontKnow = async (by: string, note: string, ids: string[]) => {
     setDkyOpen(false); setErr('');
@@ -169,7 +177,7 @@ export function MyDates({ me, base = '', preview = false }: { me: Staff; base?: 
               </div>
             )}
             {answerList.map((d) => justDone.has(d.id) && !toAnswer(d, today)
-              ? <AnsweredRow key={d.id} d={d} onTap={() => setSheet({ d, mode: 'pick' })} />
+              ? <AnsweredRow key={d.id} d={d} until={untilBy[d.id]} onTap={() => setSheet({ d, mode: 'pick' })} />
               : <AnswerRow key={d.id} d={d} onYes={() => setSheet({ d, mode: 'yes' })} onMaybe={() => setSheet({ d, mode: 'maybe' })} onNo={() => save(d, 'no')} />)}
             {!answerList.length && !dky && !fills.length && <div className="md-empty"><b className="serif">All answered, thanks!</b><span>When <Brand /> sends you new dates, they show up here.</span></div>}
             {answerList.length > 0 && <p className="md-foot">Answer any date, in any order. Saying yes doesn’t book you yet.</p>}
@@ -182,7 +190,7 @@ export function MyDates({ me, base = '', preview = false }: { me: Staff; base?: 
           </section>
         ) : (
           <section className="md-list">
-            {answered.map((d) => <AnsweredRow key={d.id} d={d} onTap={() => setSheet({ d, mode: 'pick' })} />)}
+            {answered.map((d) => <AnsweredRow key={d.id} d={d} until={untilBy[d.id]} onTap={() => setSheet({ d, mode: 'pick' })} />)}
             {!answered.length && <div className="md-empty"><b className="serif">Nothing answered yet</b><span>Dates you answer show up here. Tap one to change it.</span></div>}
             {answered.length > 0 && <p className="md-foot">In date order. Tap any one to change it.</p>}
           </section>
@@ -193,7 +201,7 @@ export function MyDates({ me, base = '', preview = false }: { me: Staff; base?: 
       )}
 
       {sheet?.mode === 'pick' && <PickSheet d={sheet.d} onClose={() => setSheet(null)} onYes={() => setSheet({ d: sheet.d, mode: 'yes' })} onMaybe={() => setSheet({ d: sheet.d, mode: 'maybe' })} onNo={() => save(sheet.d, 'no')} />}
-      {sheet?.mode === 'yes' && <YesSheet d={sheet.d} usual={usualFor(sheet.d.for_date)} onClose={() => setSheet(null)} onPick={(from) => save(sheet.d, 'yes', { from })} />}
+      {sheet?.mode === 'yes' && <YesSheet d={sheet.d} usual={usualFor(sheet.d.for_date)} usualDay={usualDayFor(sheet.d.for_date)} until={untilBy[sheet.d.id] ?? null} onClose={() => setSheet(null)} onPick={(from, until) => save(sheet.d, 'yes', { from, until })} />}
       {sheet?.mode === 'maybe' && <KnowsSheet title={`${dayLabel(sheet.d.for_date)} · when will you know?`} latest={latestKnows([sheet.d])} oneTap
         onClose={() => setSheet(null)} onPick={(by) => save(sheet.d, 'maybe', { knows: by })} />}
       {dkyOpen && <KnowsSheet title="When will you know?" latest={latestKnows(dkyList)} withNote
@@ -235,11 +243,11 @@ function AnswerRow({ d, onYes, onMaybe, onNo }: { d: MyDate; onYes: () => void; 
   );
 }
 
-function AnsweredRow({ d, onTap }: { d: MyDate; onTap: () => void }) {
+function AnsweredRow({ d, onTap, until }: { d: MyDate; onTap: () => void; until?: string | null }) {
   if (d.status === 'yes') return (
     <div className="md-card row">
       <DateSq iso={d.for_date} kind="yes" />
-      <div className="grow" style={{ minWidth: 0 }}><b>Yes · {d.from_time ? ampm15(d.from_time.slice(0, 5)) : 'any time'}</b><span className="md-tag yes">NOT BOOKED YET</span><small className="md-sub">{whereText(d)}</small></div>
+      <div className="grow" style={{ minWidth: 0 }}><b>Yes · {until ? `day only ${d.from_time ? ampm15(d.from_time.slice(0, 5)) : ''}–${ampm15(until)}` : d.from_time ? ampm15(d.from_time.slice(0, 5)) : 'any time'}</b><span className="md-tag yes">NOT BOOKED YET</span><small className="md-sub">{whereText(d)}</small></div>
       <button className="md-chg" onClick={onTap}>Change</button>
     </div>
   );
@@ -334,22 +342,40 @@ function PickSheet({ d, onClose, onYes, onMaybe, onNo }: { d: MyDate; onClose: (
 }
 
 /** Yes → "from what time?" chips; their usual time for that weekday is pre-picked (green). One tap saves and closes. */
-function YesSheet({ d, usual, onClose, onPick }: { d: MyDate; usual: string | null | undefined; onClose: () => void; onPick: (from: string | null) => void }) {
+function YesSheet({ d, usual, usualDay, until, onClose, onPick }: { d: MyDate; usual: string | null | undefined; usualDay: [string, string] | null; until: string | null; onClose: () => void; onPick: (from: string | null, until?: string | null) => void }) {
   const [other, setOther] = useState(false); const [t, setT] = useState<string | null>(null);
+  // push 64 · Day only (from… until…), pre-filled from their usual week
+  const [day, setDay] = useState(false);
+  const [dFrom, setDFrom] = useState<string | null>(until ? (d.from_time?.slice(0, 5) ?? '08:00') : usualDay?.[0] ?? '08:00');
+  const [dUntil, setDUntil] = useState<string | null>(until ?? usualDay?.[1] ?? '15:00');
+  const dayOk = !!dFrom && !!dUntil && dUntil > dFrom;
   const chips = useMemo(() => { const c = ['15:00', '16:00', '17:00', '18:00']; if (usual && !c.includes(usual)) c.push(usual); return c.sort(); }, [usual]);
-  const cur = d.status === 'yes' ? (d.from_time ? d.from_time.slice(0, 5) : 'any') : usual === null ? 'any' : usual ?? null;
+  const cur = d.status === 'yes' && !until ? (d.from_time ? d.from_time.slice(0, 5) : 'any') : d.status === 'yes' ? null : usualDay ? null : usual === null ? 'any' : usual ?? null;
+  const wd = D(d.for_date).toLocaleDateString('en-US', { weekday: 'long' });
   return (
     <>
       <div className="scrim" onClick={onClose} />
       <SwipeSheet onClose={onClose} label="From what time?">
-        <div className="serif" style={{ fontSize: 24, paddingRight: 44 }}>{dayLabel(d.for_date)} · from what time?</div>
-        {!other ? <>
+        <div className="serif" style={{ fontSize: 24, paddingRight: 44 }}>{dayLabel(d.for_date)} · {day ? 'day only' : 'from what time?'}</div>
+        {day ? <>
+          <p className="muted sm" style={{ margin: 0 }}>{usualDay ? `Pre-filled from your usual ${wd}. ` : ''}Events often run late: pick Day only only if you really can’t stay for the evening.</p>
+          <div className="wk-two">
+            <div><small>From</small><TimeWheel value={dFrom} onChange={setDFrom} rest="08:00" /></div>
+            <div><small>Until</small><TimeWheel value={dUntil} onChange={setDUntil} rest="15:00" /></div>
+          </div>
+          <button className="big-btn dark" disabled={!dayOk} onClick={() => dayOk && onPick(dFrom, dUntil)}>{dayOk ? `Save · day only ${ampm15(dFrom)}–${ampm15(dUntil)}` : 'Until must be after From'}</button>
+          <button className="link-btn" onClick={() => setDay(false)}>‹ I can stay for the evening</button>
+        </> : !other ? <>
           <div className="md-chips">
             <button className={cur === 'any' ? 'on' : ''} onClick={() => onPick(null)}>Any time</button>
             {chips.map((c) => <button key={c} className={cur === c ? 'on' : ''} onClick={() => onPick(c)}>{ampm15(c)}</button>)}
             <button onClick={() => setOther(true)}>Other…</button>
           </div>
-          <p className="muted sm" style={{ margin: 0 }}>{usual !== undefined ? `Your usual ${D(d.for_date).toLocaleDateString('en-US', { weekday: 'long' })} is in green. ` : ''}Tap a time: it saves and closes.</p>
+          <p className="muted sm" style={{ margin: 0 }}>{usual !== undefined && !usualDay ? `Your usual ${wd} is in green. ` : ''}Tap a time: it saves and closes.</p>
+          <div className="md-day">
+            <span className="k">CAN’T STAY FOR THE EVENING?</span>
+            <div className="md-chips"><button className={until || usualDay ? 'on day' : ''} onClick={() => setDay(true)}>Day only{until ? ` · ${ampm15(dFrom)}–${ampm15(until)}` : usualDay ? ` · usually until ${ampm15(usualDay[1])}` : ''}…</button></div>
+          </div>
         </> : <>
           <FromPicker choice={t} setChoice={setT} rest={usual ?? d.approx_start?.slice(0, 5) ?? '17:00'} />
           <button className="big-btn dark" disabled={!t} onClick={() => onPick(t === 'any' ? null : t)}>{!t ? 'Pick a time' : t === 'any' ? 'Save · any time' : `Save · from ${ampm15(t)}`}</button>

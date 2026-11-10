@@ -26,8 +26,8 @@ const lineFor = (starts: string[], t: string): string | undefined => {
   const sorted = [...starts].sort((a, b) => m(a) - m(b));
   return [...sorted].reverse().find((x) => m(x) <= m(t)) ?? sorted[0];
 };
-type Av = { staff_id: string; status: string; from_time: string | null; note: string | null; tier: string | null };
-type Wk = { staff_id: string; dow: number; status: string; from_time: string | null };
+type Av = { staff_id: string; status: string; from_time: string | null; until_time?: string | null; note: string | null; tier: string | null };
+type Wk = { staff_id: string; dow: number; status: string; from_time: string | null; until_time?: string | null };
 type Cond = SCond;
 type Warn = { key: string; cls: 'red' | 'gold' | 'ok'; text: React.ReactNode };
 /** locks (push 50): staff ids locked on a placement not saved yet; saved shifts use the real padlock (shifts.locked, migration 055). */
@@ -120,8 +120,8 @@ export function Bookings() {
     const since30 = addDays(date, -setting('ask.hold_back').days); const since90 = addDays(date, -90);
     const [evs, st, a, w, o, l, c, s30, hist90, dr] = await Promise.all([
       eventsBetween(range.from, range.to), staff.length ? Promise.resolve(staff) : allStaff(),
-      supabase.from('availability').select('staff_id,status,from_time,note,tier,for_date').gte('for_date', range.from).lte('for_date', range.to).not('ask_id', 'is', null),
-      supabase.from('staff_weekly').select('staff_id,dow,status,from_time'),
+      supabase.from('availability').select('staff_id,status,from_time,until_time,note,tier,for_date').gte('for_date', range.from).lte('for_date', range.to).not('ask_id', 'is', null),
+      supabase.from('staff_weekly').select('staff_id,dow,status,from_time,until_time'),
       supabase.from('days_off').select('staff_id,from_date,to_date').lte('from_date', range.to).gte('to_date', range.from),
       supabase.from('staff_links').select('staff_a,staff_b,kind,reason'), supabase.from('staff_conditions').select('id,staff_id,kind,value,reason'),
       supabase.from('shifts').select('staff_id,events!inner(event_date)').neq('status', 'declined').gte('events.event_date', since30).lt('events.event_date', date),
@@ -332,7 +332,7 @@ export function Bookings() {
     const pl = c.pl.filter((p) => !p.suggested); const booked = new Set(pl.map((p) => p.staff_id));
     const big = isBig(d);
     const skipped: { name: string; why: string }[] = []; const out: Pl[] = [];
-    const pool = aList.filter(({ a }) => a?.status === 'yes').map(({ s, a }) => ({ s, from: a?.from_time ?? null })).filter(({ s }) => !c.locks.includes(s.id) && !pl.some((p) => p.staff_id === s.id && isLocked(d, p))).sort((x, y) => byScore(x.s.id, y.s.id)); // push 50 · locked people never move
+    const pool = aList.filter(({ a }) => a?.status === 'yes').map(({ s, a }) => ({ s, from: a?.from_time ?? null, until: a?.until_time ?? null })).filter(({ s }) => !c.locks.includes(s.id) && !pl.some((p) => p.staff_id === s.id && isLocked(d, p))).sort((x, y) => byScore(x.s.id, y.s.id)); // push 50 · locked people never move
     const late: typeof pool = [];
     /** '' = fits. Skips misfits (venue, private houses only, weekday, old min guests) and never puts "keep apart" people together. */
     const ok = (sid: string, e: AEvent) => {
@@ -346,23 +346,24 @@ export function Bookings() {
       for (const e of evs) { const lines = (e.staffing ?? []).filter((l) => !['MD', 'BM'].includes(l.code)); const starts = [...new Set(lines.map((l) => l.start))].sort();
         for (const st of starts) { const need = lines.filter((l) => l.start === st).reduce((n, l) => n + l.count, 0); const have = [...pl, ...out].filter((p) => p.event_id === e.id && p.start === st).length; if (need > have) r.push({ e, start: st, open: need - have }); } }
       return r; };
-    const tryPlace = (s: AStaff, from: string | null) => {
+    const tryPlace = (s: AStaff, from: string | null, until: string | null = null) => {
       for (const sl of slots()) {
         const why = ok(s.id, sl.e); if (why) continue;
         if (from && toMin(from) > toMin(sl.start) + 15) continue;
+        if (until && (!sl.e.end_time || toMin(sl.e.end_time) > toMin(until))) continue; // push 64 · day only: never auto-placed on a later event
         out.push({ key: uid(), staff_id: s.id, event_id: sl.e.id, start: sl.start, code: fillDept === 'bar' ? 'BT' : 'W', suggested: true }); booked.add(s.id);
         for (const pid of partnerOf(s.id)) { const pp = pool.find((x) => x.s.id === pid); if (pp && !booked.has(pid) && !ok(pid, sl.e)) { const again = slots().find((x) => x.e.id === sl.e.id); if (again) { out.push({ key: uid(), staff_id: pid, event_id: sl.e.id, start: again.start, code: fillDept === 'bar' ? 'BT' : 'W', suggested: true }); booked.add(pid); } } }
         return true;
       }
       return false;
     };
-    for (const { s, from } of pool) {
+    for (const { s, from, until } of pool) {
       if (booked.has(s.id)) continue;
       const k = condsOf(s.id).map((x) => x.kind);
-      if (k.includes('only_if_needed') || (k.includes('big_dates_only') && !big)) { late.push({ s, from }); continue; }
-      if (!tryPlace(s, from)) { const e = evs.find((x) => ok(s.id, x)); skipped.push({ name: s.full_name, why: !e ? (evs.map((x) => ok(s.id, x)).find(Boolean) ?? 'condition') : from ? `free from ${t12(from)} · no group that late` : 'no open spot' }); }
+      if (k.includes('only_if_needed') || (k.includes('big_dates_only') && !big)) { late.push({ s, from, until }); continue; }
+      if (!tryPlace(s, from, until)) { const e = evs.find((x) => ok(s.id, x)); skipped.push({ name: s.full_name, why: !e ? (evs.map((x) => ok(s.id, x)).find(Boolean) ?? 'condition') : until ? `day only · until ${t12(until)} · event ends later` : from ? `free from ${t12(from)} · no group that late` : 'no open spot' }); }
     }
-    for (const { s, from } of late) { if (booked.has(s.id)) continue; if (!slots().length || !tryPlace(s, from)) skipped.push({ name: s.full_name, why: condsOf(s.id).some((x) => x.kind === 'only_if_needed') ? 'only when we really need them' : 'only for very big dates' }); }
+    for (const { s, from, until } of late) { if (booked.has(s.id)) continue; if (!slots().length || !tryPlace(s, from, until)) skipped.push({ name: s.full_name, why: condsOf(s.id).some((x) => x.kind === 'only_if_needed') ? 'only when we really need them' : 'only for very big dates' }); }
     setCur(d, { ...c, pl: [...pl, ...out] }); setAuto({ open: true, skipped });
   };
   const acceptAll = () => { const c = cur(date); setCur(date, { ...c, pl: c.pl.map((p) => ({ ...p, suggested: false })) }); setAuto(null); };
@@ -685,7 +686,7 @@ export function Bookings() {
                   <div key={s.id} className={'bk-av' + (dept === 'both' && s.department === 'bar' ? ' bar-p' : '')} draggable onDragStart={(ev) => dragStart(ev, { staff_id: s.id })} onDragEnd={() => setDrag(null)}>
                     <i className={'bk-t t' + (t ?? 'x')} />
                     <div className="grow"><b>{s.full_name}<RuleIcons sid={s.id} links={rl} conds={conds} /></b>
-                      <small>{a?.status === 'yes' ? (a.from_time ? `from ${t12(a.from_time)}` : 'any time') : a?.status === 'asked' ? 'asked · no reply' : u?.status === 'yes' ? `usual week · ${u.from_time ? 'from ' + t12(u.from_time) : 'any time'}` : 'not asked'}
+                      <small>{a?.status === 'yes' ? (a.until_time ? <b className="amberc">day only · {a.from_time ? t12(a.from_time) : 'any'}–{t12(a.until_time)}</b> : a.from_time ? `from ${t12(a.from_time)}` : 'any time') : a?.status === 'asked' ? 'asked · no reply' : u?.status === 'yes' ? `usual week · ${u.until_time ? `day only ${u.from_time ? t12(u.from_time) : ''}–${t12(u.until_time)}` : u.from_time ? 'from ' + t12(u.from_time) : 'any time'}` : 'not asked'}
                         {part.length > 0 && ` · 🔗 ${part.map((x) => name(x).split(' ')[0]).join(', ')}`}{c.length > 0 && ` · ${c.map(condShort).join(', ')}`}{apartOf(s.id).length > 0 && ` · ⊘ ${apartOf(s.id).map((x) => name(x).split(' ')[0]).join(', ')}`}</small>
                       {a?.note && <i className="av-note-adm">“{a.note}”</i>}</div>
                   </div>); })}

@@ -230,7 +230,7 @@ export function Availability() {
                   <i className={'tier-dot ' + (r.tier ?? '')}>{r.tier ?? '–'}</i>
                   <span className="rk">#{s ? rank(s) : '?'}</span>
                   <span className="grow strong">{s?.full_name ?? '—'}</span>
-                  <span className="sm">{r.status === 'yes' ? <>Yes · {r.from_time ? `from ${ampm(r.from_time)}` : 'any time'}{r.note && <i className="av-note-adm"> “{r.note}”</i>}</> : r.status === 'no' ? 'No'
+                  <span className="sm">{r.status === 'yes' ? <>Yes · {r.until_time ? `day only · ${r.from_time ? ampm(r.from_time) : 'any'}–${ampm(r.until_time)}` : r.from_time ? `from ${ampm(r.from_time)}` : 'any time'}{r.note && <i className="av-note-adm"> “{r.note}”</i>}</> : r.status === 'no' ? 'No'
                     : r.status === 'maybe' ? <span className="gold">Maybe · knows by {r.knows_by ? fmt(r.knows_by) : '—'}</span>
                     : r.answer_by && new Date(r.answer_by).getTime() <= Date.now() ? <b className="red-b">Waiting</b> : '—'}
                     {r.status === 'asked' && s && freeFrom(s, a.for_date) && <small className="muted"> (usually from {ampm(freeFrom(s, a.for_date))})</small>}</span>

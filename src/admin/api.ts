@@ -149,7 +149,8 @@ export type Client = { id: string; name: string; rate_sets: { key: string; label
   /** push 32 (migration 038 adds admin_fee_pct, transport_billing) */
   qb_customer?: string | null; extras_billing?: 'gr' | 'client'; transport_billing?: 'client' | 'gr'; admin_fee_pct?: number | null };
 export const UNIFORMS: [string, string][] = [['white_shirt', 'White dress shirt'], ['black_shirt', 'Black dress shirt'], ['dress', 'Black cocktail dress'], ['black_tshirt', 'Black T-shirt']];
-export const ENDS: [string, string | null][] = [['~ 10 PM', '22:00'], ['~ 11 PM', '23:00'], ['~ midnight', '00:00'], ['~ 1 AM', '01:00'], ['~ 2 AM', '02:00'], ['late', null]];
+/** push 64 · day events need an end too (brunch, lunch): shown to staff as an estimate. */
+export const ENDS: [string, string | null][] = [['~ 1 PM', '13:00'], ['~ 2 PM', '14:00'], ['~ 3 PM', '15:00'], ['~ 4 PM', '16:00'], ['~ 5 PM', '17:00'], ['~ 6 PM', '18:00'], ['~ 7 PM', '19:00'], ['~ 8 PM', '20:00'], ['~ 9 PM', '21:00'], ['~ 10 PM', '22:00'], ['~ 11 PM', '23:00'], ['~ midnight', '00:00'], ['~ 1 AM', '01:00'], ['~ 2 AM', '02:00'], ['late', null]];
 /** "545" → "17:45", "5:45pm" → "17:45", "1130" → "11:30" (AM/PM guessed for evening events: 1–9 → PM). */
 export function parseTime(raw: string): string | null {
   const t = raw.trim().toLowerCase().replace(/\s/g, ''); if (!t) return null;
