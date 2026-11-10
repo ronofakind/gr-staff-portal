@@ -15,6 +15,11 @@
  * It never overwrites a cell someone changed by hand, and never writes an early start of 16+ min before call.
  * Anything it can't do safely is listed in red at the right of the APP tab ("NEEDS RONNIE").
  *
+ * Push 38 · meetings (Teams / Zoom / office meetings, paid like a shift): each meeting on the date gets its own block,
+ * "MEETING · <title>" / "MEETING · PAID · NOT INVOICED", one row per person who is paid (said Coming, or Ronnie's choice in the app).
+ * Start = meeting start, End = start + its length (or the times Ronnie set in the app). No 4-hour minimum, not in COMBINED,
+ * never copied to a day tab; the hours go straight to payroll, added to anything else that person worked that date.
+ *
  * Push 28f · EXTRAS LOG: every refresh also appends the extras & cancellations Ronnie confirmed in the app
  * (and, once it is past 5 AM the day after an event with no answer, the app's proposal) as rows of the EXTRAS LOG tab,
  * matched to its header row (EVENT DATE · VENUE · INVOICE # · DETAILS · LOGGED AT). Each event is written once.
@@ -31,6 +36,7 @@ function onOpen() {
     .addItem('Update today now', 'syncToday')
     .addItem('Redo yesterday (day tab + payroll)', 'syncYesterday')
     .addItem('Send extras & cancellations to EXTRAS LOG', 'syncExtrasLog')
+    .addItem('Send events to the app now (Sheet changes)', 'postEventsToApp')
     .addToUi();
 }
 
@@ -49,6 +55,7 @@ function setup() {
   ScriptApp.getProjectTriggers().forEach((t) => ScriptApp.deleteTrigger(t));
   ScriptApp.newTrigger('buildTomorrow').timeBased().atHour(11).nearMinute(30).everyDays(1).inTimezone(TZ).create();
   ScriptApp.newTrigger('refresh').timeBased().everyMinutes(15).create();
+  if (typeof postEventsToApp === 'function') ScriptApp.newTrigger('postEventsToApp').timeBased().everyMinutes(10).create(); // push 44 · events-sheet-to-app.gs
   buildTomorrow();
   refresh();
 }
@@ -90,16 +97,23 @@ function syncDate_(d, force) {
 
 function fetch_(ymd) {
   const p = PropertiesService.getScriptProperties();
-  const res = UrlFetchApp.fetch(SUPABASE_URL + '/rest/v1/rpc/hours_sheet', {
+  const call = (body) => UrlFetchApp.fetch(SUPABASE_URL + '/rest/v1/rpc/hours_sheet', {
     method: 'post', contentType: 'application/json', muteHttpExceptions: true,
     headers: { apikey: p.getProperty('SUPABASE_KEY'), Authorization: 'Bearer ' + p.getProperty('SUPABASE_KEY') },
-    payload: JSON.stringify({ p_token: p.getProperty('SHEET_TOKEN'), p_date: ymd }),
+    payload: JSON.stringify(body),
   });
+  const base = { p_token: p.getProperty('SHEET_TOKEN'), p_date: ymd };
+  let res = call(Object.assign({ p_meetings: true }, base)); // push 38: meetings too
+  if (res.getResponseCode() !== 200 && /p_meetings|function|schema cache/i.test(res.getContentText())) res = call(base); // migration 043 not applied yet
   if (res.getResponseCode() !== 200) throw new Error('App feed failed (' + res.getResponseCode() + '): ' + res.getContentText());
   return JSON.parse(res.getContentText());
 }
 
 const BAR = { BM: 1, BB: 1, BT: 1 };
+/** floor | bar | meeting (push 38) */
+const kindOf_ = (r) => r.kind === 'meeting' ? 'meeting' : BAR[r.position_code] || r.department === 'bar' ? 'bar' : 'floor';
+/** Block title on the APP tab, e.g. "LE ANDOVER - 1234 RUE X - BAR" (also used to find a person's row in their own block). */
+const where_ = (title, address, kind) => (title + (address ? ' - ' + String(address).split(',')[0] : '') + (kind === 'bar' ? ' - BAR' : '')).toUpperCase();
 const q15 = (iso) => new Date(Math.round(new Date(iso).getTime() / 900000) * 900000);
 const dayFrac = (dt) => { const [h, m] = Utilities.formatDate(dt, TZ, 'H:m').split(':').map(Number); return (h * 60 + m) / 1440; };
 const ampm = (iso) => Utilities.formatDate(new Date(iso), TZ, 'h:mma').toUpperCase();
@@ -119,8 +133,8 @@ function write_(ss, name, d, rows) {
   const events = [];
   rows.forEach((r) => {
     let ev = events.find((e) => e.title === r.title && e.address === r.address);
-    if (!ev) { ev = { title: r.title, address: r.address, blocks: { floor: [], bar: [] } }; events.push(ev); }
-    ev.blocks[BAR[r.position_code] || r.department === 'bar' ? 'bar' : 'floor'].push(r);
+    if (!ev) { ev = { title: r.title, address: r.address, blocks: { floor: [], bar: [], meeting: [] } }; events.push(ev); }
+    ev.blocks[kindOf_(r)].push(r);
   });
 
   // 3. Rows. kind: blank | date | title | dept | head | start | person | total
@@ -130,36 +144,37 @@ function write_(ss, name, d, rows) {
   const dateVal = new Date(Utilities.formatDate(d, TZ, 'yyyy-MM-dd') + 'T12:00:00');
   push([], 'blank');
   events.forEach((ev) => {
-    ['floor', 'bar'].forEach((kind) => {
+    ['floor', 'bar', 'meeting'].forEach((kind) => {
       const list = ev.blocks[kind]; if (!list.length) return;
-      const where = (ev.title + (ev.address ? ' - ' + ev.address.split(',')[0] : '') + (kind === 'bar' ? ' - BAR' : '')).toUpperCase();
-      push(['', dateVal], 'date'); push(['', where], 'title'); push(['', kind === 'bar' ? 'BAR STAFF' : 'FLOOR STAFF'], 'dept');
+      const mtg = kind === 'meeting';
+      const where = where_(ev.title, ev.address, kind);
+      push(['', dateVal], 'date'); push(['', where], 'title'); push(['', mtg ? 'MEETING · PAID · NOT INVOICED' : kind === 'bar' ? 'BAR STAFF' : 'FLOOR STAFF'], 'dept');
       push(headers_(L), 'head');
       const first = out.length + 1; let n = 0; let start = null;
       list.forEach((r) => {
         if (r.planned_start !== start) { start = r.planned_start; n = 0; push(['', 'START TIME: ' + ampm(start)], 'start'); }
         const gone = gone_(r);
-        const code = BAR[r.position_code] || r.position_code === 'MD' ? r.position_code : (kind === 'bar' ? (r.position_code || '') : ++n);
+        const code = mtg ? '' : BAR[r.position_code] || r.position_code === 'MD' ? r.position_code : (kind === 'bar' ? (r.position_code || '') : ++n);
         const row = out.length + 1; const v = [];
         v[0] = code; v[1] = r.full_name.toUpperCase();
         v[L.start - 1] = !gone && r.punch_in ? dayFrac(q15(r.punch_in)) : '';
         v[L.end - 1] = !gone && r.punch_out ? dayFrac(q15(r.punch_out)) : '';
-        v[L.worked - 1] = workedF_(row, L);
-        if (L.travel) v[L.travel - 1] = gone ? 0 : Number(r.travel_h) || '';
+        v[L.worked - 1] = mtg ? meetingF_(row, L) : workedF_(row, L);
+        if (L.travel) v[L.travel - 1] = gone || mtg ? 0 : Number(r.travel_h) || '';
         v[L.total - 1] = totalF_(row, L);
-        if (L.gas) v[L.gas - 1] = Number(r.gas) || '';
-        v[L.note - 1] = noteFor_(r);
+        if (L.gas) v[L.gas - 1] = mtg ? '' : Number(r.gas) || '';
+        v[L.note - 1] = mtg ? 'MEETING' : noteFor_(r);
         push(v, 'person');
       });
       const last = out.length; const t = [];
-      t[L.end - 1] = kind === 'bar' ? 'BAR TOTAL' : 'FLOOR TOTAL';
+      t[L.end - 1] = mtg ? 'MEETING TOTAL' : kind === 'bar' ? 'BAR TOTAL' : 'FLOOR TOTAL';
       sumCols_(L).forEach((c) => { t[c - 1] = '=SUM(' + col_(c) + first + ':' + col_(c) + last + ')'; });
-      push(t, 'total'); sumRows.push(out.length);
+      push(t, 'total'); if (!mtg) sumRows.push(out.length); // COMBINED = event staff only (what gets invoiced)
       push([], 'blank');
     });
   });
   const c = []; c[L.end - 1] = 'COMBINED';
-  sumCols_(L).forEach((k) => { c[k - 1] = '=SUM(' + sumRows.map((r) => col_(k) + r).join(',') + ')'; });
+  sumCols_(L).forEach((k) => { c[k - 1] = sumRows.length ? '=SUM(' + sumRows.map((r) => col_(k) + r).join(',') + ')' : 0; });
   push(c, 'total');
 
   const n = out.length;
@@ -236,6 +251,9 @@ function styleTab_(sh, kinds, L) {
 /** Hours worked: 15-min times, 4 h minimum unless the Note says LEFT EARLY. */
 const workedF_ = (row, L) => { const S = col_(L.start) + row, E = col_(L.end) + row, N = col_(L.note) + row;
   return '=IF(OR(' + S + '="",' + E + '=""),"",LET(h,24*MOD(TIMEVALUE(' + E + ')-TIMEVALUE(' + S + '),1),IF(ISNUMBER(SEARCH("LEFT EARLY",' + N + ')),h,MAX(4,h))))'; };
+/** Push 38 · meeting rows: real time between start and end, no 4-hour minimum. */
+const meetingF_ = (row, L) => { const S = col_(L.start) + row, E = col_(L.end) + row;
+  return '=IF(OR(' + S + '="",' + E + '=""),"",24*MOD(TIMEVALUE(' + E + ')-TIMEVALUE(' + S + '),1))'; };
 /** Total hours = worked + travel (v2); the old layout's Total is the worked formula itself. */
 const totalF_ = (row, L) => { L = L || LAYOUT_OLD; if (L.v === 1) return workedF_(row, L);
   const w = col_(L.worked) + row; return L.travel ? '=IF(' + w + '="","",' + w + '+N(' + col_(L.travel) + row + '))' : '=IF(' + w + '="","",' + w + ')'; };
@@ -304,10 +322,14 @@ function fillDayAndPayroll_(ss, d, rows) {
   if (transport && L.v === 2 && !L.travel) L = addTransportCols_(day);
   if (transport && !L.travel) issues.push('Transport event: the ' + label + ' tab is in the old layout, so travel / gas were not added to it. Payroll still gets the travel hours.');
 
-  const pay = []; const gas = [];
+  const pay = []; const gas = []; const direct = [];
   done.forEach((id) => {
+    if (byEvent[id][0].kind === 'meeting') { // push 38: never on the day tab; app hours straight to payroll
+      byEvent[id].forEach((r) => { if (r.punch_in && r.punch_out) direct.push({ name: r.full_name.toUpperCase(), h: Math.round((new Date(r.punch_out) - new Date(r.punch_in)) / 900000) / 4 }); });
+      return;
+    }
     ['floor', 'bar'].forEach((kind) => {
-      const team = byEvent[id].filter((r) => (BAR[r.position_code] || r.department === 'bar' ? 'bar' : 'floor') === kind);
+      const team = byEvent[id].filter((r) => kindOf_(r) === kind);
       if (!team.length) return;
       const what = team[0].title + (kind === 'bar' ? ' bar' : '');
       let people = personRows_(day, L);
@@ -366,7 +388,7 @@ function fillDayAndPayroll_(ss, d, rows) {
   const f = day.getRange(1, L.total, day.getLastRow(), 1).getValues();
   const hours = pay.filter((x) => typeof f[x.row - 1][0] === 'number').map((x) => ({ name: x.name, h: Math.round((f[x.row - 1][0] + x.travel) * 4) / 4 }));
   pay.filter((x) => typeof f[x.row - 1][0] !== 'number').forEach((x) => issues.push(x.name + ': the Total on the ' + label + ' tab is not a number, not added to payroll.'));
-  payroll_(d, hours, issues, wrote, gas);
+  payroll_(d, hours.concat(direct), issues, wrote, gas);
   props.setProperty('wrote_' + ymd, JSON.stringify(wrote));
   return issues;
 }
@@ -378,11 +400,16 @@ function payrollFromApp_(ss, d, label, done, byEvent, issues, wrote) {
   SpreadsheetApp.flush();
   const AL = layoutOf_(app);
   const v = app.getRange(1, 1, app.getLastRow(), AL.cols).getValues();
-  const rowOf = (fullName) => { const n = norm_(fullName); return v.findIndex((r) => norm_(r[AL.name - 1]) === n); };
+  // Block title of each row (the row after a date row), so someone on two events / a meeting gets the right row each time.
+  const blockOf = []; let cur = ''; let next = false;
+  v.forEach((r, i) => { if (r[1] instanceof Date) next = true; else if (next) { cur = String(r[1]).trim().toUpperCase(); next = false; } blockOf[i] = cur; });
+  const rowOf = (r) => { const n = norm_(r.full_name); const w = where_(r.title, r.address, kindOf_(r));
+    const i = v.findIndex((x, k) => blockOf[k] === w && norm_(x[AL.name - 1]) === n);
+    return i >= 0 ? i : v.findIndex((x) => norm_(x[AL.name - 1]) === n); };
   const hours = []; const gas = [];
   done.forEach((id) => byEvent[id].forEach((r) => {
     if (gone_(r) || !r.punch_in || !r.punch_out) return;
-    const name = r.full_name.toUpperCase(); const i = rowOf(r.full_name);
+    const name = r.full_name.toUpperCase(); const i = rowOf(r);
     const t = i >= 0 ? v[i][AL.total - 1] : '';
     if (typeof t !== 'number') { issues.push(name + ': no Total hours on the APP tab, not added to payroll.'); return; }
     hours.push({ name: name, h: Math.round((t + (AL.travel ? 0 : Number(r.travel_h) || 0)) * 4) / 4 });
@@ -420,6 +447,10 @@ function find_(list, fullName) {
 
 function payroll_(d, hours, issues, wrote, gas) {
   if (!hours.length && !(gas && gas.length)) return;
+  // Push 38: one payroll cell per person and date → add up everything they did that date (shifts + meetings).
+  const sum = {}; const order = [];
+  hours.forEach((x) => { if (!(x.name in sum)) { sum[x.name] = 0; order.push(x.name); } sum[x.name] += x.h; });
+  hours = order.map((n) => ({ name: n, h: Math.round(sum[n] * 4) / 4 }));
   const mon = Utilities.formatDate(d, TZ, 'MMM').toLowerCase(); const dd = Number(Utilities.formatDate(d, TZ, 'd'));
   const label = Utilities.formatDate(d, TZ, 'MMM d');
   const ps = SpreadsheetApp.openById(PAYROLL_ID);

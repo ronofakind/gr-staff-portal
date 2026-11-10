@@ -26,16 +26,23 @@ export function rememberPinLen(email: string, len: PinLen) {
 }
 
 /**
- * How many dots to show. Device memory first, then the public pin_length(email) RPC (4 | 6; 6 for unknown emails).
- * known = false when we can't tell a real 6 from "unknown" → the sign-in screen offers "I use a 4-digit code".
+ * How many dots to show. The database first (pin_length(email), updated whenever the code is changed on any device),
+ * then this device's memory only if the database can't be reached (fixes chat Nov 3: a code changed on one device
+ * left another device stuck on the old length, because device memory used to win).
+ * known = true only when the database answered with 4, or the device remembers a length; the sign-in screen always
+ * offers the "I use a 4-digit / 6-digit code" switch anyway.
  */
 export async function resolvePinLen(email: string): Promise<{ len: PinLen; known: boolean }> {
   const local = localPinLen(email);
-  if (local) return { len: local, known: true };
   try {
     const { data, error } = await supabase.rpc('pin_length', { p_email: email.trim() });
-    if (!error && Number(data) === 4) return { len: 4, known: true };
-  } catch { /* offline / migration 036 not applied */ }
+    if (!error && (Number(data) === 4 || Number(data) === 6)) {
+      const len = Number(data) as PinLen;
+      if (local && local !== len) rememberPinLen(email, len);
+      return { len, known: len === 4 || local === 6 };
+    }
+  } catch { /* offline */ }
+  if (local) return { len: local, known: true };
   return { len: 6, known: false };
 }
 

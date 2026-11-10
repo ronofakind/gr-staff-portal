@@ -1,20 +1,25 @@
+import { RateCard } from './Rates';
+import { TaxCard } from './Hiring';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { Avatar } from '../components/Avatar';
 import { isoDay, flagsOf, hoursBetween, dLabel, allStaff, type AStaff, type Flag, type Venue } from './api';
-import { loadRules, linksOf, other, condLabel, DOW3, type SLink, type SCond, type LinkKind, type CondKind } from './rules';
+import { loadRules, linksOf, other, condLabel, DOW3, AREAS as WORK_AREAS, AREA_HINT, type SLink, type SCond, type LinkKind, type CondKind } from './rules';
 import { loadScoreData, scoreOf, AREAS, avgStars, isStar, type ScoreData } from './score';
-import { ScoreWhy } from './Ranking';
+import { ScoreWhy, tabOf } from './Ranking';
+import { ReminderList } from './StaffRemind';
 import { appStatus, loadInviteStatus, InviteModal, AppChip, type InviteRow } from './Invite';
 
 const DOW = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 type Sh = { id: string; planned_start: string; attendance: string | null; left_early?: boolean; punches: { punch_in: string | null; punch_out: string | null } | null; events: { event_date: string; title: string } };
 
 /** Side panel (desktop) / full screen (phone) with everything about one person. */
+const TAG_LABEL: Record<string, string> = { guests: 'Great with guests', wine: 'Knows wine', bar: 'Knows the bar', fast: 'Fast', team: 'Team player', on_time: 'Ready on time', trays: 'Good on trays', late: 'Late', uniform: 'Uniform / dress off', phone: 'On phone', coaching: 'Needs coaching', slow: 'Slow' };
+
 export function StaffProfile({ s, onClose, onEdit, all }: { s: AStaff; onClose: () => void; onEdit: () => void; all?: AStaff[] }) {
   const today = isoDay(new Date());
-  const [week, setWeek] = useState<Record<number, { status: string; from_time: string | null }>>({});
+  const [week, setWeek] = useState<Record<number, { status: string; from_time: string | null; until_time?: string | null }>>({});
   const [off, setOff] = useState<{ id: string; from_date: string; to_date: string; reason: string | null; every_dow: number | null; added_by_admin: boolean; created_at: string; days_off_private: { note: string | null } | null }[]>([]);
   const [toff, setToff] = useState<{ mode: 'day' | 'range' | 'week'; from: string; to: string; dow: number; note: string }>({ mode: 'day', from: today, to: today, dow: 0, note: '' });
   const [toffMsg, setToffMsg] = useState('');
@@ -33,13 +38,13 @@ export function StaffProfile({ s, onClose, onEdit, all }: { s: AStaff; onClose: 
   useEffect(() => {
     reloadRules(); loadScoreData().then(setSd); setTierNow(s.staff_private?.tier ?? null);
     if (!all?.length) allStaff().then(setPeople);
-    supabase.from('venues').select('id,name').order('name').then(({ data }) => setVenues(Array.isArray(data) ? (data as Venue[]) : []));
+    supabase.from('venues').select('id,name').is('archived_at', null).order('name').then(({ data }) => setVenues(Array.isArray(data) ? (data as Venue[]) : []));
   }, [s.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     setNotes(s.staff_private?.notes ?? ''); setSaved(true);
     Promise.all([
-      supabase.from('staff_weekly').select('dow,status,from_time').eq('staff_id', s.id),
+      supabase.from('staff_weekly').select('dow,status,from_time,until_time').eq('staff_id', s.id),
       supabase.from('days_off').select('id,from_date,to_date,reason,every_dow,added_by_admin,created_at,days_off_private(note)').eq('staff_id', s.id).gte('to_date', today).order('from_date'),
       supabase.from('shifts').select('id,planned_start,attendance,left_early,punches(punch_in,punch_out),events!inner(event_date,title)').eq('staff_id', s.id).neq('status', 'declined')
         .gte('events.event_date', today.slice(0, 4) + '-01-01'),
@@ -81,94 +86,126 @@ export function StaffProfile({ s, onClose, onEdit, all }: { s: AStaff; onClose: 
   const saveNotes = async () => { await supabase.from('staff_private').upsert({ staff_id: s.id, notes: notes || null }); setSaved(true); };
   const ampm = (t: string | null) => { if (!t) return ''; const h = Number(t.slice(0, 2)); return `${h % 12 || 12} ${h < 12 ? 'AM' : 'PM'}`; };
 
+  const upcoming = shifts.filter((x) => x.events.event_date >= today).sort((x, y) => x.events.event_date.localeCompare(y.events.event_date) || x.planned_start.localeCompare(y.planned_start)).slice(0, 3);
+  const tm = (iso: string) => { const d = new Date(iso); return d.toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' }).replace('a.m.', 'AM').replace('p.m.', 'PM'); };
+  const me = { ...s, staff_private: s.staff_private ? { ...s.staff_private, tier: tierNow } : s.staff_private };
+  const sc = sd ? scoreOf(me, sd) : null;
+  const tab = tabOf(s);
+  const place = sd && sc ? (() => { const pool = people.filter((p) => p.active && tabOf(p) === tab && p.id !== s.id).map((p) => scoreOf(p, sd).total); return { n: pool.filter((v) => v > sc.total).length + 1, of: pool.length + 1 }; })() : null;
+
   return (
     <>
       <div className="adm-scrim" onClick={onClose} />
-      <aside className="adm-panel" aria-label={s.full_name}>
-        <div className="row" style={{ justifyContent: 'space-between' }}><span className="kick">STAFF PROFILE</span><button className="sq" aria-label="Close" onClick={onClose}>×</button></div>
-        <div className="row" style={{ gap: 14 }}>
-          <span className={'ringt t-' + (s.staff_private?.tier ?? 'none')}><Avatar name={s.full_name} url={s.photo_url} size={64} /></span>
-          <div className="grow"><div className="serif" style={{ fontSize: 24, lineHeight: 1.1 }}>{s.full_name}</div>
-            <div className="muted sm">{s.nickname ? `"${s.nickname}" · ` : ''}{s.positions.join(', ') || s.role}{s.role !== 'staff' ? ` · ${s.role}` : ''}</div>
-            <div className="row sm" style={{ gap: 6, marginTop: 4 }}>{s.staff_private?.tier && <i className={'tier-dot ' + s.staff_private.tier}>{s.staff_private.tier}</i>}{s.staff_private?.ranking != null && <b>#{s.staff_private.ranking}</b>}<span className="muted">· {s.language.toUpperCase()}</span></div></div>
-        </div>
-        <div className="row sm" style={{ gap: 8 }}><span className="muted">Uniform line</span>
-          <div className="seg">{([['m', 'Men'], ['f', 'Women']] as const).map(([k, l]) => <button key={k} className={sex === k ? 'on' : ''} onClick={async () => { setSex(k); await supabase.from('staff').update({ sex: k }).eq('id', s.id); }}>{l}</button>)}</div>
-          {!sex && <span className="accent">not set · they see the men's line</span>}</div>
-        <div className="grid-3btn" style={{ gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' }}>
-          {tel ? <a className="abtn ok" href={`tel:${tel}`}>Call</a> : <span className="abtn" aria-disabled>No phone</span>}
-          {tel ? <a className="abtn dark" href={`sms:${tel}`}>Text</a> : <span />}
-          <Link className="abtn dark" to={`/admin/messages?staff=${s.id}`}>✉ Message</Link>
-          <Link className="abtn" to={`/admin/view/${s.id}`}>View as</Link>
-        </div>
-        {inv !== undefined && (() => { const ap = appStatus(s, inv); return (
-          <div className="row sm sp-app" style={{ gap: 8 }}><span className="muted">App</span><AppChip st={ap} />
-            {ap.action && <button className={'abtn sm' + (ap.action === 'Invite' ? ' dark' : '')} style={{ marginLeft: 'auto' }} onClick={() => (ap.action === 'Invite' || ap.action === 'Resend' ? setInviting(true) : onEdit())}>{ap.action}</button>}</div>); })()}
-        <div className="pcard"><div className="kick">THIS MONTH</div><div className="row" style={{ gap: 20 }}><b className="big">{month.length} <small>shifts</small></b><b className="big">{monthHours} <small>hrs</small></b></div></div>
-        {sd && <div className="pcard"><div className="row" style={{ justifyContent: 'space-between' }}><span className="kick">SCORE</span><Link to="/admin/ranking" className="sm accent strong">Ranking ›</Link></div>
-          <ScoreWhy compact s={{ ...s, staff_private: s.staff_private ? { ...s.staff_private, tier: tierNow } : s.staff_private }} sc={scoreOf({ ...s, staff_private: s.staff_private ? { ...s.staff_private, tier: tierNow } : s.staff_private }, sd)}
-            onTier={() => supabase.from('staff_private').select('tier').eq('staff_id', s.id).maybeSingle().then(({ data }) => setTierNow(((data as { tier?: 'A' | 'B' | 'C' | null } | null)?.tier) ?? null))} /></div>}
-        {sd && <MgrFeedback sid={s.id} d={sd} />}
-        <div className="pcard">
-          <div className="row" style={{ justifyContent: 'space-between' }}><span className="kick">RELIABILITY · {today.slice(0, 4)}</span><Link to="/admin/reliability" className="sm accent strong">Full log ›</Link></div>
-          <div className="rel4">
-            <div className={count('no_show') ? 'r' : 'g'}><b>{count('no_show')}</b><small>no-shows</small></div>
-            <div className={count('cancelled') ? 'r' : 'g'}><b>{count('cancelled')}</b><small>cancels</small></div>
-            <div className={count('late') ? 'r' : 'g'}><b>{count('late')}</b><small>late</small></div>
-            <div className={count('early') ? 'y' : 'g'}><b>{count('early')}</b><small>early starts</small></div>
+      <aside className="adm-panel sp-wide" aria-label={s.full_name}>
+        {/* Nov 5 · staff profile v2: header + ranking badge, then 3 columns (doing · who · when) */}
+        <div className="sp-head">
+          <span className={'ringt t-' + (tierNow ?? 'none')}><Avatar name={s.full_name} url={s.photo_url} size={68} /></span>
+          <div className="grow sp-who">
+            <div className="serif" style={{ fontSize: 26, lineHeight: 1.1 }}>{s.full_name}</div>
+            <div className="muted sm">{s.nickname ? `"${s.nickname}" · ` : ''}{s.positions.join(', ') || s.role}{s.role !== 'staff' ? ` · ${s.role}` : ''} · {tab === 'bar' ? 'Bar' : tab === 'md' ? 'MD' : 'Floor'} · {s.language.toUpperCase()} · {shifts.filter((x) => x.events.event_date <= today).length} shifts this year</div>
+            <div className="row wrap sp-acts">
+              {tel ? <a className="abtn sm ok" href={`tel:${tel}`}>Call</a> : <span className="abtn sm" aria-disabled>No phone</span>}
+              {tel && <a className="abtn sm" href={`sms:${tel}`}>Text</a>}
+              <Link className="abtn sm dark" to={`/admin/messages?staff=${s.id}`}>✉ Message</Link>
+              <Link className="abtn sm" to={`/admin/view/${s.id}`}>View as</Link>
+              <button className="abtn sm" onClick={onEdit}>Edit details</button>
+            </div>
+            {inv !== undefined && (() => { const ap = appStatus(s, inv); return (
+              <div className="row sm sp-app" style={{ gap: 8 }}><span className="muted">App</span><AppChip st={ap} />
+                {ap.action && <button className={'abtn sm' + (ap.action === 'Invite' ? ' dark' : '')} style={{ marginLeft: 'auto' }} onClick={() => (ap.action === 'Invite' || ap.action === 'Resend' ? setInviting(true) : onEdit())}>{ap.action}</button>}</div>); })()}
           </div>
-          {last && <div className="muted sm">Last: {flagsOf(last).map((f) => f.flag.replace('_', '-')).join(', ')} · {dLabel(last.events.event_date)} · {last.events.title}</div>}
+          <div className={'sp-badge t-' + (tierNow ?? 'none')}><span>RANKING</span><b className="serif">{tierNow ? <i>{tierNow}</i> : null}{tierNow ? ' · ' : ''}{sc ? sc.form : '…'}</b>
+            <small>{place ? `#${place.n} of ${place.of} · ${tab === 'md' ? 'MD' : tab}` : ' '}</small></div>
+          <button className="sq sp-x" aria-label="Close" onClick={onClose}>×</button>
         </div>
-        <div className="pcard">
-          <div className="row" style={{ justifyContent: 'space-between' }}><span className="kick">TIME OFF</span><span className="muted sm">on their calendar as days off</span></div>
-          {offShown.map((o) => (
-            <div key={o.id} className="toff-row"><div className="grow"><b>{o.every_dow != null ? `Every ${DOWL[o.every_dow]}` : o.from_date === o.to_date ? dLabel(o.from_date) : `${dLabel(o.from_date)} – ${dLabel(o.to_date)}`}{o.days_off_private?.note ? ` · ${o.days_off_private.note}` : o.reason ? ` · ${o.reason}` : ''}</b>
-              <small>{o.added_by_admin ? 'added by G&R' : 'they added it'} · {dLabel(o.created_at.slice(0, 10))}</small></div><button className="sq" aria-label="Remove time off" onClick={() => removeOff(o)}>×</button></div>
-          ))}
-          {!offShown.length && <div className="muted sm">None coming up.</div>}
-          <div className="toff-add">
-            <b className="sm">+ Add time off</b>
-            <div className="seg">{([['day', 'One day'], ['range', 'Date range'], ['week', 'Every week']] as const).map(([k, l]) => <button key={k} className={toff.mode === k ? 'on' : ''} onClick={() => setToff({ ...toff, mode: k })}>{l}</button>)}</div>
-            {toff.mode === 'week' ? <select value={toff.dow} onChange={(e) => setToff({ ...toff, dow: Number(e.target.value) })}>{DOWL.map((d, i) => <option key={d} value={i}>Every {d}</option>)}</select>
-              : <div className="row" style={{ gap: 8 }}><input type="date" value={toff.from} onChange={(e) => setToff({ ...toff, from: e.target.value, to: toff.to < e.target.value ? e.target.value : toff.to })} />{toff.mode === 'range' && <input type="date" value={toff.to} min={toff.from} onChange={(e) => setToff({ ...toff, to: e.target.value })} />}</div>}
-            <input placeholder="Reason (optional, only you see it)" value={toff.note} onChange={(e) => setToff({ ...toff, note: e.target.value })} />
-            <button className="abtn dark" onClick={addOff}>Save time off</button>
-            {toffMsg && <span className={'sm ' + (toffMsg.startsWith('Saved.') && !toffMsg.includes('⚠') ? 'okc' : 'accent')}>{toffMsg}</span>}
-            <span className="muted sm">They're skipped in availability asks for those dates. If they're already booked, you get a warning.</span>
+        <div className="sp-cols">
+          <div className="sp-col">
+            <div className="sp-colh">HOW THEY’RE DOING</div>
+            {sd && sc && <div className="pcard"><div className="row" style={{ justifyContent: 'space-between' }}><span className="kick">RANKING · WHY {sc.form}</span><Link to="/admin/ranking" className="sm accent strong">All rankings ›</Link></div>
+              <div className="sp-tierh"><b>Tier</b><span className="muted sm">the colour on the Bookings board</span></div>
+              <div className="sp-tier">{(['A', 'B', 'C', null] as const).map((t) => <button key={t ?? 'none'} type="button" className={(tierNow ?? null) === t ? 'on t-' + (t ?? 'none') : ''}
+                onClick={async () => { if ((tierNow ?? null) === t) return; const prev = tierNow; setTierNow(t); const { error } = await supabase.from('staff_private').update({ tier: t }).eq('staff_id', s.id); if (error) { setTierNow(prev); alert(error.message); } }}>{t ?? 'No tier'}</button>)}</div>
+              <ScoreWhy compact bars s={me} sc={sc}
+                onTier={() => supabase.from('staff_private').select('tier').eq('staff_id', s.id).maybeSingle().then(({ data }) => setTierNow(((data as { tier?: 'A' | 'B' | 'C' | null } | null)?.tier) ?? null))} /></div>}
+            {sd && <MgrFeedback sid={s.id} d={sd} />}
+            <RateCard s={s} />
+            <TaxCard staffId={s.id} />
+            <div className="pcard">
+              <div className="row" style={{ justifyContent: 'space-between' }}><span className="kick">RELIABILITY · {today.slice(0, 4)}</span><Link to="/admin/reliability" className="sm accent strong">Full log ›</Link></div>
+              <div className="rel4">
+                <div className={count('no_show') ? 'r' : 'g'}><b>{count('no_show')}</b><small>no-shows</small></div>
+                <div className={count('cancelled') ? 'r' : 'g'}><b>{count('cancelled')}</b><small>cancels</small></div>
+                <div className={count('late') ? 'r' : 'g'}><b>{count('late')}</b><small>late</small></div>
+                <div className={count('early') ? 'y' : 'g'}><b>{count('early')}</b><small>early starts</small></div>
+              </div>
+              {last && <div className="muted sm">Last: {flagsOf(last).map((f) => f.flag.replace('_', '-')).join(', ')} · {dLabel(last.events.event_date)} · {last.events.title}</div>}
+            </div>
+          </div>
+          <div className="sp-col">
+            <div className="sp-colh">WHO THEY ARE · MANAGERS SEE “ABOUT”</div>
+            <AboutCard key={s.id} s={s} people={people} />
+            <PinNoteCard key={"pin" + s.id} staffId={s.id} first={(s.nickname || s.full_name).split(' ')[0]} />
+            <div className="pcard ru-card">
+              <div className="row" style={{ justifyContent: 'space-between' }}><span className="kick">BOOKING RULES · NEVER SHOWN TO STAFF</span><button className="lnk accent" style={{ textDecoration: 'none', fontSize: 13, whiteSpace: 'nowrap', marginLeft: 8 }} onClick={() => setAdding(true)}>+ Add</button></div>
+              {(['together', 'apart'] as LinkKind[]).map((k) => { const ls = linksOf(links, s.id, k); if (!ls.length) return null; return (
+                <div key={k} className="ru-grp"><div className={'ru-h ' + (k === 'together' ? 'okc' : 'accent')}>{k === 'together' ? 'WORKS WELL WITH' : 'KEEP APART FROM'} · {ls.length}</div>
+                  {ls.map((l) => { const o = people.find((p) => p.id === other(l, s.id)); return (
+                    <div key={l.staff_a + l.staff_b} className={'ru-row ' + k}><Avatar name={o?.full_name ?? '?'} url={o?.photo_url} size={30} />
+                      <div className="grow"><b>{o?.full_name ?? 'Someone'}</b><small>{l.reason || (k === 'apart' ? 'not on the same event' : 'book together when you can')}</small></div>
+                      <button className="ru-x" aria-label="Remove rule" onClick={async () => { if (!confirm(`Remove this rule for ${s.full_name.split(' ')[0]} and ${o?.full_name.split(' ')[0] ?? 'them'}?`)) return; await supabase.from('staff_links').delete().eq('staff_a', l.staff_a).eq('staff_b', l.staff_b); reloadRules(); }}>×</button></div>); })}
+                </div>); })}
+              {conds.some((c) => c.staff_id === s.id) && <div className="ru-grp"><div className="ru-h gold">WHEN TO BOOK · {conds.filter((c) => c.staff_id === s.id).length}</div>
+                {conds.filter((c) => c.staff_id === s.id).map((c) => (
+                  <div key={c.id} className="ru-row when"><span className="ru-ic">{c.kind === 'areas' ? '⌖' : c.kind === 'not_venue' || c.kind === 'private_only' ? '⌂' : c.kind === 'big_dates_only' ? '◆' : c.kind === 'only_if_needed' ? '…' : c.kind === 'not_weekday' ? '◷' : '#'}</span>
+                    <div className="grow"><b>{condLabel(c)}</b>{c.reason && <small>{c.reason}</small>}</div>
+                    {c.kind !== 'min_guests' ? <button className="ru-x" aria-label="Remove rule" onClick={async () => { await supabase.from('staff_conditions').delete().eq('id', c.id); reloadRules(); }}>×</button> : <small className="muted">read-only</small>}</div>))}
+              </div>}
+              {!linksOf(links, s.id).length && !conds.some((c) => c.staff_id === s.id) && <div className="muted sm">No rules. + Add to set who they work well with, who to keep apart, or when to book them.</div>}
+              <div className="muted sm">Bookings and Auto-fill follow these. Changes save right away.</div>
+            </div>
+            <div className="pcard">
+              <div className="kick">ADMIN ONLY · NEVER SHOWN TO STAFF</div>
+                <div className="row sm" style={{ gap: 8 }}><span className="muted">Uniform line</span>
+                  <div className="seg">{([['m', 'Men'], ['f', 'Women']] as const).map(([k, l]) => <button key={k} className={sex === k ? 'on' : ''} onClick={async () => { setSex(k); await supabase.rpc('admin_staff_update', { p_id: s.id, p_patch: { sex: k } }); }}>{l}</button>)}</div>
+                  {!sex && <span className="accent">not set · they see the men's line</span>}</div>
+              <textarea rows={3} value={notes} onChange={(e) => { setNotes(e.target.value); setSaved(false); }} onBlur={() => !saved && saveNotes()} placeholder="Admin notes · great with VIP tables…" />
+              {!saved && <button className="abtn sm dark" onClick={saveNotes}>Save note</button>}
+              <ReminderList key={'rm' + s.id} staffId={s.id} staffName={s.full_name} />
+            </div>
+            <EmergencyCard key={'em' + s.id} s={s} />
+            {s.active && <button className="lnk accent" style={{ alignSelf: 'flex-start' }} onClick={async () => { if (confirm(`Mark ${s.full_name} inactive? They stay in the history.`)) { await supabase.rpc('admin_staff_update', { p_id: s.id, p_patch: { active: false } }); onClose(); } }}>Mark inactive</button>}
+          </div>
+          <div className="sp-col">
+            <div className="sp-colh">WHEN THEY WORK</div>
+            <div className="pcard"><div className="kick">THIS MONTH</div><div className="row" style={{ gap: 20 }}><b className="big">{month.length} <small>shifts</small></b><b className="big">{monthHours} <small>hrs</small></b></div>
+              <b className="sm">Next</b>
+              {upcoming.length ? upcoming.map((x) => <div key={x.id} className="sp-next"><span className="muted">{dLabel(x.events.event_date)}</span><b>{x.events.title} · {tm(x.planned_start)}</b></div>) : <div className="muted sm">Nothing booked.</div>}
+            </div>
+            <div className="pcard">
+              <div className="kick">USUAL WEEK</div>
+              <div className="wk7">{DOW.map((d, i) => { const w = week[i]; return <span key={i} className={w?.status ?? 'unset'} title={w && w.status !== 'no' ? (w.until_time ? `day only · ${w.from_time ? ampm(w.from_time) : 'any'}–${ampm(w.until_time)}` : w.from_time ? `from ${ampm(w.from_time)}` : '') : ''}>{d}{w && w.status !== 'no' && w.until_time ? <small>day</small> : w && w.status !== 'no' && w.from_time ? <small>{ampm(w.from_time).replace(' ', '')}</small> : null}</span>; })}</div>
+              {!Object.keys(week).length && <div className="muted sm">Not set yet.</div>}
+            </div>
+            <div className="pcard">
+              <div className="row" style={{ justifyContent: 'space-between' }}><span className="kick">TIME OFF</span><span className="muted sm">on their calendar as days off</span></div>
+              {offShown.map((o) => (
+                <div key={o.id} className="toff-row"><div className="grow"><b>{o.every_dow != null ? `Every ${DOWL[o.every_dow]}` : o.from_date === o.to_date ? dLabel(o.from_date) : `${dLabel(o.from_date)} – ${dLabel(o.to_date)}`}{o.days_off_private?.note ? ` · ${o.days_off_private.note}` : o.reason ? ` · ${o.reason}` : ''}</b>
+                  <small>{o.added_by_admin ? 'added by G&R' : 'they added it'} · {dLabel(o.created_at.slice(0, 10))}</small></div><button className="sq" aria-label="Remove time off" onClick={() => removeOff(o)}>×</button></div>
+              ))}
+              {!offShown.length && <div className="muted sm">None coming up.</div>}
+              <div className="toff-add">
+                <b className="sm">+ Add time off</b>
+                <div className="seg">{([['day', 'One day'], ['range', 'Date range'], ['week', 'Every week']] as const).map(([k, l]) => <button key={k} className={toff.mode === k ? 'on' : ''} onClick={() => setToff({ ...toff, mode: k })}>{l}</button>)}</div>
+                {toff.mode === 'week' ? <select value={toff.dow} onChange={(e) => setToff({ ...toff, dow: Number(e.target.value) })}>{DOWL.map((d, i) => <option key={d} value={i}>Every {d}</option>)}</select>
+                  : <div className="row" style={{ gap: 8 }}><input type="date" value={toff.from} onChange={(e) => setToff({ ...toff, from: e.target.value, to: toff.to < e.target.value ? e.target.value : toff.to })} />{toff.mode === 'range' && <input type="date" value={toff.to} min={toff.from} onChange={(e) => setToff({ ...toff, to: e.target.value })} />}</div>}
+                <input placeholder="Reason (optional, only you see it)" value={toff.note} onChange={(e) => setToff({ ...toff, note: e.target.value })} />
+                <button className="abtn dark" onClick={addOff}>Save time off</button>
+                {toffMsg && <span className={'sm ' + (toffMsg.startsWith('Saved.') && !toffMsg.includes('⚠') ? 'okc' : 'accent')}>{toffMsg}</span>}
+                <span className="muted sm">They're skipped in availability asks for those dates. If they're already booked, you get a warning.</span>
+              </div>
+            </div>
           </div>
         </div>
-        <div className="pcard">
-          <div className="kick">USUAL WEEK</div>
-          <div className="wk7">{DOW.map((d, i) => { const w = week[i]; return <span key={i} className={w?.status ?? 'unset'} title={w && w.status !== 'no' && w.from_time ? `from ${ampm(w.from_time)}` : ''}>{d}{w && w.status !== 'no' && w.from_time ? <small>{ampm(w.from_time).replace(' ', '')}</small> : null}</span>; })}</div>
-          {!Object.keys(week).length && <div className="muted sm">Not set yet.</div>}
-        </div>
-        <div className="pcard ru-card">
-          <div className="row" style={{ justifyContent: 'space-between' }}><span className="kick">BOOKING RULES · NEVER SHOWN TO STAFF</span><button className="lnk accent" style={{ textDecoration: 'none', fontSize: 13, whiteSpace: 'nowrap', marginLeft: 8 }} onClick={() => setAdding(true)}>+ Add</button></div>
-          {(['together', 'apart'] as LinkKind[]).map((k) => { const ls = linksOf(links, s.id, k); if (!ls.length) return null; return (
-            <div key={k} className="ru-grp"><div className={'ru-h ' + (k === 'together' ? 'okc' : 'accent')}>{k === 'together' ? 'WORKS WELL WITH' : 'KEEP APART FROM'} · {ls.length}</div>
-              {ls.map((l) => { const o = people.find((p) => p.id === other(l, s.id)); return (
-                <div key={l.staff_a + l.staff_b} className={'ru-row ' + k}><Avatar name={o?.full_name ?? '?'} url={o?.photo_url} size={30} />
-                  <div className="grow"><b>{o?.full_name ?? 'Someone'}</b><small>{l.reason || (k === 'apart' ? 'not on the same event' : 'book together when you can')}</small></div>
-                  <button className="ru-x" aria-label="Remove rule" onClick={async () => { if (!confirm(`Remove this rule for ${s.full_name.split(' ')[0]} and ${o?.full_name.split(' ')[0] ?? 'them'}?`)) return; await supabase.from('staff_links').delete().eq('staff_a', l.staff_a).eq('staff_b', l.staff_b); reloadRules(); }}>×</button></div>); })}
-            </div>); })}
-          {conds.some((c) => c.staff_id === s.id) && <div className="ru-grp"><div className="ru-h gold">WHEN TO BOOK · {conds.filter((c) => c.staff_id === s.id).length}</div>
-            {conds.filter((c) => c.staff_id === s.id).map((c) => (
-              <div key={c.id} className="ru-row when"><span className="ru-ic">{c.kind === 'not_venue' || c.kind === 'private_only' ? '⌂' : c.kind === 'big_dates_only' ? '◆' : c.kind === 'only_if_needed' ? '…' : c.kind === 'not_weekday' ? '◷' : '#'}</span>
-                <div className="grow"><b>{condLabel(c)}</b>{c.reason && <small>{c.reason}</small>}</div>
-                {c.kind !== 'min_guests' ? <button className="ru-x" aria-label="Remove rule" onClick={async () => { await supabase.from('staff_conditions').delete().eq('id', c.id); reloadRules(); }}>×</button> : <small className="muted">read-only</small>}</div>))}
-          </div>}
-          {!linksOf(links, s.id).length && !conds.some((c) => c.staff_id === s.id) && <div className="muted sm">No rules. + Add to set who they work well with, who to keep apart, or when to book them.</div>}
-          <div className="muted sm">Bookings and Auto-fill follow these. Changes save right away.</div>
-        </div>
-        <EmergencyCard key={'em' + s.id} s={s} />
-        <AboutCard key={s.id} s={s} people={people} />
-        <div className="pcard">
-          <div className="kick">ADMIN NOTES · NEVER SHOWN TO STAFF</div>
-          <textarea rows={3} value={notes} onChange={(e) => { setNotes(e.target.value); setSaved(false); }} onBlur={() => !saved && saveNotes()} placeholder="Great with VIP tables…" />
-          {!saved && <button className="abtn sm dark" onClick={saveNotes}>Save note</button>}
-        </div>
-        <div className="row wrap"><button className="abtn" onClick={onEdit}>Edit details</button><Link className="abtn" to="/admin/tiers">Change tier</Link></div>
-        {s.active && <button className="lnk accent" style={{ alignSelf: 'flex-start' }} onClick={async () => { if (confirm(`Mark ${s.full_name} inactive? They stay in the history.`)) { await supabase.from('staff').update({ active: false }).eq('id', s.id); onClose(); } }}>Mark inactive</button>}
       </aside>
       {inviting && <InviteModal queue={[s]} onClose={() => { setInviting(false); loadInv(); }} onChanged={loadInv} onFix={() => { setInviting(false); onEdit(); }} />}
       {adding && <AddRule s={s} people={people} venues={venues} links={links} onClose={() => setAdding(false)} onSaved={() => { setAdding(false); reloadRules(); }} />}
@@ -181,13 +218,14 @@ const KINDS: { k: LinkKind | CondKind; label: string; ic: string; cls: string }[
   { k: 'not_venue', label: 'Not at a venue', ic: '⌂', cls: 'gold' }, { k: 'private_only', label: 'Private houses only', ic: '⌂', cls: 'gold' },
   { k: 'big_dates_only', label: 'Big dates only', ic: '◆', cls: 'gold' }, { k: 'only_if_needed', label: 'Only if needed', ic: '…', cls: 'gold' },
   { k: 'not_weekday', label: 'Not on certain days', ic: '◷', cls: 'gold' },
+  { k: 'areas', label: 'Only these areas', ic: '⌖', cls: 'gold' }, // push 63 · default is anywhere
 ];
 
 /** + Add a booking rule: kind → who / venue / days → optional reason → Save. Pairs are one row (shows on both profiles). */
 function AddRule({ s, people, venues, links, onClose, onSaved }: { s: AStaff; people: AStaff[]; venues: Venue[]; links: SLink[]; onClose: () => void; onSaved: () => void }) {
   const [kind, setKind] = useState<LinkKind | CondKind>('together');
   const [q, setQ] = useState(''); const [who, setWho] = useState<AStaff | null>(null);
-  const [venue, setVenue] = useState(''); const [days, setDays] = useState<string[]>([]); const [reason, setReason] = useState('');
+  const [venue, setVenue] = useState(''); const [days, setDays] = useState<string[]>([]); const [reason, setReason] = useState(''); const [areas, setAreas] = useState<string[]>([]);
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
   const pair = kind === 'together' || kind === 'apart';
   const norm = (x: string) => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -198,6 +236,7 @@ function AddRule({ s, people, venues, links, onClose, onSaved }: { s: AStaff; pe
     if (pair && !who) return setErr('Pick who.');
     if (kind === 'not_venue' && !venue) return setErr('Pick the venue.');
     if (kind === 'not_weekday' && !days.length) return setErr('Pick at least one day.');
+    if (kind === 'areas' && !areas.length) return setErr('Pick at least one area.');
     setBusy(true);
     let error;
     if (pair) {
@@ -206,7 +245,8 @@ function AddRule({ s, people, venues, links, onClose, onSaved }: { s: AStaff; pe
       if (had && had.kind !== kind && !confirm(`They already have a "${had.kind === 'together' ? 'works well with' : 'keep apart'}" rule. Replace it?`)) { setBusy(false); return; }
       ({ error } = await supabase.from('staff_links').upsert({ staff_a: a, staff_b: b, kind, reason: reason.trim() || null }, { onConflict: 'staff_a,staff_b' }));
     } else {
-      const value = kind === 'not_venue' ? venue : kind === 'not_weekday' ? DOW3.filter((d) => days.includes(d)).join(',') : null;
+      const value = kind === 'not_venue' ? venue : kind === 'not_weekday' ? DOW3.filter((d) => days.includes(d)).join(',') : kind === 'areas' ? WORK_AREAS.filter((a) => areas.includes(a)).join('|') : null;
+      if (kind === 'areas') await supabase.from('staff_conditions').delete().eq('staff_id', s.id).eq('kind', 'areas'); // one areas rule per person
       ({ error } = await supabase.from('staff_conditions').insert({ staff_id: s.id, kind, value, reason: reason.trim() || null }));
     }
     setBusy(false);
@@ -228,7 +268,10 @@ function AddRule({ s, people, venues, links, onClose, onSaved }: { s: AStaff; pe
         <select value={venue} onChange={(e) => setVenue(e.target.value)}><option value="">Pick a venue…</option>{venues.map((v) => <option key={v.id} value={v.name}>{v.name}</option>)}</select></>}
       {kind === 'not_weekday' && <><div className="kick">WHICH DAYS</div>
         <div className="row wrap" style={{ gap: 6 }}>{DOW3.map((d) => <button key={d} className={'chipb' + (days.includes(d) ? ' on' : '')} onClick={() => setDays(days.includes(d) ? days.filter((x) => x !== d) : [...days, d])}>{d}</button>)}</div></>}
-      <input className="search" placeholder={pair ? 'Why? (optional · e.g. friend, carpool)' : 'Why? (optional)'} value={reason} onChange={(e) => setReason(e.target.value)} />
+      {kind === 'areas' && <><div className="kick">ONLY THESE AREAS · everyone else stays “anywhere”</div>
+        <div className="row wrap" style={{ gap: 6 }}>{WORK_AREAS.map((a) => <button key={a} className={'chipb' + (areas.includes(a) ? ' on' : '')} title={AREA_HINT[a]} onClick={() => setAreas(areas.includes(a) ? areas.filter((x) => x !== a) : [...areas, a])}>{a}</button>)}</div>
+        <div className="muted sm">Not asked for events outside these areas, skipped by auto-fill and Ask more · asked again when the event is still short 3 days out · a warning if you book them by hand.</div></>}
+      <input className="search" placeholder={kind === 'areas' ? 'Note (optional · e.g. asked Nov 9 · downtown only)' : pair ? 'Why? (optional · e.g. friend, carpool)' : 'Why? (optional)'} value={reason} onChange={(e) => setReason(e.target.value)} />
       {pair && who && <div className="muted sm">✓ Also shows on {f(who.full_name)}’s profile (one rule for the pair).</div>}
       {err && <p className="error">{err}</p>}
       <button className="abtn dark" style={{ height: 46 }} disabled={busy} onClick={save}>{busy ? 'Saving…' : 'Save rule'}</button>
@@ -264,6 +307,7 @@ function MgrFeedback({ sid, d }: { sid: string; d: ScoreData }) {
           <div key={f.id} className="fb-item"><div className="spread"><b>{f.by?.full_name?.split(' ')[0] ?? 'Manager'} · {f.events?.title ?? ''}{f.events?.event_date ? ` · ${dLabel(f.events.event_date)}` : ''}</b>
             <span className="fb-it-r">{st ? <StarRow v={st} /> : <small className="muted">before stars</small>}{f.tier_vote && <i className={'tier-dot ' + f.tier_vote}>{f.tier_vote}</i>}</span></div>
             {det.length > 0 && <small>{det.join(' · ')}</small>}
+            {(f.again || (f.tags ?? []).length > 0) && <small>{f.again && <b className={f.again === 'yes' ? 'okc' : f.again === 'no' ? 'accent' : ''}>Want again: {f.again === 'yes' ? 'Yes' : f.again === 'no' ? 'No' : 'Maybe'}</b>}{f.again && (f.tags ?? []).length ? ' · ' : ''}{(f.tags ?? []).map((t) => TAG_LABEL[t] ?? t).join(' · ')}</small>}
             {f.note && <span>“{f.note}”</span>}</div>); })}
     </div>
   );
@@ -271,10 +315,12 @@ function MgrFeedback({ sid, d }: { sid: string; d: ScoreData }) {
 
 /** EMERGENCY CONTACT · admin only (push 31): from the profile check-up, + neighbourhood and when the check-up was done. */
 function EmergencyCard({ s }: { s: AStaff }) {
-  type Em = { emergency_name: string | null; emergency_relation: string | null; emergency_phone: string | null; neighbourhood: string | null; checkup_done_at: string | null; checkup_step: number | null };
+  type Em = { emergency_name: string | null; emergency_relation: string | null; emergency_phone: string | null; neighbourhood: string | null; checkup_done_at: string | null; checkup_step: number | null; emergency_snooze_until?: string | null; emergency_declined_at?: string | null };
   const [e, setE] = useState<Em | null>(null); const [err, setErr] = useState('');
   useEffect(() => {
-    supabase.from('staff_private').select('emergency_name,emergency_relation,emergency_phone,neighbourhood,checkup_done_at,checkup_step').eq('staff_id', s.id).maybeSingle().then(({ data, error }) => {
+    const cols = 'emergency_name,emergency_relation,emergency_phone,neighbourhood,checkup_done_at,checkup_step';
+    (async () => { const r = await supabase.from('staff_private').select(cols + ',emergency_snooze_until,emergency_declined_at').eq('staff_id', s.id).maybeSingle();
+      return r.error ? await supabase.from('staff_private').select(cols).eq('staff_id', s.id).maybeSingle() : r; })().then(({ data, error }: { data: unknown; error: { message: string } | null }) => {
       if (error) { setErr(/column|schema/i.test(error.message) ? 'Needs migration 036 (not applied yet).' : error.message); return; }
       setE((data ?? { emergency_name: null, emergency_relation: null, emergency_phone: null, neighbourhood: null, checkup_done_at: null, checkup_step: null }) as Em);
     });
@@ -291,7 +337,9 @@ function EmergencyCard({ s }: { s: AStaff }) {
             <div className="grow"><b>{e.emergency_name ?? '—'}</b>{e.emergency_relation && <span className="muted"> · {e.emergency_relation}</span>}<div className="sm">{e.emergency_phone}</div></div>
             {tel && <a className="abtn sm ok" href={`tel:${tel}`}>Call</a>}
           </div>
-        ) : <div className="muted sm">{done ? 'Skipped in the check-up · they see a reminder on their Home.' : 'Not given yet.'}</div>}
+        ) : <div className="muted sm">{e.emergency_declined_at ? `No emergency contact · chose not to add (${dLabel(isoDay(new Date(e.emergency_declined_at)), { month: 'short', day: 'numeric' })})`
+          : e.emergency_snooze_until && new Date(e.emergency_snooze_until).getTime() > Date.now() ? `No emergency contact · asked to be reminded later (back ${dLabel(isoDay(new Date(e.emergency_snooze_until)), { month: 'short', day: 'numeric' })})`
+          : done ? 'Skipped in the check-up · they see a reminder on their Home.' : 'Not given yet.'}</div>}
         <div className="sm"><span className="muted">Neighbourhood </span><b>{e.neighbourhood ?? '—'}</b></div>
         <div className="muted sm">Never shown to managers or other staff.</div>
       </>}
@@ -363,6 +411,33 @@ function AboutCard({ s, people }: { s: AStaff; people: AStaff[] }) {
         {err && <p className="error">{err}</p>}
         <div className="ab-foot">Managers never see tiers, rankings, ratings, rates or admin notes.</div>
       </>}
+    </div>
+  );
+}
+
+/** 076 · the 📌 note for managers that follows this person (set from Bookings → Note for the manager) */
+function PinNoteCard({ staffId, first }: { staffId: string; first: string }) {
+  const [n, setN] = useState<{ note: string; shifts: number | null; from_date: string } | null>(null); const [left, setLeft] = useState<number | null>(null);
+  const load = async () => {
+    const { data } = await supabase.from('staff_mgr_notes').select('note,shifts,from_date').eq('staff_id', staffId).maybeSingle();
+    setN((data as typeof n) ?? null);
+    if (data && (data as { shifts: number | null }).shifts) {
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' });
+      const { count } = await supabase.from('shifts').select('id, events!inner(event_date)', { count: 'exact', head: true }).eq('staff_id', staffId).neq('status', 'declined').is('cancelled_at', null)
+        .gte('events.event_date', (data as { from_date: string }).from_date).lt('events.event_date', today);
+      setLeft(Math.max(0, ((data as { shifts: number }).shifts) - (count ?? 0)));
+    } else setLeft(null);
+  };
+  useEffect(() => { load(); }, [staffId]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!n) return null;
+  return (
+    <div className="pcard"><span className="kick">📌 NOTE FOR MANAGERS · STAFF DON’T SEE IT</span>
+      <div className="pin-note"><i aria-hidden="true">📌</i><span>{n.note}</span></div>
+      <div className="row" style={{ justifyContent: 'space-between', gap: 8 }}>
+        <small className="muted">{n.shifts ? (left === 0 ? 'Done · shown on their first 3 shifts' : `First ${n.shifts} shifts${left != null ? ` · ${left} left` : ''}`) : 'Every shift'} · from {new Date(n.from_date + 'T12:00:00').toLocaleDateString('en-CA', { month: 'short', day: 'numeric' })}</small>
+        <button className="lnk accent" onClick={async () => { const { error } = await supabase.from('staff_mgr_notes').delete().eq('staff_id', staffId); if (error) { alert(error.message); return; } setN(null); }}>Remove</button>
+      </div>
+      <small className="muted">Change it from Bookings → {first} → Note for the manager.</small>
     </div>
   );
 }

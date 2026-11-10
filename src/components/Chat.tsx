@@ -1,6 +1,8 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { ShiftNote } from './ShiftNotes';
+import type { MyAsk } from '../lib/shiftAsks';
 import { CONV_COLS, MSG_COLS, QUICK, dayHead, dayOf, fmtH, first, shiftLine, shortDate, t12, uploadPhotos, useSigned, type Conv, type Msg, type Side, type Topic } from '../lib/messages';
 
 /* Push 36 · one conversation: bubbles, shift tag, system notes, hours card, photos, Seen, press-and-hold Edit / Delete, composer. */
@@ -34,6 +36,7 @@ export function Chat(p: ChatProps) {
   const [busy, setBusy] = useState(false); const [err, setErr] = useState('');
   const [full, setFull] = useState<string | null>(null);
   const end = useRef<HTMLDivElement>(null); const lastN = useRef(0);
+  const [asks, setAsks] = useState<Record<string, MyAsk>>({}); // push 40 · live state of the ask cards in this conversation
 
   const load = async (id = p.convId) => {
     if (!id) { setMsgs([]); setConv(null); p.onConv?.(null); return; }
@@ -44,6 +47,9 @@ export function Chat(p: ChatProps) {
     ]);
     const cv = (c.data as Conv | null) ?? null; const list = (m.data ?? []) as Msg[];
     setConv(cv); p.onConv?.(cv); setMsgs(list);
+    const askIds = [...new Set(list.filter((x) => x.meta?.card === 'ask' && typeof x.meta.ask_id === 'string').map((x) => x.meta.ask_id as string))];
+    if (askIds.length && cv) supabase.rpc('shift_ask_cards', { p_ids: askIds, p_staff: p.side === 'admin' ? cv.staff_id : null })
+      .then(({ data, error }) => { if (!error && Array.isArray(data)) setAsks(Object.fromEntries((data as MyAsk[]).map((a) => [a.ask_id, a]))); });
     // Opening = Seen. Only when something from the other side is newer than what we've seen.
     if (cv) {
       const mine = p.side === 'staff' ? cv.staff_seen_at : p.side === 'admin' ? cv.admin_seen_at : cv.manager_seen_at;
@@ -90,7 +96,7 @@ export function Chat(p: ChatProps) {
     ...(msgs ?? []).map((m) => ({ at: m.created_at, key: m.id, node: <MsgView key={m.id} m={m} mine={m.sender_id === p.meId && m.sender_role !== 'system'} side={p.side} label={label(m)} urls={urls}
       seen={m.id === lastMine ? (otherSeen && otherSeen >= m.created_at ? (p.side === 'staff' ? 'Seen' : `Seen ${t12(otherSeen)}`) : 'Sent') : null}
       menu={menu === m.id} onMenu={(on) => setMenu(on ? m.id : null)} onEdit={() => { setMenu(null); setEditing(m); setText(m.body); }} onDelete={() => del(m)} onPhoto={setFull}
-      draft={text} onAnswered={() => { setText(''); load(); }} /> })),
+      draft={text} onAnswered={() => { setText(''); load(); }} ask={typeof m.meta?.ask_id === 'string' ? asks[m.meta.ask_id] ?? null : null} staffSeenAt={conv?.staff_seen_at ?? null} onNote={() => load()} /> })),
   ].sort((a, b) => a.at.localeCompare(b.at));
 
   return (
@@ -115,11 +121,13 @@ export function Chat(p: ChatProps) {
   );
 }
 
-function MsgView({ m, mine, side, label, urls, seen, menu, onMenu, onEdit, onDelete, onPhoto, draft, onAnswered }: {
+function MsgView({ m, mine, side, label, urls, seen, menu, onMenu, onEdit, onDelete, onPhoto, draft, onAnswered, ask, staffSeenAt, onNote }: {
   m: Msg; mine: boolean; side: Side; label: string | null; urls: Record<string, string>; seen: string | null; menu: boolean;
   onMenu: (on: boolean) => void; onEdit: () => void; onDelete: () => void; onPhoto: (u: string) => void; draft: string; onAnswered: () => void;
+  ask: MyAsk | null; staffSeenAt: string | null; onNote: () => void;
 }) {
   const hold = useRef<number>();
+  if (m.kind === 'system' && m.meta?.card) return <ShiftNote m={m} side={side} ask={ask} staffSeenAt={staffSeenAt} onChanged={onNote} />;
   if (m.kind === 'system') return <div className={'ch-sys' + (m.body.startsWith('✓') ? ' ok' : '')}>{m.body}</div>;
   if (m.kind === 'hours') return <><HoursCard m={m} mine={mine} side={side} draft={draft} onAnswered={onAnswered} />{seen && <div className="ch-seen">{seen}</div>}</>;
   const canHold = mine && !m.deleted_at;
@@ -206,9 +214,11 @@ function HoursCard({ m, mine, side, draft, onAnswered }: { m: Msg; mine: boolean
   );
 }
 
-export function Composer({ value, onChange, files, onFiles, busy, err, placeholder, editing, onCancelEdit, quick, onQuick, onSend }: {
+export function Composer({ value, onChange, files, onFiles, busy, err, placeholder, editing, onCancelEdit, quick, onQuick, onSend, noPhotos, above }: {
   value: string; onChange: (v: string) => void; files: File[]; onFiles: (f: File[]) => void; busy: boolean; err?: string; placeholder: string;
   editing?: boolean; onCancelEdit?: () => void; quick?: string[]; onQuick?: (q: string) => void; onSend: () => void;
+  /** push 41 · team chat: no 📷 when photos are off · a bar above the box (Replying to …) */
+  noPhotos?: boolean; above?: ReactNode;
 }) {
   const ta = useRef<HTMLTextAreaElement>(null);
   useEffect(() => { const el = ta.current; if (!el) return; el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 120) + 'px'; }, [value]);
@@ -216,11 +226,12 @@ export function Composer({ value, onChange, files, onFiles, busy, err, placehold
   return (
     <div className="ch-comp">
       {err && <p className="error" style={{ padding: '0 6px' }}>{err}</p>}
+      {above}
       {editing && <div className="ch-editing"><span className="grow">Editing your message · others will see “edited”</span><button onClick={onCancelEdit}>Cancel</button></div>}
       {quick && <div className="ch-quick">{quick.map((q) => <button key={q} disabled={busy} onClick={() => onQuick?.(q)}>{q}</button>)}</div>}
       {files.length > 0 && <div className="ch-files">{files.map((f, i) => <span key={i}>📷 {f.name.slice(0, 16)}<button aria-label="Remove photo" onClick={() => onFiles(files.filter((_, k) => k !== i))}>×</button></span>)}</div>}
       <div className="ch-bar">
-        {!editing && <label className="ch-cam" aria-label="Add a photo">📷<input type="file" accept="image/*" multiple hidden onChange={(e) => { onFiles([...files, ...Array.from(e.target.files ?? []).filter((f) => f.type.startsWith('image/'))].slice(0, 6)); e.target.value = ''; }} /></label>}
+        {!editing && !noPhotos && <label className="ch-cam" aria-label="Add a photo">📷<input type="file" accept="image/*" multiple hidden onChange={(e) => { onFiles([...files, ...Array.from(e.target.files ?? []).filter((f) => f.type.startsWith('image/'))].slice(0, 6)); e.target.value = ''; }} /></label>}
         <textarea ref={ta} rows={1} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />
         <button className="ch-send" aria-label={editing ? 'Save' : 'Send'} disabled={busy || (!value.trim() && !files.length)} onClick={onSend}>{editing ? '✓' : '↑'}</button>
       </div>

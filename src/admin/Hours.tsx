@@ -1,6 +1,8 @@
 import { QuarterTime } from '../components/QuarterTime';
 import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import type { MeetingHours } from '../lib/meetings';
 import { eventsBetween, addDays, isoDay, endIso, startIso, periodOf, hoursBetween, tTime, dLabel, flagsOf, flagText, type AEvent, type AShift } from './api';
 
 type Row = { e: AEvent; s: AShift };
@@ -15,11 +17,13 @@ export function Hours() {
   const [why, setWhy] = useState<Record<string, string>>({});
   const [qs, setQs] = useState<{ id: string; shift_id: string; kind: string; claimed_at: string | null; note: string | null; created_at: string }[]>([]);
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
+  const [mh, setMh] = useState<MeetingHours[]>([]); // push 38 · paid meetings in the period
   const today = isoDay(new Date());
 
   const load = async () => {
     const [evs, pp] = await Promise.all([eventsBetween(p.start, p.end), supabase.from('pay_periods').select('closed_at').eq('start_date', p.start).maybeSingle()]);
     setEvents(evs.filter((e) => e.department !== 'bar')); setClosed((pp.data?.closed_at as string) ?? null);
+    supabase.rpc('meeting_hours', { p_from: p.start, p_to: p.end }).then(({ data, error }) => setMh(error ? [] : ((data ?? []) as MeetingHours[]).filter((x) => x.paid)));
     const ids = evs.flatMap((e) => e.shifts.map((x) => x.id));
     if (ids.length) { const { data: q } = await supabase.from('hours_questions').select('id,shift_id,kind,claimed_at,note,created_at').eq('status', 'open').in('shift_id', ids); setQs((q ?? []) as typeof qs); } else setQs([]);
   };
@@ -29,7 +33,8 @@ export function Hours() {
   const past = rows.filter((r) => r.e.event_date < today || r.s.punches?.punch_out);
   const missing = past.filter((r) => !r.s.attendance && (!r.s.punches?.punch_in || !r.s.punches?.punch_out) && r.e.event_date < today);
   const worked = rows.filter((r) => r.s.punches?.punch_in && r.s.punches?.punch_out);
-  const hours = worked.reduce((n, r) => n + hoursBetween(r.s.punches!.punch_in, r.s.punches!.punch_out, r.s.left_early), 0);
+  const mtgHours = mh.filter((x) => x.ended).reduce((n, x) => n + Number(x.hours), 0);
+  const hours = worked.reduce((n, r) => n + hoursBetween(r.s.punches!.punch_in, r.s.punches!.punch_out, r.s.left_early), 0) + mtgHours;
   const flagged = rows.filter((r) => flagsOf(r.s).some((f) => f.flag === 'early' || f.flag === 'late'));
   const noShows = rows.filter((r) => r.s.attendance === 'no_show');
   const notes = rows.filter((r) => r.s.manager_note && !r.s.note_archived_at);
@@ -70,6 +75,7 @@ export function Hours() {
     for (const r of [...rows].sort((a, b) => (a.s.staff?.full_name ?? '').localeCompare(b.s.staff?.full_name ?? '') || a.e.event_date.localeCompare(b.e.event_date)))
       lines.push([r.s.staff?.full_name, r.e.event_date, r.e.title, tTime(r.s.punches?.punch_in ?? null), tTime(r.s.punches?.punch_out ?? null),
         hoursBetween(r.s.punches?.punch_in ?? null, r.s.punches?.punch_out ?? null, r.s.left_early), flagsOf(r.s).map(flagText).join(' ')].map((x) => `"${String(x ?? '').replace(/"/g, '""')}"`).join(','));
+    for (const x of mh.filter((y) => y.ended)) lines.push([x.full_name, x.meeting_date, `MEETING · ${x.title}`, tTime(x.paid_in), tTime(x.paid_out), Number(x.hours), 'MEETING'].map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(','));
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv' })); a.download = `hours-${p.start}-to-${p.end}.csv`; a.click();
   };
   const step = (n: number) => setP(n < 0 ? periodOf(addDays(p.start, -1)) : periodOf(addDays(p.end, 1)));
@@ -164,6 +170,22 @@ export function Hours() {
             <button className="arch-toggle" onClick={() => setShowArch(!showArch)}>{showArch ? '▾' : '▸'} Archived · {archivedNotes.length}</button>
             {showArch && archivedNotes.map((r) => <div key={r.s.id} className="arch-row"><span className="grow"><b style={{ color: 'var(--ink)' }}>{r.s.staff?.full_name} · {dLabel(r.e.event_date)}</b> · {r.s.manager_note}<br />Archived {r.s.note_archived_by && names[r.s.note_archived_by] ? `by ${names[r.s.note_archived_by]} ` : ''}{new Date(r.s.note_archived_at!).toLocaleString('en-CA', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' })}</span><button className="abtn sm" onClick={() => archiveNote(r.s.id, false)}>Restore</button></div>)}
           </div>}
+        </section>
+      )}
+
+      {mh.length > 0 && (
+        <section className="stack">
+          <div className="sec"><span className="serif">Meetings</span><span className="muted sm">paid like a shift · no 4-hour minimum · {mtgHours} h · tap to change</span></div>
+          <div className="adm-card" style={{ padding: '4px 16px' }}>
+            {mh.map((x) => (
+              <Link key={x.meeting_id + x.staff_id} to={`/admin/meeting/${x.meeting_id}`} className="need">
+                <span>👥</span>
+                <div className="grow"><b>{x.full_name} · {dLabel(x.meeting_date)} · {x.title}</b>
+                  <span>{tTime(x.paid_in)} – {tTime(x.paid_out)}{x.auto ? '' : ' · set by you'}{x.ended ? '' : ' · not over yet'}</span></div>
+                <b className={x.ended ? 'okc' : 'muted'}>{Number(x.hours)} h</b>
+              </Link>
+            ))}
+          </div>
         </section>
       )}
 

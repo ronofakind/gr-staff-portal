@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase, type Staff } from '../lib/supabase';
 import { setting } from '../lib/settings';
 import { uploadPhoto } from '../lib/photo';
@@ -10,7 +10,11 @@ import { LenSeg } from '../components/PinPad';
 import { pinPassword, resolvePinLen, saveMyPinLen, type PinLen } from '../lib/pin';
 import { NICK_ERROR, cleanNick, nickState } from '../lib/nickname';
 import { useMyCalendar } from '../lib/calendar';
-import { CalendarBody } from './Checkup';
+import { CalendarBody, EmergencyForm } from './Checkup';
+import { useCheckup, setEmergencyReminder } from '../lib/checkup';
+import { AlertsProfileRow } from '../components/Alerts';
+import { Brand } from '../components/Brand';
+import { DeleteAccountLink } from './DeleteAccount';
 
 type Extra = { transport: string | null; positions: string[] | null; shirt_size: string | null; pants_size: string | null; dress_size: string | null };
 const POSITIONS = ['Waiter', 'Bartender', 'Barback'];
@@ -28,7 +32,8 @@ export function Profile({ me }: { me: Staff }) {
   const [nick, setNick] = useState(me.nickname ?? null); const [nickOpen, setNickOpen] = useState(false); // push 33d
   const { cal, setCal } = useMyCalendar(); const [calOpen, setCalOpen] = useState(opening === 'cal'); // push 33b
   useEffect(() => { if (opening) setParams((p) => { p.delete('open'); return p; }, { replace: true }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  const [phone, setPhone] = useState(me.phone ?? '');
+  const [phone, setPhone] = useState(me.phone ?? ''); const nav = useNavigate();
+  const { info: cu, reload: reloadCu } = useCheckup(); const [emOpen, setEmOpen] = useState(false); const [whyOpen, setWhyOpen] = useState(false);
   const [pinLen, setPinLen] = useState<PinLen | null>(null);
   useEffect(() => { if (me.email) resolvePinLen(me.email).then((r) => setPinLen(r.known ? r.len : null)); }, [me.email]);
 
@@ -72,9 +77,10 @@ export function Profile({ me }: { me: Staff }) {
 
       <div className="sec-head"><span className="serif">Contact &amp; login</span></div>
       <section className="sizes">
-        <div className="size-row"><span className="muted sm" style={{ width: 70 }}>Email</span><span className="grow strong" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{me.email}</span></div>
-        <button className="size-row edit-row" onClick={() => setEdit('phone')}><span className="muted sm" style={{ width: 70 }}>Phone</span><span className="grow strong">{phone || '—'}</span><span className="strong sm">Edit ›</span></button>
-        <button className="size-row edit-row" onClick={() => setEdit('pin')}><span className="muted sm" style={{ width: 70 }}>Code</span><span className="grow strong">{pinLen === 4 ? '••••' : '••••••'}</span><span className="strong sm">Change your code ›</span></button>
+        <div className="size-row"><span className="row-l">Email</span><span className="row-v">{me.email}</span></div>
+        <button className="size-row edit-row" onClick={() => setEdit('phone')}><span className="row-l">Phone</span><span className="row-v">{phone || '—'}</span><span className="row-a">Edit ›</span></button>
+        {me.role !== 'admin' && cu && <button className="size-row edit-row" onClick={() => setEmOpen(true)}><span className="row-l">Emergency</span><span className={'row-v' + (cu.emergency_phone ? '' : ' empty')}>{cu.emergency_phone ? `${cu.emergency_name ?? ''}${cu.emergency_relation ? ` · ${cu.emergency_relation}` : ''}` : 'Not added'}</span><span className="row-a">{cu.emergency_phone ? 'Edit ›' : 'Add ›'}</span></button>}
+        <button className="size-row edit-row" onClick={() => setEdit('pin')}><span className="row-l">Code</span><span className="row-v">{pinLen === 4 ? '••••' : '••••••'}</span><span className="row-a">Change ›</span></button>
       </section>
 
       {x && <>
@@ -100,19 +106,31 @@ export function Profile({ me }: { me: Staff }) {
           ))}
         </div>
 
-        <div className="sec-head"><span className="serif">Uniform sizes</span></div>
+        <div className="sec-head"><span className="serif">Uniform sizes <button type="button" className="why-q" aria-label="Why we ask for your sizes" onClick={() => setWhyOpen(true)}>?</button></span></div>
         <section className="sizes">
-          <SizeRow label="Shirt" value={x.shirt_size} options={SHIRT} onChange={(v) => save({ shirt_size: v })} />
-          <SizeRow label="Pants (waist)" value={x.pants_size} options={PANTS} onChange={(v) => save({ pants_size: v })} />
-          <SizeRow label="Dress" value={x.dress_size} options={DRESS} none="Not needed" onChange={(v) => save({ dress_size: v })} />
+          <SizeRow label="Shirt" hint="the letter on the tag" value={x.shirt_size} options={SHIRT} onChange={(v) => save({ shirt_size: v })} />
+          <SizeRow label="Pants (waist)" hint="jeans tag W32 L30 → 32" value={x.pants_size} options={PANTS} onChange={(v) => save({ pants_size: v })} />
+          <SizeRow label="Dress" hint="between sizes? pick the bigger" value={x.dress_size} options={DRESS} none="Not needed" onChange={(v) => save({ dress_size: v })} />
         </section>
+        <p className="size-count">{[x.shirt_size, x.pants_size, x.dress_size].filter(Boolean).length} of 3 filled{!x.dress_size ? ' · Dress: leave “Not needed” if it doesn’t apply' : ''}</p>
       </>}
 
+      {cal && me.role !== 'admin' && <div className="sec-head"><span className="serif"><Brand /> calendar</span></div>}
       {cal && me.role !== 'admin' && <section className="sizes">
-        <button className="size-row edit-row" onClick={() => setCalOpen(true)}><span className="grow">{cal.added_at ? 'My G&R calendar' : 'Add my G&R calendar'}</span><span className="muted sm">{cal.added_at ? 'Added · add again ›' : '›'}</span></button>
+        <button className="size-row edit-row" onClick={() => setCalOpen(true)}><span className="row-l">Calendar</span><span className={'row-v' + (cal.added_at ? ' ok' : ' empty')}>{cal.added_at ? '✓ Added' : 'Not added'}</span><span className="row-a">{cal.added_at ? 'Add again ›' : 'Add ›'}</span></button>
       </section>}
 
+      {me.role !== 'admin' && <AlertsProfileRow me={me} />}
+
+      {/* push 56 · Refer a friend (their link fills "Referred by" on the apply page) + the handbook any time */}
+      <div className="sec-head"><span className="serif">Refer a friend</span></div>
+      <section className="sizes">
+        <ReferRow me={me} />
+        <button className="size-row edit-row" onClick={() => nav('/handbook')}><span className="row-l">Handbook</span><span className="row-v">G&R standards</span><span className="row-a">Read ›</span></button>
+      </section>
+
       <button className="btn" onClick={() => supabase.auth.signOut().then(() => window.location.replace('/'))}>Log out</button>
+      {me.role !== 'admin' && <DeleteAccountLink />}
       <TabBar />
       {nickOpen && <NickSheet me={me} nick={nick} onClose={() => setNickOpen(false)} onSaved={(v) => { setNick(v); me.nickname = v; setMsg('✓ Saved'); setNickOpen(false); }} />}
       {calOpen && cal && <>
@@ -123,23 +141,41 @@ export function Profile({ me }: { me: Staff }) {
           <div className="cu-body"><CalendarBody me={me} cal={cal} onCal={setCal} /></div>
         </SwipeSheet>
       </>}
+      {whyOpen && <>
+        <div className="scrim" onClick={() => setWhyOpen(false)} />
+        <SwipeSheet onClose={() => setWhyOpen(false)} label="Why we ask for your sizes">
+          <div className="why-sheet">
+            <span className="why-ic" aria-hidden="true">👕</span>
+            <div className="serif" style={{ fontSize: 24 }}>Why we ask for your sizes</div>
+            <p>Some clients dress our team for themed events, like custom t-shirts or costumes, and need everyone’s sizes ahead of time. Fill these once and you’re ready for those events.</p>
+            <small>🔒 Only Ronnie sees them. Shared with a client only for a themed event you’re booked on.</small>
+            <button type="button" className="cu-btn green" onClick={() => setWhyOpen(false)}>Got it</button>
+          </div>
+        </SwipeSheet>
+      </>}
+      {emOpen && cu && <>
+        <div className="scrim" onClick={() => setEmOpen(false)} />
+        <SwipeSheet onClose={() => setEmOpen(false)} label="Emergency contact">
+          <div><div className="kicker">ONLY RONNIE SEES THIS</div><div className="serif" style={{ fontSize: 26 }}>Emergency contact</div></div>
+          <EmergencyForm info={{ ...cu }} saveLabel="Save" onSaved={() => { setEmOpen(false); setEmergencyReminder('clear'); reloadCu(); setMsg('✓ Saved'); }} />
+        </SwipeSheet>
+      </>}
       {edit && <EditSheet kind={edit} me={me} phone={phone} pinLen={pinLen} onPinLen={setPinLen} onClose={() => setEdit(null)} onPhone={(v) => { setPhone(v); setMsg('✓ Saved'); }} />}
     </main>
   );
 }
 
-function SizeRow({ label, value, options, onChange, none = 'Choose' }: { label: string; value: string | null; options: string[]; onChange: (v: string | null) => void; none?: string }) {
+function SizeRow({ label, hint, value, options, onChange, none = 'Choose' }: { label: string; hint?: string; value: string | null; options: string[]; onChange: (v: string | null) => void; none?: string }) {
+  // Same look as the Contact rows: grey label (hint under it) · bold value · Change ›. The phone's own list opens on tap.
   return (
-    <label className="size-row">
-      <span>{label}</span>
-      <span className={'size-val' + (value ? '' : ' empty')}>
-        {value ?? none}
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9A9187" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
-        <select aria-label={label} value={value ?? ''} onChange={(e) => onChange(e.target.value || null)}>
-          <option value="">{none}</option>
-          {options.map((o) => <option key={o} value={o}>{o}</option>)}
-        </select>
-      </span>
+    <label className="size-row edit-row pick-row">
+      <span className="row-l">{label}</span>
+      <span className="row-vh"><span className={'row-v' + (value ? '' : ' empty')}>{value ?? none}</span>{hint && <small>{hint}</small>}</span>
+      <span className="row-a">{value ? 'Change ›' : 'Pick ›'}</span>
+      <select aria-label={label} value={value ?? ''} onChange={(e) => onChange(e.target.value || null)}>
+        <option value="">{none}</option>
+        {options.map((o) => <option key={o} value={o}>{o}</option>)}
+      </select>
     </label>
   );
 }
@@ -213,7 +249,7 @@ function NickSheet({ me, nick, onClose, onSaved }: { me: Staff; nick: string | n
       <div className="sheet nick-sheet" role="dialog" aria-label="What should we call you?">
         <div className="grab" />
         <div className="spread" style={{ alignItems: 'center' }}><span className="kicker">PROFILE</span><button className="btn link" onClick={onClose}>Cancel</button></div>
-        <div className="nick-full"><small>Full name (from G&amp;R)</small><b>{me.full_name}</b></div>
+        <div className="nick-full"><small>Full name (from <Brand />)</small><b>{me.full_name}</b></div>
         <div className="serif" style={{ fontSize: 24 }}>What should we call you?</div>
         <p className="muted sm" style={{ margin: 0 }}>The name you go by at work. Your manager and team will see it on sections, teams and in the app.</p>
         <div className={'nick-input' + (st === 'bad' ? ' bad' : st === 'ok' ? ' ok' : '')}>
@@ -229,4 +265,15 @@ function NickSheet({ me, nick, onClose, onSaved }: { me: Staff; nick: string | n
       </div>
     </>
   );
+}
+
+function ReferRow({ me }: { me: Staff }) {
+  const [ok, setOk] = useState(false);
+  const link = `https://${window.location.host}/apply?r=${me.id}`;
+  const share = async () => {
+    const text = `G&R is hiring for events in Montreal. Apply here (3 min): ${link}`;
+    try { if (navigator.share) { await navigator.share({ text }); return; } } catch { return; }
+    try { await navigator.clipboard.writeText(text); setOk(true); setTimeout(() => setOk(false), 2000); } catch { /* */ }
+  };
+  return <button className="size-row edit-row" onClick={share}><span className="row-l">Your link</span><span className={'row-v' + (ok ? ' ok' : '')}>{ok ? '✓ Copied' : 'When they apply, we know you sent them'}</span><span className="row-a">Share ›</span></button>;
 }

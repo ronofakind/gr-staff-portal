@@ -1,18 +1,21 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { ap12, type AEvent } from './api';
+import { CarChat } from '../components/GettingThere';
 
 type Offer = { id: string; event_id: string; staff_id: string; kind: 'driver' | 'rider' | 'own'; pickup_spot: string | null; leave_at: string | null; seats: number | null;
-  coming_from: string | null; car_driver_id: string | null; placed_at: string | null; sent_at: string | null; staff: { full_name: string; phone: string | null } | null };
+  coming_from: string | null; car_driver_id: string | null; placed_at: string | null; sent_at: string | null; request_to?: string | null; late_eta?: string | null; lost_at?: string | null; staff: { full_name: string; phone: string | null } | null };
 const tm = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' }).replace(/\./g, '') : '');
 const hrs = (min: number) => `${Math.floor(min / 60)} h${min % 60 ? ` ${min % 60}` : ''}`;
 
 /** Admin event page → Rides (push 25d): cars, riders to place, auto-fill, send the plan (in-app cards). */
 export function RidesAdmin({ evs }: { evs: AEvent[] }) {
-  const e = evs.find((x) => x.transport) ?? evs[0];
+  const e = evs.find((x) => x.transport) ?? evs.find((x) => x.rides) ?? evs[0];
+  const [adding, setAdding] = useState(''); const [chatFor, setChatFor] = useState<string | null>(null); const [meId, setMeId] = useState<string | null>(null);
+  useEffect(() => { supabase.rpc('me').then(({ data }) => setMeId((data as string) ?? null)); }, []);
   const [offers, setOffers] = useState<Offer[] | null>(null); const [links, setLinks] = useState<[string, string][]>([]);
   const [drag, setDrag] = useState<string | null>(null); const [msg, setMsg] = useState(''); const [busy, setBusy] = useState(false);
-  const load = () => supabase.from('ride_offers').select('id,event_id,staff_id,kind,pickup_spot,leave_at,seats,coming_from,car_driver_id,placed_at,sent_at,staff:staff!ride_offers_staff_id_fkey(full_name,phone)')
+  const load = () => supabase.from('ride_offers').select('id,event_id,staff_id,kind,pickup_spot,leave_at,seats,coming_from,car_driver_id,placed_at,sent_at,request_to,late_eta,lost_at,staff:staff!ride_offers_staff_id_fkey(full_name,phone)')
     .in('event_id', evs.map((x) => x.id)).then(({ data }) => setOffers((data ?? []) as unknown as Offer[]));
   useEffect(() => { load(); supabase.from('staff_links').select('staff_a,staff_b').then(({ data }) => setLinks(((data ?? []) as { staff_a: string; staff_b: string }[]).map((l) => [l.staff_a, l.staff_b]))); }, [evs.map((x) => x.id).join()]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!offers) return <div className="muted sm">Loading…</div>;
@@ -24,6 +27,17 @@ export function RidesAdmin({ evs }: { evs: AEvent[] }) {
   const place = async (riderId: string, driver: string | null) => {
     await supabase.from('ride_offers').update({ car_driver_id: driver, placed_at: driver ? new Date().toISOString() : null, sent_at: null }).eq('id', riderId); load();
   };
+  // push 68 · Ronnie plans: add a car (anyone booked), edit spot / time / seats
+  const firstStart = (e.staffing ?? []).map((l) => l.start).sort()[0] ?? e.start_time?.slice(0, 5) ?? '17:00';
+  const isoAt = (t: string) => { const [h, m] = t.split(':').map(Number); const d = new Date(`${e.event_date}T12:00:00`); const local = new Date(d.toLocaleString('en-US', { timeZone: 'America/Toronto' })); const diff = d.getTime() - local.getTime(); local.setHours(h, m, 0, 0); return new Date(local.getTime() + diff).toISOString(); };
+  const addCar = async (sid: string) => {
+    if (!sid) return; const [h, m] = firstStart.split(':').map(Number); const lv = ((h * 60 + m - (e.transport ? (e.travel_min ?? 60) : 30) - 15) + 1440) % 1440;
+    const t = `${String(Math.floor(lv / 60)).padStart(2, '0')}:${String(Math.round(lv % 60 / 15) * 15 % 60).padStart(2, '0')}`;
+    const ev = evs.find((x) => x.shifts.some((s) => s.staff_id === sid)) ?? e;
+    const { error } = await supabase.from('ride_offers').upsert({ event_id: ev.id, staff_id: sid, kind: 'driver', seats: 3, leave_at: isoAt(t), pickup_spot: null, car_driver_id: null, coming_from: null, sent_at: null, placed_at: null }, { onConflict: 'event_id,staff_id' });
+    if (error) setMsg(error.message); setAdding(''); load();
+  };
+  const editCar = async (d: Offer, patch: Partial<Offer>) => { await supabase.from('ride_offers').update({ ...patch, sent_at: null }).eq('id', d.id); load(); };
   const autoFill = async () => {
     setBusy(true);
     const left = new Map(drivers.map((d) => [d.staff_id, (d.seats ?? 3) - inCar(d.staff_id).length]));
@@ -52,27 +66,28 @@ export function RidesAdmin({ evs }: { evs: AEvent[] }) {
       await supabase.from('ride_offers').update({ sent_at: now }).eq('id', o.id);
       const d = drivers.find((x) => x.staff_id === (o.kind === 'driver' ? o.staff_id : o.car_driver_id));
       const body = o.kind === 'driver'
-        ? `You're driving · ${inCar(o.staff_id).map(name).join(', ')} · pick up ${d?.pickup_spot ?? ''} ${tm(d?.leave_at ?? null)} · gas covered`
-        : `With ${d ? name(d) : 'your driver'} · pick-up ${d?.pickup_spot ?? ''} at ${tm(d?.leave_at ?? null)}. Running late? Text ${d ? name(d).split(' ')[0] : 'your driver'} first.`;
-      await supabase.from('staff_alerts').insert({ staff_id: o.staff_id, kind: 'changed', title: o.kind === 'driver' ? `Your car for ${e.title}` : `Your ride to ${e.title}`, body, event_id: o.event_id });
+        ? `You're driving · ${inCar(o.staff_id).map(name).join(', ')} · pick up ${d?.pickup_spot ?? ''} ${tm(d?.leave_at ?? null)}${e.transport ? ' · gas covered' : ''}`
+        : `Carpooling with ${d ? name(d).split(' ')[0] : '…'} · pick-up ${d?.pickup_spot ?? ''} at ${tm(d?.leave_at ?? null)}. Running late? Text ${d ? name(d).split(' ')[0] : 'them'} first.`;
+      await supabase.from('staff_alerts').insert({ staff_id: o.staff_id, kind: 'changed', title: o.kind === 'driver' ? `Your carpool to ${e.title}` : `Your carpool to ${e.title}`, body, event_id: o.event_id });
     }
     setBusy(false); setMsg(`Ride plan sent to ${toSend.length} people (in the app: event page + red card on Home).`); load();
   };
   const cars = drivers.length; const travelStaff = team.length; const paid = e.paid_travel_min ?? 0;
   return (
     <div className="rides">
-      <div className="rides-side">
+      {e.transport ? <div className="rides-side">
         <div className="kick">TRANSPORT</div>
         <div className="sm">One way <b>{e.travel_min ? hrs(e.travel_min) : '—'}</b> · paid travel <b>{paid ? hrs(paid) : '—'}</b> each · gas <b>${e.gas_per_car ?? 20}</b> per car · {e.transport_billing === 'gr' ? 'on G&R' : 'client pays'}</div>
         <div className="kick" style={{ marginTop: 10 }}>WHAT IT COSTS</div>
         <div className="rides-cost"><span>Gas · {cars} car{cars === 1 ? '' : 's'} × ${e.gas_per_car ?? 20}</span><b>${(cars * Number(e.gas_per_car ?? 20)).toFixed(0)}</b></div>
         <div className="rides-cost"><span>Travel · {travelStaff} staff × {hrs(paid)}</span><b>{((travelStaff * paid) / 60).toFixed(2)} h</b></div>
         <small className="muted">Pay staff: travel hours go into each person’s hours; drivers get the gas. {e.transport_billing === 'gr' ? 'Not on the invoice.' : 'Bill the client: “Transport · travel time” and “Transport · gas (n cars)” lines.'}</small>
-      </div>
+      </div> : <div className="rides-side"><div className="kick">CARPOOL</div><div className="sm">Staff carpool between themselves (no paid travel, no gas). You can still plan the cars here and send the plan.</div></div>}
       <div className="rides-main">
         <div className="row wrap" style={{ gap: 8, alignItems: 'center' }}>
           <span className="tag">{drivers.length} driver{drivers.length === 1 ? '' : 's'} offered</span><span className="tag">{riders.length} asked for a ride</span><span className="tag">{own.length} on their own</span>{noAnswer.length > 0 && <span className="tag amber">{noAnswer.length} no answer</span>}
           <span className="grow" />
+          <select className="abtn sm" value={adding} onChange={(ev) => { setAdding(ev.target.value); addCar(ev.target.value); }}><option value="">+ Add a car…</option>{team.filter((t) => !drivers.some((d) => d.staff_id === t.staff_id)).map((t) => <option key={t.id} value={t.staff_id}>{t.staff?.full_name} drives</option>)}</select>
           <button className="abtn sm" disabled={busy || !drivers.length} onClick={autoFill}>Auto-fill rides</button>
           <button className="abtn sm dark" disabled={busy || !toSend.length} onClick={send}>Send ride plan{toSend.length ? ` (${toSend.length})` : ''}</button>
         </div>
@@ -81,7 +96,14 @@ export function RidesAdmin({ evs }: { evs: AEvent[] }) {
           {drivers.map((d) => { const rs = inCar(d.staff_id); const seats = d.seats ?? 3; return (
             <div key={d.id} className="ride-car" onDragOver={(ev) => ev.preventDefault()} onDrop={() => { if (drag && rs.length < seats) place(drag, d.staff_id); setDrag(null); }}>
               <div className="row" style={{ justifyContent: 'space-between' }}><b>🚗 {name(d)}</b><span className="muted sm">{rs.length} / {seats}</span></div>
-              <div className="muted sm">picks up {d.pickup_spot || '—'} · {tm(d.leave_at) || 'time ?'}{d.sent_at ? ' · ✓ sent' : ''}</div>
+              <div className="ride-edit">
+                <input defaultValue={d.pickup_spot ?? ''} placeholder="pickup spot" onBlur={(ev) => ev.target.value !== (d.pickup_spot ?? '') && editCar(d, { pickup_spot: ev.target.value.trim() || null })} />
+                <input type="time" step={900} defaultValue={d.leave_at ? new Date(d.leave_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Toronto' }) : ''} onBlur={(ev) => ev.target.value && editCar(d, { leave_at: isoAt(ev.target.value) })} />
+                <select value={seats} onChange={(ev) => editCar(d, { seats: Number(ev.target.value) })}>{[1, 2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>{n} seats</option>)}</select>
+              </div>
+              <div className="muted sm">{d.late_eta ? <b className="amberc">⏱ running late · now {tm(d.late_eta)} · </b> : null}{d.sent_at ? '✓ sent' : 'not sent'}{riders.filter((r) => r.request_to === d.staff_id && !r.car_driver_id).length ? ` · ${riders.filter((r) => r.request_to === d.staff_id && !r.car_driver_id).map((r) => name(r).split(' ')[0]).join(', ')} asked` : ''}
+                {' · '}<button className="lnk" onClick={() => setChatFor(chatFor === d.staff_id ? null : d.staff_id)}>{chatFor === d.staff_id ? 'Close chat' : 'Car chat'}</button></div>
+              {chatFor === d.staff_id && <CarChat eventId={d.event_id} driverId={d.staff_id} meId={meId} people={[d, ...rs].map((x) => ({ id: x.staff_id, name: x.staff?.full_name ?? '?' }))} />}
               {rs.map((r) => <div key={r.id} className="ride-p" draggable onDragStart={() => setDrag(r.id)}>{name(r)}{r.coming_from && <small> · from {r.coming_from}</small>}{r.sent_at && <small className="okc"> ✓</small>}<button onClick={() => place(r.id, null)}>×</button></div>)}
               {rs.length < seats && <div className="bk-open">{seats - rs.length} open seat{seats - rs.length === 1 ? '' : 's'} · drop here</div>}
             </div>); })}
@@ -90,7 +112,7 @@ export function RidesAdmin({ evs }: { evs: AEvent[] }) {
         <div className="kick">NEED A RIDE · NOT PLACED · {riders.filter((r) => !r.car_driver_id).length}</div>
         <div className="row wrap" style={{ gap: 6 }} onDragOver={(ev) => ev.preventDefault()} onDrop={() => { if (drag) place(drag, null); setDrag(null); }}>
           {riders.filter((r) => !r.car_driver_id).map((r) => (
-            <span key={r.id} className="ride-p loose" draggable onDragStart={() => setDrag(r.id)}>{name(r)}{r.coming_from && <small> · from {r.coming_from}</small>}
+            <span key={r.id} className="ride-p loose" draggable onDragStart={() => setDrag(r.id)}>{name(r)}{r.coming_from && <small> · from {r.coming_from}</small>}{r.lost_at && <small className="amberc"> · lost their carpool</small>}{r.request_to && <small> · asked {name(drivers.find((d) => d.staff_id === r.request_to) ?? r).split(' ')[0]}</small>}
               {drivers.length > 0 && <select value="" onChange={(ev) => ev.target.value && place(r.id, ev.target.value)}><option value="">car…</option>{drivers.map((d) => <option key={d.staff_id} value={d.staff_id}>{name(d)}</option>)}</select>}</span>))}
           {!riders.filter((r) => !r.car_driver_id).length && <span className="muted sm">Everyone who asked is in a car.</span>}
         </div>

@@ -1,13 +1,21 @@
+import { PastDebriefsFor } from './Debriefs';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { supabase, type ShiftRow } from '../lib/supabase';
 import { DriveFiles } from '../components/DriveFiles';
 import { DeleteEvent } from './DeleteEvent';
+import { AlsoManaging } from './AlsoManaging';
+import { TentativeCard } from './Tentative';
+import { TeamChatCard } from './TeamChatCard';
 import { ConfirmTracker } from './Confirmations';
 import { RidesAdmin } from './Rides';
 import { ShiftView } from '../pages/Shift';
 import { UniformIcon, PantsIcon, ShoesIcon, ApronIcon, TieIcon, WineKeyIcon, PIECE, defaultItems, uniformLabel, type UniItemsMap, type UniLineKey, type UniformKind } from '../components/Uniform';
-import { EVENT_SELECT, ap12, dLabel, roleName, type AEvent } from './api';
+import { EVENT_SELECT, EVENT_SELECT_28, missing034, ap12, dLabel, roleName, type AEvent } from './api';
+import { ReplacedBanners } from './Replace';
+import { TeamLocks } from './TeamLocks';
+import { NightOff } from './NightOff';
+import { BarReport } from './BarReport';
 
 const FOLD_KEY = 'gr-ed-fold';
 const readFold = (): Record<string, boolean> => { try { return JSON.parse(localStorage.getItem(FOLD_KEY) || '{}'); } catch { return {}; } };
@@ -28,7 +36,9 @@ export function EventDetail() {
     (async () => {
       const { data: one } = await supabase.from('events').select('event_date,title,venue_id,uniform_items,venues(name,address,staff_notes),event_private(client_id,rate_set)').eq('id', id!).single();
       if (!one) { setEvs([]); return; }
-      const { data } = await supabase.from('events').select(EVENT_SELECT).eq('event_date', one.event_date).eq('title', one.title).order('department');
+      const q = (sel: string) => supabase.from('events').select(sel).eq('event_date', one.event_date).eq('title', one.title).order('department');
+      let { data, error } = await q(EVENT_SELECT_28); // push 47 · replacement_for for "✓ REPLACED"
+      if (error && missing034(error)) ({ data } = await q(EVENT_SELECT));
       const mine = ((data ?? []) as unknown as AEvent[]).sort((a) => (a.department === 'floor' ? -1 : 1));
       setEvs(mine);
       const o = one as unknown as { uniform_items: UniItemsMap | null; venues: Extra['venue']; event_private: { client_id: string | null; rate_set: string | null } | null };
@@ -58,13 +68,13 @@ export function EventDetail() {
   const uniRows = uniformRows(evs, x?.uniform_items ?? null);
   const fee = /brera/i.test(x?.client?.name ?? p?.client ?? '') ? 8 : 10;
   const rateLabel = x?.client && x.client.rate_sets.length >= 2 ? x.client.rate_sets.find((r) => r.key === (x.rate_set ?? x.client!.rate_sets[0].key))?.label : null;
-  const keys = ['event', 'confirm', 'staffing', 'uniforms', 'folder', 'billing', 'rides', 'lands'];
+  const keys = ['event', 'confirm', 'locks', 'staffing', 'managers', 'team', 'uniforms', 'folder', 'billing', 'rides', 'barcount', 'lands'];
 
   return (
     <div className="stack-lg ed2">
       <div className="toolbar">
         <div>
-          <Link to={`/admin/bookings?date=${e.event_date}`} className="muted sm strong">‹ Bookings · {dLabel(e.event_date, { weekday: 'long', month: 'short', day: 'numeric' })}</Link>
+          <Link to={`/admin/bookings?date=${e.event_date}&view=board&ev=${e.id}`} className="abtn sm back-btn">‹ Back to Bookings · {dLabel(e.event_date, { weekday: 'short', month: 'short', day: 'numeric' })}</Link>
           <h1 className="serif-h">{x?.venue?.name ?? e.title}</h1>
           <div className="row wrap" style={{ gap: 6, marginTop: 8 }}>
             <span className="tag">{dLabel(e.event_date, { weekday: 'short', month: 'short', day: 'numeric' })}</span>
@@ -77,6 +87,7 @@ export function EventDetail() {
         <div className="stack no-print" style={{ gap: 8, alignItems: 'flex-end' }}>
           <div className="row wrap" style={{ gap: 8, justifyContent: 'flex-end' }}>
             <Link className="abtn dark" to={`/admin/event/${e.id}/edit`}>Edit details</Link>
+            <Link className="abtn" to={`/admin/event/${(floor ?? e).id}/change`}>Client change</Link>
             <Link className="abtn" to={`/admin/event/${e.id}/edit?dup=1`}>Duplicate…</Link>
             <button className="abtn" onClick={() => window.print()}>Print / PDF</button>
             <DeleteEvent id={e.id} />
@@ -88,7 +99,12 @@ export function EventDetail() {
         </div>
       </div>
 
+      <ReplacedBanners evs={evs} />
+      <NightOff evs={evs} onChange={() => {}} />
+      <PastDebriefsFor title={e.title} eventId={e.id} />
+
       <div className="ed2-grid">
+        {e.event_date >= new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' }) && <TentativeCard evs={evs} onChange={load} />}
         <Sec k="event" title="Event" open={isOpen('event')} setOpen={setFold} summary={[dLabel(e.event_date, { month: 'short', day: 'numeric' }), x?.venue?.name ?? e.title, e.guests ? `${e.guests} guests` : null].filter(Boolean).join(' · ')}>
           <div className="ed2-facts">
             <F l="Date" v={dLabel(e.event_date, { weekday: 'long', month: 'long', day: 'numeric' })} />
@@ -107,6 +123,10 @@ export function EventDetail() {
           <ConfirmTracker evs={evs} venue={x?.venue?.name ?? e.title} />
         </Sec>}
 
+        <Sec k="locks" title="Team" open={isOpen('locks')} setOpen={setFold} summary="who's booked · 🔒 locked never move">
+          <TeamLocks evs={evs} onChange={load} />
+        </Sec>
+
         <Sec k="staffing" title="Staffing" open={isOpen('staffing')} setOpen={setFold} summary={[floor ? `${nFloor} floor` : null, bar ? `${nBar} bar` : null, String(nFloor + nBar)].filter(Boolean).join(' · ')}>
           <div className="ed2-lines">
             {lines.map((l, i) => (
@@ -121,6 +141,14 @@ export function EventDetail() {
           </div>
           <div className="ed2-tot"><span>{floor ? `${nFloor} floor` : ''}{floor && bar ? ' · ' : ''}{bar ? `${nBar} bar` : ''}</span><b>{nFloor + nBar} total</b></div>
           <Link className="sm strong no-print" to={`/admin/bookings?date=${e.event_date}`}>Who's booked →</Link>
+        </Sec>
+
+        <Sec k="managers" title="Check-in managers" open={isOpen('managers')} setOpen={setFold} summary={[floor && bar ? (e.department === 'bar' ? 'Bar' : 'Floor') : null, 'lead + also managing'].filter(Boolean).join(' · ')}>
+          <AlsoManaging ev={e} />
+        </Sec>
+
+        <Sec k="team" title="Team chat" open={isOpen('team')} setOpen={setFold} summary="off by default · this event only">
+          <TeamChatCard eventId={e.id} />
         </Sec>
 
         <Sec k="uniforms" title="Uniforms" open={isOpen('uniforms')} setOpen={setFold} summary={[floor ? 'Floor' : null, bar ? 'Bar' : null].filter(Boolean).join(' + ') + ' · men / women'}>
@@ -151,7 +179,10 @@ export function EventDetail() {
           <Billing evs={evs} onChange={load} />
         </Sec>}
 
-        {evs.some((v) => v.transport) && <Sec k="rides" title="Rides" wide open={isOpen('rides')} setOpen={setFold} summary="Transport · cars and riders">
+        {evs.filter((v) => v.department === 'bar').map((b) => <Sec key={'bar' + b.id} k="barcount" title="Bar count" wide open={isOpen('barcount')} setOpen={setFold} summary="Out · more · back · used · CSV">
+          <BarReport e={b} />
+        </Sec>)}{/* push 69 */}
+        {evs.some((v) => v.transport || v.rides) && <Sec k="rides" title="Rides" wide open={isOpen('rides')} setOpen={setFold} summary={evs.some((v) => v.transport) ? 'Transport · cars and riders' : 'Carpool · cars and riders'}>
           <RidesAdmin evs={evs} />
         </Sec>}
 

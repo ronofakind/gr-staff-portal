@@ -17,11 +17,15 @@ export type Settings = {
   // Bookings & changes
   'bookings.late_cancel': 'after_confirmed';
   'bookings.count_told_ahead': boolean;
+  /** Nov 8 · Ronnie: off while start times still come from the Events sheet mapping (wrong time slots). */
+  'bookings.count_late': boolean;
   'bookings.running_late': 'event_day' | 'off';
   'bookings.new_tag_shifts': number;
   // Extras
   'extras.rule': { over: number; pct: number };
   'extras.default_billing': 'gr' | 'client';
+  /** Push 61 · New event → staffing suggested from the guest count (guests per staff; MD included on the floor). */
+  'staffing.ratios': { seated: number; cocktail: number; bar: number; buffer: number; md2: number; small: number };
   // Transport
   'transport.office': string;
   'transport.far_min': number;
@@ -58,10 +62,12 @@ export const DEFAULTS: Settings = {
   'ask.reply_by_days': 2,
   'bookings.late_cancel': 'after_confirmed',
   'bookings.count_told_ahead': false,
+  'bookings.count_late': false,
   'bookings.running_late': 'event_day',
   'bookings.new_tag_shifts': 3,
   'extras.rule': { over: 7, pct: 10 },
   'extras.default_billing': 'gr',
+  'staffing.ratios': { seated: 15, cocktail: 25, bar: 40, buffer: 15, md2: 300, small: 50 },
   'transport.office': 'C-4865 rue Dagenais',
   'transport.far_min': 45,
   'transport.client_pays': true,

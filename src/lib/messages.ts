@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { supabase } from './supabase';
+import { meetingMorningCheck } from './meetings';
 
 /* Push 36 · Messages: shared types + helpers (staff tab, Ronnie's inbox, manager replies). Migration 042. */
 
@@ -21,7 +22,7 @@ export type Conv = {
 export type Msg = {
   id: string; conversation_id: string; sender_id: string | null; sender_role: 'staff' | 'admin' | 'manager' | 'system'; kind: 'text' | 'system' | 'hours';
   body: string; topic: Topic | null; shift_id: string | null; hours_question_id: string | null; announcement_id: string | null; photo_paths: string[];
-  meta: { shift?: ShiftMeta; hours?: HoursMeta; re?: string }; edited_at: string | null; deleted_at: string | null; created_at: string;
+  meta: { shift?: ShiftMeta; hours?: HoursMeta; re?: string; /** push 40 · shift notes / asks (044) */ card?: string; [k: string]: unknown }; edited_at: string | null; deleted_at: string | null; created_at: string;
 };
 export type InboxRow = {
   id: string; staff_id: string; staff_name: string; staff_photo: string | null; staff_phone: string | null; kind: 'ronnie' | 'manager';
@@ -108,7 +109,7 @@ export function useMessagesBadge(off = false) {
   useEffect(() => {
     if (off) return;
     let live = true;
-    supabase.rpc('messages_badge').then(({ data, error }) => { if (live && !error && typeof data === 'number') setN(data); });
+    meetingMorningCheck().then(() => supabase.rpc('messages_badge').then(({ data, error }) => { if (live && !error && typeof data === 'number') setN(data); }));
     return () => { live = false; };
   }, [off, pathname, search]);
   return n;

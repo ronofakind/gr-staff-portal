@@ -1,27 +1,40 @@
 import { siteOrigin } from '../lib/native';
 import { useEffect, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { supabase, SHIFT_SELECT, isSetup, type ShiftRow } from '../lib/supabase';
 import { useT } from '../lib/i18n';
 import { minus, mapsUrl } from '../lib/format';
 import { Avatar, PhotoViewer } from '../components/Avatar';
 import { UniformIcon, uniformFor, uniformLabel, PantsIcon, ShoesIcon, ApronIcon, TieIcon, WineKeyIcon, isBarPos, lineKey, PIECE } from '../components/Uniform';
-import { Status, isBar, StartPos } from './Home';
+import { Status, isBar, StartPos, BigTime } from './Home';
 import { GettingThere } from '../components/GettingThere';
 import { PinnedAnnouncements } from '../components/Announce';
 import { MessageRonnieLink } from '../components/MessageCard';
 import { useMyCalendar, addCalendar, defaultCalOs } from '../lib/calendar';
 import { NeedChange, CancelSheet, ChangeSheet, ChangeCard, CancelledCard, useShiftChanges } from '../components/ShiftChange';
+import { FromTheMeeting } from '../components/Meeting';
+import { useSettings } from '../lib/settings';
+import { feedbackOn, Stars } from './Manage';
+import { managesShift, loadTeamSums, type TeamSum } from '../lib/pastEvents';
+import { mtlToday, addDays } from '../lib/myDates';
+import { shiftNotes, noteSeen, type ShiftNote } from '../lib/staffNotes';
+import { PinMap, pinDirections } from '../components/VenuePin';
+import { StaffLinks, mergeLinks } from '../components/Links';
+import { FirstCut } from '../components/FirstCut';
+import { BarCountCard } from '../components/BarCountCard';
 
 export function Shift({ backTo = '/' }: { backTo?: string }) {
   const { id } = useParams();
   const [s, setS] = useState<ShiftRow | null>(null);
   const [md, setMd] = useState<{ full_name: string; photo_url: string | null; phone: string | null } | null>(null);
   const [team, setTeam] = useState<TeamGroup[] | undefined>(undefined);
+  const [who, setWho] = useState<{ id: string; full_name: string } | null>(null);
+  const [q] = useSearchParams();
 
   useEffect(() => {
-    supabase.from('shifts').select(SHIFT_SELECT + ',punches(punch_in,punch_out)').eq('id', id!).single().then(({ data }) => {
-      const row = data as unknown as ShiftRow; setS(row);
+    supabase.from('shifts').select(SHIFT_SELECT + ',staff_id,who:staff!shifts_staff_id_fkey(full_name),punches(punch_in,punch_out)').eq('id', id!).single().then(({ data }) => {
+      const row = data as unknown as ShiftRow & { staff_id?: string; who?: { full_name: string } | null }; setS(row);
+      if (row?.staff_id) setWho({ id: row.staff_id, full_name: row.who?.full_name ?? '' });
       if (row && (row.position_code === 'MD' || row.position_code === 'BM'))
         supabase.from('shifts').select('planned_start,status,attendance,staff:staff!shifts_staff_id_fkey(full_name,photo_url)').eq('event_id', row.events.id).neq('status', 'declined').then(({ data: crew }) => {
           const m = new Map<string, Face[]>();
@@ -34,7 +47,42 @@ export function Shift({ backTo = '/' }: { backTo?: string }) {
   }, [id]);
 
   if (!s) return <div className="loading" />;
-  return <ShiftView s={s} lead={md ?? s.events.manager} backTo={backTo} team={team} />;
+  // push 51 · past mode: opened from My dates → Past, or any shift on an earlier day
+  const past = q.get('past') === '1' || s.events.event_date < mtlToday();
+  return <ShiftView s={s} lead={md ?? s.events.manager} backTo={past && backTo === '/' ? '/my-dates?tab=past' : backTo} team={team} past={past ? who : undefined} />;
+}
+
+/**
+ * push 51 · past event page, manager part: YOUR TEAM (ended · no-show · hours sent or not → the team screen, editable until
+ * hours are submitted) + NEW STAFF · RATE WITHIN 7 DAYS (★ Rate opens the push 30 window on the team screen, or their stars).
+ */
+function PastManager({ eventId, eventDate, sentAt, me }: { eventId: string; eventDate: string; sentAt: string | null; me: { id: string; full_name: string } }) {
+  useSettings(); const fbOn = feedbackOn(me);
+  const [sum, setSum] = useState<TeamSum | null>(null);
+  useEffect(() => { loadTeamSums([eventId], fbOn, me.id).then((m) => setSum(m[eventId] ?? null)); }, [eventId, fbOn, me.id]);
+  if (!sum) return <section className="pe-card"><div className="loading" style={{ minHeight: 60 }} /></section>;
+  const ord = ['1st', '2nd', '3rd'];
+  const open = mtlToday() <= addDays(eventDate, 7);
+  return <>
+    <section className="pe-card">
+      <span className="kicker">Your team · {sum.team}</span>
+      <div className="pe-line">{sum.ended} ended{sum.noShow ? ` · ${sum.noShow} no-show` : ''} · {sentAt ? 'hours sent' : 'hours not sent'}</div>
+      <Link className="pe-open" to={`/manage/${eventId}`}>{sentAt ? 'Open team ›' : 'Open team · Submit hours'}</Link>
+    </section>
+    {fbOn && sum.newStaff.length > 0 && (
+      <section className="pe-card">
+        <span className="kicker">New staff · {open ? 'rate within 7 days' : 'rating closed'}</span>
+        {sum.newStaff.map((n) => (
+          <div key={n.staff_id} className="pe-new">
+            <Avatar name={n.name} url={n.photo_url} size={36} />
+            <div className="grow"><b>{n.name}</b><small>{ord[n.done_before] ?? ''} shift · {n.role}</small></div>
+            {n.stars ? <Stars value={n.stars} size="sm" label={`${n.name.split(' ')[0]}`} />
+              : open ? <Link className="pe-rate" to={`/manage/${eventId}?rate=${n.staff_id}`}>★ Rate</Link> : <small className="muted">not rated</small>}
+          </div>
+        ))}
+      </section>
+    )}
+  </>;
 }
 
 type Lead = { full_name: string; photo_url: string | null; phone: string | null } | null;
@@ -48,7 +96,7 @@ const dirUrl = (a: string) => `https://www.google.com/maps/dir/?api=1&destinatio
 const placeUrl = (a: string) => mapsUrl(a);
 const MAPS_KEY = import.meta.env.VITE_GOOGLE_MAPS_KEY as string | undefined;
 
-export function ShiftView({ s, lead, backTo = '/', preview = false, team }: { s: ShiftRow; lead: Lead; backTo?: string; preview?: boolean; team?: TeamGroup[] }) {
+export function ShiftView({ s, lead, backTo = '/', preview = false, team, past }: { s: ShiftRow; lead: Lead; backTo?: string; preview?: boolean; team?: TeamGroup[]; past?: { id: string; full_name: string } | null }) {
   const t = useT();
   const [leadPhoto, setLeadPhoto] = useState(false);
   const vx = useVenueExtras(s.events.id); const [vPhoto, setVPhoto] = useState<number | null>(null); // push 32 · venue notes + photos
@@ -57,6 +105,9 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team }: { s:
   const [sheet, setSheet] = useState<'cancel' | 'change' | null>(null);
   const [gone, setGone] = useState<{ late: boolean } | null>(s.attendance === 'cancelled' ? { late: false } : null);
   const chg = useShiftChanges(preview ? [] : [s.id]);
+  // Nov 6 · a note from G&R covers the page until they tap Got it (migration 068)
+  const [gNote, setGNote] = useState<ShiftNote | null>(null);
+  useEffect(() => { shiftNotes([s.id]).then((m) => setGNote(m[s.id] ?? null)); }, [s.id]);
   const { cal: myCal, setCal: setMyCal } = useMyCalendar(preview); // subscribed to the G&R calendar → no one-off Add to calendar
   const inFeed = s.status === 'confirmed' && !s.time_tbc && !(s.events as { details_pending?: boolean }).details_pending;
   const req = chg.reqs[s.id];
@@ -86,7 +137,7 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team }: { s:
   };
   const plus = (name: string): Piece => ({ key: 'x:' + name, icon: () => <span className="uni-extra">+</span>, name, extra: true });
   const order = [PIECE.tie, PIECE.pants, PIECE.shoes, PIECE.apron, PIECE.key] as string[];
-  const tiles: Piece[] = picked ? [
+  const tiles0: Piece[] = picked ? [
     ...order.filter((p) => picked.on.includes(p)).map((p) => pieceTile[p]),
     ...picked.on.filter((p) => !order.includes(p)).map(plus),
     ...picked.extra.map(plus),
@@ -97,6 +148,8 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team }: { s:
     ...(!dress && kind !== 'black_tshirt' ? [pieceTile[PIECE.apron]] : []),
     ...(bar ? [pieceTile[PIECE.key]] : []),
   ];
+  // Ronnie, Nov 4 · MDs and bar managers wear the same as their team, minus the apron and the wine key.
+  const tiles = s.position_code === 'MD' || s.position_code === 'BM' ? tiles0.filter((x) => x.key !== 'apron' && x.key !== 'key') : tiles0;
   const shirtLabel = uniformLabel(kind).replace(' + tie', '');
 
   const lead_ = s.position_code === 'MD' || s.position_code === 'BM';
@@ -112,18 +165,37 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team }: { s:
   const city = cityParts.join(',').trim();
   const area = cityParts[0]?.trim() ?? '';
   const shortDate = d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase();
-  const canChange = !lead_ && !gone && !s.punches?.punch_in && Date.now() < new Date(s.planned_start).getTime();
+  const canChange = !gone && !s.punches?.punch_in && Date.now() < new Date(s.planned_start).getTime();
   const seeUniform = () => uniRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   const staffNotes = ev.venues?.staff_notes?.trim();
+  const pinV = ev.venues?.pin_lat != null && ev.venues?.pin_lng != null ? { lat: ev.venues.pin_lat, lng: ev.venues.pin_lng, label: ev.venues.pin_label } : null; // Nov 6 · 📍 exact spot (073)
+  const isPastV = past !== undefined; // push 51
   return (
     <main className={'page v2 details d3 d37' + (preview ? ' preview' : '')}>
+      {gNote && !gNote.seen_at && <div className="g-cover" role="dialog" aria-modal="true"><div className="g-cover-card">
+        <span className="k">📌 BEFORE YOUR SHIFT · {ev.title.toUpperCase()}</span>
+        <b className="serif">{gNote.body}</b><span className="muted sm">From G&amp;R</span>
+        <button onClick={() => { setGNote({ ...gNote, seen_at: new Date().toISOString() }); if (!preview) noteSeen(s.id); }}>Got it · see my shift</button></div></div>}
       <header className="row d3-top">
         <Link to={backTo} className="back" aria-label={t('back')}>‹</Link>
-        <span className="kicker grow d37-date">{shortDate}</span>
-        {gone ? <span className="tag-done">Cancelled</span> : <Status s={s.status} />}
+        <span className="kicker grow d37-date">{isPastV ? `PAST · ${shortDate.replace(',', '')}` : shortDate}</span>
+        {isPastV ? null : gone ? <span className="tag-done">Cancelled</span> : <Status s={s.status} />}
       </header>
+      {ev.tentative && <div className="tbc-box"><span className="tbc-pill">⏳ TO BE CONFIRMED</span>
+        <b>The client hasn’t confirmed this event yet.</b> We’re booking early so the team is ready if it goes ahead.
+        <span>• Please keep the date free.<br />• We’ll let you know as soon as the client answers.<br />• If it doesn’t happen, it’s simply removed. Nothing to do.</span></div>}
+      {gNote?.seen_at && <div className="g-line">📌 <b>From G&amp;R:</b> {gNote.body}</div>}
 
-      <section className="d3-hero">
+      {isPastV ? <>
+        <section className="pe-hero">
+          <div><div className="serif">{venueName}</div>{address && <div className="pe-addr">{address}</div>}</div>
+          <div className="dbl-times">
+            <div><small>Started</small>{s.punches?.punch_in ? <BigTime iso={s.punches.punch_in} small /> : <span className="big serif sm-big">–</span>}</div>
+            <div><small>Ended</small>{s.punches?.punch_out ? <BigTime iso={s.punches.punch_out} small /> : <span className="big serif sm-big">–</span>}</div>
+          </div>
+        </section>
+        {past && managesShift(s, past.id) && <PastManager eventId={ev.id} eventDate={ev.event_date} sentAt={ev.hours_submitted_at ?? null} me={past} />}
+      </> : <section className="d3-hero">
         <div className="d3-kick">{dayWord.toUpperCase()}{cd ? ` · ${cd.toUpperCase()}` : ''}</div>
         <div><div className="serif d3-venue">{venueName}</div>{(facts || ev.description) && <div className="d3-sub">{facts || ev.description}</div>}</div>
         <StartPos start={s.time_tbc ? null : s.planned_start} role={role} />
@@ -148,37 +220,43 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team }: { s:
           </a>
         )}
         {lead_ && !preview && <Link className="d3-team" to={`/manage/${ev.id}`}>My team{team ? ` · ${team.reduce((n, g) => n + g.n, 0)}` : ''} ›</Link>}
+        {canChange && !lead_ && !ev.tentative && s.status !== 'declined' && <FirstCut shiftId={s.id} at={s.cut_first_at} start={s.planned_start} mgr={ev.manager?.full_name} preview={preview} />}{/* push 64 */}
         {canChange && <>
           <span className="d3-hl" />
           <NeedChange canSchedule={!(req?.status === 'pending' || (req?.status === 'keep' && !req.keep_reply))} onSchedule={() => setSheet('change')} onCancel={() => setSheet('cancel')} />
         </>}
-      </section>
+      </section>}
+      {!isPastV && <>
       {gone && <CancelledCard title={ev.title} date={ev.event_date} late={gone.late} onOk={() => window.history.length > 1 ? window.history.back() : window.location.assign(backTo)} />}
       {!gone && req && <ChangeCard r={req} s={s} preview={preview} onChanged={chg.reload} />}
       {sheet === 'cancel' && <CancelSheet s={s} preview={preview} onClose={() => setSheet(null)} onDone={(late) => { setGone({ late }); setSheet(null); }} />}
       {sheet === 'change' && <ChangeSheet s={s} preview={preview} onClose={() => setSheet(null)} onSent={() => { setSheet(null); chg.reload(); }} />}
 
-      {ev.transport && ev.rides && <GettingThere eventId={ev.id} eventDate={ev.event_date} firstStart={s.planned_start} travelMin={ev.travel_min ?? 60} paidMin={ev.paid_travel_min ?? 0} preview={preview} />}
+      {!gone && ev.department === 'bar' && <BarCountCard eventId={ev.id} preview={preview} />}{/* push 69 */}
+      {!gone && <FromTheMeeting eventId={ev.id} meetingBase={preview ? '/admin' : ''} />}{/* push 38 · pinned meeting notes */}
+      {ev.rides && <GettingThere eventId={ev.id} eventDate={ev.event_date} firstStart={s.planned_start} travelMin={ev.travel_min ?? 60} paidMin={ev.paid_travel_min ?? 0} transport={!!ev.transport} preview={preview} />}{/* push 68 · carpool on any event with rides on */}
+      </>}
       <SecTitle icon="pin">Where</SecTitle>
       <section className="d3-card d3-where d37-wcard">
-        {address && <MapTile address={address} />}
+        {pinV ? <div className="vp-box"><PinMap pin={pinV} height={180} />{pinV.label && <b>📍 {pinV.label}</b>}</div> : address && <MapTile address={address} />}
         <a className="d37-addr" href={address ? placeUrl(address) : undefined} target="_blank" rel="noreferrer">
           <b>{street.trim()}</b>{city && <span>{city}</span>}
         </a>
         {staffNotes && <div className="d37-door">🚪 {staffNotes}</div>}
         {vx.photos.length > 0 && <div className="d3-vphotos">{vx.photos.map((u, i) => <button key={u} type="button" aria-label={`Venue photo ${i + 1} of ${vx.photos.length}`} onClick={() => setVPhoto(i)}><img src={u} alt="" loading="lazy" /></button>)}</div>}
-        <div className="row2" style={{ gap: 8 }}>
-          {address ? <a className={'big-btn dark d37-dir' + (isToday ? ' ok' : '')} href={dirUrl(address)} target="_blank" rel="noreferrer">
+        <StaffLinks links={mergeLinks(ev.venues?.links, ev.links)} />
+        {!isPastV && <div className="row2" style={{ gap: 8 }}>
+          {address || pinV ? <a className={'big-btn dark d37-dir' + (isToday ? ' ok' : '')} href={pinV ? pinDirections(pinV) : dirUrl(address!)} target="_blank" rel="noreferrer">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 11 21 3l-8 18-2-8z" /></svg>Directions</a> : <span />}
           {myCal?.added_at
             ? <div className={'big-btn d37-cal d37-calon' + (inFeed ? '' : ' wait')}><span className="mini-cal"><i>{d.toLocaleDateString('en-CA', { month: 'short' }).toUpperCase().replace('.', '')}</i><b>{d.getDate()}</b></span>{inFeed ? '✓ In your calendar' : 'In calendar once confirmed'}</div>
             : myCal
               ? <button type="button" className="big-btn d37-cal" onClick={() => addCalendar(myCal, defaultCalOs()).then(setMyCal)}><span className="mini-cal"><i>{d.toLocaleDateString('en-CA', { month: 'short' }).toUpperCase().replace('.', '')}</i><b>{d.getDate()}</b></span>Add my G&R calendar</button>
               : <a className="big-btn d37-cal" href={cal} target="_blank" rel="noreferrer"><span className="mini-cal"><i>{d.toLocaleDateString('en-CA', { month: 'short' }).toUpperCase().replace('.', '')}</i><b>{d.getDate()}</b></span>Add to calendar</a>}
-        </div>
+        </div>}
       </section>
 
-      {(s.plan || ev.plan) ? (
+      {!isPastV && (s.plan || ev.plan) ? (
         <Link to={`${backTo === '/' ? '' : backTo}/shift/${s.id}/plan`} className="plan-link">
           <span className="ic">📋</span>
           <div className="grow"><b>Your plan tonight</b><span>Your role, side, leads, wine + water, clearing</span></div>
@@ -202,7 +280,12 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team }: { s:
         </section>
       </>}
 
-      {lead_ && team && team.length > 0 && <>
+      {ev.venues?.no_outside_food && <>
+        <SecTitle icon="pin">At this venue</SecTitle>
+        <section className="d3-card venue-rule"><img src="/rules/no-outside-food.png" alt="" width={52} height={52} /><b>No outside food or drinks</b></section>
+      </>}
+
+      {!isPastV && lead_ && team && team.length > 0 && <>
         <SecTitle icon="people">Your team</SecTitle>
         <section className="d3-card d37-team">
           {team.map((g) => (
@@ -216,7 +299,7 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team }: { s:
         </section>
       </>}
 
-      {!preview && <PinnedAnnouncements eventId={ev.id} />}
+      {!preview && !isPastV && <PinnedAnnouncements eventId={ev.id} />}
 
       {(ev.notes || vx.notes) && <>
         <SecTitle>Notes</SecTitle>
@@ -225,7 +308,7 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team }: { s:
       </>}
       {vPhoto !== null && vx.photos[vPhoto] && <PhotoViewer wide name={venueName} url={vx.photos[vPhoto]} sub={vx.photos.length > 1 ? `Photo ${vPhoto + 1} of ${vx.photos.length} · tap to close` : 'Tap to close'} onClose={() => setVPhoto(null)} />}
 
-      {lead && <>
+      {lead && !isPastV && <>
         <SecTitle icon="phone">Manager on-site</SecTitle>
         <section className="d3-card look">
           <button className="look-photo" aria-label={`See ${lead.full_name}'s photo`} onClick={() => setLeadPhoto(true)}><Avatar name={lead.full_name} url={lead.photo_url} size={56} /></button>
@@ -245,7 +328,7 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team }: { s:
 }
 
 /** push 37 · section title: thin line icon + serif title + thin rule (no emojis). */
-function SecTitle({ icon, children }: { icon?: 'pin' | 'hanger' | 'people' | 'phone'; children: string }) {
+export function SecTitle({ icon, children }: { icon?: 'pin' | 'hanger' | 'people' | 'phone'; children: string }) {
   const p = { width: 17, height: 17, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const, 'aria-hidden': true };
   return (
     <div className="d37-sec">

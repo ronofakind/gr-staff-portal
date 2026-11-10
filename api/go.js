@@ -13,7 +13,9 @@
 //      that browser. No redirect URL to allow-list, and session tokens never pass through this server.
 // The service role key stays here (server env SUPABASE_SERVICE_ROLE_KEY); the client only ever gets the one-time hash.
 const URL_ = process.env.VITE_SUPABASE_URL;
-const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY;
+// Vercel value was pasted as SUPABASE_SERVICE_ROLE_KEY=“…” → keep only the key itself.
+const cleanKey = (v) => (v || '').replace(/^\s*[A-Z_]+\s*=\s*/, '').replace(/[\s"'“”‘’]/g, '');
+const SERVICE = cleanKey(process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 const TOKEN_RE = /^[A-Za-z0-9_-]{10,64}$/;
 const H = () => ({ apikey: SERVICE, Authorization: `Bearer ${SERVICE}`, 'Content-Type': 'application/json' });
@@ -40,7 +42,12 @@ export default async function handler(req, res) {
   res.setHeader('X-Robots-Tag', 'noindex');
   const ready = !!(URL_ && SERVICE);
 
-  if (req.method === 'GET' && req.query.check) { res.status(200).json({ ready }); return; }
+  if (req.method === 'GET' && req.query.check) {
+    // Key shape only (never the key): kind, length, and the role inside a JWT key (anon vs service_role).
+    let role = null; try { role = JSON.parse(Buffer.from(SERVICE.split('.')[1], 'base64url').toString()).role ?? null; } catch { /* not a JWT */ }
+    res.status(200).json({ ready, key: { kind: SERVICE.startsWith('eyJ') ? 'jwt' : SERVICE.startsWith('sb_secret_') ? 'sb_secret' : SERVICE.startsWith('sb_publishable_') ? 'sb_publishable' : 'other', len: SERVICE.length, role } });
+    return;
+  }
 
   if (req.method === 'GET') {
     const t = String(req.query.t || '');
@@ -55,6 +62,25 @@ export default async function handler(req, res) {
   if (!ready) { res.status(503).json({ error: 'setup' }); return; }
   let body = req.body;
   if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = {}; } }
+
+  // Nov 9 · Delete my account (migration 085): after Ronnie's "Delete account" (admin_delete_staff), remove that sign-in.
+  // Lives here (not its own file) to stay under Vercel Hobby's 12-function limit. The caller's own token must belong to an
+  // admin, and admin_can_remove_login() checks the sign-in belongs to a deleted account that no staff row uses any more.
+  if (body?.removeLogin) {
+    const uid = String(body.removeLogin);
+    const bearer = String(req.headers.authorization || '');
+    if (!/^[0-9a-f-]{36}$/i.test(uid) || !/^Bearer\s+\S+$/.test(bearer)) { res.status(400).json({ error: 'bad request' }); return; }
+    try {
+      const anon = process.env.VITE_SUPABASE_KEY || '';
+      const ok = await fetch(`${URL_}/rest/v1/rpc/admin_can_remove_login`, { method: 'POST', headers: { apikey: anon, Authorization: bearer, 'Content-Type': 'application/json' }, body: JSON.stringify({ p_auth: uid }) });
+      if (!ok.ok || (await ok.json()) !== true) { res.status(403).json({ error: 'not allowed' }); return; }
+      const d = await auth(`admin/users/${uid}`, 'DELETE');
+      if (!d.ok && d.status !== 404) throw new Error(`delete user ${d.status}`);
+      res.status(200).json({ removed: true });
+    } catch (e) { console.error('[go] removeLogin', e.message); res.status(502).json({ error: 'failed' }); }
+    return;
+  }
+
   const t = String(body?.t || '');
   if (!TOKEN_RE.test(t)) { res.status(410).json({ error: 'expired' }); return; }
 

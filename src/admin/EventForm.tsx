@@ -1,15 +1,20 @@
+import { LinksEditor, asLinks, type HLink } from '../components/Links';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { DeleteEvent } from './DeleteEvent';
 import { supabase } from '../lib/supabase';
 import {
-  allStaff, bookingChange, isoDay, startIso, endIso, addDays, dLabel, parseTime, ap12, roleOfShift, ROLES, UNIFORMS, ENDS,
+  allStaff, doesBar, bookingChange, isoDay, startIso, endIso, addDays, dLabel, parseTime, ap12, roleOfShift, ROLES, UNIFORMS, ENDS,
   type AStaff, type Line, type Venue, type Client,
 } from './api';
 import { tiersFor } from './Availability';
 import { AddressInput, type AddressParts } from '../components/AddressInput';
-import { defaultPieces, defaultItems, type UniItems, type UniItemsMap, type UniLineKey } from '../components/Uniform';
-import { setting, autoExtras } from '../lib/settings';
+import { defaultPieces, defaultItems, UniformIcon, TieIcon, ApronIcon, PantsIcon, ShoesIcon, WineKeyIcon, PIECE, type UniformKind, type UniItems, type UniItemsMap, type UniLineKey } from '../components/Uniform';
+import { useEventLayout, EditEventLayout, type BlockKey } from './EventLayout';
+import { loadRules, outOfArea, type SCond } from './rules';
+import { setting } from '../lib/settings';
+import { AlsoWorking, type OtherShift } from './alsoWorking';
+import { takeAiApply, endLabelFor, hhmm, AI_APPLY_KEY, type AApply } from './EmailReview';
 
 export const MEN: [string, string][] = [['white_shirt', 'White dress shirt'], ['black_shirt', 'Black dress shirt'], ['black_tshirt', 'Black T-shirt']];
 export const WOMEN: [string, string][] = [['white_shirt', 'White dress shirt'], ['black_shirt', 'Black dress shirt'], ['dress', 'Black cocktail dress'], ['black_tshirt', 'Black T-shirt']];
@@ -71,15 +76,30 @@ export function UniDept({ label, sub, bar, men, women, setMen, setWomen, items, 
 }
 
 /** A numbered block that folds; open/closed is remembered in this browser. */
-function Fold({ n, title, summary, open, setOpen, children, id }: { n: number; title: string; summary: string; open: boolean; setOpen: (o: boolean) => void; children: React.ReactNode; id?: string }) {
+function Fold({ n, title, summary, open, setOpen, children, id, state }: { n: number; title: string; summary: string; open: boolean; setOpen: (o: boolean) => void; children: React.ReactNode; id?: string; state?: 'ok' | 'miss' }) {
   return (
     <section className={'fold' + (open ? ' open' : '')} id={id}>
       <button type="button" className="fold-h" onClick={() => setOpen(!open)} aria-expanded={open}>
         <span className="fold-c">{open ? '▾' : '▸'}</span><span className="fold-n">{n}</span><b className="fold-t">{title}</b>
-        <span className="fold-s">{summary}</span>
+        <span className="fold-s">{summary}</span>{state && <span className={'fold-st ' + state}>{state === 'ok' ? '✓ done' : '● missing'}</span>}
       </button>
       {open && <div className="fold-b">{children}</div>}
     </section>
+  );
+}
+/** Push 61 · uniform at a glance, with the app's own icons (board EventPageV3). */
+const PIECE_ICON: Record<string, (p: { size?: number }) => React.ReactElement> = { [PIECE.tie]: TieIcon, [PIECE.apron]: ApronIcon, [PIECE.pants]: PantsIcon, [PIECE.key]: WineKeyIcon };
+function UniLook({ t, sub, kind, it, bar }: { t: string; sub?: string; kind: string; it: UniItems; bar?: boolean }) {
+  const name = kind.startsWith('custom:') ? kind.slice(7) || 'See notes' : ({ white_shirt: 'WHITE dress shirt', black_shirt: 'BLACK dress shirt', black_tshirt: 'Black T-shirt', dress: 'Black cocktail dress' } as Record<string, string>)[kind] ?? kind;
+  return (
+    <div className="ul-card">
+      <UniformIcon kind={kind as UniformKind} size={58} />
+      <div className="stack" style={{ gap: 4, minWidth: 0 }}>
+        <span className={'ul-t' + (bar ? ' ul-bar' : '')}>{t}{sub ? <small> · {sub}</small> : null}</span>
+        <b className="ul-n">{name}</b>
+        <span className="row" style={{ gap: 4, alignItems: 'center' }}>{it.on.map((p) => { const I = PIECE_ICON[p]; return I ? <I key={p} size={24} /> : p === PIECE.shoes ? <ShoesIcon key={p} size={24} who={t.includes('WOMEN') ? 'women' : 'men'} /> : <small key={p} className="muted">{p}</small>; })}{it.extra.map((p) => <small key={p} className="muted">+ {p}</small>)}</span>
+      </div>
+    </div>
   );
 }
 const FOLD_KEY = 'gr-ef-fold';
@@ -90,7 +110,7 @@ type Ev = { id: string; department: 'floor' | 'bar' | 'kitchen'; staffing: Omit<
 type Sh = { id: string; event_id: string; staff_id: string; position_code: string | null; planned_start: string; attendance: string | null; notified_at?: string | null; punches: { punch_in: string | null } | null };
 type DayInfo = {
   avail: Record<string, { status: string; from: string | null; until: string | null }>;
-  booked: Record<string, string>;   // staff_id → other event title
+  booked: Record<string, OtherShift[]>;   // staff_id → their shifts on other events that day (push 46: info, never blocks)
   off: Set<string>;
   weeklyNo: Set<string>;
 };
@@ -133,6 +153,9 @@ export function EventForm() {
   const [staff, setStaff] = useState<AStaff[]>([]);
   const [venueId, setVenueId] = useState<string | null>(null); const [title, setTitle] = useState('');
   const [pendingDetails, setPendingDetails] = useState(false); const [wasPending, setWasPending] = useState(false);
+  // Nov 6 · ⏳ to be confirmed + start time to come (072)
+  const [links, setLinks] = useState<HLink[]>([]); const [linksVenue, setLinksVenue] = useState(false); // 075
+  const [tentative, setTentative] = useState(false); const [startTbc, setStartTbc] = useState(false); const [wasTbc, setWasTbc] = useState(false);
   const [clientId, setClientId] = useState<string>(''); const [newClient, setNewClient] = useState<string | null>(null);
   const [address, setAddress] = useState(''); const [ends, setEnds] = useState('~ midnight');
   const [parts, setParts] = useState<AddressParts | null>(null);
@@ -147,7 +170,13 @@ export function EventForm() {
   const [fold, setFoldMap] = useState<Record<number, boolean>>(readFold);
   const isOpen = (n: number) => fold[n] ?? true;
   const setFold = (n: number, o: boolean) => { const f = { ...fold, [n]: o }; setFoldMap(f); try { localStorage.setItem(FOLD_KEY, JSON.stringify(f)); } catch { /* private mode */ } };
-  const allFold = (o: boolean) => { const f = Object.fromEntries([1, 2, 3, 4, 5, 6].map((n) => [n, o])); setFoldMap(f); try { localStorage.setItem(FOLD_KEY, JSON.stringify(f)); } catch { /* private mode */ } };
+  const [areaCtx, setAreaCtx] = useState<{ conds: SCond[]; venues: { id: string; area?: string | null; postal_code?: string | null }[]; clients: { id: string; name: string; area?: string | null }[] }>({ conds: [], venues: [], clients: [] });
+  useEffect(() => { loadRules().then(async ({ conds }) => { const [v, c] = await Promise.all([supabase.from('venues').select('id,area,postal_code'), supabase.from('clients').select('id,name,area')]); setAreaCtx({ conds, venues: (v.data ?? []) as never[], clients: (c.data ?? []) as never[] }); }); }, []);
+  const elay = useEventLayout(); const [editLay, setEditLay] = useState(false); const [uniEdit, setUniEdit] = useState(false);
+  const [openB, setOpenBMap] = useState<Partial<Record<BlockKey, boolean>>>({});
+  const isOpenB = (k: BlockKey) => openB[k] ?? (elay.lay.mode[k] ?? 'open') === 'open';
+  const setOpenB = (k: BlockKey, o: boolean) => setOpenBMap((m) => ({ ...m, [k]: o }));
+  void fold; void isOpen; void setFold;
   const [privateId, setPrivateId] = useState<string | null>(null); // a private-home client used as the venue
   const [guests, setGuests] = useState(''); const [eventType, setEventType] = useState(''); const [types, setTypes] = useState<{ name: string; main: boolean }[]>([]);
   const [tr, setTr] = useState<{ on: boolean | null; travel: number; gas: string; billing: 'client' | 'gr'; rides: boolean }>(() => ({ on: null, travel: 60, gas: '20', billing: setting('transport.client_pays') ? 'client' : 'gr', rides: true }));
@@ -158,18 +187,43 @@ export function EventForm() {
   const [existing, setExisting] = useState<Ev[]>([]); const [oldShifts, setOldShifts] = useState<Sh[]>([]);
   const [askTiers, setAskTiers] = useState<Tier[] | null>(null); const [askBar, setAskBar] = useState<'georges' | 'team'>('georges');
   const [askWhen, setAskWhen] = useState<'save' | 'later'>(isNew ? 'save' : 'later');
+  const [showTimes, setShowTimes] = useState(false); // push 65 · date ask shows the place and start times
   const [day, setDay] = useState<DayInfo>({ avail: {}, booked: {}, off: new Set(), weeklyNo: new Set() });
   const [dup, setDup] = useState<{ dates: string[]; pick: string; names: 'none' | 'leads' | 'all' } | null>(null);
   const [lastAt, setLastAt] = useState<{ date: string; lines: Line[] } | null>(null);
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false); const [loaded, setLoaded] = useState(isNew);
+  // push 67 · a reviewed client email → fill the form once loaded (nothing saved until Save)
+  const [aiApply, setAiApply] = useState<AApply | null>(null); const [aiSkipped, setAiSkipped] = useState<string[]>([]);
+  useEffect(() => {
+    if (!loaded || params.get('ai') !== '1' || aiApply) return;
+    const a = takeAiApply(isNew ? null : id!); if (!a) return;
+    const skipped: string[] = [];
+    for (const c of a.changes) {
+      if (c.field === 'guests') { const n = parseInt(c.value, 10); if (n > 0) setGuests(String(n)); else skipped.push(c.label); }
+      else if (c.field === 'address') setAddress(c.value);
+      else if (c.field === 'venue') { setTitle(c.value); setVenueId(null); }
+      else if (c.field === 'date' && isNew) { if (/^\d{4}-\d{2}-\d{2}$/.test(c.value)) setDate(c.value); else skipped.push(c.label); }
+      else if (c.field === 'end') { const l = endLabelFor(c.value); if (l) setEnds(l); else skipped.push(`${c.label} (${c.value})`); }
+      else if (c.field === 'notes') setNote((n) => (n ? n + '\n' : '') + c.value);
+      else if (c.field === 'guests_arrive') { const t = hhmm(c.value); setNote((n) => (n ? n.replace(/^Guests arrive.*$/im, '').trim() + '\n' : '') + `Guests arrive ${t ? ap12(t) : c.value}`); }
+      else if (c.field === 'staff_start') {
+        const t = hhmm(c.value); if (!t) { skipped.push(`${c.label} (${c.value})`); continue; }
+        setLines((ls) => { const st = ls.filter((l) => l.count > 0).map((l) => l.start).filter(Boolean).sort(); const first = st[0];
+          if (!first) return ls.map((l) => ({ ...l, start: t }));
+          const [h1, m1] = first.split(':').map(Number); const [h2, m2] = t.split(':').map(Number); const d = (h2 * 60 + m2) - (h1 * 60 + m1);
+          return ls.map((l) => { if (!l.start) return { ...l, start: t }; const [h, m] = l.start.split(':').map(Number); const x = (h * 60 + m + d + 1440) % 1440; return { ...l, start: `${String(Math.floor(x / 60)).padStart(2, '0')}:${String(x % 60).padStart(2, '0')}` }; }); });
+      }
+    }
+    setAiApply(a); setAiSkipped(skipped);
+  }, [loaded]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (loaded && params.get('dup') === '1' && date) setDup((d) => d ?? { dates: [], pick: addDays(date, 1), names: 'none' }); }, [loaded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Lists
   useEffect(() => {
-    supabase.from('venues').select('id,name,address,usual_client_id,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,uniform_items,always_offer_rides').order('name').then(({ data }) => setVenues((data ?? []) as Venue[]));
+    supabase.from('venues').select('id,name,address,usual_client_id,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,uniform_items,always_offer_rides,archived_at').order('name').then(({ data }) => setVenues((data ?? []) as Venue[]));
     // push 32: + extras_billing / transport_billing (a picked client sets the billing on new events; 038 not applied → old columns)
-    const cq = (extra: string) => supabase.from('clients').select('id,name,rate_sets,kind,address,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,uniform_items,drive_folder_default' + extra).order('name');
-    cq(',extras_billing,transport_billing').then(async (r) => { const res = r.error ? await cq('') : r; setClients((res.data ?? []) as unknown as Client[]); });
+    const cq = (extra: string) => supabase.from('clients').select('id,name,rate_sets,kind,address,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,uniform_items,drive_folder_default,archived_at' + extra).order('name');
+    cq(',extras_billing,transport_billing').then(async (r) => { const res = r.error ? await cq('') : r; setClients((res.data ?? []) as unknown as Client[]); }); // 074: archived ones stay in the list only for events that already use them
     allStaff().then((s) => setStaff(s.filter((x) => x.active)));
     supabase.from('event_types').select('name,main,sort').order('sort').then(({ data }) => setTypes((data ?? []) as { name: string; main: boolean }[]));
     supabase.rpc('google_status').then(({ data }) => setDrive((data as { email: string } | null) ?? null));
@@ -188,6 +242,7 @@ export function EventForm() {
       setExisting(evs); setOldShifts(shifts);
       setDate(e.event_date); setTitle(e.title === 'Details to come' ? '' : e.title); setVenueId(e.venue_id); setAddress(e.address ?? '');
       setPendingDetails(!!(e as unknown as { details_pending?: boolean }).details_pending); setWasPending(!!(e as unknown as { details_pending?: boolean }).details_pending);
+      { const x = e as unknown as { tentative?: boolean; start_tbc?: boolean }; setTentative(!!x.tentative); setStartTbc(!!x.start_tbc); setWasTbc(!!x.start_tbc); setLinks(asLinks((e as unknown as { links?: unknown }).links)); }
       setClientId(e.event_private?.client_id ?? ''); setRateSet(e.event_private?.rate_set ?? null);
       setTr({ on: !!e.transport, travel: e.travel_min ?? 60, gas: String(e.gas_per_car ?? 20), billing: e.transport_billing ?? 'client', rides: e.rides ?? !!e.transport });
       setExtras(e.extras != null ? String(e.extras) : ''); setExtrasBill(e.extras_billing ?? 'gr');
@@ -199,7 +254,7 @@ export function EventForm() {
       setFolder(e.drive_folder_url ?? ''); setShowFolder(!!e.drive_folder_url); setItemsMap((e.uniform_items ?? {}) as UniItemsMap);
       setNote(e.description ?? ''); setStaffNote(e.notes ?? ''); setShowStaffNote(!!e.notes);
       const ordered = [...evs].sort((a) => (a.department === 'floor' ? -1 : 1));
-      const ls = ordered.flatMap((x) => linesFor(x, shifts)); setLines(ls);
+      const ls = ordered.flatMap((x) => linesFor(x, shifts).map((l) => ({ ...l, tbc: l.tbc ?? !!(x as unknown as { start_tbc?: boolean }).start_tbc }))); setLines(ls);
       setModeRaw(ls.some((l) => l.dept === 'bar') ? (ls.some((l) => l.dept === 'floor') ? 'both' : 'bar') : 'floor');
       setLoaded(true);
     })();
@@ -211,7 +266,7 @@ export function EventForm() {
     const dow = (new Date(date + 'T12:00:00').getDay() + 6) % 7;
     Promise.all([
       supabase.from('availability').select('staff_id,status,from_time,until_time').eq('for_date', date),
-      supabase.from('shifts').select('staff_id,event_id,events!inner(title,event_date)').eq('events.event_date', date).neq('status', 'declined'),
+      supabase.from('shifts').select('staff_id,event_id,planned_start,planned_end,attendance,events!inner(title,event_date)').eq('events.event_date', date).neq('status', 'declined'),
       supabase.from('days_off').select('staff_id,from_date,to_date,every_dow').lte('from_date', date).gte('to_date', date),
       supabase.from('staff_weekly').select('staff_id,status').eq('dow', dow).eq('status', 'no'),
       supabase.from('avail_exceptions').select('staff_id').eq('for_date', date),
@@ -220,8 +275,9 @@ export function EventForm() {
       for (const r of (a.data ?? []) as { staff_id: string; status: string; from_time: string | null; until_time: string | null }[]) {
         const cur = avail[r.staff_id]; if (!cur || r.status === 'yes') avail[r.staff_id] = { status: r.status, from: r.from_time, until: r.until_time };
       }
-      const mine = new Set(existing.map((e) => e.id)); const booked: Record<string, string> = {};
-      for (const r of (b.data ?? []) as unknown as { staff_id: string; event_id: string; events: { title: string } }[]) if (!mine.has(r.event_id)) booked[r.staff_id] = r.events.title;
+      const mine = new Set(existing.map((e) => e.id)); const booked: DayInfo['booked'] = {};
+      for (const r of (b.data ?? []) as unknown as { staff_id: string; event_id: string; planned_start: string; planned_end: string | null; attendance: string | null; events: { title: string } }[])
+        if (!mine.has(r.event_id) && !r.attendance) (booked[r.staff_id] ??= []).push({ venue: r.events.title, start: r.planned_start, end: r.planned_end });
       const off = new Set(((o.data ?? []) as { staff_id: string; every_dow: number | null }[]).filter((r) => r.every_dow == null || r.every_dow === dow).map((r) => r.staff_id));
       const opened = new Set(((x.data ?? []) as { staff_id: string }[]).map((r) => r.staff_id));
       setDay({ avail, booked, off, weeklyNo: new Set(((w.data ?? []) as { staff_id: string }[]).map((r) => r.staff_id).filter((s) => !opened.has(s))) });
@@ -245,6 +301,7 @@ export function EventForm() {
   const venue = venues.find((v) => v.id === venueId) ?? null;
   const trSuggested = !!(venue as (Venue & { always_offer_rides?: boolean }) | null)?.always_offer_rides;
   const trOn = tr.on ?? trSuggested;
+  const [carpoolSet, setCarpool] = useState<boolean | null>(null); const carpool = carpoolSet ?? (!isNew ? !!tr.rides : trSuggested); // push 68 · carpool without paid transport
   const paidTravel = Math.round((tr.travel * 2) / 15) * 15;
   useEffect(() => { if (venue?.address && !address) setAddress(venue.address); }, [venue?.id]);
   const client = clients.find((c) => c.id === clientId) ?? null;
@@ -268,7 +325,7 @@ export function EventForm() {
     setUFloorW(c.uniform_floor_w ?? c.uniform_floor ?? uFloorW); setUBarW(c.uniform_bar_w ?? 'dress');
     setItemsMap(c.uniform_items ?? {});
   };
-  const privates = clients.filter((c) => c.kind === 'private_home');
+  const privates = clients.filter((c) => c.kind === 'private_home' && (!(c as Client & { archived_at?: string | null }).archived_at || c.id === privateId));
   useEffect(() => { if (!privateId && !venueId && title) { const c = privates.find((x) => x.name === title); if (c) setPrivateId(c.id); } }, [title, clients.length]);
 
   // Staffing toggle: limits the grid's departments and which uniform rows show.
@@ -280,6 +337,8 @@ export function EventForm() {
     if (!next.length) next = m === 'bar' ? [blankLine('bar', 'BM', '17:00'), blankLine('bar', 'BT', '17:00')] : [blankLine('floor', 'MD', '17:00'), blankLine('floor', 'W', '17:00')];
     if (m === 'both' && !next.some((l) => l.dept === 'bar')) next = [...next, blankLine('bar', 'BM', next[0]?.start ?? '17:00')];
     setLines(next); setModeRaw(m);
+    // Nov 6 · Both → the floor default is a black dress shirt (Ronnie); a shirt you already picked stays
+    if (m === 'both') { if (uFloor === 'white_shirt') setUFloor('black_shirt'); if (uFloorW === 'white_shirt') setUFloorW('black_shirt'); }
   };
   useEffect(() => { // a bar line added (typed or pasted) while on Floor → Both
     const f = lines.some((l) => l.dept === 'floor'); const b = lines.some((l) => l.dept === 'bar');
@@ -296,6 +355,51 @@ export function EventForm() {
   const floorN = lines.filter((l) => l.dept === 'floor').reduce((n, l) => n + l.count, 0);
   const tiers = askTiers ?? tiersFor(floorN || 1);
   const named = (l: Line) => staff.filter((s) => l.names.includes(s.id));
+
+  // ── Push 61 · staffing from the guest count (board GuestStaffingV1) ──
+  const sug = (() => {
+    const g = Number(guests); if (!g || g < 1) return null;
+    const R = setting('staffing.ratios'); const up = (n: number) => Math.ceil(n * (1 + R.buffer / 100));
+    const cocktail = /cocktail/i.test(eventType);
+    let base = showFloor ? Math.ceil(g / (cocktail ? R.cocktail : R.seated)) : 0; let floor = showFloor ? up(base) : 0;
+    if (showFloor && g < R.small) { base = Math.max(base, 3); floor = Math.max(floor, 3); }
+    const md = showFloor ? (g >= R.md2 ? 2 : 1) : 0;
+    const bt0 = showBar ? Math.max(1, Math.ceil(g / R.bar)) : 0; const bt = showBar ? up(bt0) : 0; const bb = bt;
+    return { g, floor, md, base, bt0, bt, bb, hold: floor - base + (bt - bt0) * 2 };
+  })();
+  const useSug = () => {
+    if (!sug) return;
+    if (lines.some((l) => l.names.length) && !confirm('Replace the staffing lines? Names already on the lines are kept where the role matches.')) return;
+    const st = [...lines.map((l) => l.start)].sort()[0] ?? '17:00';
+    const keepNames = (dept: 'floor' | 'bar', code: string) => lines.filter((l) => l.dept === dept && l.code === code).flatMap((l) => l.names);
+    const mk = (dept: 'floor' | 'bar', code: string, count: number, hold = 0): Line => { const names = keepNames(dept, code).slice(0, count); return { dept, code, start: st, count: Math.max(count, names.length), names, tbc: true, hold }; };
+    const next: Line[] = [];
+    if (showFloor) { next.push(mk('floor', 'MD', sug.md)); next.push(mk('floor', 'W', Math.max(0, sug.floor - sug.md), sug.floor - sug.base)); }
+    for (const l of lines) if (l.dept === 'bar' && l.code === 'WW') next.push(l); // wine lines stay as they are
+    if (showBar) { next.push(mk('bar', 'BM', 1)); if (sug.bt > 1) next.push(mk('bar', 'BT', sug.bt - 1, sug.bt - sug.bt0)); next.push(mk('bar', 'BB', sug.bb, sug.bt - sug.bt0)); }
+    setLines(next);
+  };
+  const tbcRows = pendingDetails ? 0 : lines.filter((l) => l.tbc && l.count > 0).length;
+  const timesOk = !pendingDetails && !!title.trim() && !tbcRows && lines.some((l) => l.count > 0 && !!l.start); // push 65
+  const holdN = lines.reduce((n, l) => n + (l.hold ?? 0), 0);
+  const isWine = (l: Line) => l.dept === 'bar' && l.code === 'WW';
+  const billF = lines.filter((l) => l.dept === 'floor').reduce((n, l) => n + l.count, 0);
+  const billB = lines.filter((l) => l.dept === 'bar').reduce((n, l) => n + l.count, 0);
+  const wineN = lines.filter(isWine).reduce((n, l) => n + l.count, 0);
+  const roleMix = (ls: Line[]) => ROLES.map((r) => { const k = ls.filter((l) => l.code === r.code).reduce((n, l) => n + l.count, 0); return k ? `${r.label.toLowerCase()} ${k}` : ''; }).filter(Boolean).join(' · ') || '—';
+  const uniWarn = (() => {
+    const tops = [...(showFloor ? [uFloor, uFloorW] : []), ...(showBar ? [uBar, uBarW] : [])];
+    const w: string[] = [];
+    const shirt = tops.some((t) => t === 'white_shirt' || t === 'black_shirt');
+    if (tops.includes('black_tshirt') && shirt) w.push('A T-shirt and a dress shirt on the same event');
+    if (!shirt) w.push('No dress shirt (black or white) on this event');
+    return w;
+  })();
+  const missing = [
+    ...(pendingDetails || !title.trim() ? ['Venue'] : []),
+    ...(tbcRows ? [`Start times · ${tbcRows} row${tbcRows === 1 ? '' : 's'} TBC`] : []),
+    ...(!guests ? ['Guest count'] : []),
+  ];
 
   // ── Save ──
   const saveAll = async (forDate: string, asNew: boolean, namesMode: 'all' | 'leads' | 'none') => {
@@ -317,6 +421,11 @@ export function EventForm() {
     } else if (vId) {
       await supabase.from('venues').update({ uniform_floor: uFloor, uniform_bar: uBar, uniform_floor_w: uFloorW, uniform_bar_w: uBarW, uniform_items: lineItems(), ...(venue && !venue.address && address ? { address } : {}), ...(venue && !venue.usual_client_id && cId ? { usual_client_id: cId } : {}) }).eq('id', vId);
     }
+    if (linksVenue && vId && links.length) { // 075 · also on the venue: add the ones it doesn't have
+      const cur = asLinks((await supabase.from('venues').select('links').eq('id', vId).maybeSingle()).data?.links);
+      const add = links.filter((l) => !cur.some((c) => c.url === l.url));
+      if (add.length) await supabase.from('venues').update({ links: [...cur, ...add] }).eq('id', vId);
+    }
     const endT = ENDS.find(([l]) => l === ends)?.[1] ?? null;
     let firstId: string | null = null;
     for (const dept of ['floor', 'bar'] as const) {
@@ -327,11 +436,11 @@ export function EventForm() {
       const lead = ls.find((l) => l.code === (dept === 'floor' ? 'MD' : 'BM'));
       const start = ls.map((l) => l.start).sort()[0] ?? '17:00';
       const row = {
-        event_date: forDate, title: title.trim() || (pendingDetails ? 'Details to come' : ''), venue_id: vId, details_pending: pendingDetails, address: (address + (unit.trim() ? `, ${unit.trim()}` : '')) || null, department: dept,
+        event_date: forDate, title: title.trim() || (pendingDetails ? 'Details to come' : ''), venue_id: vId, details_pending: pendingDetails, tentative, start_tbc: ls.some((l) => l.tbc) && !pendingDetails, links, address: (address + (unit.trim() ? `, ${unit.trim()}` : '')) || null, department: dept,
         start_time: start, end_time: endT, ends_label: ends, staff_needed: ls.reduce((n, l) => n + l.count, 0),
         manager_id: lead ? keep(lead)[0] ?? null : null, description: note || null, notes: staffNote || null,
-        uniform_floor: uFloor, uniform_bar: uBar, uniform_floor_w: uFloorW, uniform_bar_w: uBarW, uniform_items: lineItems(), drive_folder_url: folder.trim() || null, staffing: ls.map(({ dept: d, code, start: s, end, count }) => ({ dept: d, code, start: s, end: end || null, count })), guests: guests ? Number(guests) : null, event_type: eventType || null, extras: extras === '' ? null : Number(extras), extras_billing: extrasBill,
-        transport: trOn, travel_min: trOn ? tr.travel : null, paid_travel_min: trOn ? paidTravel : null, gas_per_car: trOn ? Number(tr.gas) || 0 : null, transport_billing: trOn ? tr.billing : null, rides: trOn && tr.rides,
+        uniform_floor: uFloor, uniform_bar: uBar, uniform_floor_w: uFloorW, uniform_bar_w: uBarW, uniform_items: lineItems(), drive_folder_url: folder.trim() || null, staffing: ls.map(({ dept: d, code, start: s, end, count, tbc, hold }) => ({ dept: d, code, start: s, end: end || null, count, ...(tbc ? { tbc: true } : {}), ...(hold ? { hold } : {}) })), guests: guests ? Number(guests) : null, event_type: eventType || null, extras: extras === '' ? null : Number(extras), extras_billing: 'client', // push 61 · extras always on the invoice for now
+        transport: trOn, travel_min: trOn ? tr.travel : null, paid_travel_min: trOn ? paidTravel : null, gas_per_car: trOn ? Number(tr.gas) || 0 : null, transport_billing: trOn ? tr.billing : null, rides: tr.rides && (trOn || carpool),
       };
       const res = old ? await supabase.from('events').update(row).eq('id', old.id).select('id').single() : await supabase.from('events').insert(row).select('id').single();
       if (res.error) throw res.error;
@@ -366,18 +475,19 @@ export function EventForm() {
 
       // Ask availability (staff only see the date)
       if (askWhen === 'save' && (dept === 'floor' || askBar === 'team')) await ask(forDate, dept, row.staff_needed, start);
-      if (pendingDetails || wasPending) await supabase.from('shifts').update({ time_tbc: pendingDetails }).eq('event_id', evId);
+      { const tb = ls.some((l) => l.tbc); if (pendingDetails || wasPending || tb || wasTbc) await supabase.from('shifts').update({ time_tbc: pendingDetails || tb }).eq('event_id', evId); }
     }
     return firstId;
   };
 
   const ask = async (d: string, dept: 'floor' | 'bar', needed: number, start: string) => {
-    const pool = staff.filter((s) => (dept === 'bar' ? s.department === 'bar' : s.department !== 'bar'))
+    const pool = staff.filter((s) => (dept === 'bar' ? doesBar(s) : s.department !== 'bar'))
       .filter((s) => dept === 'bar' || (tierOf(s) && tiers.includes(tierOf(s)!)))
-      .filter((s) => !day.avail[s.id] && !day.booked[s.id] && !day.off.has(s.id) && !day.weeklyNo.has(s.id) && !lines.some((l) => l.names.includes(s.id)));
+      .filter((s) => !day.avail[s.id] && !day.booked[s.id] && !day.off.has(s.id) && !day.weeklyNo.has(s.id) && !lines.some((l) => l.names.includes(s.id)))
+      .filter((s) => !outOfArea(s.id, { event_date: d, venue_id: venueId, event_private: { client_id: clientId || null, client: client?.name ?? null } } as unknown as Parameters<typeof outOfArea>[1], areaCtx)); // push 63
     const { data: prev } = await supabase.from('avail_asks').select('tiers_sent').eq('for_date', d).eq('department', dept).maybeSingle();
     const { data: a, error } = await supabase.from('avail_asks').upsert({
-      for_date: d, department: dept, label: 'Evening event', approx_start: start, staff_needed: needed,
+      for_date: d, department: dept, label: 'Evening event', approx_start: start, staff_needed: needed, show_times: showTimes && timesOk,
       tiers_sent: Array.from(new Set([...((prev?.tiers_sent as string[]) ?? []), ...(dept === 'bar' ? [] : tiers)])).sort(),
     }, { onConflict: 'for_date,department' }).select('id').single();
     if (error || !a) throw error ?? new Error('Could not ask');
@@ -399,6 +509,7 @@ export function EventForm() {
         const r = await fetch('/api/drive/folder', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ses.session?.access_token}` }, body: JSON.stringify({ event_id: evId, month: driveMonth(date), name: driveName(date, title, client?.name ?? null, !!privateId) }) });
         if (!r.ok) setErr('Saved, but the Drive folder was not created: ' + (await r.text()));
       }
+      if (aiApply) { await supabase.from('ai_items').update({ status: 'done', done_at: new Date().toISOString(), done_note: `applied ${aiApply.changes.length} change(s)` }).eq('id', aiApply.item); try { sessionStorage.removeItem(AI_APPLY_KEY); } catch { /* */ } }
       setBusy(false); if (evId) nav(`/admin/event/${evId}`);
     }
     catch (e) { setBusy(false); setErr((e as Error).message); }
@@ -416,8 +527,9 @@ export function EventForm() {
 
   return (
     <form className="stack-lg ef" onSubmit={save}>
+      {aiApply && <div className="ef-aibar">✉ <b>From {aiApply.who ?? 'a client'}’s email:</b> {aiApply.changes.map((c) => c.label).join(' · ')} filled in{aiSkipped.length ? <> · <span>couldn’t fill: {aiSkipped.join(', ')}</span></> : null}. Check and press Save. Staff hear about time changes only from 4 days before.</div>}
       <div className="toolbar">
-        <div><Link to={isNew ? '/admin/week' : `/admin/event/${id}`} className="muted sm strong">‹ {isNew ? 'Back to week' : 'Back to event'}</Link><h1 className="serif-h">{isNew ? 'New event' : `Edit · ${title}`}</h1></div>
+        <div><div className="row wrap" style={{ gap: 6 }}>{!isNew && <Link to={`/admin/bookings?date=${date}&view=board&ev=${id}`} className="abtn sm back-btn">‹ Back to Bookings · {dLabel(date, { weekday: 'short', month: 'short', day: 'numeric' })}</Link>}<Link to={isNew ? (date ? `/admin/bookings?date=${date}` : '/admin/week') : `/admin/event/${id}`} className="abtn sm back-btn ghost">{isNew ? '‹ Back' : 'Event details'}</Link></div><h1 className="serif-h">{isNew ? 'New event' : `Edit · ${title}`}</h1></div>
         <div className="row wrap" style={{ position: 'relative' }}>
           {lastAt && <button type="button" className="abtn" onClick={() => setLines(lastAt.lines.map((l) => ({ ...l, names: [] })))}>Copy last {title} ({dLabel(lastAt.date, { month: 'short', day: 'numeric' })})</button>}
           <button type="button" className="abtn" style={{ borderColor: 'var(--ink)' }} onClick={() => setDup(dup ? null : { dates: [], pick: addDays(date, 1), names: 'none' })}>Duplicate to another day…</button>
@@ -442,38 +554,36 @@ export function EventForm() {
       </div>
       {err && <p className="error">{err}</p>}
 
-      <div className="row" style={{ gap: 8, justifyContent: 'flex-end' }}>
-        <button type="button" className="abtn sm" onClick={() => allFold(true)}>Expand all</button>
-        <button type="button" className="abtn sm" onClick={() => allFold(false)}>Collapse all</button>
+      <div className="ef-laybar">
+        <button type="button" className="abtn sm" onClick={() => setEditLay(true)}>✎ Edit layout</button>
       </div>
-
-      <Fold n={1} title="Event & client" open={isOpen(1)} setOpen={(o) => setFold(1, o)}
-        summary={[dLabel(date, { weekday: 'short', month: 'short', day: 'numeric' }), title || 'no venue yet', client && client.name !== title ? client.name : privateId ? 'private home' : '', guests ? `${guests} guests` : '', eventType].filter(Boolean).join(' · ')}>
-        <div className="ef-top">
-          <label className="ef-f"><span>DATE</span><input type="date" required value={date} onChange={(e) => setDate(e.target.value)} /></label>
-          <label className="ef-f ef-pending" style={{ gridColumn: '1 / -1', flexDirection: 'row', alignItems: 'center', gap: 10 }}><input type="checkbox" checked={pendingDetails} onChange={(e) => setPendingDetails(e.target.checked)} /><span style={{ textTransform: 'none', letterSpacing: 0, fontSize: 13 }}><b>Place and time to come</b> · staff see “Details coming” with no Confirm button until you untick this and fill in the venue and times.</span></label>
-          <div className="ef-f ef-venue"><span>VENUE · this is the title staff see</span><VenuePicker venues={venues} privates={privates} value={title} venue={venue} privateId={privateId} onPick={pickVenue} onPrivate={pickPrivate} onNew={(name) => { setVenueId(null); setPrivateId(null); setTitle(name); }} /></div>
-          <label className="ef-f"><span>CLIENT · only you see it</span>
+      {editLay && <EditEventLayout lay={elay.lay} onSave={elay.save} onClose={() => setEditLay(false)} />}
+      <div className="ef-main"><div className="ef-blocks">
+      {elay.sorted.map((k, i) => { const n = i + 1; const op = isOpenB(k); const so = (o: boolean) => setOpenB(k, o); switch (k) {
+      case 'event': return (
+      <Fold key={k} n={n} title="The event" open={op} setOpen={so} state={guests && title !== '' ? 'ok' : undefined}
+        summary={[dLabel(date, { weekday: 'short', month: 'short', day: 'numeric' }), client?.name ?? (privateId ? 'private home' : ''), guests ? `${guests} guests` : '', eventType, showFloor && showBar ? 'floor + bar' : showBar ? 'bar' : 'floor'].filter(Boolean).join(' · ')}>
+        <div className="ef-g"><div className="ef-gh">STATUS <span>is it happening?</span></div>
+          <div className="seg3 ef-status"><button type="button" className={!tentative ? 'on' : ''} onClick={() => setTentative(false)}>✓ Confirmed</button><button type="button" className={tentative ? 'on tbc' : ''} onClick={() => setTentative(true)}>⏳ To be confirmed</button></div>
+          {tentative && <small className="muted">Staff see ⏳ To be confirmed and “Keep the date for G&amp;R”. You answer It’s confirmed / Not happening on the event page.</small>}</div>
+        <div className="ef-g"><div className="ef-gh">THE EVENT <span>only you see the client</span></div>
+          <label className="ef-f" style={{ maxWidth: 220 }}><span>DATE</span><input type="date" required value={date} onChange={(e) => setDate(e.target.value)} /></label>
+          <div className="ef-row3">
+            <label className="ef-f"><span>CLIENT · only you</span>
             {newClient !== null ? <div className="row"><input autoFocus value={newClient} onChange={(e) => setNewClient(e.target.value)} placeholder="New client name" /><button type="button" className="abtn sm" onClick={() => setNewClient(null)}>×</button></div>
               : <select value={clientId} onChange={(e) => {
                 const v = e.target.value; if (v === '__new') { setNewClient(''); setClientId(''); return; }
                 const c = clients.find((x) => x.id === v); if (c?.kind === 'private_home') pickPrivate(c); else { setClientId(v); setRateSet(null); }
               }}>
                 <option value="">—</option>
-                {clients.filter((c) => !c.kind).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                {clients.filter((c) => !c.kind && (!(c as Client & { archived_at?: string | null }).archived_at || c.id === clientId)).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 {privates.length > 0 && <optgroup label="── Private homes ──">{privates.map((c) => <option key={c.id} value={c.id}>{c.name} · private home</option>)}</optgroup>}
-                {clients.some((c) => c.kind === 'roaming') && <optgroup label="── Venue changes each time ──">{clients.filter((c) => c.kind === 'roaming').map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</optgroup>}
+                {clients.some((c) => c.kind === 'roaming') && <optgroup label="── Venue changes each time ──">{clients.filter((c) => c.kind === 'roaming' && (!(c as Client & { archived_at?: string | null }).archived_at || c.id === clientId)).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</optgroup>}
                 <option value="__new">+ New client…</option>
               </select>}
             {privateId ? <small className="okc">Private home · the client is the venue</small> : venue?.usual_client_id && venue.usual_client_id === clientId && <small className="okc">Filled from the venue · change if needed</small>}
           </label>
-          <label className="ef-f"><span>ENDS · approx.</span><select value={ends} onChange={(e) => setEnds(e.target.value)}>{ENDS.map(([l]) => <option key={l}>{l}</option>)}</select></label>
-          <div className="ef-f ef-wide"><span>ADDRESS · {venue?.address || privateId ? 'auto' : 'start typing, pick from the list'}</span><div className="row" style={{ gap: 8, alignItems: 'flex-start' }}><div style={{ flex: '1 1 auto' }}><AddressInput value={address} onChange={(v) => { setAddress(v); setParts(null); }} onPick={(p) => { setParts(p); if (p.unit) setUnit(p.unit); }} placeholder="Start typing the address…" /></div><input aria-label="Apt / unit / floor" style={{ width: 150, flex: '0 0 auto' }} value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="Apt / unit / floor" /></div></div>
-          <div className="ef-f"><span>STAFFING</span>
-            <div className="seg3">{(['floor', 'bar', 'both'] as Mode[]).map((m) => <button type="button" key={m} className={mode === m ? 'on' : ''} onClick={() => setMode(m)}>{m === 'floor' ? 'Floor' : m === 'bar' ? 'Bar' : 'Both'}</button>)}</div>
-            <small className="muted">Sets the Dept choices in the grid and which uniforms show</small></div>
-          <label className="ef-f"><span>GUESTS</span><input type="number" min={0} value={guests} onChange={(e) => setGuests(e.target.value)} placeholder="e.g. 220" /></label>
-          <label className="ef-f"><span>EVENT TYPE</span>
+            <label className="ef-f"><span>EVENT TYPE</span>
             <select value={eventType} onChange={async (e) => {
               const v = e.target.value;
               if (v === '__new') { const n = prompt('New event type')?.trim(); if (n) { await supabase.from('event_types').insert({ name: n, sort: 50 }); setTypes([...types, { name: n, main: false }]); setEventType(n); } return; }
@@ -485,43 +595,93 @@ export function EventForm() {
               {eventType && !types.some((t) => t.name === eventType) && <option>{eventType}</option>}
               <option value="__new">+ New type (saved for next time)</option>
             </select></label>
-          <label className="ef-f ef-wide"><span>EVENT NOTE (optional)</span><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Sit-down dinner · 250 guests" /></label>
-        </div>
-        <div className={'tr-card' + (trOn ? ' on' : '')}>
-          <div className="sw-row">
-            <button type="button" role="switch" aria-checked={trOn} className={'sw' + (trOn ? ' on' : '')} onClick={() => setTr({ ...tr, on: !trOn })}><span className="sw-track"><span className="sw-knob" /></span><span className="sw-lbl">{trOn ? 'ON' : 'OFF'}</span></button>
-            <b>Transport</b><span className="muted sm">far event · rides, paid travel time, gas</span>
-            {trSuggested && <span className="tag" style={{ height: 22 }}>{venue?.name} · always offer rides · suggested ON</span>}
+            <label className="ef-f"><span>GUESTS</span><input type="number" min={0} value={guests} onChange={(e) => setGuests(e.target.value)} placeholder="e.g. 220" /></label>
           </div>
-          {trOn && (() => { const first = [...lines.map((l) => l.start)].sort()[0] ?? '17:00'; const [h, m] = first.split(':').map(Number); const leave = ((h * 60 + m - tr.travel) % 1440 + 1440) % 1440; const fmt = (min: number) => `${Math.floor(min / 60)} h${min % 60 ? ` ${min % 60}` : ''}`; return (
-            <div className="tr-grid">
-              <label className="ef-f"><span>TRAVEL TIME · ONE WAY</span><select value={tr.travel} onChange={(e) => setTr({ ...tr, travel: Number(e.target.value) })}>{Array.from({ length: 16 }, (_, i) => (i + 1) * 15).map((n) => <option key={n} value={n}>{fmt(n)}</option>)}</select></label>
-              <div className="ef-f"><span>PAID TRAVEL · BOTH WAYS</span><b className="tr-v">{fmt(paidTravel)}</b><small className="muted">one way × 2, nearest 15 min</small></div>
-              <label className="ef-f"><span>GAS PER CAR</span><input inputMode="decimal" value={tr.gas} onChange={(e) => setTr({ ...tr, gas: e.target.value.replace(/[^\d.]/g, '') })} /></label>
-              <div className="ef-f"><span>SUGGESTED LEAVE</span><b className="tr-v">{ap12(`${String(Math.floor(leave / 60)).padStart(2, '0')}:${String(leave % 60).padStart(2, '0')}`)}</b><small className="muted">first start {ap12(first)} − travel</small></div>
-              <div className="ef-f"><span>CLIENT PAYS TRANSPORT?</span><div className="seg3">{(['client', 'gr'] as const).map((b) => <button type="button" key={b} className={tr.billing === b ? 'on' : ''} onClick={() => setTr({ ...tr, billing: b })}>{b === 'client' ? 'Yes · on the invoice' : 'No · on G&R'}</button>)}</div></div>
-              <div className="ef-f"><span>RIDES</span><div className="sw-row"><button type="button" role="switch" aria-checked={tr.rides} className={'sw' + (tr.rides ? ' on' : '')} onClick={() => setTr({ ...tr, rides: !tr.rides })}><span className="sw-track"><span className="sw-knob" /></span><span className="sw-lbl">{tr.rides ? 'ON' : 'OFF'}</span></button><b>Offer rides on the staff app</b></div></div>
-              <small className="muted tr-wide">Everyone on the event gets {fmt(paidTravel)} added to their paid hours; drivers get the gas per car. Staff see hours only, never dollars. Travel time from the office isn’t looked up automatically yet (needs the Google Maps key): set it here.</small>
-            </div>); })()}
-        </div>
-      </Fold>
-
-      <Fold n={2} id="uni-card" title="Uniforms" open={isOpen(2)} setOpen={(o) => setFold(2, o)}
+          <label className="ef-f"><span>EVENT NOTE (optional)</span><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Sit-down dinner · 250 guests" /></label></div>
+        <div className="ef-g"><div className="ef-gh">SERVICES <span>each one = its own invoice and booking board · wine staff are booked with the floor, billed on the bar</span></div>
+          <div className="row wrap" style={{ gap: 18 }}>
+            <label className="ef-chk"><input type="checkbox" checked={showFloor} onChange={(e) => (e.target.checked ? setMode(showBar ? 'both' : 'floor') : showBar && setMode('bar'))} /> <b>Floor</b></label>
+            <label className="ef-chk"><input type="checkbox" checked={showBar} onChange={(e) => (e.target.checked ? setMode(showFloor ? 'both' : 'bar') : showFloor && setMode('floor'))} /> <b>Bar</b></label>
+          </div></div>
+      </Fold>);
+      case 'place': return (
+      <Fold key={k} n={n} title="Place & time" open={op} setOpen={so} state={pendingDetails || !title ? 'miss' : 'ok'}
+        summary={[pendingDetails ? 'venue to come' : title || 'no venue yet', ends].filter(Boolean).join(' · ')}>
+        <div className="ef-g"><div className="ef-gh">WHERE <span>what staff see</span></div>
+          <div className="ef-row3 ef-row2">
+            <div className="ef-f ef-venue"><span>VENUE · title staff see</span><VenuePicker venues={venues} privates={privates} value={title} venue={venue} privateId={privateId} onPick={pickVenue} onPrivate={pickPrivate} onNew={(name) => { setVenueId(null); setPrivateId(null); setTitle(name); }} /></div>
+            <label className="ef-f"><span>ENDS · approx.</span><select value={ends} onChange={(e) => setEnds(e.target.value)}>{ENDS.map(([l]) => <option key={l}>{l}</option>)}</select></label>
+          </div>
+          <div className="ef-f ef-wide"><span>ADDRESS · {venue?.address || privateId ? 'auto' : 'start typing, pick from the list'}</span><div className="row" style={{ gap: 8, alignItems: 'flex-start' }}><div style={{ flex: '1 1 auto' }}><AddressInput value={address} onChange={(v) => { setAddress(v); setParts(null); }} onPick={(p) => { setParts(p); if (p.unit) setUnit(p.unit); }} placeholder="Start typing the address…" /></div><input aria-label="Apt / unit / floor" style={{ width: 150, flex: '0 0 auto' }} value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="Apt / unit / floor" /></div></div>
+          <LinksEditor links={links} set={setLinks} venueName={venue?.name ?? null} alsoVenue={linksVenue} setAlsoVenue={setLinksVenue} />
+          <div className="ef-opts">
+            <label className={'ef-opt' + (pendingDetails ? ' on' : '')}><input type="checkbox" checked={pendingDetails} onChange={(e) => setPendingDetails(e.target.checked)} /><span><b>Venue not known yet</b><small>Staff see “Place to come · details coming”, no Confirm button, until you untick this.</small></span></label>
+          </div></div>
+      </Fold>);
+      case 'staff': return (
+      <Fold key={k} n={n} title="Staffing" open={op} setOpen={so} state={tbcRows ? 'miss' : 'ok'}
+        summary={(() => { const t = lines.reduce((x, l) => x + l.count, 0); const nm = lines.reduce((x, l) => x + l.names.length, 0); return `${t} staff · ${nm} named${holdN ? ` · ${holdN} on hold` : ''}${tbcRows ? ` · ${tbcRows} time TBC` : ''}`; })()}>
+        {sug && (
+          <div className="ef-sug">
+            <span className="ef-sug-k">FROM {sug.g} GUESTS</span>
+            <span>Floor <b>{sug.floor}</b>{sug.md === 2 ? ' (2 MD)' : ''}{showBar ? <> · Bar <b>{sug.bt}</b> + <b>{sug.bb}</b></> : ''} · <span className="amber">{sug.hold} on hold</span></span>
+            <span className="grow" />
+            <button type="button" className="abtn sm dark" onClick={useSug}>Use this</button>
+          </div>)}
+        <Grid date={date} lines={lines} setLines={setLines} staff={staff} day={day} mode={mode} />
+      </Fold>);
+      case 'uni': return (
+      <Fold key={k} id="uni-card" n={n} title="Uniforms" open={op} setOpen={so} state={uniWarn.length ? 'miss' : 'ok'}
         summary={[showFloor && `Floor · men ${uniName(uFloor)} · women ${uniName(uFloorW)}`, showBar && `Bar · men ${uniName(uBar)} · women ${uniName(uBarW)}`].filter(Boolean).join('  ·  ')}>
+        <div className="ul-grid">
+          {showFloor && <><UniLook t="FLOOR · MEN" sub="+ wine staff" kind={uFloor} it={itemsOf(items, 'floor_m', uFloor)} /><UniLook t="FLOOR · WOMEN" sub="+ wine staff" kind={uFloorW} it={itemsOf(items, 'floor_w', uFloorW)} /></>}
+          {showBar && <><UniLook t="BAR · MEN" bar kind={uBar} it={itemsOf(items, 'bar_m', uBar)} /><UniLook t="BAR · WOMEN" bar kind={uBarW} it={itemsOf(items, 'bar_w', uBarW)} /></>}
+        </div>
+        {uniWarn.map((w) => <div key={w} className="ul-warn">⚠ {w}</div>)}
+        {!uniEdit ? <button type="button" className="lnk" style={{ marginTop: 8 }} onClick={() => setUniEdit(true)}>Edit uniforms ›</button> : <>
         <div className="uni-card">
           <div className="muted sm" style={{ paddingBottom: 6 }}>Showing <b>{mode === 'both' ? 'Floor + Bar' : mode === 'bar' ? 'Bar' : 'Floor'}</b> · from the Staffing toggle above{venue || privateId ? ' · filled from the ' + (privateId ? 'client card' : 'venue') : ''}</div>
           {showFloor && <UniDept label="Floor" sub="MD · waiters · busboys" bar={false} men={uFloor} women={uFloorW} setMen={setUFloor} setWomen={setUFloorW} items={items} setItems={setItems} />}
           {showBar && <UniDept label="Bar" sub="BM · bartenders · barbacks" bar men={uBar} women={uBarW} setMen={setUBar} setWomen={setUBarW} items={items} setItems={setItems} />}
           <small className="muted"><b className="okc">Green ✓</b> = they wear it · tap to switch off (crossed out) · tap again to switch on. <b style={{ color: '#8A6A12' }}>Gold</b> = something you added for this event · × removes it. Staff see exactly the pieces left on for their line.</small>
         </div>
-      </Fold>
-
-      <Fold n={3} title="Staffing" open={isOpen(3)} setOpen={(o) => setFold(3, o)}
-        summary={(() => { const t = lines.reduce((x, l) => x + l.count, 0); const nm = lines.reduce((x, l) => x + l.names.length, 0); return `${floorN} floor · ${t - floorN} bar · ${t} total · ${nm} of ${t} named`; })()}>
-        <Grid lines={lines} setLines={setLines} staff={staff} day={day} mode={mode} />
-      </Fold>
-
-      <Fold n={4} title="Event folder" open={isOpen(4)} setOpen={(o) => setFold(4, o)} summary={folder.trim() ? 'Google Drive · folder linked' : `Google Drive · ${driveWanted ? 'create on Save' : 'off'}${drive ? '' : ' · not connected'}`}>
+        <button type="button" className="abtn sm" style={{ marginTop: 8 }} onClick={() => setUniEdit(false)}>Done</button></>}
+      </Fold>);
+      case 'bill': return (
+      <Fold key={k} n={n} title="Billing & extras" open={op} setOpen={so} state="ok"
+        summary={[payMethod === 'cash' ? 'Cash' : 'Invoice · QuickBooks', showFloor && showBar ? `floor ${billF} · bar ${billB}${wineN ? ` (incl. ${wineN} wine)` : ''}` : '', 'extras on the invoice'].filter(Boolean).join(' · ')}>
+        <div className="ef-inv">
+          {showFloor && <div className="ef-invc"><b><i className="fl" />FLOOR INVOICE</b><span className="muted sm">{billF} staff · {roleMix(lines.filter((l) => l.dept === 'floor'))}</span></div>}
+          {showBar && <div className="ef-invc"><b><i className="br" />BAR INVOICE</b><span className="muted sm">{billB} staff · {roleMix(lines.filter((l) => l.dept === 'bar'))}</span></div>}
+        </div>
+        <div className="ef-2 ef-bill">
+          <div className="stack" style={{ gap: 10 }}>
+            <div className="sec" style={{ padding: 0 }}><span className="serif">Billing</span><span className="muted sm">only you see it</span></div>
+            <span className="kick" style={{ fontSize: 11 }}>HOW THE CLIENT PAYS</span>
+            <div className="seg3">{(['invoice', 'cash'] as const).map((m) => <button type="button" key={m} className={payMethod === m ? 'on' : ''} onClick={() => setPayMethod(m)}>{m === 'invoice' ? 'Invoice · QuickBooks' : 'Cash'}</button>)}</div>
+            {payMethod === 'cash' && <small className="muted">No QuickBooks invoice is made or filled for this event. Amount to collect = hours × rate + admin fee, no GST / QST. “Mark cash received” is on the event page.</small>}
+            {client && client.rate_sets.length >= 2 && client.rate_sets.map((r, i) => (
+              <label key={r.key} className={'bill' + ((rateSet ?? client.rate_sets[0].key) === r.key ? ' on' : '')}>
+                <input type="radio" checked={(rateSet ?? client.rate_sets[0].key) === r.key} onChange={() => setRateSet(r.key)} />
+                <span><b>{r.label}{i === 0 && !r.label.includes('default') ? ' (default)' : ''}</b><small>{Object.entries(r.rates).map(([k, v]) => `${k} $${v}`).join(' · ')} / h</small></span>
+              </label>
+            ))}
+            <span className="kick" style={{ fontSize: 11 }}>QUICKBOOKS LINK (OPTIONAL)</span>
+            <div className="row" style={{ gap: 8 }}>
+              <select value={qbType} onChange={(e) => setQbType(e.target.value as 'estimate' | 'invoice')} style={{ height: 40, borderRadius: 10, border: '1.5px solid #DCD3C7', padding: '0 8px' }}><option value="estimate">Estimate #</option><option value="invoice">Invoice #</option></select>
+              <input value={qbNum} onChange={(e) => setQbNum(e.target.value.replace(/[^\d]/g, ''))} placeholder="e.g. 3317" style={{ height: 40, borderRadius: 10, border: '1.5px solid #DCD3C7', padding: '0 10px', width: 120 }} />
+            </div>
+            <small className="muted">{payMethod === 'cash'
+              ? 'Cash: nothing is made or filled in QuickBooks. After “Mark cash received”, Needs-you reminds you to remove the estimate yourself.'
+              : qbNum ? (qbType === 'estimate' ? 'The invoice is made from this estimate.' : 'The invoice runs fill this invoice instead of making a new one.') : 'Empty = automatic, as today.'}</small>
+            <span className="kick" style={{ marginTop: 10 }}>EXTRAS</span>
+            <small className="muted">Extras go on the invoice (client pays). Book them on the Bookings side.</small>
+          </div>
+        </div>
+      </Fold>);
+      default: return (
+      <Fold key={k} n={n} title="Folder, transport & notes" open={op} setOpen={so}
+        summary={[folder.trim() ? 'folder linked' : driveWanted ? 'folder on Save' : 'no folder', trOn ? 'transport ON' : '', askWhen === 'save' ? 'ask on Save' : 'ask later'].filter(Boolean).join(' · ')}>
         <div className="stack" style={{ gap: 12, paddingTop: 14 }}>
           <div className="row wrap" style={{ justifyContent: 'space-between', gap: 8 }}>
             <span className="sw-row sm">
@@ -552,50 +712,24 @@ export function EventForm() {
             </div>
           </div>
         </div>
-      </Fold>
-
-      <Fold n={5} title="Alerts & billing" open={isOpen(5)} setOpen={(o) => setFold(5, o)}
-        summary={['Changes recorded on Save', client && client.rate_sets.length >= 2 ? `${client.name} rates: ${client.rate_sets.find((r) => r.key === (rateSet ?? client.rate_sets[0].key))?.label ?? ''}` : ''].filter(Boolean).join(' · ')}>
-        <div className="ef-2">
-          <div className="stack" style={{ gap: 8 }}>
-            <span className="serif" style={{ fontSize: 20 }}>Alerts</span>
-            <span className="muted sm">Booked / moved / removed people are recorded when you press Save. They get a red card on their Home only if this event’s confirmations were already sent. Nothing goes out until you press Save.</span>
+        {!trOn && <div className="tr-card"><div className="sw-row"><button type="button" role="switch" aria-checked={carpool} className={'sw' + (carpool ? ' on' : '')} onClick={() => { setCarpool(!carpool); setTr({ ...tr, rides: !carpool }); }}><span className="sw-track"><span className="sw-knob" /></span><span className="sw-lbl">{carpool ? 'ON' : 'OFF'}</span></button><b>Carpool</b><span className="muted sm">staff offer seats and carpool between themselves · no paid travel, no gas</span></div></div>}
+        <div className={'tr-card' + (trOn ? ' on' : '')}>
+          <div className="sw-row">
+            <button type="button" role="switch" aria-checked={trOn} className={'sw' + (trOn ? ' on' : '')} onClick={() => setTr({ ...tr, on: !trOn })}><span className="sw-track"><span className="sw-knob" /></span><span className="sw-lbl">{trOn ? 'ON' : 'OFF'}</span></button>
+            <b>Transport</b><span className="muted sm">far event · rides, paid travel time, gas</span>
+            {trSuggested && <span className="tag" style={{ height: 22 }}>{venue?.name} · always offer rides · suggested ON</span>}
           </div>
-          <div className="stack" style={{ gap: 10 }}>
-            <div className="sec" style={{ padding: 0 }}><span className="serif">Billing</span><span className="muted sm">only you see it</span></div>
-            <span className="kick" style={{ fontSize: 11 }}>HOW THE CLIENT PAYS</span>
-            <div className="seg3">{(['invoice', 'cash'] as const).map((m) => <button type="button" key={m} className={payMethod === m ? 'on' : ''} onClick={() => setPayMethod(m)}>{m === 'invoice' ? 'Invoice · QuickBooks' : 'Cash'}</button>)}</div>
-            {payMethod === 'cash' && <small className="muted">No QuickBooks invoice is made or filled for this event. Amount to collect = hours × rate + admin fee, no GST / QST. “Mark cash received” is on the event page.</small>}
-            {client && client.rate_sets.length >= 2 && client.rate_sets.map((r, i) => (
-              <label key={r.key} className={'bill' + ((rateSet ?? client.rate_sets[0].key) === r.key ? ' on' : '')}>
-                <input type="radio" checked={(rateSet ?? client.rate_sets[0].key) === r.key} onChange={() => setRateSet(r.key)} />
-                <span><b>{r.label}{i === 0 && !r.label.includes('default') ? ' (default)' : ''}</b><small>{Object.entries(r.rates).map(([k, v]) => `${k} $${v}`).join(' · ')} / h</small></span>
-              </label>
-            ))}
-            <span className="kick" style={{ fontSize: 11 }}>QUICKBOOKS LINK (OPTIONAL)</span>
-            <div className="row" style={{ gap: 8 }}>
-              <select value={qbType} onChange={(e) => setQbType(e.target.value as 'estimate' | 'invoice')} style={{ height: 40, borderRadius: 10, border: '1.5px solid #DCD3C7', padding: '0 8px' }}><option value="estimate">Estimate #</option><option value="invoice">Invoice #</option></select>
-              <input value={qbNum} onChange={(e) => setQbNum(e.target.value.replace(/[^\d]/g, ''))} placeholder="e.g. 3317" style={{ height: 40, borderRadius: 10, border: '1.5px solid #DCD3C7', padding: '0 10px', width: 120 }} />
-            </div>
-            <small className="muted">{payMethod === 'cash'
-              ? 'Cash: nothing is made or filled in QuickBooks. After “Mark cash received”, Needs-you reminds you to remove the estimate yourself.'
-              : qbNum ? (qbType === 'estimate' ? 'The invoice is made from this estimate.' : 'The invoice runs fill this invoice instead of making a new one.') : 'Empty = automatic, as today.'}</small>
-            {(() => { const fl = lines.filter((l) => l.dept === 'floor').reduce((n, l) => n + l.count, 0); const rule = setting('extras.rule'); const auto = autoExtras(fl); return (<>
-              <span className="kick" style={{ marginTop: 10 }}>EXTRAS</span>
-              <div className="row wrap" style={{ gap: 8, alignItems: 'center' }}>
-                <select value={extras} onChange={(e) => setExtras(e.target.value)} style={{ height: 40, borderRadius: 10, border: '1.5px solid #DCD3C7', padding: '0 8px' }}>
-                  <option value="">+{auto} ({rule.pct}%{fl > rule.over ? '' : `, ${rule.over} or fewer = none`})</option>{[0, 1, 2, 3, 4, 5, 6, 8, 10].map((n) => <option key={n} value={String(n)}>+{n}</option>)}
-                </select>
-                <div className="seg3">{(['gr', 'client'] as const).map((m) => <button type="button" key={m} className={extrasBill === m ? 'on' : ''} onClick={() => setExtrasBill(m)}>{m === 'gr' ? 'On G&R' : 'Client pays'}</button>)}</div>
-              </div>
-              <small className="muted">Events over {rule.over} staff get {rule.pct}% extras, rounded up (Settings). On G&R: extras stay off the invoice unless one replaces a no-show. Client pays: invoiced like the other waiters.</small>
-            </>); })()}
-          </div>
+          {trOn && (() => { const first = [...lines.map((l) => l.start)].sort()[0] ?? '17:00'; const [h, m] = first.split(':').map(Number); const leave = ((h * 60 + m - tr.travel) % 1440 + 1440) % 1440; const fmt = (min: number) => `${Math.floor(min / 60)} h${min % 60 ? ` ${min % 60}` : ''}`; return (
+            <div className="tr-grid">
+              <label className="ef-f"><span>TRAVEL TIME · ONE WAY</span><select value={tr.travel} onChange={(e) => setTr({ ...tr, travel: Number(e.target.value) })}>{Array.from({ length: 16 }, (_, i) => (i + 1) * 15).map((n) => <option key={n} value={n}>{fmt(n)}</option>)}</select></label>
+              <div className="ef-f"><span>PAID TRAVEL · BOTH WAYS</span><b className="tr-v">{fmt(paidTravel)}</b><small className="muted">one way × 2, nearest 15 min</small></div>
+              <label className="ef-f"><span>GAS PER CAR</span><input inputMode="decimal" value={tr.gas} onChange={(e) => setTr({ ...tr, gas: e.target.value.replace(/[^\d.]/g, '') })} /></label>
+              <div className="ef-f"><span>SUGGESTED LEAVE</span><b className="tr-v">{ap12(`${String(Math.floor(leave / 60)).padStart(2, '0')}:${String(leave % 60).padStart(2, '0')}`)}</b><small className="muted">first start {ap12(first)} − travel</small></div>
+              <div className="ef-f"><span>CLIENT PAYS TRANSPORT?</span><div className="seg3">{(['client', 'gr'] as const).map((b) => <button type="button" key={b} className={tr.billing === b ? 'on' : ''} onClick={() => setTr({ ...tr, billing: b })}>{b === 'client' ? 'Yes · on the invoice' : 'No · on G&R'}</button>)}</div></div>
+              <div className="ef-f"><span>RIDES</span><div className="sw-row"><button type="button" role="switch" aria-checked={tr.rides} className={'sw' + (tr.rides ? ' on' : '')} onClick={() => setTr({ ...tr, rides: !tr.rides })}><span className="sw-track"><span className="sw-knob" /></span><span className="sw-lbl">{tr.rides ? 'ON' : 'OFF'}</span></button><b>Offer rides on the staff app</b></div></div>
+              <small className="muted tr-wide">Everyone on the event gets {fmt(paidTravel)} added to their paid hours; drivers get the gas per car. Staff see hours only, never dollars. Travel time from the office isn’t looked up automatically yet (needs the Google Maps key): set it here.</small>
+            </div>); })()}
         </div>
-      </Fold>
-
-      <Fold n={6} title="Ask availability & more" open={isOpen(6)} setOpen={(o) => setFold(6, o)}
-        summary={`${showFloor ? `Floor ${tiers.join('+')}` : ''}${showFloor && showBar ? ' · ' : ''}${showBar ? (askBar === 'team' ? 'Bar team' : 'Georges books bar') : ''} · ${askWhen === 'save' ? 'ask on Save' : 'later'}`}>
         <div className="ef-2">
           <div className="stack" style={{ gap: 12 }}>
             <div className="sec" style={{ padding: 0 }}><span className="serif">Ask availability</span><span className="muted sm">staff only see the date</span></div>
@@ -608,6 +742,7 @@ export function EventForm() {
             <div className="row" style={{ gap: 18 }}>
               <label className="radio"><input type="radio" checked={askWhen === 'save'} onChange={() => setAskWhen('save')} /> Ask when I save</label>
               <label className="radio"><input type="radio" checked={askWhen === 'later'} onChange={() => setAskWhen('later')} /> Later</label></div>
+            {askWhen === 'save' && <label className={'ask-times' + (timesOk ? '' : ' off')}><input type="checkbox" disabled={!timesOk} checked={showTimes && timesOk} onChange={(e) => setShowTimes(e.target.checked)} /> <span><b>Show the place and start times</b><small>{timesOk ? `${title.trim()} · ${[...new Set(lines.filter((l) => l.count > 0 && !['MD', 'BM'].includes(l.code)).map((l) => ap12(l.start)))].join(' or ')}` : 'only when the place and times are final'}</small></span></label>}
           </div>
           <div className="stack" style={{ gap: 10 }}>
             <span className="serif" style={{ fontSize: 20 }}>More (optional)</span>
@@ -615,7 +750,24 @@ export function EventForm() {
               : <label className="ef-f"><span>NOTE FOR STAFF · shows in their event details</span><textarea rows={2} value={staffNote} onChange={(e) => setStaffNote(e.target.value)} placeholder="Enter by the loading dock on Cathcart." /></label>}
           </div>
         </div>
-      </Fold>
+        <small className="muted">Booked / moved / removed people are recorded when you press Save. They get a red card on their Home only if this event’s confirmations were already sent.</small>
+      </Fold>); } })}
+      </div>
+      <aside className="ef-side">
+        <div className="ef-sidec">
+          <span className="kick">{dLabel(date, { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase()} · {(pendingDetails || !title ? 'VENUE TO COME' : title.toUpperCase())}</span>
+          <b className="serif" style={{ fontSize: 21 }}>{client?.name ?? (privateId ? title : 'No client yet')}</b>
+          <span className="muted sm">{[guests ? `${guests} guests` : '', eventType, showFloor && showBar ? 'floor + bar' : showBar ? 'bar' : 'floor'].filter(Boolean).join(' · ')}</span>
+          <i className="ef-hr" />
+          {missing.length ? <><span className="kick amber">STILL MISSING · {missing.length}</span>{missing.map((m) => <span key={m} className="sm">● {m}</span>)}<small className="muted">From 5 days out these show in Needs you with “Ask client”.</small></> : <span className="kick okc">NOTHING MISSING</span>}
+          {uniWarn.length > 0 && <>{uniWarn.map((w) => <span key={w} className="sm amber">⚠ {w}</span>)}</>}
+          <i className="ef-hr" />
+          <span className="sm">Staff <b>{lines.reduce((x, l) => x + l.count, 0)}</b> · named <b>{lines.reduce((x, l) => x + l.names.length, 0)}</b>{holdN ? <> · <span className="amber">{holdN} on hold</span></> : null}</span>
+          {showFloor && showBar && <span className="muted sm">Floor bill {billF} · Bar bill {billB}{wineN ? ` (incl. ${wineN} wine)` : ''}</span>}
+          <span className="muted sm">Ask availability: {askWhen === 'save' ? <b>on Save{showFloor ? ` · floor ${tiers.join('+')}` : ''}</b> : 'later'} · <button type="button" className="lnk" onClick={() => setAskWhen(askWhen === 'save' ? 'later' : 'save')}>{askWhen === 'save' ? 'Not now' : 'Ask on Save'}</button></span>
+          <button className="abtn dark" disabled={busy} style={{ marginTop: 6 }}>{busy ? 'Saving…' : 'Save event'}</button>
+        </div>
+      </aside></div>
       <div className="ef-float">
         {!isNew && id && <DeleteEvent id={id} />}
         <span className="grow" />
@@ -630,7 +782,7 @@ function VenuePicker({ venues, privates, value, venue, privateId, onPick, onPriv
   const [open, setOpen] = useState(false); const [q, setQ] = useState('');
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => { const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); }; document.addEventListener('mousedown', h); return () => document.removeEventListener('mousedown', h); }, []);
-  const list = venues.filter((v) => v.name.toLowerCase().includes(q.toLowerCase()));
+  const list = venues.filter((v) => (!(v as Venue & { archived_at?: string | null }).archived_at || v.id === venue?.id) && v.name.toLowerCase().includes(q.toLowerCase()));
   const homes = privates.filter((c) => c.name.toLowerCase().includes(q.toLowerCase()));
   return (
     <div className="vp" ref={ref}>
@@ -662,7 +814,7 @@ function VenuePicker({ venues, privates, value, venue, privateId, onPick, onPriv
 const ROLE_KEYS: Record<string, string> = { md: 'MD', w: 'W', waiter: 'W', waiters: 'W', bus: 'BUS', busboy: 'BUS', bm: 'BM', 'bar manager': 'BM', bt: 'BT', bartender: 'BT', bartenders: 'BT', bb: 'BB', barback: 'BB', barbacks: 'BB' };
 
 /** The staffing grid: one line per role + start time. */
-function Grid({ lines, setLines, staff, day, mode }: { lines: Line[]; setLines: (l: Line[]) => void; staff: AStaff[]; day: DayInfo; mode: Mode }) {
+function Grid({ date, lines, setLines, staff, day, mode }: { date: string; lines: Line[]; setLines: (l: Line[]) => void; staff: AStaff[]; day: DayInfo; mode: Mode }) {
   const wrap = useRef<HTMLDivElement>(null);
   const upd = (i: number, p: Partial<Line>) => setLines(lines.map((l, k) => (k === i ? { ...l, ...p } : l)));
   const focusRow = (i: number) => setTimeout(() => wrap.current?.querySelector<HTMLElement>(`[data-row="${i}"] select`)?.focus(), 0);
@@ -699,6 +851,14 @@ function Grid({ lines, setLines, staff, day, mode }: { lines: Line[]; setLines: 
 
   const floor = lines.filter((l) => l.dept === 'floor'); const bar = lines.filter((l) => l.dept === 'bar');
   const n = (ls: Line[]) => ls.reduce((a, l) => a + l.count, 0);
+  // Push 61 · floor / wine / bar groups (wine = floor staff billed on the bar invoice, report to the MD)
+  const [wineView, setWineView] = useState<'own' | 'floor'>(() => { try { return localStorage.getItem('gr-ef-wine') === 'floor' ? 'floor' : 'own'; } catch { return 'own'; } });
+  const setWine = (v: 'own' | 'floor') => { setWineView(v); try { localStorage.setItem('gr-ef-wine', v); } catch { /* private mode */ } };
+  const ix = (f: (l: Line) => boolean) => lines.map((l, i) => (f(l) ? i : -1)).filter((i) => i >= 0);
+  const wineIx = ix((l) => l.dept === 'bar' && l.code === 'WW');
+  const groups = wineView === 'floor'
+    ? [{ k: 'g-floor', label: 'FLOOR + WINE', idx: [...ix((l) => l.dept === 'floor'), ...wineIx] }, { k: 'g-bar', label: 'BAR', idx: ix((l) => l.dept === 'bar' && l.code !== 'WW') }]
+    : [{ k: 'g-floor', label: 'FLOOR', idx: ix((l) => l.dept === 'floor') }, { k: 'g-wine', label: 'WINE · booked with floor · reports to the MD · bar bill', idx: wineIx }, { k: 'g-bar', label: 'BAR', idx: ix((l) => l.dept === 'bar' && l.code !== 'WW') }];
   const floorBits = [...new Set(floor.map((l) => l.start))].sort().map((st) => { const c = floor.filter((l) => l.start === st && l.code !== 'MD'); return c.length ? `${n(c)} at ${ap12(st).replace(':00', '')}` : ''; }).filter(Boolean);
   const barBits = ['BM', 'BT', 'BB'].map((c) => { const k = n(bar.filter((l) => l.code === c)); return k ? `${k} ${c}` : ''; }).filter(Boolean);
   const md = n(floor.filter((l) => l.code === 'MD'));
@@ -707,19 +867,24 @@ function Grid({ lines, setLines, staff, day, mode }: { lines: Line[]; setLines: 
     <div className="grid-card" ref={wrap}>
       <div className="sec" style={{ padding: '4px 4px 10px' }}><span className="serif">Staffing · one line per start time</span><span className="muted sm hide-sm">Tab → next cell · Enter → new line · ⌘D duplicate line · paste rows from the sheet</span></div>
       <div className="sg">
+        <div className="row wrap" style={{ gap: 8, alignItems: 'center', padding: '0 4px 8px' }}><span className="muted sm">Show wine</span><span className="seg3 sm">{(['own', 'floor'] as const).map((x) => <button type="button" key={x} className={wineView === x ? 'on' : ''} onClick={() => setWine(x)}>{x === 'own' ? 'Own group' : 'With floor'}</button>)}</span></div>
         <div className="sg-h"><span>DEPT</span><span>ROLE</span><span>START</span><span>END ~</span><span>HOW MANY</span><span>NAMES</span><span /></div>
-        {lines.map((l, i) => (
-          <div key={i} className={'sg-r ' + (l.dept === 'bar' ? 'is-bar' : 'is-floor')} data-row={i} onKeyDown={keys(i)} onPaste={paste(i)}>
+        {groups.map((g) => g.idx.length > 0 && <div key={g.k} className={'sg-grp ' + g.k}><div className="sg-gh"><i />{g.label}<span className="grow" /><small>{g.idx.reduce((a, i) => a + lines[i].count, 0)} · {g.idx.reduce((a, i) => a + lines[i].names.length, 0)} named</small></div>
+        {g.idx.map((i) => { const l = lines[i]; return (
+          <div key={i} className={'sg-r ' + (l.dept === 'bar' ? (l.code === 'WW' ? 'is-wine' : 'is-bar') : 'is-floor')} data-row={i} onKeyDown={keys(i)} onPaste={paste(i)}>
             <select aria-label="Department" value={l.dept} onChange={(e) => { const d = e.target.value as 'floor' | 'bar'; upd(i, { dept: d, code: d === 'bar' ? 'BT' : 'W', names: [] }); }}>{(mode !== 'bar' || l.dept === 'floor') && <option value="floor">● Floor</option>}{(mode !== 'floor' || l.dept === 'bar') && <option value="bar">● Bar</option>}</select>
-            <select aria-label="Role" value={l.code} onChange={(e) => upd(i, { code: e.target.value, names: [] })} className={l.code === 'MD' || l.code === 'BM' ? 'strong' : ''}>{ROLES.filter((r) => r.dept === l.dept).map((r) => <option key={r.code} value={r.code}>{r.label}</option>)}</select>
-            <TimeCell value={l.start} onChange={(v) => upd(i, { start: v })} />
+            <select aria-label="Role" value={l.code} onChange={(e) => upd(i, { code: e.target.value, names: [] })} className={l.code === 'MD' || l.code === 'BM' ? 'strong' : ''}>{ROLES.filter((r) => r.dept === l.dept).map((r) => <option key={r.code} value={r.code}>{r.code === 'WW' ? 'Wine waiter · bar bill' : r.label}</option>)}</select>
+            <span className={l.tbc ? 'sg-tbc' : 'sg-tc'}><TimeCell value={l.start} onChange={(v) => upd(i, { start: v, tbc: false })} /><button type="button" className={'sg-tbcb' + (l.tbc ? ' on' : '')} title={l.tbc ? 'Start time still to come · staff see Time TBC · tap when you know it' : 'Mark the start time as TBC'} onClick={() => upd(i, { tbc: !l.tbc })}>TBC</button></span>
             <TimeCell value={l.end ?? ''} optional onChange={(v) => upd(i, { end: v || null })} />
             <input aria-label="How many" type="number" min={0} value={l.count} onChange={(e) => upd(i, { count: Math.max(0, Number(e.target.value)) })} className={l.count >= 10 ? 'strong' : ''} />
-            <NamePicker line={l} staff={staff} day={day} taken={lines.flatMap((x, k) => (k === i ? [] : x.names))} onChange={(names) => upd(i, { names, count: Math.max(l.count, names.length) })} />
+            <NamePicker line={l} date={date} staff={staff} day={day} taken={lines.flatMap((x, k) => (k === i ? [] : x.names))} onChange={(names) => upd(i, { names, count: Math.max(l.count, names.length) })} />
             <button type="button" className="sg-x" aria-label="Remove line" onClick={() => setLines(lines.filter((_, k) => k !== i))}>×</button>
-          </div>
-        ))}
-        <button type="button" className="sg-add" onClick={() => addAfter(lines.length - 1)}>+ new line <span className="muted">· times like "545" → 5:45 PM</span></button>
+          </div>); })}</div>)}
+        <div className="row wrap" style={{ gap: 6 }}>
+          {mode !== 'bar' && <button type="button" className="sg-add" onClick={() => setLines([...lines, { ...blankLine('floor', 'W', lines[0]?.start ?? '17:00'), tbc: lines.some((x) => x.tbc) }])}>+ Floor row</button>}
+          {mode !== 'floor' && <button type="button" className="sg-add" onClick={() => setLines([...lines, { ...blankLine('bar', 'WW', lines[0]?.start ?? '17:00'), tbc: lines.some((x) => x.tbc) }])}>+ Wine row</button>}
+          {mode !== 'floor' && <button type="button" className="sg-add" onClick={() => setLines([...lines, { ...blankLine('bar', 'BT', lines[0]?.start ?? '17:00'), tbc: lines.some((x) => x.tbc) }])}>+ Bar row</button>}
+          <span className="muted sm" style={{ alignSelf: 'center' }}>· times like "545" → 5:45 PM</span></div>
       </div>
       <div className="sg-tot">
         <span><b>{n(floor)}</b> floor <small>({[md ? `${md} MD` : '', ...floorBits].filter(Boolean).join(' · ') || '—'})</small></span>
@@ -744,17 +909,17 @@ function TimeCell({ value, onChange, optional = false }: { value: string; onChan
 }
 
 /** Type-to-add names; MD and BM lines only list people who can lead. */
-function NamePicker({ line, staff, day, taken, onChange }: { line: Line; staff: AStaff[]; day: DayInfo; taken: string[]; onChange: (ids: string[]) => void }) {
+function NamePicker({ line, date, staff, day, taken, onChange }: { line: Line; date: string; staff: AStaff[]; day: DayInfo; taken: string[]; onChange: (ids: string[]) => void }) {
+  const lineStart = line.start ? startIso(date, line.start) : null;
   const [q, setQ] = useState(''); const [open, setOpen] = useState(false); const [hi, setHi] = useState(0);
   const isBar = line.dept === 'bar';
   const pool = useMemo(() => staff.filter((s) => {
     if (line.code === 'MD') return s.md_rank != null || (q.trim().length > 1 && s.department !== 'bar'); // MD list; anyone else = "+ Add MD" by typing
-    if (line.code === 'BM') return s.positions.includes('BM') || (s.role !== 'staff' && s.department === 'bar');
-    return isBar ? s.department === 'bar' : s.department !== 'bar';
+    if (line.code === 'BM') return s.positions.includes('BM') || (s.role !== 'staff' && doesBar(s));
+    return isBar ? doesBar(s) : s.department !== 'bar';
   }), [staff, line.code, isBar, q]);
   const info = (s: AStaff) => {
     if (day.off.has(s.id)) return { t: 'off that day', cls: 'grey', block: true };
-    if (day.booked[s.id]) return { t: `booked at ${day.booked[s.id]} that day`, cls: 'grey', block: true };
     if (taken.includes(s.id)) return { t: 'on another line', cls: 'grey', block: true };
     const a = day.avail[s.id];
     if (a?.status === 'yes') return { t: 'said yes' + (a.from ? ` · from ${ap12(a.from.slice(0, 5)).replace(':00', '')}` : '') + (a.until ? ` · until ${ap12(a.until.slice(0, 5)).replace(':00', '')}` : ''), cls: 'ok', block: false, w: 0 };
@@ -783,14 +948,16 @@ function NamePicker({ line, staff, day, taken, onChange }: { line: Line; staff: 
           }} />
         {line.count > 0 && !lead && <small className="np-n">{line.names.length} of {line.count} named</small>}
       </div>
+      {line.names.some((id) => day.booked[id]) && <div className="np-also">{line.names.filter((id) => day.booked[id]).map((id) => <div key={id}><b className="sm">{staff.find((x) => x.id === id)?.full_name.split(' ')[0]}</b> <AlsoWorking others={day.booked[id]} start={lineStart} compact /></div>)}</div>}
       {open && matches.length > 0 && (
         <div className="np-list">
           {matches.map(({ s, i }, k) => (
             <button type="button" key={s.id} disabled={i.block} className={'np-opt' + (k === hi ? ' hi' : '') + (i.block ? ' off' : '')} onMouseDown={(e) => e.preventDefault()} onClick={() => add(s.id)}>
               <b>{s.full_name}</b>{tierOf(s) && <i className={'tier-dot ' + tierOf(s)}>{tierOf(s)}</i>}<span className={'np-st ' + i.cls}>{i.t}</span>
+              {day.booked[s.id] && !i.block && <span className="np-opt-also"><AlsoWorking others={day.booked[s.id]} start={lineStart} compact /></span>}
             </button>
           ))}
-          <div className="np-hint">Enter adds · type more letters to narrow · people who are off or booked that day are greyed out</div>
+          <div className="np-hint">Enter adds · type more letters to narrow · people who are off that day are greyed out · 🕐 = also working another event that day</div>
         </div>
       )}
     </div>

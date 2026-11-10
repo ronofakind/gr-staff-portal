@@ -2,6 +2,8 @@
 // iPhone subscribes with webcal://<host>/api/feed?t=…, Google with calendar.google.com/calendar/r?cid=<webcal url>.
 // Only confirmed shifts with final details (RPC calendar_feed, SECURITY DEFINER, anon key, same pattern as api/cal.js).
 // Each shift keeps UID = shift id, so a change updates the same entry and a cancel / decline drops it from the feed.
+// Push 38: + meetings the person said Coming to (RPC calendar_feed_meetings, migration 043). UID = meeting id, so a new time /
+// link updates the same entry, and Can't make it / a cancel drops it. Until 043 is applied the feed is shifts only.
 const URL_ = process.env.VITE_SUPABASE_URL;
 const KEY = process.env.VITE_SUPABASE_KEY;
 
@@ -72,6 +74,34 @@ function vevent(s, now) {
   ].join('\r\n');
 }
 
+const PLACE = { teams: 'Microsoft Teams', zoom: 'Zoom' };
+/** Push 38 · a meeting: real start and end, location = the Teams / Zoom link or the address, notes = what it's about + link. */
+function mevent(m, now) {
+  const link = /^https?:\/\//i.test(String(m.link || '').trim()) ? String(m.link).trim() : '';
+  const where = m.place_kind === 'in_person' ? (m.address || 'In person') : (link || PLACE[m.place_kind] || 'Online');
+  const notes = [
+    m.about && String(m.about),
+    m.place_kind === 'in_person' ? m.address && `📍 ${m.address}` : link ? `▶ Join on ${PLACE[m.place_kind] || 'the call'}: ${link}` : `${PLACE[m.place_kind] || 'Online'} · link in the G&R app`,
+    'G&R meeting (paid). Notes and who is coming in the G&R app.',
+  ].filter(Boolean);
+  const seq = Math.max(0, Math.floor((new Date(m.updated || now).getTime() - Date.UTC(2026, 0, 1)) / 1000));
+  return [
+    'BEGIN:VEVENT',
+    `UID:meeting-${m.uid}@gr-staff-portal`,
+    `DTSTAMP:${stamp(now)}`,
+    `LAST-MODIFIED:${stamp(m.updated || now)}`,
+    `SEQUENCE:${seq}`,
+    `DTSTART:${stamp(m.start)}`,
+    `DTEND:${stamp(m.end)}`,
+    fold(`SUMMARY:${esc(m.title)}`),
+    fold(`LOCATION:${esc(where)}`),
+    ...(link && m.place_kind !== 'in_person' ? [fold(`URL:${link}`)] : []),
+    fold(`DESCRIPTION:${esc(notes.join('\n'))}`),
+    'BEGIN:VALARM', 'ACTION:DISPLAY', 'DESCRIPTION:G&R meeting in 10 minutes', 'TRIGGER:-PT10M', 'END:VALARM',
+    'END:VEVENT',
+  ].join('\r\n');
+}
+
 export default async function handler(req, res) {
   // Native app (Capacitor) calls from capacitor://localhost / https://localhost: allow it, answer preflight.
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -86,6 +116,15 @@ export default async function handler(req, res) {
   });
   const feed = r.ok ? await r.json() : null;
   if (!feed) { res.status(404).send('This calendar link is no longer active. Open the G&R app to add it again.'); return; }
+  let meetings = [];
+  try {
+    const rm = await fetch(`${URL_}/rest/v1/rpc/calendar_feed_meetings`, {
+      method: 'POST', headers: { apikey: KEY, Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_token: t }),
+    });
+    const mj = rm.ok ? await rm.json() : null; // 404 until migration 043 is applied
+    if (Array.isArray(mj)) meetings = mj;
+  } catch { /* shifts only */ }
 
   const now = Date.now();
   const ics = [
@@ -96,6 +135,7 @@ export default async function handler(req, res) {
     `X-APPLE-CALENDAR-COLOR:${RED}`, 'COLOR:darkred',
     'REFRESH-INTERVAL;VALUE=DURATION:PT1H', 'X-PUBLISHED-TTL:PT1H',
     ...(Array.isArray(feed.shifts) ? feed.shifts : []).map((s) => vevent(s, now)),
+    ...meetings.map((m) => mevent(m, now)),
     'END:VCALENDAR',
   ].join('\r\n') + '\r\n';
 

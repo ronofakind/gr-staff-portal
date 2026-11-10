@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
+import { loadOnboarding } from '../lib/handbook';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase, type Staff } from '../lib/supabase';
 import { TabBar } from '../components/TabBar';
 import { PageHead } from '../components/ProfileMenu';
 import { SwipeSheet } from '../components/SwipeSheet';
-import { FromPicker, ampm15 } from '../components/TimeWheel';
+import { FromPicker, TimeWheel, ampm15 } from '../components/TimeWheel';
 import { ConfirmThanks } from '../components/ConfirmThanks';
 import { useMyCalendar } from '../lib/calendar';
 import { callName } from '../lib/nickname';
@@ -12,12 +13,19 @@ import {
   useMyDates, toAnswer, isOpen, urgent, latestKnows, answerByText, whereText, dayLabel, monDay, mtlToday, addDays, D,
   type MyDate,
 } from '../lib/myDates';
+import { AskCard } from '../components/ShiftNotes';
+import { useMyAsks } from '../lib/shiftAsks';
+import { useMyMeetings, dayOfMtl, t12 as mt12, type MyMeeting } from '../lib/meetings';
+import { useSettings } from '../lib/settings';
+import { feedbackOn } from './Manage';
+import { usePastEvents, managesShift, roleOf, type PastShift, type TeamSum } from '../lib/pastEvents';
+import { Brand, brandify } from '../components/Brand';
 
 /** Booked tab rows (shifts from today on). confirm_by is push 33 (039). */
-type Shift = { id: string; status: 'booked' | 'confirmed' | 'declined'; attendance: string | null; planned_start: string; time_tbc: boolean;
+type Shift = { id: string; status: 'booked' | 'confirmed' | 'declined'; confirmed_by?: string | null; attendance: string | null; planned_start: string; time_tbc: boolean;
   confirm_by: string | null; events: { id: string; event_date: string; title: string; details_pending?: boolean | null; venues: { name: string } | null } };
-type Week = { dow: number; status: 'yes' | 'from' | 'no'; from_time: string | null };
-type Tab = 'answer' | 'booked' | 'answered';
+type Week = { dow: number; status: 'yes' | 'from' | 'no'; from_time: string | null; until_time?: string | null };
+type Tab = 'answer' | 'booked' | 'answered' | 'past';
 
 const t12 = (iso: string) => new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' });
 const dow3 = (iso: string) => D(iso).toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
@@ -32,6 +40,8 @@ export function MyDates({ me, base = '', preview = false }: { me: Staff; base?: 
   const { dates, setDates, reload } = useMyDates(me.id, preview);
   const [shifts, setShifts] = useState<Shift[] | null>(null);
   const [week, setWeek] = useState<Record<number, Week>>({});
+  const [untilBy, setUntilBy] = useState<Record<string, string>>({}); // push 64
+  const [timesBy, setTimesBy] = useState<Record<string, ATimes>>({}); // push 65 · ask shows the place and start times
   const [err, setErr] = useState('');
   const [justDone, setJustDone] = useState<Set<string>>(new Set()); // answered on this visit: stay in Answer, in their new colour
   const [sheet, setSheet] = useState<{ d: MyDate; mode: 'pick' | 'yes' | 'maybe' } | null>(null);
@@ -39,9 +49,20 @@ export function MyDates({ me, base = '', preview = false }: { me: Staff; base?: 
   const [dkyOpen, setDkyOpen] = useState(false);
   const [thanks, setThanks] = useState<Shift | null>(null);
   const { cal, setCal } = useMyCalendar(preview);
+  const { meetings } = useMyMeetings(me.id, preview); // push 38 · meetings in Booked (MEETING tag)
+  // push 40 · "Can you work this shift?" asks sit on top of Answer (same card as Home and Messages)
+  const { asks: allAsks0, reload: reloadAsks } = useMyAsks(preview || me.role === 'admin');
+  // push 56 · new hire with the handbook not done → no requests yet (Home explains why)
+  const [hbLocked, setHbLocked] = useState(false);
+  useEffect(() => { if (!preview) loadOnboarding().then((o) => setHbLocked(!!o && !o.hb_done_at)); }, [preview]);
+  const allAsks = hbLocked ? [] : allAsks0;
+  const fills = allAsks.filter((a) => a.kind === 'fill');
+  // push 51 · Past tab: my own past shifts, last 30 days (+ team / hours / rating status for the ones I managed)
+  useSettings(); const fbOn = feedbackOn(me) && !preview; // admin view-as: ratings are per manager, not shown
+  const past = usePastEvents(me.id, 30, fbOn);
 
   const loadShifts = () => supabase.from('shifts')
-    .select('id,status,attendance,planned_start,time_tbc,confirm_by,events!inner(id,event_date,title,details_pending,venues(name))')
+    .select('id,status,attendance,planned_start,time_tbc,confirm_by,confirmed_by,events!inner(id,event_date,title,details_pending,venues(name))')
     .eq('staff_id', me.id).neq('status', 'declined').gte('events.event_date', today)
     .then(({ data, error }) => {
       if (error) console.warn('[my dates · shifts]', error.message);
@@ -49,8 +70,15 @@ export function MyDates({ me, base = '', preview = false }: { me: Staff; base?: 
     });
   useEffect(() => {
     loadShifts();
-    supabase.from('staff_weekly').select('dow,status,from_time').eq('staff_id', me.id)
+    supabase.from('staff_weekly').select('dow,status,from_time,until_time').eq('staff_id', me.id)
       .then(({ data }) => setWeek(Object.fromEntries(((data ?? []) as Week[]).map((w) => [w.dow, w]))));
+    // push 65 · place + start times when Ronnie turned them on for that date
+    supabase.rpc('my_ask_times').then(({ data, error }) => { if (error || !Array.isArray(data)) return; const m: Record<string, ATimes> = {};
+      for (const r of data as { avail_id: string; venue: string; starts: (string | null)[] }[]) { const st = (r.starts ?? []).filter(Boolean) as string[]; if (!st.length) continue; (m[r.avail_id] ??= []).push({ venue: r.venue, starts: st }); }
+      setTimesBy(m); });
+    // push 64 · day-only answers (my_dates doesn't return until_time)
+    supabase.from('availability').select('id,until_time').eq('staff_id', me.id).gte('for_date', today).not('until_time', 'is', null)
+      .then(({ data, error }) => { if (!error) setUntilBy(Object.fromEntries(((data ?? []) as { id: string; until_time: string }[]).map((x) => [x.id, x.until_time.slice(0, 5)]))); });
   }, [me.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const all = dates ?? [];
@@ -60,27 +88,35 @@ export function MyDates({ me, base = '', preview = false }: { me: Staff; base?: 
   const waiting = all.filter((d) => toAnswer(d, today));
   const answered = all.filter((d) => !d.booked && d.status !== 'asked' && !toAnswer(d, today));
   const booked = shifts ?? [];
+  const mtgs = (meetings ?? []).filter((m) => dayOfMtl(m.starts_at) >= today);
+  const bookedRows: ({ k: 's'; at: string; s: Shift } | { k: 'm'; at: string; m: MyMeeting })[] = [
+    ...booked.map((s) => ({ k: 's' as const, at: s.planned_start, s })), ...mtgs.map((m) => ({ k: 'm' as const, at: m.starts_at, m })),
+  ].sort((a, b) => a.at.localeCompare(b.at));
 
   const tabParam = params.get('tab') as Tab | null;
   const view = params.get('view') === 'cal' ? 'cal' : 'list';
   const [tab, setTabState] = useState<Tab | null>(tabParam);
   useEffect(() => { if (tabParam) setTabState(tabParam); }, [tabParam]);
   // Opens on Answer when something waits, otherwise on Booked (decided once, so answering the last date doesn't jump tabs).
-  useEffect(() => { if (tab === null && dates !== null) setTabState(waiting.length ? 'answer' : 'booked'); }, [dates === null]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (tab === null && dates !== null) setTabState(waiting.length || fills.length ? 'answer' : 'booked'); }, [dates === null]); // eslint-disable-line react-hooks/exhaustive-deps
   const curTab: Tab = tab ?? (dates === null || waiting.length ? 'answer' : 'booked');
   const setTab = (t: Tab) => { setTabState(t); setParams((p) => { p.set('tab', t); p.delete('view'); return p; }, { replace: true }); };
   const setView = (v: 'list' | 'cal') => setParams((p) => { if (v === 'cal') p.set('view', 'cal'); else p.delete('view'); return p; }, { replace: true });
 
+  const usualDayFor = (iso: string): [string, string] | null => { const w = week[dowMon0(iso)]; return w && w.status !== 'no' && w.until_time ? [w.from_time?.slice(0, 5) ?? '08:00', w.until_time.slice(0, 5)] : null; };
   const usualFor = (iso: string): string | null | undefined => { const w = week[dowMon0(iso)]; return !w || w.status === 'no' ? undefined : w.from_time ? w.from_time.slice(0, 5) : null; };
 
   /** One answer: optimistic, then the RPC (answer_my_date, 041). */
-  const save = async (d: MyDate, status: 'yes' | 'maybe' | 'no', extra: { from?: string | null; knows?: string } = {}) => {
+  const save = async (d: MyDate, status: 'yes' | 'maybe' | 'no', extra: { from?: string | null; knows?: string; until?: string | null } = {}) => {
     setSheet(null); setErr('');
     if (preview) return;
     setJustDone((s) => new Set(s).add(d.id));
     setDates((list) => (list ?? []).map((x) => x.id === d.id ? { ...x, status, from_time: status === 'yes' ? (extra.from ?? null) : null, knows_by: status === 'maybe' ? extra.knows ?? null : null } : x));
+    const until = status === 'yes' ? extra.until ?? null : null;
+    setUntilBy((m) => { const n = { ...m }; if (until) n[d.id] = until; else delete n[d.id]; return n; });
     const { error } = await supabase.rpc('answer_my_date', { p_id: d.id, p_status: status, p_from: status === 'yes' ? (extra.from ?? null) : null, p_knows_by: status === 'maybe' ? extra.knows : null, p_note: null });
-    if (error) { setErr(error.message); reload(); }
+    if (error) { setErr(error.message); reload(); return; }
+    if (until) { const r = await supabase.rpc('set_my_until', { p_id: d.id, p_from: extra.from ?? null, p_until: until }); if (r.error) setErr(r.error.message); }
   };
   const dontKnow = async (by: string, note: string, ids: string[]) => {
     setDkyOpen(false); setErr('');
@@ -100,7 +136,7 @@ export function MyDates({ me, base = '', preview = false }: { me: Staff; base?: 
   };
 
   const firstOf = (list: { for_date?: string; events?: { event_date: string } }[]) => (list[0] ? (list[0].for_date ?? list[0].events!.event_date) : today);
-  const title = monthName(curTab === 'answer' ? firstOf(answerList) : curTab === 'booked' ? firstOf(booked) : firstOf(answered));
+  const title = curTab === 'past' ? 'My dates' : monthName(curTab === 'answer' ? firstOf(answerList) : curTab === 'booked' ? firstOf(booked) : firstOf(answered));
   const dkyList = dky ? all.filter((d) => dky.ids.includes(d.id)) : waiting;
 
   return (
@@ -113,14 +149,24 @@ export function MyDates({ me, base = '', preview = false }: { me: Staff; base?: 
       {err && <p className="error">{err}</p>}
 
       {view === 'list' ? <>
-        <div className="md-tabs" role="tablist">
-          <button className={curTab === 'answer' ? 'on' : ''} onClick={() => setTab('answer')}>Answer <i className={'n' + (waiting.length ? ' red' : '')}>{waiting.length}</i></button>
-          <button className={curTab === 'booked' ? 'on' : ''} onClick={() => setTab('booked')}>Booked <i className={'n' + (curTab === 'booked' && booked.length ? ' green' : '')}>{booked.length}</i></button>
+        <div className="md-tabs four" role="tablist">
+          <button className={curTab === 'answer' ? 'on' : ''} onClick={() => setTab('answer')}>Answer <i className={'n' + (waiting.length + fills.length ? ' red' : '')}>{waiting.length + fills.length}</i></button>
+          <button className={curTab === 'booked' ? 'on' : ''} onClick={() => setTab('booked')}>Booked <i className={'n' + (curTab === 'booked' && bookedRows.length ? ' green' : '')}>{bookedRows.length}</i></button>
           <button className={curTab === 'answered' ? 'on' : ''} onClick={() => setTab('answered')}>Answered <i className={'n' + (curTab === 'answered' && answered.length ? ' dark' : '')}>{answered.length}</i></button>
+          <button className={curTab === 'past' ? 'on' : ''} onClick={() => setTab('past')}>Past</button>
         </div>
 
-        {dates === null || shifts === null ? <div className="loading" style={{ minHeight: 240 }} /> : curTab === 'answer' ? (
+        {curTab === 'past' ? (
+          past.shifts === null ? <div className="loading" style={{ minHeight: 240 }} /> : (
+            <section className="md-list">
+              {past.shifts.map((s) => <PastRow key={s.id} s={s} base={base} mine={managesShift(s, me.id)} sum={past.sums[s.events.id]} fbOn={fbOn} />)}
+              {!past.shifts.length && <div className="md-empty"><b className="serif">No past shifts yet</b><span>Shifts you worked in the last 30 days show up here.</span></div>}
+              {past.shifts.length > 0 && <p className="md-foot">Last 30 days, newest first. Tap one for the details{past.shifts.some((s) => managesShift(s, me.id)) ? ', your team and hours' : ''}.</p>}
+            </section>
+          )
+        ) : dates === null || shifts === null ? <div className="loading" style={{ minHeight: 240 }} /> : curTab === 'answer' ? (
           <section className="md-list">
+            {fills.map((a) => <AskCard key={a.ask_id} a={a} preview={preview} onAnswered={(st) => { if (st === 'booked') loadShifts(); setTimeout(reloadAsks, st === 'gone' ? 4000 : 2500); }} />)}
             {dky && (
               <div className="md-dky done">
                 <span className="md-dky-ic" aria-hidden="true">⏳</span>
@@ -136,19 +182,20 @@ export function MyDates({ me, base = '', preview = false }: { me: Staff; base?: 
               </div>
             )}
             {answerList.map((d) => justDone.has(d.id) && !toAnswer(d, today)
-              ? <AnsweredRow key={d.id} d={d} onTap={() => setSheet({ d, mode: 'pick' })} />
-              : <AnswerRow key={d.id} d={d} onYes={() => setSheet({ d, mode: 'yes' })} onMaybe={() => setSheet({ d, mode: 'maybe' })} onNo={() => save(d, 'no')} />)}
-            {!answerList.length && !dky && <div className="md-empty"><b className="serif">All answered, thanks!</b><span>When G&amp;R sends you new dates, they show up here.</span></div>}
+              ? <AnsweredRow key={d.id} d={d} times={timesBy[d.id]} until={untilBy[d.id]} onTap={() => setSheet({ d, mode: 'pick' })} />
+              : <AnswerRow key={d.id} d={d} times={timesBy[d.id]} onYes={() => setSheet({ d, mode: 'yes' })} onMaybe={() => setSheet({ d, mode: 'maybe' })} onNo={() => save(d, 'no')} />)}
+            {!answerList.length && !dky && !fills.length && <div className="md-empty"><b className="serif">All answered, thanks!</b><span>When <Brand /> sends you new dates, they show up here.</span></div>}
             {answerList.length > 0 && <p className="md-foot">Answer any date, in any order. Saying yes doesn’t book you yet.</p>}
           </section>
         ) : curTab === 'booked' ? (
           <section className="md-list">
-            {booked.map((s) => <BookedRow key={s.id} s={s} base={base} onConfirm={() => confirm(s)} />)}
-            {!booked.length && <div className="md-empty"><b className="serif">No shifts booked yet</b><span>Shifts G&amp;R books you on show up here.</span></div>}
+            {bookedRows.map((r) => r.k === 's' ? <BookedRow key={r.s.id} s={r.s} base={base} onConfirm={() => confirm(r.s)} />
+              : <MeetingRow key={r.m.id} m={r.m} to={preview ? `/admin/meeting/${r.m.id}` : `/meeting/${r.m.id}`} />)}
+            {!bookedRows.length && <div className="md-empty"><b className="serif">No shifts booked yet</b><span>Shifts <Brand /> books you on show up here.</span></div>}
           </section>
         ) : (
           <section className="md-list">
-            {answered.map((d) => <AnsweredRow key={d.id} d={d} onTap={() => setSheet({ d, mode: 'pick' })} />)}
+            {answered.map((d) => <AnsweredRow key={d.id} d={d} until={untilBy[d.id]} onTap={() => setSheet({ d, mode: 'pick' })} />)}
             {!answered.length && <div className="md-empty"><b className="serif">Nothing answered yet</b><span>Dates you answer show up here. Tap one to change it.</span></div>}
             {answered.length > 0 && <p className="md-foot">In date order. Tap any one to change it.</p>}
           </section>
@@ -159,7 +206,7 @@ export function MyDates({ me, base = '', preview = false }: { me: Staff; base?: 
       )}
 
       {sheet?.mode === 'pick' && <PickSheet d={sheet.d} onClose={() => setSheet(null)} onYes={() => setSheet({ d: sheet.d, mode: 'yes' })} onMaybe={() => setSheet({ d: sheet.d, mode: 'maybe' })} onNo={() => save(sheet.d, 'no')} />}
-      {sheet?.mode === 'yes' && <YesSheet d={sheet.d} usual={usualFor(sheet.d.for_date)} onClose={() => setSheet(null)} onPick={(from) => save(sheet.d, 'yes', { from })} />}
+      {sheet?.mode === 'yes' && <YesSheet d={sheet.d} times={timesBy[sheet.d.id]} usual={usualFor(sheet.d.for_date)} usualDay={usualDayFor(sheet.d.for_date)} until={untilBy[sheet.d.id] ?? null} onClose={() => setSheet(null)} onPick={(from, until) => save(sheet.d, 'yes', { from, until })} />}
       {sheet?.mode === 'maybe' && <KnowsSheet title={`${dayLabel(sheet.d.for_date)} · when will you know?`} latest={latestKnows([sheet.d])} oneTap
         onClose={() => setSheet(null)} onPick={(by) => save(sheet.d, 'maybe', { knows: by })} />}
       {dkyOpen && <KnowsSheet title="When will you know?" latest={latestKnows(dkyList)} withNote
@@ -168,27 +215,32 @@ export function MyDates({ me, base = '', preview = false }: { me: Staff; base?: 
       {thanks && <ConfirmThanks name={callName(me)} cal={preview ? null : cal} onCal={setCal} onClose={() => setThanks(null)}
         line={`${thanks.events.venues?.name ?? thanks.events.title} · ${dayLabel(thanks.events.event_date)} · ${t12(thanks.planned_start)}`} />}
       <div style={{ height: 90 }} />
-      <TabBar base={base} badge={waiting.length} />
+      <TabBar base={base} badge={waiting.length + fills.length} />
     </main>
   );
 }
 
 const monthsOf = (list: MyDate[]) => { const m = [...new Set(list.map((d) => monthName(d.for_date)))]; return m.length === 1 ? m[0] : ''; };
 
-function DateSq({ iso, kind }: { iso: string; kind: 'neutral' | 'booked' | 'yes' | 'maybe' | 'no' | 'answer' }) {
+function DateSq({ iso, kind }: { iso: string; kind: 'neutral' | 'booked' | 'yes' | 'maybe' | 'no' | 'answer' | 'meeting' }) {
   return <div className={'md-sq ' + kind}><small>{dow3(iso)}</small><b>{D(iso).getDate()}</b></div>;
 }
 
 /** Board D: plain white card, neutral date, venue · evening, red "Answer by …"; red outline only under 24 h. */
-function AnswerRow({ d, onYes, onMaybe, onNo }: { d: MyDate; onYes: () => void; onMaybe: () => void; onNo: () => void }) {
+/** push 65 · [{venue, starts}] per event that night, when Ronnie showed the times */
+type ATimes = { venue: string; starts: string[] }[];
+/** "Le Andover · starts 4:00 or 6:00 PM" · two events: "Le Andover 4:00 PM · Salon Richmond 5:00 PM" */
+const timesText = (t: ATimes) => t.length === 1 ? `${t[0].venue} · starts ${t[0].starts.map((x) => ampm15(x)).join(' or ')}` : t.map((e) => `${e.venue} ${e.starts.map((x) => ampm15(x)).join(' or ')}`).join(' · ');
+
+function AnswerRow({ d, onYes, onMaybe, onNo, times }: { d: MyDate; onYes: () => void; onMaybe: () => void; onNo: () => void; times?: ATimes }) {
   const hot = urgent(d);
   return (
     <div className={'md-card' + (hot ? ' hot' : '')}>
       <div className="md-top">
         <DateSq iso={d.for_date} kind="neutral" />
         <div className="grow" style={{ minWidth: 0 }}>
-          <b className="md-where">{whereText(d)}</b>
-          <span className="md-by">{hot ? '⏰ ' : ''}{answerByText(d)}</span>
+          <b className="md-where">{times ? <>{timesText(times)}</> : whereText(d)}</b>
+          <span className="md-by">{times && times.some((t) => t.starts.length > 1) || (times && times.length > 1) ? 'We’ll tell you which · ' : ''}{hot ? '⏰ ' : ''}{answerByText(d)}</span>
           {d.status === 'maybe' && d.knows_by && <span className="md-tag maybe">MAYBE · KNOWS BY {monDay(d.knows_by).toUpperCase()}</span>}
         </div>
       </div>
@@ -201,11 +253,11 @@ function AnswerRow({ d, onYes, onMaybe, onNo }: { d: MyDate; onYes: () => void; 
   );
 }
 
-function AnsweredRow({ d, onTap }: { d: MyDate; onTap: () => void }) {
+function AnsweredRow({ d, onTap, until, times }: { d: MyDate; onTap: () => void; until?: string | null; times?: ATimes }) {
   if (d.status === 'yes') return (
     <div className="md-card row">
       <DateSq iso={d.for_date} kind="yes" />
-      <div className="grow" style={{ minWidth: 0 }}><b>Yes · {d.from_time ? ampm15(d.from_time.slice(0, 5)) : 'any time'}</b><span className="md-tag yes">NOT BOOKED YET</span><small className="md-sub">{whereText(d)}</small></div>
+      <div className="grow" style={{ minWidth: 0 }}><b>Yes · {until ? `day only ${d.from_time ? ampm15(d.from_time.slice(0, 5)) : ''}–${ampm15(until)}` : d.from_time ? ampm15(d.from_time.slice(0, 5)) : 'any time'}</b><span className="md-tag yes">NOT BOOKED YET</span><small className="md-sub">{times ? timesText(times) + (times.length > 1 || times[0].starts.length > 1 ? ' · we’ll tell you which' : '') : whereText(d)}</small></div>
       <button className="md-chg" onClick={onTap}>Change</button>
     </div>
   );
@@ -235,10 +287,47 @@ function BookedRow({ s, base, onConfirm }: { s: Shift; base: string; onConfirm: 
         <b>{s.events.details_pending ? 'You’re booked' : place} · {notFinal(s) ? 'time TBC' : t12(s.planned_start)}</b>
         {notFinal(s) ? <span className="md-tag soon">DETAILS COMING</span>
           : toConfirm ? <span className="md-tag red">{left == null ? 'TO CONFIRM' : left <= 0 ? 'CONFIRM NOW' : `${left} H TO CONFIRM`}</span>
-          : <span className="md-tag ok">✓ BOOKED</span>}
+          : <span className="md-tag ok">{s.status === 'confirmed' ? '✓ CONFIRMED' : '✓ BOOKED'}</span>}
+        {s.status === 'confirmed' && s.confirmed_by && <span className="md-by-r">Ronnie confirmed this for you</span>}
       </div>
       {toConfirm ? <button className="md-confirm" onClick={onConfirm}>Confirm</button> : <Link className="md-chg" to={`${base}/shift/${s.id}`}>Details</Link>}
     </div>
+  );
+}
+
+/** push 51 · a past shift: date, venue, position · start – end; managers: hours sent / to rate, staff: approved / waiting. */
+function PastRow({ s, base, mine, sum, fbOn }: { s: PastShift; base: string; mine: boolean; sum?: TeamSum; fbOn: boolean }) {
+  const p = s.punches; const a = p?.punch_in ?? s.planned_start; const b = p?.punch_out ?? s.planned_end;
+  const sent = !!s.events.hours_submitted_at;
+  return (
+    <Link to={`${base}/shift/${s.id}?past=1`} className="md-card row past">
+      <DateSq iso={s.events.event_date} kind="neutral" />
+      <div className="grow" style={{ minWidth: 0 }}>
+        <b>{s.events.venues?.name ?? s.events.title}</b>
+        <span className="md-pos">{roleOf(s.position_code, s.position_detail)} · {t12(a)}{b ? ` – ${t12(b)}` : ''}{mine && sum ? ` · you managed ${sum.team}` : ''}</span>
+        <span className="md-tags">
+          {mine ? <>
+            {sent ? <span className="md-tag okl">✓ HOURS SENT</span> : <span className="md-tag gold">HOURS NOT SENT</span>}
+            {fbOn && sum && sum.newStaff.length > 0 && (sum.toRate ? <span className="md-tag ink">★ {sum.toRate} TO RATE</span> : <span className="md-tag okl">✓ RATED</span>)}
+          </> : sent ? <span className="md-tag okl">✓ APPROVED</span> : <span className="md-tag wait">WAITING</span>}
+        </span>
+      </div>
+      <span className="md-go" aria-hidden="true">›</span>
+    </Link>
+  );
+}
+
+/** push 38 · a meeting in Booked: Teams-purple date square + MEETING tag. */
+function MeetingRow({ m, to }: { m: MyMeeting; to: string }) {
+  return (
+    <Link to={to} className="md-card row mtg-mdrow">
+      <DateSq iso={dayOfMtl(m.starts_at)} kind="meeting" />
+      <div className="grow" style={{ minWidth: 0 }}>
+        <b>{m.title} · {mt12(m.starts_at)}</b>
+        <span className="md-tag mtg">MEETING</span>{m.answer === 'coming' ? <span className="md-tag ok" style={{ marginLeft: 6 }}>✓ COMING</span> : m.answer === 'cant' ? <span className="md-tag soon" style={{ marginLeft: 6 }}>CAN’T MAKE IT</span> : <span className="md-tag red" style={{ marginLeft: 6 }}>ANSWER</span>}
+      </div>
+      <span className="md-chg">Details</span>
+    </Link>
   );
 }
 
@@ -256,29 +345,47 @@ function PickSheet({ d, onClose, onYes, onMaybe, onNo }: { d: MyDate; onClose: (
           <button className={'m' + (d.status === 'maybe' ? ' cur' : '')} disabled={!canMaybe} onClick={onMaybe}>Maybe</button>
           <button className={'n' + (d.status === 'no' ? ' cur' : '')} onClick={onNo}>No</button>
         </div>
-        <p className="muted sm" style={{ margin: 0 }}>{canMaybe ? 'Saying yes doesn’t book you yet. G&R confirms the team closer to the date.' : 'The answer-by date has passed: Yes or No only.'}</p>
+        <p className="muted sm" style={{ margin: 0 }}>{canMaybe ? brandify('Saying yes doesn’t book you yet. G&R confirms the team closer to the date.') : 'The answer-by date has passed: Yes or No only.'}</p>
       </SwipeSheet>
     </>
   );
 }
 
 /** Yes → "from what time?" chips; their usual time for that weekday is pre-picked (green). One tap saves and closes. */
-function YesSheet({ d, usual, onClose, onPick }: { d: MyDate; usual: string | null | undefined; onClose: () => void; onPick: (from: string | null) => void }) {
+function YesSheet({ d, usual, usualDay, until, onClose, onPick, times }: { d: MyDate; usual: string | null | undefined; usualDay: [string, string] | null; until: string | null; onClose: () => void; onPick: (from: string | null, until?: string | null) => void; times?: ATimes }) {
   const [other, setOther] = useState(false); const [t, setT] = useState<string | null>(null);
-  const chips = useMemo(() => { const c = ['15:00', '16:00', '17:00', '18:00']; if (usual && !c.includes(usual)) c.push(usual); return c.sort(); }, [usual]);
-  const cur = d.status === 'yes' ? (d.from_time ? d.from_time.slice(0, 5) : 'any') : usual === null ? 'any' : usual ?? null;
+  // push 64 · Day only (from… until…), pre-filled from their usual week
+  const [day, setDay] = useState(false);
+  const [dFrom, setDFrom] = useState<string | null>(until ? (d.from_time?.slice(0, 5) ?? '08:00') : usualDay?.[0] ?? '08:00');
+  const [dUntil, setDUntil] = useState<string | null>(until ?? usualDay?.[1] ?? '15:00');
+  const dayOk = !!dFrom && !!dUntil && dUntil > dFrom;
+  const chips = useMemo(() => { if (times) return [...new Set(times.flatMap((t) => t.starts))].sort(); const c = ['15:00', '16:00', '17:00', '18:00']; if (usual && !c.includes(usual)) c.push(usual); return c.sort(); }, [usual, times]);
+  const cur = d.status === 'yes' && !until ? (d.from_time ? d.from_time.slice(0, 5) : 'any') : d.status === 'yes' ? null : usualDay ? null : usual === null ? 'any' : usual ?? null;
+  const wd = D(d.for_date).toLocaleDateString('en-US', { weekday: 'long' });
   return (
     <>
       <div className="scrim" onClick={onClose} />
       <SwipeSheet onClose={onClose} label="From what time?">
-        <div className="serif" style={{ fontSize: 24, paddingRight: 44 }}>{dayLabel(d.for_date)} · from what time?</div>
-        {!other ? <>
-          <div className="md-chips">
-            <button className={cur === 'any' ? 'on' : ''} onClick={() => onPick(null)}>Any time</button>
-            {chips.map((c) => <button key={c} className={cur === c ? 'on' : ''} onClick={() => onPick(c)}>{ampm15(c)}</button>)}
-            <button onClick={() => setOther(true)}>Other…</button>
+        <div className="serif" style={{ fontSize: 24, paddingRight: 44 }}>{dayLabel(d.for_date)} · {day ? 'day only' : times ? 'what’s the earliest you can start?' : 'from what time?'}</div>
+        {day ? <>
+          <p className="muted sm" style={{ margin: 0 }}>{usualDay ? `Pre-filled from your usual ${wd}. ` : ''}Events often run late: pick Day only only if you really can’t stay for the evening.</p>
+          <div className="wk-two">
+            <div><small>From</small><TimeWheel value={dFrom} onChange={setDFrom} rest="08:00" /></div>
+            <div><small>Until</small><TimeWheel value={dUntil} onChange={setDUntil} rest="15:00" /></div>
           </div>
-          <p className="muted sm" style={{ margin: 0 }}>{usual !== undefined ? `Your usual ${D(d.for_date).toLocaleDateString('en-US', { weekday: 'long' })} is in green. ` : ''}Tap a time: it saves and closes.</p>
+          <button className="big-btn dark" disabled={!dayOk} onClick={() => dayOk && onPick(dFrom, dUntil)}>{dayOk ? `Save · day only ${ampm15(dFrom)}–${ampm15(dUntil)}` : 'Until must be after From'}</button>
+          <button className="link-btn" onClick={() => setDay(false)}>‹ I can stay for the evening</button>
+        </> : !other ? <>
+          <div className="md-chips">
+            {!times && <button className={cur === 'any' ? 'on' : ''} onClick={() => onPick(null)}>Any time</button>}
+            {chips.map((c) => <button key={c} className={cur === c ? 'on' : ''} onClick={() => onPick(c)}>{ampm15(c)}</button>)}
+            <button onClick={() => setOther(true)}>{times ? 'Later…' : 'Other…'}</button>
+          </div>
+          <p className="muted sm" style={{ margin: 0 }}>{times ? `${timesText(times)}. This isn’t your shift yet: we’ll tell you which time. Later… = Ronnie may still book you as an extra.` : `${usual !== undefined && !usualDay ? `Your usual ${wd} is in green. ` : ''}Tap a time: it saves and closes.`}</p>
+          <div className="md-day">
+            <span className="k">CAN’T STAY FOR THE EVENING?</span>
+            <div className="md-chips"><button className={until || usualDay ? 'on day' : ''} onClick={() => setDay(true)}>Day only{until ? ` · ${ampm15(dFrom)}–${ampm15(until)}` : usualDay ? ` · usually until ${ampm15(usualDay[1])}` : ''}…</button></div>
+          </div>
         </> : <>
           <FromPicker choice={t} setChoice={setT} rest={usual ?? d.approx_start?.slice(0, 5) ?? '17:00'} />
           <button className="big-btn dark" disabled={!t} onClick={() => onPick(t === 'any' ? null : t)}>{!t ? 'Pick a time' : t === 'any' ? 'Save · any time' : `Save · from ${ampm15(t)}`}</button>
@@ -410,7 +517,7 @@ function CalendarView({ me, today, dates, shifts, preview, onAnswer, onShift }:
           </div>
         ) : opened.has(sel) && usualNo.has(dowMon0(sel)) ? (
           <div className="card row" style={{ gap: 10 }}><span className="opened-tag">✓ Opened up</span><span className="grow muted sm">You can be asked and booked this {dowName(sel)}.</span><button className="link-btn" onClick={() => openDay(sel, false)}>Undo</button></div>
-        ) : <div className="card muted sm">{dayLabel(sel)} · nothing yet. G&amp;R’s dates show here when they’re sent.</div>
+        ) : <div className="card muted sm">{dayLabel(sel)} · nothing yet. <Brand />’s dates show here when they’re sent.</div>
       )}
     </>
   );

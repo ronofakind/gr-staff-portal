@@ -10,7 +10,7 @@ import { dLabel, tTime, type AEvent } from './api';
  * Hours count from shifts.confirm_sent_at (migration 039). Nothing is auto-cancelled and the app never sends texts:
  * Text opens Ronnie's Messages with the reminder filled in.
  */
-type Row = { id: string; event_id: string; staff_id?: string; status: string; attendance: string | null; planned_start: string; confirm_sent_at?: string | null; time_tbc?: boolean | null;
+type Row = { id: string; event_id: string; staff_id?: string; status: string; confirmed_by?: string | null; attendance: string | null; planned_start: string; confirm_sent_at?: string | null; time_tbc?: boolean | null;
   staff: { full_name: string; nickname: string | null; phone: string | null } | null; events?: { details_pending?: boolean } | null };
 export type CState = 'ok' | 'grey' | 'gold' | 'red' | 'unsent' | 'pending';
 export const hoursSince = (iso: string) => Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 3600e3));
@@ -37,11 +37,17 @@ export function ConfirmTracker({ evs, venue }: { evs: AEvent[]; venue: string })
   useEffect(() => {
     const q = (cols: string) => supabase.from('shifts').select(cols).in('event_id', evs.map((e) => e.id)).neq('status', 'declined').is('attendance', null).order('planned_start');
     const base = 'id,event_id,staff_id,status,attendance,planned_start,time_tbc,events(details_pending),staff:staff!shifts_staff_id_fkey(full_name,nickname,phone)';
-    q(base + ',confirm_sent_at').then(async (r) => {
+    q(base + ',confirm_sent_at,confirmed_by').then(async (r) => {
       const res = r.error ? await q(base) : r; // migration 039 not applied yet → no hours, only confirmed / waiting
       setRows(((res.data ?? []) as unknown as Row[]).filter((x) => x.staff));
     });
   }, [ids]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Nov 4 · Ronnie confirms for them (they texted). Same as their own Confirm; nothing is sent.
+  const markConfirmed = async (id: string, on: boolean) => {
+    const { error } = await supabase.rpc('admin_mark_confirmed', { p_shift: id, p_on: on });
+    if (error) { alert(error.message); return; }
+    setRows((l) => (l ?? []).map((x) => (x.id === id ? { ...x, status: on ? 'confirmed' : 'booked', confirmed_by: on ? 'me' : null } : x)));
+  };
   if (!rows) return <div className="muted sm">Loading…</div>;
   if (!rows.length) return <div className="muted sm">Nobody booked yet.</div>;
   const pendingOf = (r: Row) => !!r.events?.details_pending || !!r.time_tbc;
@@ -55,7 +61,7 @@ export function ConfirmTracker({ evs, venue }: { evs: AEvent[]; venue: string })
   const seg = (s: CState[], cls: string) => { const k = list.filter((x) => s.includes(x.st)).length; return k ? <i className={cls} style={{ flex: k }} /> : null; };
   return (
     <div className="ct">
-      <div className="ct-h"><b>Confirmations</b><span className="muted sm">{ok} of {total}</span></div>
+      <div className="ct-h"><b>Confirmations</b><span className="muted sm">{ok} of {total}{ok < total && <> · <button className="lnk sm" onClick={async () => { const ids = list.filter((x) => x.st !== 'ok').map((x) => x.r.id); for (const id of ids) await markConfirmed(id, true); }}>✓ Confirm all</button></>}</span></div>
       <div className="ct-bar">{seg(['ok'], 'ok')}{seg(['grey', 'unsent', 'pending'], 'grey')}{seg(['gold'], 'gold')}{seg(['red'], 'red')}</div>
       {shown.map(({ r, st }) => {
         const h = r.confirm_sent_at ? hoursSince(r.confirm_sent_at) : 0;
@@ -64,7 +70,7 @@ export function ConfirmTracker({ evs, venue }: { evs: AEvent[]; venue: string })
           <div key={r.id} className="ct-row">
             <b className="grow">{r.staff!.full_name}</b>
             {r.staff_id && <Link className="abtn sm" to={`/admin/messages?staff=${r.staff_id}`} title={`Message ${r.staff!.full_name}`} aria-label={`Message ${r.staff!.full_name}`}>✉</Link>}
-            {st === 'ok' ? <span className="ct-tag ok">✓ Confirmed</span>
+            {st === 'ok' ? <span className="ct-tag ok">{r.confirmed_by ? '✓ by Ronnie · texted' : '✓ Confirmed'}</span>
               : st === 'red' ? <span className="ct-tag red">Overdue · {h} h</span>
               : st === 'gold' ? <span className="ct-tag gold">Waiting · {h} h</span>
               : st === 'grey' ? <span className="ct-tag">Waiting · {h} h</span>
@@ -73,6 +79,8 @@ export function ConfirmTracker({ evs, venue }: { evs: AEvent[]; venue: string })
             {(st === 'gold' || st === 'red') && (r.staff!.phone
               ? <a className="abtn sm dark" href={remindSms(r.staff!.phone, name, evs[0].event_date, venue, r.planned_start)}>Text</a>
               : <span className="abtn sm" aria-disabled title="No phone on file">Text</span>)}
+            {st !== 'ok' && st !== 'pending' && <button className="abtn sm dark" title="They confirmed by text" onClick={() => markConfirmed(r.id, true)}>✓ Mark confirmed</button>}
+            {st === 'ok' && r.confirmed_by && <button className="lnk sm" onClick={() => markConfirmed(r.id, false)}>Undo</button>}
           </div>
         );
       })}
@@ -83,7 +91,8 @@ export function ConfirmTracker({ evs, venue }: { evs: AEvent[]; venue: string })
 }
 
 /** Needs you: "2 people haven't confirmed after 6 h · 1 is overdue" (one line for all upcoming events). */
-export async function lateConfirmations(today: string): Promise<{ title: string; sub: string; to: string } | null> {
+/** skipOverdue (push 47): people past 24 h are on the NOT CONFIRMED card instead. */
+export async function lateConfirmations(today: string, skipOverdue = false): Promise<{ title: string; sub: string; to: string } | null> {
   const cut = new Date(Date.now() - 6 * 3600e3).toISOString();
   const { data, error } = await supabase.from('shifts')
     .select('id,event_id,confirm_sent_at,staff:staff!shifts_staff_id_fkey(full_name),events!inner(title,event_date,details_pending)')
@@ -91,7 +100,7 @@ export async function lateConfirmations(today: string): Promise<{ title: string;
     .gte('events.event_date', today).order('confirm_sent_at');
   if (error || !Array.isArray(data) || !data.length) return null; // 039 not applied → nothing
   type R = { event_id: string; confirm_sent_at: string; staff: { full_name: string } | null; events: { title: string; event_date: string; details_pending?: boolean } };
-  const rows = (data as unknown as R[]).filter((r) => r.events && !r.events.details_pending);
+  const rows = (data as unknown as R[]).filter((r) => r.events && !r.events.details_pending && !(skipOverdue && hoursSince(r.confirm_sent_at) >= 24));
   if (!rows.length) return null;
   const over = rows.filter((r) => hoursSince(r.confirm_sent_at) >= 24).length;
   const names = rows.slice(0, 4).map((r) => `${(r.staff?.full_name ?? '?').split(' ')[0]} (${r.events.title} ${dLabel(r.events.event_date)})`).join(', ');

@@ -15,6 +15,9 @@ export function CheckupTracker({ staff, onOpen }: { staff: AStaff[]; onOpen: (s:
   const [rows, setRows] = useState<Record<string, Row> | null>(null); const [err, setErr] = useState('');
   const [next, setNext] = useState<Record<string, string>>({});
   const [f, setF] = useState<Filter>('notyet'); const [all, setAll] = useState(false);
+  // Nov 6 · fold away (remembered on this computer)
+  const [fold, setFold] = useState(() => { try { return localStorage.getItem('gr_cu_fold') === '1'; } catch { return false; } });
+  const tog = () => { setFold(!fold); try { localStorage.setItem('gr_cu_fold', fold ? '0' : '1'); } catch { /* private mode */ } };
   useEffect(() => {
     supabase.rpc('admin_checkup_overview').then(({ data, error }) => {
       if (error) { setErr(/function|schema|exist/i.test(error.message) ? 'Needs migration 036 (not applied yet).' : error.message); return; }
@@ -41,8 +44,9 @@ export function CheckupTracker({ staff, onOpen }: { staff: AStaff[]; onOpen: (s:
   const shown = all ? list : list.slice(0, 8);
   return (
     <div className="adm-card cu-tr">
-      <div className="row" style={{ justifyContent: 'space-between' }}><span className="kick">PROFILE CHECK-UP</span><b className="sm">{done.length} of {active.length} done</b></div>
+      <button type="button" className="cu-tr-h" onClick={tog} aria-expanded={!fold}><span className="kick">PROFILE CHECK-UP</span><span className="grow" /><b className="sm">{done.length} of {active.length} done</b><span className="muted">{fold ? '▾' : '▴'}</span></button>
       <div className="cu-tr-bar"><span style={{ width: pct + '%' }} /></div>
+      {!fold && <>
       <div className="cu-tr-chips">
         <button className={'c-done' + (f === 'done' ? ' on' : '')} onClick={() => setF('done')}>Done {done.length}</button>
         <button className={'c-skip' + (f === 'skipped' ? ' on' : '')} onClick={() => setF('skipped')}>Skipped emergency contact {skipped.length}</button>
@@ -66,6 +70,7 @@ export function CheckupTracker({ staff, onOpen }: { staff: AStaff[]; onOpen: (s:
         {list.length > 8 && <button className="lnk sm" style={{ alignSelf: 'flex-start' }} onClick={() => setAll(!all)}>{all ? 'Show less' : `Show all ${list.length}`}</button>}
       </div>
       <span className="muted sm">They do it the next time they open the app, so most will be done by their next shift. No texts are sent from here.</span>
+      </>}
     </div>
   );
 }

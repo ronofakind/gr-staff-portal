@@ -9,7 +9,7 @@ export type AStaff = {
 
 export type AShift = {
   id: string; event_id: string; staff_id: string; position_code: string | null; position_detail: string | null;
-  planned_start: string; status: 'booked' | 'confirmed' | 'declined'; changed_at: string; notified_at: string | null; attendance: 'no_show' | 'cancelled' | null; left_early?: boolean; attendance_reason?: string | null; leave_by: string | null;
+  planned_start: string; planned_end?: string | null; status: 'booked' | 'confirmed' | 'declined'; changed_at: string; notified_at: string | null; attendance: 'no_show' | 'cancelled' | null; left_early?: boolean; attendance_reason?: string | null; leave_by: string | null;
   punches: { punch_in: string | null; punch_out: string | null } | null; manager_note?: string | null; note_archived_at?: string | null; note_archived_by?: string | null;
   staff: { full_name: string; phone?: string | null } | null;
   /** push 28 (migration 034; undefined until it is applied) */
@@ -20,15 +20,15 @@ export type AShift = {
 export type AEvent = {
   id: string; event_date: string; title: string; address: string | null; department: 'floor' | 'bar' | 'kitchen';
   description: string | null; dress_code: string | null; bring: string | null;
-  start_time: string | null; end_time: string | null; staff_needed: number; manager_id: string | null; hours_submitted_at: string | null; hours_submitted_by?: string | null;
-  venue_id: string | null; guests?: number | null; event_type?: string | null; extras?: number | null; extras_billing?: 'gr' | 'client' | null; transport?: boolean; travel_min?: number | null; paid_travel_min?: number | null; gas_per_car?: number | null; transport_billing?: 'client' | 'gr' | null; rides?: boolean; ends_label?: string | null; staffing?: Line[]; notes?: string | null; uniform_floor?: string; uniform_bar?: string; uniform_floor_w?: string | null; uniform_bar_w?: string | null; drive_folder_url?: string | null; timeline: { time: string; label: string }[];
+  start_time: string | null; end_time: string | null; staff_needed: number; details_pending?: boolean | null; manager_id: string | null; hours_submitted_at: string | null; hours_submitted_by?: string | null;
+  venue_id: string | null; guests?: number | null; event_type?: string | null; extras?: number | null; extras_billing?: 'gr' | 'client' | null; transport?: boolean; travel_min?: number | null; paid_travel_min?: number | null; gas_per_car?: number | null; transport_billing?: 'client' | 'gr' | null; rides?: boolean; ends_label?: string | null; staffing?: Line[]; notes?: string | null; uniform_floor?: string; uniform_bar?: string; uniform_floor_w?: string | null; uniform_bar_w?: string | null; drive_folder_url?: string | null; tentative?: boolean; links?: unknown; timeline: { time: string; label: string }[];
   event_private: { client: string | null; client_id?: string | null; punch_code: string ; pay_method?: 'invoice' | 'cash'; qb_doc_type?: 'estimate' | 'invoice' | null; qb_doc_number?: string | null; cash_received_at?: string | null; qb_removed_at?: string | null } | null;
   shifts: AShift[];
 };
 
-const EVENT_SELECT_T = `id,event_date,title,address,department,description,dress_code,bring,start_time,end_time,
-  staff_needed,manager_id,hours_submitted_at,hours_submitted_by,venue_id,timeline,event_private(client,client_id,punch_code,pay_method,qb_doc_type,qb_doc_number,cash_received_at,qb_removed_at),guests,event_type,extras,extras_billing,transport,travel_min,paid_travel_min,gas_per_car,transport_billing,rides,ends_label,staffing,notes,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,drive_folder_url,
-  shifts(id,event_id,staff_id,position_code,position_detail,planned_start,status,changed_at,notified_at,attendance,left_early,attendance_reason,leave_by,manager_note,note_archived_at,note_archived_by,responded_at,punches(punch_in,punch_out),staff:staff!shifts_staff_id_fkey(full_name,phone)P28)`;
+const EVENT_SELECT_T = `id,event_date,title,address,department,description,dress_code,bring,start_time,end_time,details_pending,
+  staff_needed,manager_id,hours_submitted_at,hours_submitted_by,venue_id,timeline,event_private(client,client_id,punch_code,pay_method,qb_doc_type,qb_doc_number,cash_received_at,qb_removed_at),guests,event_type,extras,extras_billing,transport,travel_min,paid_travel_min,gas_per_car,transport_billing,rides,ends_label,staffing,notes,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,drive_folder_url,tentative,links,
+  shifts(id,event_id,staff_id,position_code,position_detail,planned_start,planned_end,status,changed_at,notified_at,attendance,left_early,attendance_reason,leave_by,manager_note,note_archived_at,note_archived_by,responded_at,punches(punch_in,punch_out),staff:staff!shifts_staff_id_fkey(full_name,phone)P28)`;
 /** push 28 shift columns (migration 034). */
 export const P28_SHIFT_COLS = ',cancelled_at,cancel_reason,cancel_note,cancel_self,cancel_late,cancel_sent_to_manager,replacement_for';
 export const EVENT_SELECT = EVENT_SELECT_T.replace('P28', '');
@@ -46,7 +46,7 @@ export async function eventsBetween(from: string, to: string) {
 
 export async function allStaff() {
   const { data, error } = await supabase.from('staff')
-    .select('id,full_name,nickname,email,phone,language,department,role,positions,md_rank,active,photo_url,created_at,sex,staff_private(ranking,notes,tier)')
+    .select('id,full_name,nickname,email,phone,language,department,role,positions,md_rank,active,photo_url,created_at,sex,staff_private!staff_private_staff_id_fkey(ranking,notes,tier)')
     .order('full_name');
   if (error) throw error;
   return (data ?? []) as unknown as AStaff[];
@@ -81,21 +81,37 @@ export const addDays = (iso: string, n: number) => {
 };
 export const hhmm = (t: string | null) => (t ? t.slice(0, 5) : '');
 
-/** Flags computed from a shift: no-show / cancelled / late (>10 min after call) / early start (started before call on purpose). */
+/** Nov 8 · late = more than 30 min after call (Ronnie): 30 and under is not flagged and doesn't count on reliability. */
+export const LATE_MIN = 30;
+/** Flags computed from a shift: no-show / cancelled / late (30+ min after call) / early start (started before call on purpose). */
 export type Flag = 'no_show' | 'cancelled' | 'late' | 'early';
 export const FLAG_LABEL: Record<Flag, string> = { no_show: 'NO-SHOW', cancelled: 'CANCELLED', late: 'LATE', early: 'EARLY START' };
 /**
  * push 28: `free` = shown but not counted in Reliability — a cancel made before they confirmed (cancel_self and not
  * cancel_late), or late but started by the ETA they gave in "I'm running late" (late_eta, within the same 10 min).
  */
-export function flagsOf(s: { attendance: string | null; planned_start: string; punches: { punch_in: string | null } | null; cancel_self?: boolean; cancel_late?: boolean; late_eta?: string | null }): { flag: Flag; min?: number; free?: boolean; told?: boolean }[] {
+/** push 57 (084) · Ronnie decides each late arrival: 'count' · 'skip'. No entry → Settings default. Cached here so flagsOf stays sync. */
+export const LATE_DECISION: Record<string, 'count' | 'skip'> = {};
+export async function loadLateDecisions() {
+  const { data, error } = await supabase.from('late_decisions').select('shift_id,decision');
+  if (error || !Array.isArray(data)) return; // before 084
+  for (const k of Object.keys(LATE_DECISION)) delete LATE_DECISION[k];
+  for (const r of data as { shift_id: string; decision: 'count' | 'skip' }[]) LATE_DECISION[r.shift_id] = r.decision;
+}
+export async function setLateDecision(shiftId: string, d: 'count' | 'skip') {
+  const { error } = await supabase.from('late_decisions').upsert({ shift_id: shiftId, decision: d, decided_at: new Date().toISOString() });
+  if (!error) LATE_DECISION[shiftId] = d;
+  return error;
+}
+const lateFree = (id: string | undefined, dflt: boolean) => (id && LATE_DECISION[id] ? LATE_DECISION[id] === 'skip' : dflt);
+export function flagsOf(s: { id?: string; attendance: string | null; planned_start: string; punches: { punch_in: string | null } | null; cancel_self?: boolean; cancel_late?: boolean; late_eta?: string | null }): { flag: Flag; min?: number; free?: boolean; told?: boolean }[] {
   if (s.attendance === 'no_show') return [{ flag: 'no_show' }];
   if (s.attendance === 'cancelled') return [s.cancel_self && !s.cancel_late ? { flag: 'cancelled', free: true } : { flag: 'cancelled' }];
   const pin = s.punches?.punch_in; if (!pin) return [];
   const diff = Math.round((new Date(pin).getTime() - new Date(s.planned_start).getTime()) / 60000);
   // push 32: Settings → "Count told ahead as late" (off by default) counts them even when they came by their ETA.
-  if (diff > 10 && s.late_eta) { const byEta = new Date(pin).getTime() <= new Date(s.late_eta).getTime() + 10 * 60000; return [{ flag: 'late', min: diff, told: true, free: byEta && !setting('bookings.count_told_ahead') }]; }
-  if (diff > 10) return [{ flag: 'late', min: diff }];
+  if (diff > LATE_MIN && s.late_eta) { const byEta = new Date(pin).getTime() <= new Date(s.late_eta).getTime() + 10 * 60000; return [{ flag: 'late', min: diff, told: true, free: lateFree(s.id, !setting('bookings.count_late') || (byEta && !setting('bookings.count_told_ahead'))) }]; }
+  if (diff > LATE_MIN) return [{ flag: 'late', min: diff, free: lateFree(s.id, !setting('bookings.count_late')) }];
   if (diff < -1) return [{ flag: 'early', min: -diff }];
   return [];
 }
@@ -115,10 +131,13 @@ export const tTime = (iso: string | null) => iso ? new Date(iso).toLocaleTimeStr
 export const dLabel = (iso: string, o: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric' }) => new Date(iso + 'T12:00:00').toLocaleDateString('en-CA', o).replace(/\./g, '');
 
 /** One line of the staffing grid: one role at one start time. */
-export type Line = { dept: 'floor' | 'bar'; code: string; start: string; end?: string | null; count: number; names: string[] };
+/** Push 61 · tbc = start time still to come (a placeholder time is kept for shifts); hold = how many of `count` are the +15% on hold. */
+export type Line = { dept: 'floor' | 'bar'; code: string; start: string; end?: string | null; count: number; names: string[]; tbc?: boolean; hold?: number };
 export const ROLES: { dept: 'floor' | 'bar'; code: string; label: string }[] = [
   { dept: 'floor', code: 'MD', label: 'MD' }, { dept: 'floor', code: 'W', label: 'Waiter' }, { dept: 'floor', code: 'BUS', label: 'Busboy' },
   { dept: 'bar', code: 'BM', label: 'Bar manager' }, { dept: 'bar', code: 'BT', label: 'Bartender' }, { dept: 'bar', code: 'BB', label: 'Barback' },
+  /** Push 61 · wine staff: floor staff (floor uniform, report to the MD) billed on the bar invoice, so they live on the bar event. */
+  { dept: 'bar', code: 'WW', label: 'Wine waiter' },
 ];
 export const roleName = (code: string | null) => ROLES.find((r) => r.code === code)?.label ?? (code && /^\d+$/.test(code) ? 'Waiter' : code ?? '');
 export const roleOfShift = (code: string | null) => (code && /^\d+$/.test(code) ? 'W' : code ?? 'W');
@@ -130,7 +149,8 @@ export type Client = { id: string; name: string; rate_sets: { key: string; label
   /** push 32 (migration 038 adds admin_fee_pct, transport_billing) */
   qb_customer?: string | null; extras_billing?: 'gr' | 'client'; transport_billing?: 'client' | 'gr'; admin_fee_pct?: number | null };
 export const UNIFORMS: [string, string][] = [['white_shirt', 'White dress shirt'], ['black_shirt', 'Black dress shirt'], ['dress', 'Black cocktail dress'], ['black_tshirt', 'Black T-shirt']];
-export const ENDS: [string, string | null][] = [['~ 10 PM', '22:00'], ['~ 11 PM', '23:00'], ['~ midnight', '00:00'], ['~ 1 AM', '01:00'], ['~ 2 AM', '02:00'], ['late', null]];
+/** push 64 · day events need an end too (brunch, lunch): shown to staff as an estimate. */
+export const ENDS: [string, string | null][] = [['~ 1 PM', '13:00'], ['~ 2 PM', '14:00'], ['~ 3 PM', '15:00'], ['~ 4 PM', '16:00'], ['~ 5 PM', '17:00'], ['~ 6 PM', '18:00'], ['~ 7 PM', '19:00'], ['~ 8 PM', '20:00'], ['~ 9 PM', '21:00'], ['~ 10 PM', '22:00'], ['~ 11 PM', '23:00'], ['~ midnight', '00:00'], ['~ 1 AM', '01:00'], ['~ 2 AM', '02:00'], ['late', null]];
 /** "545" → "17:45", "5:45pm" → "17:45", "1130" → "11:30" (AM/PM guessed for evening events: 1–9 → PM). */
 export function parseTime(raw: string): string | null {
   const t = raw.trim().toLowerCase().replace(/\s/g, ''); if (!t) return null;
@@ -152,12 +172,62 @@ const aDate = (iso: string) => new Date(iso + 'T12:00:00').toLocaleDateString('e
 export async function bookingChange(kind: 'booked' | 'moved' | 'removed', p: {
   staff_id: string; shift_id?: string | null; to?: { id: string; event_date: string; title: string; sent: boolean; start: string };
   from?: { id: string; event_date: string; title: string; sent: boolean; start: string };
+  /** push 40 · position before → after (for the "Your shift changed" note) */ pos?: { old: string; new: string } | null; position?: string | null;
+  /** push 52 · Sheet changes "Approve quietly": log the change only (no Home alert, no conversation note → no push, no text). */ quiet?: boolean;
 }) {
-  await supabase.from('change_log').insert({ entity: 'shift', entity_id: p.shift_id ?? null, change: { kind, staff: p.staff_id, from: p.from?.id ?? null, to: p.to?.id ?? null, start: p.to?.start ?? null } });
+  await supabase.from('change_log').insert({ entity: 'shift', entity_id: p.shift_id ?? null, change: { kind, staff: p.staff_id, from: p.from?.id ?? null, to: p.to?.id ?? null, start: p.to?.start ?? null, ...(p.quiet ? { quiet: true } : {}) } });
+  if (p.quiet) return;
   const t = (x: { start: string }) => tTime(x.start);
   let alert: { title: string; body: string; event_id: string | null } | null = null;
   if (kind === 'booked' && p.to?.sent) alert = { title: "You're booked", body: `${aDate(p.to.event_date)} · ${p.to.title} · starts ${t(p.to)}`, event_id: p.to.id };
   if (kind === 'moved' && p.to && (p.to.sent || p.from?.sent)) alert = { title: 'Your shift changed', body: `Now ${aDate(p.to.event_date)} · ${p.to.title} · starts ${t(p.to)}${p.from ? ` (was ${p.from.title} · ${t(p.from)})` : ''}`, event_id: p.to.id };
   if (kind === 'removed' && p.from?.sent) alert = { title: `You're no longer on ${aDate(p.from.event_date)}`, body: `${p.from.title} · that shift was removed. Questions? Text Ronnie.`, event_id: null };
-  if (alert) await supabase.from('staff_alerts').insert({ staff_id: p.staff_id, kind, ...alert });
+  if (kind === 'moved' && p.pos && p.to && (p.to.sent || p.from?.sent) && !alert) alert = { title: 'Your shift changed', body: `${aDate(p.to.event_date)} · ${p.to.title} · now ${p.pos.new} (was ${p.pos.old})`, event_id: p.to.id };
+  if (!alert) return;
+  const { data: al } = await supabase.from('staff_alerts').insert({ staff_id: p.staff_id, kind, ...alert }).select('id').maybeSingle();
+  // push 40 · the same change as a note in their conversation with Ronnie (Got it / Can't make it). Errors (044 not applied) are ignored.
+  const lines: { label: string; old: string | null; new: string | null }[] = [];
+  if (kind === 'moved' && p.from && p.to) {
+    if (p.from.id !== p.to.id) lines.push({ label: 'Place', old: p.from.title, new: p.to.title });
+    if (p.pos && p.pos.old !== p.pos.new) lines.push({ label: 'Position', old: p.pos.old, new: p.pos.new });
+    if (new Date(p.from.start).getTime() !== new Date(p.to.start).getTime()) lines.push({ label: 'Start', old: t(p.from), new: t(p.to) });
+  }
+  const at = kind === 'removed' ? p.from : p.to;
+  if (at) await supabase.rpc('admin_shift_note', {
+    p_staff: p.staff_id, p_kind: kind === 'moved' ? 'changed' : kind === 'booked' ? 'new' : 'removed', p_shift: kind === 'removed' ? null : p.shift_id ?? null,
+    p_alert: (al as { id: string } | null)?.id ?? null,
+    p_meta: { date: at.event_date, venue: at.title, start: at.start, position: p.position ?? null, lines },
+  }).then(() => {}, () => {});
 }
+
+// ── Nov 4 · one count for Week, Month and the Bookings week strip ─────────────
+/** A shift that still counts on the event (not declined, not cancelled). */
+export const liveShift = (s: AShift) => s.status !== 'declined' && !s.cancelled_at && s.attendance !== 'cancelled';
+/** Client count = the event's staff count (MDs included); events imported without one fall back to their staffing lines.
+ *  booked stops at the count; anyone beyond it is an extra. need 0 = count not set. */
+export function countOf(e: AEvent) {
+  const n = e.shifts.filter(liveShift).length;
+  const lines = (e.staffing ?? []).reduce((a, l) => a + (l.count || 0), 0);
+  const need = e.staff_needed > 0 ? e.staff_needed : lines;
+  return { n, need, booked: need ? Math.min(n, need) : n, extra: need ? Math.max(0, n - need) : 0, short: need ? Math.max(0, need - n) : 0 };
+}
+/** Confirmations: sent · SEND (4 days or less, not sent) · later · none. */
+/** Nov 6 · still needs a confirmation from the app? Someone you confirmed by hand (text / call) counts as sent,
+ *  unless something changed after they confirmed. Everyone else: never sent, or changed since it was sent. */
+export const needsSend = (s: { status: string; notified_at: string | null; changed_at?: string | null; responded_at?: string | null }) => {
+  const ch = s.changed_at ?? '';
+  if (s.notified_at) return ch > s.notified_at;
+  if (s.status !== 'confirmed') return true;
+  return !!s.responded_at && new Date(ch).getTime() - new Date(s.responded_at).getTime() > 60000;
+};
+export function sendStateOf(e: AEvent, today: string): 'sent' | 'ready' | 'later' | 'none' {
+  const ls = e.shifts.filter((s) => liveShift(s) && !s.attendance); if (!ls.length) return 'none';
+  if (!ls.some(needsSend)) return 'sent';
+  const days = Math.round((new Date(e.event_date + 'T12:00:00').getTime() - new Date(today + 'T12:00:00').getTime()) / 864e5);
+  return days <= 4 ? 'ready' : 'later';
+}
+
+/** Nov 6 · "Floor + bar" people (Michael Brown, Georges…): department stays floor, positions holds BAR (or a bar code). */
+export const BAR_POS = /^(BAR|BM|BT|BB|BARTENDER|BARBACK|BAR MANAGER)$/i;
+export const doesBar = (s: { department: string; positions?: string[] | null }) => s.department === 'bar' || (s.positions ?? []).some((p) => BAR_POS.test(p.trim()));
+export const isBothDept = (s: { department: string; positions?: string[] | null }) => s.department !== 'bar' && doesBar(s);

@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import { addDays, isoDay, flagsOf, type AStaff } from './api';
+import { addDays, isoDay, flagsOf, loadLateDecisions, type AStaff } from './api';
 import { setting, loadSettings } from '../lib/settings';
 
 /* Push 27c · one score per person (admin only). Computed on load from the app data.
@@ -35,18 +35,25 @@ export const isStar = (v: unknown): v is number => typeof v === 'number' && Numb
 export const RATING_ICON: Record<Rating, string> = { up: '▲', ok: '●', down: '▼' };
 
 export type Feedback = { id: string; staff_id: string; event_id: string; by_staff_id: string; tier_vote: 'A' | 'B' | 'C' | null; overall_stars: number | null; ratings: Record<string, Rating>; note: string | null; created_at: string; archived_at: string | null;
+  again?: 'yes' | 'maybe' | 'no' | null; tags?: string[] | null;
   by?: { full_name: string } | null; events?: { title: string; event_date: string } | null };
-export type Priv = { staff_id: string; experience: string | null; bmo_fit: boolean | null; priority_until: string | null; veteran: boolean | null };
+export type Priv = { staff_id: string; experience: string | null; bmo_fit: boolean | null; priority_until: string | null; veteran: boolean | null; rel_seed?: string | null; shifts_seed?: number | null };
 type Sh = { id?: string; staff_id: string; attendance: string | null; planned_start: string; status: string; punches: { punch_in: string | null; punch_out: string | null } | null; events: { event_date: string } | null;
-  cancel_self?: boolean; cancel_late?: boolean; late_eta?: string | null };
+  cancel_self?: boolean; cancel_late?: boolean; late_eta?: string | null; cancelled_at?: string | null };
+/** Nov 5 · Ranking v3: date asks (Says yes / Saves the day) */
+type Av = { staff_id: string; status: string; for_date: string; asked_at: string | null; answered_at: string | null };
 
-export type ScoreData = { priv: Record<string, Priv>; shifts: Sh[]; feedback: Feedback[]; done: Record<string, number>; lateChanges?: Record<string, number> };
+export type ScoreData = { priv: Record<string, Priv>; shifts: Sh[]; feedback: Feedback[]; done: Record<string, number>; lateChanges?: Record<string, number>; asks?: Av[] };
+/** Nov 5 · Ranking v3 parts (shown in Why this score) */
+export type Part = { key: string; label: string; pts: number; max: number; sub: string; counted: boolean };
 export type Score = {
   total: number; tier: number; reliability: number; experience: number; feedback: number; extras: number;
   rel: { no_show: number; cancelled: number; late: number; late_change: number; free: number };
   /** stars = overall stars of the push-30 rows (newest first), hi / lo = detail stars ≥4 / ≤2, old = push-27 rows (A/B/C + ▲●▼ points) */
   fb: { n: number; votes: { A: number; B: number; C: number }; up: number; ok: number; down: number; stars: number[]; hi: number; lo: number; old: number };
   isNew: boolean; done: number; bmo: boolean; priority: string | null; exp: string | null;
+  /** Ranking v3 · form score 0–100 (sorts people inside their tier) + its parts */
+  form: number; parts: Part[];
   suggest: { to: 'A' | 'B' | 'C'; why: string } | null;
 };
 
@@ -55,16 +62,17 @@ const arr = <T,>(x: unknown, ok: (y: Record<string, unknown>) => boolean): T[] =
 
 /** Everything the score needs, in 4 reads. Shapes are checked (the mock harness can return junk). */
 export async function loadScoreData(): Promise<ScoreData> {
-  await loadSettings();
+  await Promise.all([loadSettings(), loadLateDecisions()]);
   const today = isoDay(new Date()); const since = addDays(today, -weights().reliability.days);
   const shq = (extra: string) => supabase.from('shifts').select('id,staff_id,attendance,planned_start,status,punches(punch_in,punch_out),events!inner(event_date)' + extra).neq('status', 'declined').gte('events.event_date', since).lte('events.event_date', today);
-  const [p, s0, f, c, ln, cr] = await Promise.all([
-    supabase.from('staff_private').select('staff_id,experience,bmo_fit,priority_until,veteran'),
-    shq(',cancel_self,cancel_late'),
+  const [p, s0, f, c, ln, cr, av] = await Promise.all([
+    supabase.from('staff_private').select('staff_id,experience,bmo_fit,priority_until,veteran,rel_seed,shifts_seed').then((r) => (r.error ? supabase.from('staff_private').select('staff_id,experience,bmo_fit,priority_until,veteran') : r)),
+    shq(',cancel_self,cancel_late,cancelled_at').then((r) => (r.error ? shq(',cancel_self,cancel_late') : r)),
     loadFeedback(),
     supabase.rpc('staff_shift_counts'),
     supabase.from('late_notices').select('shift_id,eta'), // push 28 · errors (034 not applied) → no notices
     supabase.from('shift_change_requests').select('staff_id,created_at').eq('count_reliability', true).eq('status', 'accepted').gte('created_at', since + 'T00:00:00Z'),
+    supabase.from('availability').select('staff_id,status,for_date,asked_at,answered_at').not('ask_id', 'is', null).gte('for_date', since).lte('for_date', today),
   ]);
   const s = s0.error ? await shq('') : s0; // migration 034 not applied yet
   const eta: Record<string, string> = {};
@@ -77,13 +85,15 @@ export async function loadScoreData(): Promise<ScoreData> {
   for (const r of arr<{ staff_id: string; done: number }>(c.data, (y) => typeof y.staff_id === 'string' && typeof y.done === 'number')) done[r.staff_id] = r.done;
   const feedback = arr<Feedback>(f.data, (y) => typeof y.staff_id === 'string' && typeof y.created_at === 'string').map((x) => ({ ...x, overall_stars: isStar(x.overall_stars) ? x.overall_stars : null, ratings: isObj(x.ratings) ? x.ratings : {} }));
   const shifts = arr<Sh>(s.data, (y) => typeof y.staff_id === 'string' && typeof y.planned_start === 'string').map((x) => ({ ...x, late_eta: x.id ? eta[x.id] ?? null : null }));
-  return { priv, shifts, feedback, done, lateChanges };
+  const asks = arr<Av>(av.error ? [] : av.data, (y) => typeof y.staff_id === 'string' && typeof y.status === 'string');
+  return { priv, shifts, feedback, done, lateChanges, asks };
 }
 
 const FB_COLS = 'id,staff_id,event_id,by_staff_id,tier_vote,ratings,note,created_at,archived_at,by:staff!staff_feedback_by_staff_id_fkey(full_name),events(title,event_date)';
 /** Feedback rows, newest first. Falls back to the push-27 columns while migration 033 (overall_stars) isn't applied. */
 async function loadFeedback() {
   const q = (cols: string) => supabase.from('staff_feedback').select(cols).order('created_at', { ascending: false }).limit(2000);
+  const r2 = await q(FB_COLS + ',overall_stars,again,tags'); if (!r2.error) return r2; // 065 · want again + tags
   const r = await q(FB_COLS + ',overall_stars');
   return r.error && /overall_stars/.test(r.error.message) ? q(FB_COLS) : r;
 }
@@ -129,7 +139,47 @@ export function scoreOf(st: AStaff, d: ScoreData, today = isoDay(new Date())): S
     if (tierL !== 'C' && below >= 3) suggest = { to: down(tierL), why: `${below} vote${below > 1 ? 's' : ''} below ${tierL} in the last ${fb.n}` };
     else if (tierL !== 'A' && above >= 4) suggest = { to: up(tierL), why: `${above} votes above ${tierL} in the last ${fb.n}` };
   }
-  return { total: Math.round((tier + reliability + experience + feedback + extras) * 10) / 10, tier, reliability, experience, feedback, extras, rel, fb, isNew, done, bmo, priority, exp, suggest };
+  // ── Ranking v3 (Ronnie, Nov 5): tier first, then a form score out of 100. Parts with no data yet are left out and the rest is scaled to 100.
+  const parts: Part[] = [];
+  const EXP: Record<string, number> = { SENIOR: 25, MID: 15, JUNIOR: 5 };
+  parts.push({ key: 'exp', label: 'Experience level', pts: exp ? EXP[exp] ?? 0 : 0, max: 25, sub: exp ? exp[0] + exp.slice(1).toLowerCase() : 'not set yet · set it on the profile', counted: true });
+  const SEED: Record<string, number> = { VERY: 25, USUALLY: 19, NEEDS: 13, RISK: 8 };
+  let r3 = SEED[pv?.rel_seed ?? ''] ?? 25; const why: string[] = [pv?.rel_seed ? `starts at ${r3} (Staff Hub: ${({ VERY: 'very reliable', USUALLY: 'usually reliable', NEEDS: 'needs confirmation', RISK: 'last-minute risk' } as Record<string, string>)[pv.rel_seed]})` : 'starts at 25'];
+  for (const sh of d.shifts) if (sh.staff_id === st.id) for (const f of flagsOf(sh)) {
+    if (f.free) continue;
+    if (f.flag === 'no_show') { r3 -= 12; why.push('no-show −12'); }
+    else if (f.flag === 'cancelled') { const h = sh.cancelled_at ? (new Date(sh.planned_start).getTime() - new Date(sh.cancelled_at).getTime()) / 36e5 : 0;
+      const pen = h >= 168 ? 0 : h >= 48 ? 3 : 6; if (pen) { r3 -= pen; why.push(`cancel ${h >= 48 ? '2–7 days ahead' : 'under 48 h'} −${pen}`); } else why.push('cancel 7+ days ahead · free'); }
+    else if (f.flag === 'late') { r3 -= 2; why.push('late −2'); }
+  }
+  if (rel.late_change) { r3 -= 2 * rel.late_change; why.push(`${rel.late_change} late change −${2 * rel.late_change}`); }
+  parts.push({ key: 'rel', label: 'Reliability', pts: Math.max(0, r3), max: 25, sub: why.join(' · '), counted: true });
+  // Nov 5 · one rating = overall stars + want again (yes +1 · maybe 0 · no −1) + tags (±¼ each, max ±½), kept between 1 and 5
+  const GOOD = new Set(['guests', 'wine', 'bar', 'fast', 'team', 'on_time', 'trays']);
+  const vals = mine.filter((f) => f.overall_stars).map((f) => {
+    const ag = f.again === 'yes' ? 1 : f.again === 'no' ? -1 : 0;
+    const tg = Math.max(-0.5, Math.min(0.5, (f.tags ?? []).reduce((n, t) => n + (GOOD.has(t) ? 0.25 : -0.25), 0)));
+    return Math.max(1, Math.min(5, (f.overall_stars ?? 0) + ag + tg)); });
+  const starsW = vals.map((v, i) => ({ v, w: 1 - i * 0.05 })); // newest first, newer count more
+  const avgW = starsW.length ? starsW.reduce((n, x) => n + x.v * x.w, 0) / starsW.reduce((n, x) => n + x.w, 0) : 0;
+  parts.push({ key: 'fb', label: 'Manager feedback', pts: Math.round(20 * avgW / 5 * 10) / 10, max: 20, sub: fb.stars.length ? `★${avgW.toFixed(1)} · last ${fb.stars.length} rating${fb.stars.length > 1 ? 's' : ''}` : 'no ratings yet · not counted', counted: fb.stars.length > 0 });
+  const asks = (d.asks ?? []).filter((a) => a.staff_id === st.id);
+  const answered = asks.filter((a) => a.status === 'yes' || a.status === 'no'); const yes = answered.filter((a) => a.status === 'yes').length;
+  parts.push({ key: 'yes', label: 'Says yes', pts: answered.length ? Math.round(15 * yes / answered.length * 10) / 10 : 0, max: 15, sub: answered.length ? `${yes} yes of ${answered.length} answered` : 'not enough answers yet · not counted', counted: answered.length >= 3 });
+  const worked = new Set(d.shifts.filter((x) => x.staff_id === st.id && x.punches?.punch_in && x.events).map((x) => x.events!.event_date));
+  const lastMin = asks.filter((a) => a.asked_at && new Date(a.for_date + 'T17:00:00').getTime() - new Date(a.asked_at).getTime() < 48 * 36e5);
+  const saves = lastMin.filter((a) => a.status === 'yes' && worked.has(a.for_date)).length;
+  parts.push({ key: 'save', label: 'Saves the day', pts: Math.min(10, saves * 5), max: 10, sub: saves ? `${saves} last-minute yes${saves === 1 ? '' : 'es'} worked` : 'bonus only · counts once they save a date', counted: saves > 0 }); // bonus only: saying no to a last-minute ask never costs points
+  const shiftsAll = (pv?.shifts_seed ?? 0) + done;
+  parts.push({ key: 'time', label: 'Time with G&R', pts: Math.min(5, Math.round(shiftsAll / 10 * 10) / 10), max: 5, sub: `${shiftsAll} shift${shiftsAll === 1 ? '' : 's'}${pv?.shifts_seed ? ` (${pv.shifts_seed} on payroll this year)` : ''}`, counted: true });
+  const inn = parts.filter((x) => x.counted); const got = inn.reduce((n, x) => n + x.pts, 0); const max = inn.reduce((n, x) => n + x.max, 0);
+  const form = Math.min(100, Math.round((max ? got / max * 100 : 0) + (priority ? 10 : 0)));
+  if (!suggest && tierL) {
+    if (tierL !== 'A' && form >= 85 && shiftsAll >= 10) suggest = { to: up(tierL), why: `form ${form} over ${shiftsAll} shifts` };
+    else if (tierL !== 'C' && form < 50) suggest = { to: down(tierL), why: `form ${form}` };
+  }
+  const band = tierL === 'A' ? 300 : tierL === 'B' ? 200 : tierL === 'C' ? 100 : 0;
+  return { total: band + form, tier, reliability, experience, feedback, extras, rel, fb, isNew, done, bmo, priority, exp, suggest, form, parts };
 }
 
 /** Average of star values, 1 decimal (0 when none). */

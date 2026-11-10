@@ -48,13 +48,14 @@ export function useInviteReady() {
 
 /** The text Ronnie pastes in WhatsApp / iMessage. No dates, no 🙏. Greeting = nickname, else first name. */
 export const inviteText = (s: AStaff, token: string) =>
-  `Hey ${callName(s)}! Ronnie added you to the G&R staff app.\n\nTap to set up your account (2 min) 👉 ${siteHost()}/go/${token}\nYour sign-in email: ${s.email}`;
+  `Hey ${callName(s)}! Ronnie added you to the G&R staff app.\n\nTap to set up your account (2 min) 👉 https://${siteHost()}/go/${token}\nYour sign-in email: ${s.email}`;
 
 /**
  * Invite pop-up (AdminInviteV1 · B). One person, or one after the other for a group ("Next: Juliette ›" after each copy).
  * onFix: person has no email / phone → open their profile editor.
  */
-export function InviteModal({ queue, onClose, onChanged, onFix }: { queue: AStaff[]; onClose: () => void; onChanged: () => void; onFix?: (s: AStaff) => void }) {
+export function InviteModal({ queue, onClose, onChanged, onFix, textFor, title }: { queue: AStaff[]; onClose: () => void; onChanged: () => void; onFix?: (s: AStaff) => void;
+  /** push 55 · Hiring → Accept uses the welcome text instead */ textFor?: (s: AStaff, token: string) => string; title?: string }) {
   const [i, setI] = useState(0);
   const s = queue[i];
   const ready = useInviteReady();
@@ -69,7 +70,7 @@ export function InviteModal({ queue, onClose, onChanged, onFix }: { queue: AStaf
     if (!s || missing || ready !== true) return;
     supabase.rpc('admin_invite_link', { p_staff: s.id }).then(({ data, error }) => {
       if (error) { setErr(/function|schema|exist/i.test(error.message) ? 'Needs migration 040 (not applied yet).' : error.message); return; }
-      const t = (data as { token: string }).token; setToken(t); setText(inviteText(s, t));
+      const t = (data as { token: string }).token; setToken(t); setText((textFor ?? inviteText)(s, t));
     });
   }, [s?.id, ready]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -93,7 +94,7 @@ export function InviteModal({ queue, onClose, onChanged, onFix }: { queue: AStaf
     <div className="bk-modal" onClick={onClose}>
       <div className="adm-card inv-pop" role="dialog" aria-label={`Invite ${callName(s)}`} onClick={(e) => e.stopPropagation()}>
         <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div className="row" style={{ gap: 10 }}><Avatar name={s.full_name} url={s.photo_url} size={36} /><span className="serif" style={{ fontSize: 26 }}>Invite {callName(s)}</span></div>
+          <div className="row" style={{ gap: 10 }}><Avatar name={s.full_name} url={s.photo_url} size={36} /><span className="serif" style={{ fontSize: 26 }}>{title ?? `Invite ${callName(s)}`}</span></div>
           <div className="row" style={{ gap: 8 }}>{queue.length > 1 && <span className="muted sm">{i + 1} of {queue.length}</span>}<button className="sq" aria-label="Close" onClick={onClose}>×</button></div>
         </div>
         {missing ? <>

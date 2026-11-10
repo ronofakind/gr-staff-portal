@@ -5,12 +5,15 @@ import { TabBar } from '../components/TabBar';
 import { PageHead } from '../components/ProfileMenu';
 import { Avatar } from '../components/Avatar';
 import { Chat } from '../components/Chat';
+import { TeamChat } from '../components/TeamChat';
 import { TimeWheel, ampm15 } from '../components/TimeWheel';
 import { AnnounceView, ANN_SELECT, ANN_SELECT_36, wantsGotIt, type Ann } from '../components/Announce';
 import {
   CONV_COLS, MSG_COLS, RONNIE_PHOTO, TOPICS, first, fmtH, hm24, hmNear, markRideSeen, ridesSeen, ronnieSub, shortDate, t12, todayIso, topicLabel, useSigned, whenShort,
   type Conv, type Msg, type Topic,
 } from '../lib/messages';
+import { meetingMorningCheck } from '../lib/meetings';
+import { myTeamChats, teamPreview, teamWhen, type MyTeamChat } from '../lib/teamChat';
 
 /* Push 36 · staff Messages tab: Ronnie pinned on top, tonight's manager thread, Updates (announcements, shift notices, rides, hours answers). */
 
@@ -35,13 +38,14 @@ export function Messages({ me }: { me: Staff }) {
   if (hours) return <MyHours me={me} pick={hours} />;
   if (c === 'ronnie' || nw) return <RonnieThread me={me} compose={!!nw} topicInit={(sp.get('topic') as Topic | null) ?? null} shiftInit={sp.get('shift')} />;
   if (c?.startsWith('mgr:')) return <MgrThread me={me} eventId={c.slice(4)} />;
+  if (c?.startsWith('team:')) return <main className="page v2 ch-page"><TeamChat eventId={c.slice(5)} meId={me.id} /></main>;
   return <Inbox me={me} />;
 }
 
 /* ───────── list ───────── */
 type MgrRow = { event_id: string; title: string; date: string; manager: string; photo: string | null; conv: Conv | null; last: { at: string; text: string } | null; unread: boolean; closed: boolean };
 type Upd = { key: string; at: string; icon: string; title: string; sub: string; unread: boolean; from: 'ronnie' | 'shift' | 'other'; open: () => void };
-type AlertRow = { id: string; kind: string; title: string; body: string | null; event_id: string | null; created_at: string; seen_at: string | null };
+type AlertRow = { id: string; kind: string; title: string; body: string | null; event_id: string | null; meeting_id?: string | null; created_at: string; seen_at: string | null };
 type ReadRow = { opened_at: string | null; ack_at: string | null; announcements: Ann & { sender: { full_name: string; role?: string } | null } };
 
 function Inbox({ me }: { me: Staff }) {
@@ -49,6 +53,7 @@ function Inbox({ me }: { me: Staff }) {
   const [filter, setFilter] = useState<'all' | 'ronnie' | 'shifts'>('all');
   const [ron, setRon] = useState<{ conv: Conv | null; last: Msg | null } | null>(null);
   const [mgr, setMgr] = useState<MgrRow[]>([]);
+  const [teams, setTeams] = useState<MyTeamChat[]>([]); // push 41 · team chats open (or read-only) for my event
   const [ups, setUps] = useState<Upd[] | null>(null);
   const [ann, setAnn] = useState<{ a: Ann; acked: boolean } | null>(null);
   const [alert, setAlert] = useState<(AlertRow & { shift: string | null }) | null>(null);
@@ -62,6 +67,7 @@ function Inbox({ me }: { me: Staff }) {
       let rLast: Msg | null = null;
       if (rc) { const { data } = await supabase.from('messages').select(MSG_COLS).eq('conversation_id', (rc as Conv).id).order('created_at', { ascending: false }).limit(1); rLast = ((data ?? []) as Msg[])[0] ?? null; }
       setRon({ conv: (rc as Conv | null) ?? null, last: rLast });
+      myTeamChats().then(setTeams);
 
       // announcements to me (90 days)
       const reads = async (cols: string) => supabase.from('announcement_reads').select(`opened_at,ack_at,announcements!inner(${cols})`).eq('staff_id', me.id).gte('announcements.created_at', cut);
@@ -104,8 +110,11 @@ function Inbox({ me }: { me: Staff }) {
         list.push({ key: 'a' + a.id, at: a.created_at, icon: '📣', title: t, sub: rest.join(' ').trim() || (a.events ? `${a.events.title}` : `From ${first(a.sender?.full_name) || 'G&R'}`), unread: !r.opened_at,
           from: a.sender?.role === 'admin' || !a.sender ? 'ronnie' : 'other', open: () => setAnn({ a, acked: !!r.ack_at }) });
       }
-      const { data: al } = await supabase.from('staff_alerts').select('id,kind,title,body,event_id,created_at,seen_at').eq('staff_id', me.id).gte('created_at', cut);
-      const alerts = (al ?? []) as AlertRow[];
+      await meetingMorningCheck(); // push 38 · "Today · 11:00 AM · …" on a meeting day
+      const alertsQ = (cols: string) => supabase.from('staff_alerts').select(cols).eq('staff_id', me.id).gte('created_at', cut);
+      let al = await alertsQ('id,kind,title,body,event_id,meeting_id,created_at,seen_at');
+      if (al.error) al = await alertsQ('id,kind,title,body,event_id,created_at,seen_at'); // migration 043 not applied yet
+      const alerts = (al.data ?? []) as unknown as AlertRow[];
       const evIds = [...new Set(alerts.map((a) => a.event_id).filter(Boolean))] as string[];
       const { data: rides } = await supabase.from('ride_offers').select('id,event_id,kind,sent_at,events(title,event_date)').eq('staff_id', me.id).not('sent_at', 'is', null).gte('sent_at', cut);
       const rideRows = (rides ?? []) as unknown as { id: string; event_id: string; kind: string; sent_at: string; events: { title: string; event_date: string } | null }[];
@@ -113,7 +122,9 @@ function Inbox({ me }: { me: Staff }) {
       const shiftOf: Record<string, string> = {};
       if (allEv.length) { const { data: ms } = await supabase.from('shifts').select('id,event_id').eq('staff_id', me.id).in('event_id', allEv); for (const x of (ms ?? []) as { id: string; event_id: string }[]) shiftOf[x.event_id] = x.id; }
       const lbl: Record<string, string> = { booked: 'New shift', moved: 'Shift changed', changed: 'Shift changed', removed: 'Shift removed' };
-      for (const a of alerts) list.push({ key: 'n' + a.id, at: a.created_at, icon: '🗓', title: `${lbl[a.kind] ?? 'Your schedule'} · ${a.title}`, sub: a.body ?? '', unread: !a.seen_at, from: 'shift',
+      for (const a of alerts.filter((x) => x.kind.startsWith('meeting'))) list.push({ key: 'n' + a.id, at: a.created_at, icon: a.kind === 'meeting_cancelled' ? '✕' : '👥', title: a.title, sub: a.body ?? '', unread: !a.seen_at, from: 'shift',
+        open: () => { if (!a.seen_at) supabase.rpc('alert_seen', { p_id: a.id }).then(() => setTick((t) => t + 1)); if (a.meeting_id) nav(`/meeting/${a.meeting_id}`); } });
+      for (const a of alerts.filter((x) => !x.kind.startsWith('meeting'))) list.push({ key: 'n' + a.id, at: a.created_at, icon: '🗓', title: `${lbl[a.kind] ?? 'Your schedule'} · ${a.title}`, sub: a.body ?? '', unread: !a.seen_at, from: 'shift',
         open: () => { setAlert({ ...a, shift: a.event_id ? shiftOf[a.event_id] ?? null : null }); if (!a.seen_at) supabase.rpc('alert_seen', { p_id: a.id }).then(() => setTick((t) => t + 1)); } });
       const seenR = ridesSeen();
       for (const r of rideRows) list.push({ key: 'r' + r.id, at: r.sent_at, icon: '🚗', title: `Ride plan${r.events ? ` · ${shortDate(r.events.event_date)}` : ''}`, sub: r.kind === 'driver' ? `You’re driving · ${r.events?.title ?? ''}` : `${r.events?.title ?? ''} · tap to see your car`, unread: !seenR.includes(r.id), from: 'shift',
@@ -144,6 +155,18 @@ function Inbox({ me }: { me: Staff }) {
         {rUnread && <i className="msg-n">1</i>}
       </button>
       <button className="msg-big" onClick={() => nav('/messages?new=1')}>✉ Message Ronnie</button>
+
+      {teams.map((t) => (
+        <button key={t.event_id} className={'msg-ron mgr' + (t.unread ? ' unread' : '')} onClick={() => nav(`/messages?c=team:${t.event_id}`)}>
+          <span className="tc-av big">👥</span>
+          <span className="grow">
+            <span className="spread"><b>{t.title} team · {teamWhen(t.event_date)}</b>{t.last_at && <small>{whenShort(t.last_at)}</small>}</span>
+            {t.last_at ? <span className="msg-prev">{teamPreview(t, me.id)}</span> : <small className="muted">{t.n_members} people · until 12 h after the event</small>}
+            {t.state === 'readonly' && <small className="muted">closed · read only</small>}
+          </span>
+          {t.unread > 0 && <i className="msg-n">{t.unread > 99 ? '99+' : t.unread}</i>}
+        </button>
+      ))}
 
       {mgr.map((r) => (
         <section key={r.event_id} className="stack" style={{ gap: 6 }}>
@@ -177,7 +200,7 @@ function Inbox({ me }: { me: Staff }) {
               {u.unread && <i className="msg-dot" />}
             </button>))}
       </section>
-      <p className="muted sm" style={{ margin: '2px 6px', textAlign: 'center' }}>Only Ronnie and your manager write here. No chats between staff.</p>
+      <p className="muted sm" style={{ margin: '2px 6px', textAlign: 'center' }}>{teams.length ? 'Team chats are for your event’s team only. No private chats between staff.' : 'Only Ronnie and your manager write here. No chats between staff.'}</p>
 
       {ann && <AnnounceView a={ann.a} acked={ann.acked} onClose={() => { setAnn(null); setTick((t) => t + 1); }} onAck={() => { setAnn(null); setTick((t) => t + 1); }} />}
       {alert && (<>

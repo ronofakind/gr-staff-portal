@@ -30,14 +30,15 @@ const MTL = { center: { lat: 45.5019, lng: -73.5674 }, radius: 40000 };
  * Address field with Google Places suggestions (Canada, biased to Montréal).
  * Works as a plain text field when there's no key or Google fails.
  */
-export function AddressInput({ value, onChange, onPick, placeholder, className }: {
+export function AddressInput({ value, onChange, onPick, placeholder, className, autoSearch = false }: {
   value: string; onChange: (v: string) => void; onPick?: (p: AddressParts) => void; placeholder?: string; className?: string;
+  /** push 52 · search Google for the prefilled value right away (Sheet changes → + New venue) */ autoSearch?: boolean;
 }) {
   const [list, setList] = useState<Sugg[]>([]); const [open, setOpen] = useState(false); const [hi, setHi] = useState(0);
   const lib = useRef<Record<string, unknown> | null>(null); const token = useRef<unknown>(null); const timer = useRef<number>();
-  const typed = useRef(false);
+  const typed = useRef(autoSearch); const [ready, setReady] = useState(0);
 
-  useEffect(() => { places().then((l) => { lib.current = l; }); }, []);
+  useEffect(() => { places().then((l) => { lib.current = l; setReady(1); }); }, []);
 
   useEffect(() => {
     if (!typed.current) return;
@@ -58,7 +59,7 @@ export function AddressInput({ value, onChange, onPick, placeholder, className }
       } catch { setList([]); }
     }, 250);
     return () => window.clearTimeout(timer.current);
-  }, [value]);
+  }, [value, ready]);
 
   const pick = async (s: Sugg) => {
     setOpen(false); setList([]); typed.current = false;

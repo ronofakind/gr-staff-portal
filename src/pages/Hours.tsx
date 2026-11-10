@@ -4,13 +4,15 @@ import { supabase, type Staff } from '../lib/supabase';
 import { TabBar } from '../components/TabBar';
 import { PageHead } from '../components/ProfileMenu';
 import { AskHours, todayIso } from './Home';
+import type { MeetingHours } from '../lib/meetings';
+import { managesShift } from '../lib/pastEvents';
 import { payPeriod, shiftPeriod, payDay, payDayLabel, periodLabel, paidHours, workedHours } from '../lib/hours';
 
 type P = { punch_in: string | null; punch_out: string | null } | null;
-type Row = { id: string; planned_start: string; attendance: string | null; left_early: boolean | null; punches: P;
-  events: { id: string; title: string; event_date: string; hours_submitted_at: string | null; manager_id: string | null; transport?: boolean; paid_travel_min?: number | null } };
+type Row = { id: string; planned_start: string; attendance: string | null; left_early: boolean | null; punches: P; position_code: string | null;
+  events: { id: string; title: string; event_date: string; hours_submitted_at: string | null; manager_id: string | null; co_manager_ids?: string[] | null; transport?: boolean; paid_travel_min?: number | null } };
 type Q = { id: string; shift_id: string; kind: 'start' | 'end' | 'other'; claimed_at: string | null; note: string | null; status: 'open' | 'fixed' | 'correct'; answer_note: string | null; created_at: string };
-type Team = { id: string; title: string; event_date: string; hours_submitted_at: string | null; shifts: { attendance: string | null; left_early: boolean | null; punches: P; staff: { full_name: string } | null }[] };
+type Team = { id: string; title: string; event_date: string; hours_submitted_at: string | null; shifts: { status?: string; attendance: string | null; left_early: boolean | null; punches: P; staff: { full_name: string } | null }[] };
 
 const D = (iso: string) => new Date(iso + 'T12:00:00');
 const t12 = (iso: string) => new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' });
@@ -26,15 +28,20 @@ export function Hours({ me }: { me: Staff }) {
   const [view, setView] = useState<'mine' | 'past' | 'teams'>('mine');
   const [open, setOpen] = useState<Row | null>(null); const [ask, setAsk] = useState<Row | null>(null);
   const [teams, setTeams] = useState<Team[] | null>(null); const [team, setTeam] = useState<Team | null>(null);
+  const [mh, setMh] = useState<MeetingHours[]>([]); // push 38 · paid meetings (ended)
   const yearStart = `${today.slice(0, 4)}-01-01`;
-  const isMgr = me.role === 'manager' || me.role === 'admin';
+  // push 51 · "Teams I managed" for anyone who managed something this year (lead, co-manager or the MD / BM shift), not only role = manager
+  const managedRows = useMemo(() => (rows ?? []).filter((r) => r.attendance !== 'cancelled' && managesShift(r, me.id)), [rows, me.id]);
+  const managedIds = useMemo(() => [...new Set(managedRows.filter((r) => r.events.event_date >= per.start && r.events.event_date <= per.end).map((r) => r.events.id))], [managedRows, per.start]); // eslint-disable-line react-hooks/exhaustive-deps
+  const isMgr = me.role === 'manager' || me.role === 'admin' || managedRows.length > 0;
   const nav = useNavigate();
 
   const load = async () => {
     const from = per.start < yearStart ? per.start : yearStart;
-    const { data } = await supabase.from('shifts').select('id,planned_start,attendance,left_early,punches(punch_in,punch_out),events!inner(id,title,event_date,hours_submitted_at,manager_id,transport,paid_travel_min)')
+    const { data } = await supabase.from('shifts').select('id,planned_start,attendance,left_early,position_code,punches(punch_in,punch_out),events!inner(id,title,event_date,hours_submitted_at,manager_id,co_manager_ids,transport,paid_travel_min)')
       .eq('staff_id', me.id).neq('status', 'declined').gte('events.event_date', from).lte('events.event_date', today);
     const list = ((data ?? []) as unknown as Row[]).map((r) => ({ ...r, punches: one(r.punches as P | P[]) }));
+    supabase.rpc('meeting_hours', { p_from: from, p_to: today }).then(({ data: m, error }) => setMh(error ? [] : ((m ?? []) as MeetingHours[]).filter((x) => x.paid && x.ended)));
     setRows(list);
     const ids = list.map((r) => r.id);
     if (ids.length) {
@@ -44,25 +51,30 @@ export function Hours({ me }: { me: Staff }) {
   };
   useEffect(() => { load(); }, [me.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (view !== 'teams') return;
+    if (view !== 'teams' || rows === null) return;
     setTeams(null);
-    supabase.from('events').select('id,title,event_date,hours_submitted_at,shifts(attendance,left_early,punches(punch_in,punch_out),staff:staff!shifts_staff_id_fkey(full_name))')
-      .eq('manager_id', me.id).gte('event_date', per.start).lte('event_date', per.end < today ? per.end : today).order('event_date', { ascending: false })
-      .then(({ data }) => setTeams(((data ?? []) as unknown as Team[]).map((t) => ({ ...t, shifts: t.shifts.map((s) => ({ ...s, punches: one(s.punches as P | P[]) })) }))));
-  }, [view, per.start, me.id]); // eslint-disable-line react-hooks/exhaustive-deps
+    // push 51 fix · was manager_id only: a bar manager booked on the BM line after the event was made (Bookings board, sheet sync…)
+    // or a co-manager never showed here. Same rule as Home / Manage now: lead, co-manager, or my MD / BM shift on the event.
+    const mine = managedIds.length ? `,id.in.(${managedIds.join(',')})` : '';
+    supabase.from('events').select('id,title,event_date,hours_submitted_at,shifts(attendance,left_early,status,punches(punch_in,punch_out),staff:staff!shifts_staff_id_fkey(full_name))')
+      .or(`manager_id.eq.${me.id},co_manager_ids.cs.{${me.id}}${mine}`).gte('event_date', per.start).lte('event_date', per.end < today ? per.end : today).order('event_date', { ascending: false })
+      .then(({ data }) => setTeams(((data ?? []) as unknown as Team[]).map((t) => ({ ...t, shifts: t.shifts.filter((s) => s.status !== 'declined').map((s) => ({ ...s, punches: one(s.punches as P | P[]) })) }))));
+  }, [view, per.start, me.id, managedIds.join()]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const done = (r: Row) => !r.attendance && !!r.punches?.punch_in && !!r.punches.punch_out && new Date(r.punches.punch_out).getTime() <= Date.now();
   const travelOf = (r: Row) => (r.events.transport ? (r.events.paid_travel_min ?? 0) / 60 : 0);
   const hoursOf = (r: Row) => paidHours(r.punches!.punch_in!, r.punches!.punch_out!, !!r.left_early) + travelOf(r);
   const inPer = (p: { start: string; end: string }) => (rows ?? []).filter((r) => r.events.event_date >= p.start && r.events.event_date <= p.end && done(r)).sort((a, b) => b.planned_start.localeCompare(a.planned_start));
   const shifts = inPer(per);
-  const total = shifts.reduce((n, r) => n + hoursOf(r), 0);
+  const mIn = (p: { start: string; end: string }) => mh.filter((x) => x.meeting_date >= p.start && x.meeting_date <= p.end).sort((a, b) => b.starts_at.localeCompare(a.starts_at));
+  const mtgs = mIn(per); const mtgH = mtgs.reduce((n, x) => n + Number(x.hours), 0);
+  const total = shifts.reduce((n, r) => n + hoursOf(r), 0) + mtgH;
   const approved = shifts.filter((r) => r.events.hours_submitted_at).length;
   const questions = shifts.filter((r) => qs[r.id]?.status === 'open').length;
   const isCurrent = per.start === payPeriod(today).start;
   const past = useMemo(() => { const out: { p: { start: string; end: string }; h: number; n: number }[] = []; let p = payPeriod(today);
-    for (let i = 0; i < 24 && p.end >= yearStart; i++) { const l = inPer(p); out.push({ p, h: l.reduce((n, r) => n + hoursOf(r), 0), n: l.length }); p = shiftPeriod(p, -1); }
-    return out; }, [rows]); // eslint-disable-line react-hooks/exhaustive-deps
+    for (let i = 0; i < 24 && p.end >= yearStart; i++) { const l = inPer(p); const ml = mIn(p); out.push({ p, h: l.reduce((n, r) => n + hoursOf(r), 0) + ml.reduce((n, x) => n + Number(x.hours), 0), n: l.length + ml.length }); p = shiftPeriod(p, -1); }
+    return out; }, [rows, mh]); // eslint-disable-line react-hooks/exhaustive-deps
   const year = past.reduce((n, x) => n + x.h, 0); const yearN = past.reduce((n, x) => n + x.n, 0);
   const maxH = Math.max(1, ...past.slice(0, 8).map((x) => x.h));
 
@@ -101,7 +113,7 @@ export function Hours({ me }: { me: Staff }) {
         <section className="hz-big">
           <div className="row" style={{ alignItems: 'flex-end', justifyContent: 'space-between' }}>
             <div><small>HOURS THIS PAY PERIOD</small><div className="serif hz-num">{fmtH(total)}<span> h</span></div></div>
-            <div style={{ textAlign: 'right' }}><div><b>{shifts.length}</b> shift{shifts.length === 1 ? '' : 's'}</div><div className="hz-paid">{payDay(per) <= today ? '✓ Paid' : 'Paid'} {payDayLabel(per)}</div></div>
+            <div style={{ textAlign: 'right' }}><div><b>{shifts.length}</b> shift{shifts.length === 1 ? '' : 's'}{mtgs.length ? <> · <b>{mtgs.length}</b> meeting{mtgs.length === 1 ? '' : 's'}</> : null}</div><div className="hz-paid">{payDay(per) <= today ? '✓ Paid' : 'Paid'} {payDayLabel(per)}</div></div>
           </div>
           {shifts.length > 0 && <div className="row wrap" style={{ gap: 6 }}>
             {approved > 0 && <span className="hz-chip ok">✓ {approved} approved</span>}
@@ -111,7 +123,14 @@ export function Hours({ me }: { me: Staff }) {
         </section>
         <div className="sec-head"><span className="serif">Shifts</span><span className="muted sm">{shifts.length}</span></div>
         <section className="stack" style={{ gap: 8 }}>
-          {!shifts.length && <div className="card muted sm">No hours in this pay period yet.</div>}
+          {!shifts.length && !mtgs.length && <div className="card muted sm">No hours in this pay period yet.</div>}
+          {mtgs.map((x) => (
+            <button key={x.meeting_id} className="hz-row" onClick={() => nav(`/meeting/${x.meeting_id}`)}>
+              <div className="hz-d"><small>{dow(x.meeting_date)}</small><b className="serif">{D(x.meeting_date).getDate()}</b></div>
+              <div className="grow" style={{ minWidth: 0, textAlign: 'left' }}><b>{x.title}</b><span>{t12(x.paid_in)} – {t12(x.paid_out)}</span><em>Meeting · paid, no 4-hour minimum</em></div>
+              <div style={{ textAlign: 'right' }}><div className="serif hz-h">{fmtH(Number(x.hours))}<span> h</span></div><span className="hz-tag mtg">MEETING</span></div>
+            </button>
+          ))}
           {shifts.map((r) => (
             <button key={r.id} className={'hz-row' + (qs[r.id]?.status === 'open' ? ' asked' : '')} onClick={() => setOpen(r)}>
               <div className="hz-d"><small>{dow(r.events.event_date)}</small><b className="serif">{D(r.events.event_date).getDate()}</b></div>

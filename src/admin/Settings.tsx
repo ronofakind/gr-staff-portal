@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { DEFAULTS, saveSetting, savedAt, useSettings, type SettingKey, type Settings as S } from '../lib/settings';
 import { signed } from './score';
+import { PhoneAlertsCard } from './PhoneAlerts';
 
 /*
  * Push 32b · Admin → More → Settings. Tap a value to change it; it saves right away and applies to new events and
@@ -32,6 +33,7 @@ const SECTIONS: Section[] = [
   ] },
   { title: 'Bookings & changes', rows: [
     { label: 'Late cancel / late change', show: () => 'after they confirmed' },
+    { label: 'Late counts in reliability', sub: 'off for now · start times still come from the Events sheet · late arrivals still show, they just don’t lower the score', k: 'bookings.count_late', kind: 'bool', show: ((v: boolean) => (v ? 'On' : 'Off')) as (v: never) => string },
     { label: 'Count “told ahead” as late', sub: 'arrived by the time they gave in I’m running late', k: 'bookings.count_told_ahead', kind: 'bool', show: ((v: boolean) => (v ? 'On' : 'Off')) as (v: never) => string },
     { label: 'Running-late button', sub: 'staff Home, until they’re started', k: 'bookings.running_late', kind: 'choice', choices: [['event_day', 'All day on the event day'], ['off', 'Off']], show: ((v: string) => (v === 'off' ? 'Off' : 'All day on the event day')) as (v: never) => string },
     { label: 'New-staff tag', sub: 'NEW on Ranking, manager team screen', k: 'bookings.new_tag_shifts', kind: 'num', unit: 'shifts', min: 0, max: 20, show: ((v: number) => `first ${v} shifts`) as (v: never) => string },
@@ -41,6 +43,14 @@ const SECTIONS: Section[] = [
     { label: 'Extras', k: 'extras.rule', kind: 'obj', fields: [{ f: 'pct', label: 'Percent', unit: '%' }], show: ((v: S['extras.rule']) => `${v.pct}% · rounded up`) as (v: never) => string },
     { label: 'Default billing', sub: 'each client can override', k: 'extras.default_billing', kind: 'choice', choices: [['gr', 'On G&R'], ['client', 'Client pays']], show: ((v: string) => (v === 'client' ? 'Client pays' : 'On G&R')) as (v: never) => string },
   ] },
+  { title: 'Staffing from guests', rows: [
+    { label: 'Floor · seated', sub: 'MD included · Reception and everything not cocktail', k: 'staffing.ratios', kind: 'obj', fields: [{ f: 'seated', label: '1 per', unit: 'guests' }], show: ((v: S['staffing.ratios']) => `1 per ${v.seated} guests`) as (v: never) => string },
+    { label: 'Floor · cocktail', sub: 'Cocktail dînatoire, Cocktail', k: 'staffing.ratios', kind: 'obj', fields: [{ f: 'cocktail', label: '1 per', unit: 'guests' }], show: ((v: S['staffing.ratios']) => `1 per ${v.cocktail} guests`) as (v: never) => string },
+    { label: 'Bartenders', sub: '+ 1 barback per bartender · only with Bar service', k: 'staffing.ratios', kind: 'obj', fields: [{ f: 'bar', label: '1 per', unit: 'guests' }], show: ((v: S['staffing.ratios']) => `1 per ${v.bar} guests`) as (v: never) => string },
+    { label: 'On hold on top', sub: 'until the client confirms numbers', k: 'staffing.ratios', kind: 'obj', fields: [{ f: 'buffer', label: '+', unit: '%' }], show: ((v: S['staffing.ratios']) => `+${v.buffer}% · rounded up`) as (v: never) => string },
+    { label: '2nd MD', k: 'staffing.ratios', kind: 'obj', fields: [{ f: 'md2', label: 'From', unit: 'guests' }], show: ((v: S['staffing.ratios']) => `ticked from ${v.md2} guests`) as (v: never) => string },
+    { label: 'Small events', sub: '1 MD + 2 waiters minimum', k: 'staffing.ratios', kind: 'obj', fields: [{ f: 'small', label: 'Under', unit: 'guests' }], show: ((v: S['staffing.ratios']) => `under ${v.small} guests`) as (v: never) => string },
+  ] },
   { title: 'Transport', rows: [
     { label: 'Office (start point)', k: 'transport.office', kind: 'text', storedOnly: true, show: ((v: string) => v) as (v: never) => string },
     { label: 'Far event from', k: 'transport.far_min', kind: 'num', unit: 'min drive', min: 10, max: 240, step: 5, storedOnly: true, show: ((v: number) => `${v} min drive`) as (v: never) => string },
@@ -48,11 +58,15 @@ const SECTIONS: Section[] = [
     { label: 'Gas per car', sub: 'New event → Transport', show: () => 'set on each event' },
     { label: 'Client pays transport by default', sub: 'new clients and new events', k: 'transport.client_pays', kind: 'bool', show: ((v: boolean) => (v ? 'On' : 'Off')) as (v: never) => string },
   ] },
-  { title: 'Messages to staff', off: 'not live yet (push 24)', rows: [
-    { label: 'Quiet hours', sub: 'today / tomorrow changes still go out', show: () => '11 PM – 7 AM' },
-    { label: 'Reminder before reply-by', show: () => '3 h' },
-    { label: 'Max ask notifications', show: () => '1 per person per day' },
-    { label: 'Personal link expires', show: () => '3 days or after the shift' },
+  { title: 'Phone alerts', sub: 'rules', rows: [
+    { label: 'Nothing buzzes until', show: () => 'you press Send / Ask' },
+    { label: 'Buzzes per send', sub: 'everything waiting for a person goes in one alert', show: () => '1 per person' },
+    { label: 'Quiet hours', sub: 'today / tomorrow still go out', show: () => '11 PM – 7 AM' },
+    { label: 'Confirm reminders', sub: 'before the confirm-by', show: () => '6 h + 2 h' },
+    { label: 'Dates to answer reminder', sub: 'before the answer-by', show: () => '3 h' },
+    { label: 'Meeting reminder', show: () => '8 AM that day' },
+    { label: 'Manager on the night', sub: 'running late · replies · not started 15 min after call · submit hours', show: () => 'always on' },
+    { label: 'No alerts on their phone', sub: 'asks, confirms, changes, Ronnie’s messages', show: () => 'text from the Mac mini' },
   ] },
   { title: 'Hours & pay', rows: [
     { label: 'Minimum paid', sub: 'except LEFT EARLY', k: 'hours.min', kind: 'num', unit: 'h', min: 0, max: 8, step: 0.5, show: ((v: number) => `${v} h`) as (v: never) => string },
@@ -61,14 +75,8 @@ const SECTIONS: Section[] = [
     { label: 'Paid on', show: () => '16th · 1st' },
     { label: 'Show money on staff phones', sub: 'hours only (Ronnie)', k: 'hours.show_money', kind: 'bool', storedOnly: true, show: ((v: boolean) => (v ? 'On' : 'Off')) as (v: never) => string },
   ] },
-  { title: 'Ranking', sub: 'score weights', rows: [
-    { label: 'Tier', k: 'rank.tier', kind: 'obj', fields: [{ f: 'A', label: 'A' }, { f: 'B', label: 'B' }, { f: 'C', label: 'C' }], show: ((v: S['rank.tier']) => `A ${v.A} · B ${v.B} · C ${v.C}`) as (v: never) => string },
-    { label: 'Reliability', k: 'rank.reliability', kind: 'obj', fields: [{ f: 'days', label: 'Window', unit: 'days' }, { f: 'start', label: 'Start' }, { f: 'no_show', label: 'No-show' }, { f: 'late_cancel', label: 'Late cancel' }, { f: 'late', label: 'Late' }, { f: 'late_change', label: 'Late change' }],
-      show: ((v: S['rank.reliability']) => `(${v.days} days) start ${v.start} · no-show ${n(v.no_show)} · late cancel ${n(v.late_cancel)} · late ${n(v.late)}`) as (v: never) => string },
-    { label: 'Experience', k: 'rank.experience', kind: 'obj', fields: [{ f: 'SENIOR', label: 'Senior' }, { f: 'MID', label: 'Mid' }, { f: 'JUNIOR', label: 'Junior' }], show: ((v: S['rank.experience']) => `Senior ${v.SENIOR} · Mid ${v.MID} · Junior ${v.JUNIOR}`) as (v: never) => string },
-    { label: 'Manager feedback', sub: 'last 10 · push 30', k: 'rank.feedback', kind: 'obj', fields: [{ f: 's5', label: '5★', step: 0.5 }, { f: 's4', label: '4★', step: 0.5 }, { f: 's3', label: '3★', step: 0.5 }, { f: 's2', label: '2★', step: 0.5 }, { f: 's1', label: '1★', step: 0.5 }, { f: 'cap', label: 'Cap ±' }],
-      show: ((v: S['rank.feedback']) => `5★ ${signed(v.s5)} · 4★ ${signed(v.s4)} · 3★ ${signed(v.s3)} · 2★ ${signed(v.s2)} · 1★ ${signed(v.s1)} · cap ±${v.cap}`) as (v: never) => string },
-    { label: 'Extras', k: 'rank.extras', kind: 'obj', fields: [{ f: 'bmo', label: 'BMO' }, { f: 'newStaff', label: 'New' }, { f: 'priority', label: 'Priority' }], show: ((v: S['rank.extras']) => `BMO ${signed(v.bmo)} · new ${signed(v.newStaff)} · priority ${signed(v.priority)}`) as (v: never) => string },
+  { title: 'Ranking', sub: 'v3 · Nov 5', rows: [
+    { label: 'How it works', sub: 'tier first, then form /100', show: () => 'See Admin → Ranking · How the form score is made' },
   ] },
   { title: 'Managers', rows: [
     { label: 'Manager feedback for', sub: 'test first, then all managers', k: 'mgr.feedback', kind: 'choice', choices: [['benjamin', 'Benjamin only'], ['all', 'All managers']], show: ((v: string) => (v === 'all' ? 'All managers' : 'Benjamin only')) as (v: never) => string },
@@ -125,6 +133,7 @@ export function Settings() {
             })}
           </section>
         ))}
+        <PhoneAlertsCard />
       </div>
       <p className="muted sm">Defaults are today’s values; a setting that was never changed keeps them. Staff and managers only read the settings their screens need.</p>
     </div>

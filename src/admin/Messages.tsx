@@ -1,18 +1,21 @@
 import { useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { RemindForm } from './StaffRemind';
 import { supabase } from '../lib/supabase';
 import { AnnounceComposer, AnnounceSent, type Target } from '../components/Announce';
 import { Avatar } from '../components/Avatar';
 import { Chat } from '../components/Chat';
 import { first, shiftLine, shortDate, t12, topicLabel, whenShort, MSG_COLS, type Conv, type InboxRow, type Msg } from '../lib/messages';
 import { eventsBetween, allStaff, isoDay, addDays, dLabel, ap12, type AEvent, type AStaff } from './api';
+import { adminTeamChats, dayTime, teamWhen, type AdminTeamChat } from '../lib/teamChat';
 
 const hm = (iso: string) => new Date(iso).toLocaleTimeString('en-GB', { timeZone: 'America/Toronto', hour: '2-digit', minute: '2-digit' });
 
 /** Admin → Messages (push 36d): Needs reply · All · Sent + New message (the push-25e composer). Inbox is admins only; no email. */
 export function Messages() {
   const [sp, setSp] = useSearchParams();
-  const tab = (sp.get('tab') as 'needs' | 'all' | 'sent' | null) ?? 'needs';
+  const tab = (sp.get('tab') as 'needs' | 'all' | 'sent' | 'team' | null) ?? 'needs';
+  const [teams, setTeams] = useState<AdminTeamChat[] | null>(null); // push 43 · Team chats tab (red count = chats with new messages)
   const cId = sp.get('c'); const staffId = sp.get('staff');
   const [rows, setRows] = useState<InboxRow[] | null>(null); const [err, setErr] = useState('');
   const [compose, setCompose] = useState(false); const [tick, setTick] = useState(0);
@@ -23,6 +26,7 @@ export function Messages() {
   useEffect(() => {
     supabase.rpc('inbox').then(({ data, error }) => { if (error) { setErr(/inbox/.test(error.message) ? 'Messages need migration 042 (apply it in the Supabase SQL editor).' : error.message); setRows([]); } else setRows((data ?? []) as InboxRow[]); });
   }, [tick, cId]);
+  useEffect(() => { adminTeamChats().then(setTeams).catch(() => setTeams([])); }, [tick, cId, tab]);
   // ✉ Message from a staff profile / team list → their conversation (created if needed)
   useEffect(() => {
     if (!staffId) return;
@@ -35,6 +39,7 @@ export function Messages() {
   if (cId) return <AdminConversation id={cId} row={rows?.find((r) => r.id === cId) ?? null} onBack={() => go({ c: null })} onUnread={unreadIt} onDone={doneIt} toast={toast} />;
 
   const needs = (rows ?? []).filter((r) => r.needs_reply);
+  const teamNew = (teams ?? []).filter((t) => t.unread > 0).length;
   const list = tab === 'needs' ? needs : rows ?? [];
   return (
     <div className="stack-lg">
@@ -44,9 +49,10 @@ export function Messages() {
         <button className={tab === 'needs' ? 'on' : ''} onClick={() => go({ tab: null })}>Needs reply{needs.length ? <b className="accent"> {needs.length}</b> : ''}</button>
         <button className={tab === 'all' ? 'on' : ''} onClick={() => go({ tab: 'all' })}>All</button>
         <button className={tab === 'sent' ? 'on' : ''} onClick={() => go({ tab: 'sent' })}>Sent</button>
+        <button className={tab === 'team' ? 'on' : ''} onClick={() => go({ tab: 'team' })}>Team chats{teamNew ? <b className="accent"> {teamNew}</b> : ''}</button>
       </div>
       {err && <p className="error">{err}</p>}
-      {tab === 'sent' ? <div className="adm-card" style={{ maxWidth: 760, padding: '6px 16px' }}><AnnounceSent reload={tick} /></div> : (
+      {tab === 'team' ? <TeamChatsTab list={teams} /> : tab === 'sent' ? <div className="adm-card" style={{ maxWidth: 760, padding: '6px 16px' }}><AnnounceSent reload={tick} /></div> : (
         <div className="adm-card ib-list" style={{ maxWidth: 760, padding: 0 }}>
           {rows === null ? <div className="muted" style={{ padding: 16 }}>Loading…</div>
             : !list.length ? <div className="muted sm" style={{ padding: 16 }}>{tab === 'needs' ? 'Nothing waiting on you. ✓' : 'No conversations yet.'}</div>
@@ -60,7 +66,51 @@ export function Messages() {
   );
 }
 
+/** push 43 · Team chats tab: OPEN NOW (open + opening soon) then CLOSED · READ ONLY 7 DAYS. Tap → the admin team chat page. */
+function TeamChatsTab({ list }: { list: AdminTeamChat[] | null }) {
+  const nav = useNavigate();
+  const open = (list ?? []).filter((t) => t.state !== 'readonly'); const closed = (list ?? []).filter((t) => t.state === 'readonly');
+  const preview = (t: AdminTeamChat) => !t.last_at ? 'No messages yet' : `${t.last_admin ? 'You' : first(t.last_sender_name) || 'Ronnie'}: ${t.last_deleted ? 'Message deleted' : t.last_body || (t.last_photos ? '📷 Photo' : '')}`;
+  const Row = ({ t }: { t: AdminTeamChat }) => (
+    <button className={'ib-row tc-trow' + (t.unread ? ' hot' : '') + (t.state === 'readonly' ? ' closed' : '')} onClick={() => nav(`/admin/team-chat/${t.event_id}?from=messages`)}>
+      <span className="tc-av">👥</span>
+      <span className="grow" style={{ minWidth: 0 }}>
+        <span className="spread"><b>{t.venue || t.title} team · {t.state === 'before' ? `opens ${dayTime(t.opens_at)}` : teamWhen(t.event_date)}</b>
+          <small className="muted nowrap">{t.state === 'readonly' ? 'closed' : t.last_at ? whenShort(t.last_at) : ''}</small></span>
+        <span className="ib-body">{preview(t)}</span>
+      </span>
+      {t.unread > 0 && <span className="tc-unread">{t.unread}</span>}
+    </button>
+  );
+  return (
+    <div className="adm-card ib-list" style={{ maxWidth: 760, padding: 0 }}>
+      {list === null ? <div className="muted" style={{ padding: 16 }}>Loading…</div> : !list.length ? <div className="muted sm" style={{ padding: 16 }}>No team chat is on right now. Turn one on from the event page.</div> : <>
+        <div className="tc-sect">OPEN NOW</div>
+        {!open.length && <div className="muted sm" style={{ padding: '8px 16px' }}>None open.</div>}
+        {open.map((t) => <Row key={t.event_id} t={t} />)}
+        {closed.length > 0 && <div className="tc-sect">CLOSED · READ ONLY 7 DAYS</div>}
+        {closed.map((t) => <Row key={t.event_id} t={t} />)}
+      </>}
+      <div className="muted sm ib-foot">Red number = new team messages since you last looked. Tap a chat to open it. Turning a chat on or off stays on the event page.</div>
+    </div>
+  );
+}
+
+/** push 40 · shift notes / asks: what they are + where they stand (in All, never Needs reply). */
+const CARD_LABEL: Record<string, string> = { shift_changed: 'Shift changed', new_shift: 'New shift', shift_removed: 'Shift removed', ask: 'Asked first', ask_result: 'Answered' };
+function noteTag(r: InboxRow) {
+  const m = (r.last_meta ?? {}) as Record<string, unknown>; const card = m.card as string | undefined;
+  if (r.last_from !== 'system' || !card) return null;
+  const seen = !!r.staff_seen_at && r.staff_seen_at >= r.last_message_at;
+  if (card === 'shift_changed') return typeof m.got_it_at === 'string' ? <i className="ib-tag ok">✓ GOT IT {t12(m.got_it_at).toUpperCase()}</i> : seen ? <i className="ib-tag">SEEN · NO ANSWER</i> : <i className="ib-tag red">NOT OPENED</i>;
+  if (card === 'ask') return m.state === 'yes' ? <i className="ib-tag ok">✓ YES</i> : m.state === 'no' ? <i className="ib-tag red">NO</i> : m.state === 'expired' ? <i className="ib-tag">NO ANSWER</i> : <i className="ib-tag gold">WAITING{seen ? ' · SEEN' : ''}</i>;
+  if (card === 'ask_result') return m.answer === 'yes' ? <i className="ib-tag ok">✓ YES</i> : m.answer === 'no' ? <i className="ib-tag red">NO</i> : null;
+  return seen ? <i className="ib-tag">SEEN</i> : <i className="ib-tag red">NOT OPENED</i>;
+}
 function subOf(r: InboxRow) {
+  const card = (r.last_meta as Record<string, unknown> | null)?.card as string | undefined;
+  if (r.last_from === 'system' && card && CARD_LABEL[card]) { const m = r.last_meta as Record<string, unknown>; const d = (m.date as string | undefined) ?? ((m.new as { date?: string } | undefined)?.date);
+    return `🗓 ${CARD_LABEL[card]}${d ? ` · ${shortDate(d)}` : ''}`; }
   if (r.kind === 'manager') return `${r.event_title ?? ''}${r.event_date ? ` · ${shortDate(r.event_date)}` : ''}${r.re ? ` · Re: ${r.re}` : ''}`;
   const m = r.last_meta ?? {};
   if (m.hours && m.shift) return `🕒 Hours · ${shortDate(m.shift.date)} · ${m.shift.title}`;
@@ -99,10 +149,11 @@ function InboxItem({ r, onOpen, onUnread, onDone }: { r: InboxRow; onOpen: () =>
               {r.needs_reply && <i className="ib-tag red">REPLY</i>}
               {r.admin_unread && <i className="ib-tag gold">● UNREAD</i>}
               {r.status === 'done' && <i className="ib-tag">✓ DONE</i>}
-              {mgrTag}{r.kind === 'ronnie' && seenTag}
+              {mgrTag}{r.kind === 'ronnie' && seenTag}{noteTag(r)}
             </span>
           </span>
         </button>
+        {(r.needs_reply || r.admin_unread) && r.status !== 'done' && <button className="abtn sm ib-noreply" title="Read · nothing to answer" onClick={onDone}>✓ No reply needed</button>}
         <button className="sq ib-more" aria-label="Mark unread or Done" onClick={() => setDx(dx ? 0 : -184)}>⋯</button>
       </div>
     </div>
@@ -114,6 +165,7 @@ function AdminConversation({ id, row, onBack, onUnread, onDone, toast }: { id: s
   const [who, setWho] = useState<{ full_name: string; photo_url: string | null; phone: string | null } | null>(null);
   const [lastShift, setLastShift] = useState<Msg['meta']['shift'] | null>(null); const [menu, setMenu] = useState(false);
   const [mgrName, setMgrName] = useState<string | null>(null); const [tick, setTick] = useState(0);
+  const [rem, setRem] = useState<string | null>(null); // Nov 6 · 📌 remind me next time I book them
   useEffect(() => { supabase.rpc('me').then(({ data }) => setMeId((data as string) ?? null)); }, []);
   useEffect(() => {
     if (!conv) return;
@@ -132,6 +184,8 @@ function AdminConversation({ id, row, onBack, onUnread, onDone, toast }: { id: s
         <button className="sq" aria-label="Back" onClick={onBack}>‹</button>
         <Avatar name={name} url={who?.photo_url ?? row?.staff_photo} size={40} />
         <div className="grow" style={{ minWidth: 0 }}><b>{name}{conv?.kind === 'manager' ? ` → ${first(mgrName)}` : ''}</b><small className="muted">{sub}</small></div>
+        {/* Nov 6 · read it, nothing to answer → one visible click */}
+        {conv && conv.status !== 'done' && <button className="abtn sm ok" onClick={() => { onDone({ id: conv.id }, true); setTick((t) => t + 1); }}>✓ No reply needed</button>}
         {tel && <a className="abtn sm" href={`tel:${tel}`}>Call</a>}
         <div style={{ position: 'relative' }}>
           <button className="sq" aria-label="More" onClick={() => setMenu(!menu)}>⋯</button>
@@ -139,9 +193,11 @@ function AdminConversation({ id, row, onBack, onUnread, onDone, toast }: { id: s
             <button onClick={() => onUnread({ id: conv.id, staff_name: name })}><i className="ib-dot" /> Mark unread</button>
             <button onClick={() => { onDone({ id: conv.id }, conv.status !== 'done'); setTick((t) => t + 1); }}>✓ {conv.status === 'done' ? 'Reopen' : 'Done'}</button>
             {(lastShift?.event_id || conv.event_id) && <Link to={`/admin/event/${lastShift?.event_id ?? conv.event_id}`}>🗓 Open the shift</Link>}
+            <button onClick={() => setRem(conv.kind === 'manager' && mgrName ? ` (${first(mgrName)}, ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})` : '')}>📌 Remind me next time I book {first(name)}</button>
           </div>}
         </div>
       </div>
+      {rem !== null && conv && <RemindForm staffId={conv.staff_id} staffName={name} preset={rem} convId={conv.id} onClose={() => setRem(null)} />}
       {lastShift && conv?.kind === 'ronnie' && <div className="ch-shift" style={{ alignSelf: 'flex-start' }}>🗓 {shortDate(lastShift.date).toUpperCase()} · {lastShift.title.toUpperCase()}</div>}
       <div className="adm-card ib-chat">
         {meId ? <Chat convId={id} meId={meId} side="admin" managerName={mgrName} onConv={setConv} reloadKey={tick} placeholder={`Reply to ${first(name)}…`} /> : <div className="loading" style={{ minHeight: 200 }} />}

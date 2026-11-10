@@ -4,6 +4,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { supabase, SHIFT_SELECT, isSetup, type ShiftRow, type Staff } from '../lib/supabase';
 import { setting, useSettings } from '../lib/settings';
 import { useLang } from '../lib/i18n';
+import { loadOnboarding, cardsFor, type Onboarding } from '../lib/handbook';
+import { LineIcon } from '../components/LineIcon';
 import { time, longDate, dayBadge, minus, mapsUrl } from '../lib/format';
 import { ProfileButton } from '../components/ProfileMenu';
 import { TabBar } from '../components/TabBar';
@@ -14,18 +16,35 @@ import { useMyCalendar } from '../lib/calendar';
 import { callName } from '../lib/nickname';
 import { UniformIcon, uniformFor, uniformLabel } from '../components/Uniform';
 import { MessageCard, MessageRonnieLink, MgrRepliesLine } from '../components/MessageCard';
-import { useCheckup } from '../lib/checkup';
+import { shiftNotes, noteSeen, type ShiftNote } from '../lib/staffNotes';
+import { OwnClose } from '../components/OwnClose';
+import { pinDirections } from '../components/VenuePin';
+import { mergeLinks, gettingThere, LinkIcon } from '../components/Links';
+import { useCheckup, setEmergencyReminder } from '../lib/checkup';
 import { EmergencyForm, UsualWeekScreen } from './Checkup';
 import { SwipeSheet } from '../components/SwipeSheet';
+import { useMyMeetings, dayOfMtl, todayMtl } from '../lib/meetings';
+import { MeetingCard } from '../components/Meeting';
+import { AskCard } from '../components/ShiftNotes';
+import { NightOffCards } from '../components/NightOffCard';
+import { useMyAsks } from '../lib/shiftAsks';
+import { AlertsCard } from '../components/Alerts';
+import { PastStrips } from '../components/PastStrip';
+import { managesShift } from '../lib/pastEvents';
 import { NeedChange, CancelSheet, ChangeSheet, LateSheet, LateBlock, ChangeCard, CancelledCard, useShiftChanges, t12 as t12c, type LateNotice } from '../components/ShiftChange';
+import { Brand } from '../components/Brand';
+import { CantMakeIt } from '../components/ShiftNotes';
+import { FirstCut } from '../components/FirstCut';
 
 type MgrLate = { id: string; shift_id: string; event_id: string; name: string; eta: string; reason: string | null; note?: string | null };
 type Gone = { id: string; title: string; date: string; late: boolean };
 const OK_KEY = 'gr-cancel-ok';
 const readOk = (): string[] => { try { return JSON.parse(localStorage.getItem(OK_KEY) || '[]'); } catch { return []; } };
+const COMGR_KEY = 'gr-comgr-seen'; // push 39 · "Ronnie made you a manager" notes dismissed (event ids)
+const readComgr = (): string[] => { try { const v = JSON.parse(localStorage.getItem(COMGR_KEY) || '[]'); return Array.isArray(v) ? v : []; } catch { return []; } };
 
 /** push 33 shift columns (migration 039), read on their own so Home still loads before it is applied. */
-type Prev = { start?: string | null; position?: string | null; place?: string | null; address?: string | null };
+type Prev = { start?: string | null; end?: string | null; position?: string | null; place?: string | null; address?: string | null; uniform?: string | null; uniform_new?: string | null };
 type P33 = { confirm_sent_at: string | null; confirm_by: string | null; change_prev: Prev | null; change_seen_at: string | null };
 type Mate = { full_name: string; photo_url: string | null; position_code: string | null; position_detail: string | null; punches: { punch_in: string | null; punch_out: string | null } | null };
 type Q = { shift_id: string; status: 'open' | 'fixed' | 'correct' };
@@ -41,6 +60,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
   const lang = useLang(); const nav = useNavigate(); useSettings();
   const [shifts, setShifts] = useState<ShiftRow[] | null>(null);
   const [teams, setTeams] = useState<Record<string, Mate[]>>({});
+  const [gNotes, setGNotes] = useState<Record<string, ShiftNote>>({}); // Nov 6 · note from G&R on a shift (068)
   const [qs, setQs] = useState<Record<string, Q['status']>>({});
   const [askQ, setAskQ] = useState<ShiftRow | null>(null);
   const [alerts, setAlerts] = useState<{ id: string; kind: string; title: string; body: string | null; event_id: string | null }[]>([]);
@@ -50,6 +70,14 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
   const [mgrLate, setMgrLate] = useState<MgrLate[]>([]);
   // push 31 · emergency contact skipped in the check-up → small reminder until it's filled
   const { info: cu, reload: reloadCu } = useCheckup(); const [emOpen, setEmOpen] = useState(false);
+  const [emToast, setEmToast] = useState<null | 'later' | 'never'>(null);
+  const emChoose = async (c: 'later' | 'never' | 'clear') => {
+    if (preview) return;
+    setEmToast(c === 'clear' ? null : c);
+    const { error } = await setEmergencyReminder(c); if (error) { setEmToast(null); return; }
+    reloadCu();
+    if (c !== 'clear') setTimeout(() => setEmToast((t) => (t === c ? null : t)), 6000);
+  };
   const [wkOpen, setWkOpen] = useState(false); // push 34d · usual week skipped in the check-up
   // push 33
   const [x33, setX33] = useState<Record<string, P33>>({});
@@ -57,13 +85,21 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
   const { cal, setCal } = useMyCalendar(preview);
 
   const load = async () => {
-    const since = new Date(Date.now() - 12 * 3600e3).toISOString();
+    // push 46 · read 24 h back so a double day keeps its first shift (the "done" line) until midnight; other days stay at 12 h
+    const since = new Date(Date.now() - 24 * 3600e3).toISOString(); const since12 = Date.now() - 12 * 3600e3;
     const { data } = await supabase.from('shifts').select(SHIFT_SELECT + ',punches(punch_in,punch_out)')
       .eq('staff_id', me.id).neq('status', 'declined').gte('planned_start', since)
       .order('planned_start').limit(30);
-    const all = (data as unknown as ShiftRow[]) ?? [];
-    const rows = all.filter((r) => r.attendance !== 'cancelled'); // push 28: a cancelled shift is off Home
+    // Nov 6 · an ends-own shift still open from up to 4 days ago (phone died) comes back so they can send the end time
+    const { data: open4 } = await supabase.from('shifts').select(SHIFT_SELECT + ',punches(punch_in,punch_out)').eq('staff_id', me.id).eq('ends_own', true)
+      .gte('planned_start', new Date(Date.now() - 4 * 86400e3).toISOString()).lt('planned_start', since);
+    const stuck = ((open4 as unknown as ShiftRow[]) ?? []).filter((r) => r.punches?.punch_in && !r.punches.punch_out && r.attendance !== 'cancelled');
+    const all = [...stuck, ...(((data as unknown as ShiftRow[]) ?? []).filter((r) => r.attendance !== 'cancelled'))]; // push 28: a cancelled shift is off Home
+    const td = todayIso(); const nToday = all.filter((r) => r.events.event_date === td).length;
+    // Nov 6 · a shift still on the clock never drops off (long nights past midnight)
+    const rows = all.filter((r) => new Date(r.planned_start).getTime() >= since12 || (r.events.event_date === td && nToday >= 2) || (!!r.punches?.punch_in && !r.punches.punch_out));
     setShifts(rows);
+    shiftNotes(rows.map((r) => r.id)).then(setGNotes);
     if (rows.length) supabase.from('shifts').select('id,confirm_sent_at,confirm_by,change_prev,change_seen_at').in('id', rows.map((r) => r.id))
       .then(({ data: d, error }) => { if (!error && Array.isArray(d)) setX33(Object.fromEntries((d as (P33 & { id: string })[]).map((x) => [x.id, x]))); });
     // push 28 · "Shift cancelled · Ronnie has been told" for 24 h (cancelled_at is new in 034: errors → none)
@@ -72,7 +108,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
       .then(({ data: g, error }) => { if (!error && Array.isArray(g)) setGone((g as unknown as { id: string; cancel_late: boolean; events: { title: string; event_date: string } | null }[]).filter((x) => x?.events).map((x) => ({ id: x.id, title: x.events!.title, date: x.events!.event_date, late: !!x.cancel_late }))); });
     if (rows.length) supabase.from('hours_questions').select('shift_id,status').in('shift_id', rows.map((r) => r.id)).order('created_at')
       .then(({ data: q }) => setQs(Object.fromEntries(((q ?? []) as Q[]).map((x) => [x.shift_id, x.status]))));
-    const managed = [...new Set(rows.filter((r) => r.events.manager_id === me.id || (r.events.co_manager_ids ?? []).includes(me.id) || r.position_code === 'MD' || r.position_code === 'BM').map((r) => r.events.id))];
+    const managed = [...new Set(rows.filter((r) => managesShift(r, me.id)).map((r) => r.events.id))]; // push 51 · one rule (lib/pastEvents)
     if (managed.length) {
       const { data: crew, error: cErr } = await supabase.from('shifts').select('id,event_id,position_code,position_detail,attendance,staff:staff!shifts_staff_id_fkey(full_name,photo_url),punches(punch_in,punch_out)')
         .in('event_id', managed).neq('status', 'declined').order('planned_start');
@@ -95,12 +131,22 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
     supabase.from('staff_alerts').select('id,kind,title,body,event_id').eq('staff_id', me.id).is('seen_at', null).order('created_at')
       .then(({ data }) => setAlerts((data ?? []) as typeof alerts));
   }, [me.id]);
+  // push 38 · meetings: today's at the top, then unanswered ones + the next 14 days above the next shift
+  const { meetings, setMeetings } = useMyMeetings(me.id, preview);
+  // push 40 · "Can you do a new time?" / "Can you work this event instead?" / "Can you work this shift?" (gold cards, also in Messages)
+  const { asks, reload: reloadAsks } = useMyAsks(preview || me.role === 'admin');
+  // push 56 · new hires: handbook before dates, tax & pay before the first shift (null = current staff, nothing to do)
+  const [ob, setOb] = useState<Onboarding | null>(null);
+  useEffect(() => { if (!preview) loadOnboarding().then(setOb); }, [preview]);
+  const hbLocked = !!ob && !ob.hb_done_at;
   const gotIt = async (id: string) => { setAlerts(alerts.filter((a) => a.id !== id)); if (!preview) await supabase.rpc('alert_seen', { p_id: id }); };
   const { dates: myDates, reload: reloadDates } = useMyDates(me.id, preview); // push 35 · My dates (count, reminder, said yes)
   const [notSure, setNotSure] = useState(false);
   const upcomingIds = (shifts ?? []).filter((s) => !(s.punches?.punch_out && new Date(s.punches.punch_out).getTime() <= Date.now())).map((s) => s.id);
   const chg = useShiftChanges(preview ? [] : upcomingIds);
   const mgrGotIt = async (id: string) => { setMgrLate((v) => v.filter((x) => x.id !== id)); if (!preview) await supabase.rpc('late_notice_seen', { p_id: id }); };
+  const [comgrSeen, setComgrSeen] = useState<string[]>(readComgr);
+  const comgrOk = (eventId: string) => { const v = [...comgrSeen, eventId]; setComgrSeen(v); try { localStorage.setItem(COMGR_KEY, JSON.stringify(v.slice(-50))); } catch { /* private mode */ } };
   const okGone = (id: string) => { const v = [...okd, id]; setOkd(v); try { localStorage.setItem(OK_KEY, JSON.stringify(v.slice(-50))); } catch { /* private mode */ } };
 
   const respond = async (id: string, r: 'confirmed' | 'declined') => {
@@ -121,8 +167,18 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
 
   if (!shifts) return <div className="loading" />;
   const isDone = (s: ShiftRow) => !!s.punches?.punch_in && !!s.punches.punch_out && new Date(s.punches.punch_out).getTime() <= Date.now();
-  const doneToday = shifts.filter((s) => isDone(s) && s.events.event_date === todayIso());
+  // Nov 6 · the night runs until 6 AM: after midnight tonight's event is still "today" (managers kept losing Team · submit)
+  const night = new Date(Date.now() - 6 * 3600e3).toLocaleDateString('en-CA', { timeZone: 'America/Toronto' });
+  const doneToday = shifts.filter((s) => isDone(s) && (s.events.event_date === todayIso() || s.events.event_date === night || (!!teams[s.events.id] && !s.events.hours_submitted_at && s.events.event_date >= addDay(todayIso(), -1))));
   const [next, ...rest] = shifts.filter((s) => !isDone(s));
+  // push 46 · two shifts the same day (not declined / cancelled): compact card + "then" card; normal days unchanged
+  const dayShifts = (d: string) => shifts.filter((s) => s.events.event_date === d);
+  const dbl = next ? dayShifts(next.events.event_date) : [];
+  const isDbl = dbl.length >= 2;
+  const ofN = (s: ShiftRow) => `${dbl.indexOf(s) + 1} of ${dbl.length}`;
+  const laterSame = isDbl ? rest.filter((s) => s.events.event_date === next!.events.event_date) : [];
+  const restAfter = isDbl ? rest.filter((s) => s.events.event_date !== next!.events.event_date) : rest;
+  const todayDbl = dayShifts(night).length >= 2;
   // push 33e · not final = details pending or time TBC: "Details coming", never a Confirm button
   const notFinal = (s: ShiftRow) => !!s.events.details_pending || !!s.time_tbc;
   const soon = (s: ShiftRow) => !!s.events.details_pending || (!!s.time_tbc && s.status === 'booked');
@@ -138,6 +194,14 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
   const myDatesTo = (q: string) => `${preview ? base : ''}/my-dates?tab=${q}`;
   const first = callName(me);
   const today = todayIso();
+  const mtgTo = (id: string) => (preview ? `/admin/meeting/${id}` : `/meeting/${id}`);
+  const mtgAnswered = (id: string, a: 'coming' | 'cant') => setMeetings((l) => (l ?? []).map((x) => (x.id === id ? { ...x, answer: a } : x)));
+  const mtgToday = (meetings ?? []).filter((m) => dayOfMtl(m.starts_at) === todayMtl());
+  // Nov 5 · later meetings they said Coming to → a row under Coming up
+  const mtgComing = (meetings ?? []).filter((m) => dayOfMtl(m.starts_at) > todayMtl() && m.answer === 'coming').sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+  const soonDay = addDay(today, 14);
+  const mtgLater = (meetings ?? []).filter((m) => dayOfMtl(m.starts_at) > todayMtl() && m.answer !== 'cant' && (m.answer === null || dayOfMtl(m.starts_at) <= soonDay));
+  const MEETING_ON_CARD = ['meeting_invite', 'meeting_today']; // the meeting card itself shows these
 
   const whenLabel = (s: ShiftRow) => {
     const d = s.events.event_date;
@@ -147,6 +211,10 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
   };
   const isLead = (s: ShiftRow) => s.position_code === 'MD' || s.position_code === 'BM';
   const role = (s: ShiftRow) => s.position_code === 'MD' ? 'MD' : s.position_detail ? s.position_detail.replace(/^bar\s*-\s*/i, '') : isBar(s.position_code, null) ? 'Bar' : 'Waiter';
+  // push 39 · co-manager (events.co_manager_ids, not the lead): keeps his own position, reads "Waiter · manager"
+  const coMgr = (s: ShiftRow) => !isLead(s) && s.events.manager_id !== me.id && (s.events.co_manager_ids ?? []).includes(me.id);
+  const pos = (s: ShiftRow) => role(s) + (coMgr(s) ? ' · manager' : '');
+  const comgrNotes = [...new Map(shifts.filter((s) => !isDone(s) && s.events.event_date >= today && coMgr(s) && !comgrSeen.includes(s.events.id)).map((s) => [s.events.id, s])).values()];
 
   return (
     <main className="page v2">
@@ -156,25 +224,70 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
         <ProfileButton me={me} preview={preview} />
       </header>
 
-      {alerts.map((a) => (
-        <div key={a.id} className="alert-card">
-          <div className="grow"><small>{a.kind === 'removed' ? 'SCHEDULE CHANGE' : a.kind === 'booked' ? 'NEW SHIFT' : 'SHIFT CHANGED'}</small><b>{a.title}</b>{a.body && <span>{a.body}</span>}</div>
+      {!preview && <PastStrips me={me} />}
+
+      {/* Nov 5 · every "Your shift changed" box sits at the top of Home until Got it (mapping StaffChangesV1) */}
+      {shifts.filter((s) => changed(s)).map((s) => <ChangedBox key={'chg' + s.id} prev={changed(s)!} s={s} role={role(s)} calOn={!!cal?.added_at} onSeen={() => changeSeen(s)} standalone />)}{/* push 51 · Rate n new staff / Send hours (events managed in the last 7 days) */}
+
+      {comgrNotes.map((s) => (
+        <div key={'cm' + s.events.id} className="comgr-note" role="status">
+          <span className="grow">✓ You’re a manager for {new Date(s.events.event_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).replace(',', '')} · {s.events.venues?.name ?? s.events.title}. You can start, end and submit the team.</span>
+          <button aria-label="Dismiss" onClick={() => comgrOk(s.events.id)}>✕</button>
+        </div>
+      ))}
+
+      {mtgToday.map((m) => <MeetingCard key={m.id} m={m} to={mtgTo(m.id)} preview={preview} onAnswered={(a) => mtgAnswered(m.id, a)} />)}
+
+      {alerts.filter((a) => !MEETING_ON_CARD.includes(a.kind)).map((a) => (
+        <div key={a.id} className={'alert-card' + (a.kind.startsWith('meeting') ? ' mtg-alert' : '')}>
+          <div className="grow"><small>{a.kind === 'meeting_cancelled' ? 'MEETING' : a.kind === 'meeting_changed' ? 'MEETING CHANGED' : a.kind === 'removed' ? 'SCHEDULE CHANGE' : a.kind === 'booked' ? 'NEW SHIFT' : 'SHIFT CHANGED'}</small><b>{a.title}</b>{a.body && <span>{a.body}</span>}</div>
           <button className="pill-red" onClick={() => gotIt(a.id)}>Got it</button>
         </div>
       ))}
+
+      {ob && (!ob.hb_done_at || (ob.paid_by === 'payroll' && !ob.tax_done_at)) && (() => {
+        // push 58 · premium: the Standard as a dark card with a gold ring, tax and pay as a calm row, requests locked with a quiet note
+        const n = cardsFor(ob).length; const read = Math.min(ob.hb_seen.length, n); const r = 25; const C = 2 * Math.PI * r;
+        return <div className="ob2">
+          {!ob.hb_done_at && <button className="ob2-card" onClick={() => nav('/handbook')}>
+            <span className="ob2-top">
+              <svg width="62" height="62" viewBox="0 0 62 62" aria-hidden="true"><circle cx="31" cy="31" r={r} fill="none" stroke="rgba(217,183,106,.25)" strokeWidth="3" />
+                <circle cx="31" cy="31" r={r} fill="none" stroke="#D9B76A" strokeWidth="3" strokeLinecap="round" strokeDasharray={`${(C * read) / n} ${C}`} transform="rotate(-90 31 31)" />
+                <text x="31" y="36" textAnchor="middle" fontFamily="Fraunces, Georgia, serif" fontSize="16" fill="#F6F2EC">{read}</text></svg>
+              <span className="grow"><em>Before you get dates</em><b>The G&amp;R Standard</b><small>{read} of {n} · about {Math.max(1, Math.round((n - read) * 0.35))} min left</small></span>
+            </span>
+            <span className="ob2-go">{read ? 'Continue reading' : 'Begin'}</span>
+          </button>}
+          {ob.paid_by === 'payroll' && !ob.tax_done_at && <button className="ob2-row" onClick={() => nav('/tax')}>
+            <LineIcon name="cheque" size={24} /><span className="grow"><b>Tax and pay</b><small>Before your first shift · 4 min</small></span><span style={{ fontSize: 18 }}>›</span></button>}
+          {hbLocked && <div className="ob2-lock"><LineIcon name="lock" size={22} color="#7A7268" /><span>Event requests arrive here<br />once you’ve finished the Standard.</span></div>}
+        </div>;
+      })()}
+
+      {!hbLocked && <NightOffCards preview={preview} onDone={load} />}{/* push 66 */}
+      {!hbLocked && asks.map((a) => <AskCard key={a.ask_id} a={a} home preview={preview} onAnswered={(st) => { if (st !== 'gone') load(); setTimeout(reloadAsks, st === 'gone' ? 4000 : 2500); }} />)}
 
       {gone.filter((g) => !okd.includes(g.id)).map((g) => <CancelledCard key={g.id} title={g.title} date={g.date} late={g.late} onOk={() => okGone(g.id)} />)}
 
       {!preview && me.role !== 'admin' && <MessageCard meId={me.id} />}
 
+      {!preview && <AlertsCard me={me} />}
 
-      {!preview && cu?.done_at && !cu.emergency_phone && (
-        <button className="em-card" onClick={() => setEmOpen(true)}>
-          <span className="em-ic" aria-hidden="true">＋</span>
-          <span className="grow"><b>Add an emergency contact · 1 min</b><span>Only Ronnie sees it. Used only if something happens at an event.</span></span>
-          <span className="em-go">Add ›</span>
-        </button>
+
+      {!preview && cu?.done_at && !cu.emergency_phone && !cu.emergency_declined_at && !(cu.emergency_snooze_until && new Date(cu.emergency_snooze_until).getTime() > Date.now()) && (
+        <div className="em-wrap">
+          <button className="em-card" onClick={() => setEmOpen(true)}>
+            <span className="em-ic" aria-hidden="true">＋</span>
+            <span className="grow"><b>Add an emergency contact · 1 min</b><span>Only Ronnie sees it. Used only if something happens at an event.</span></span>
+            <span className="em-go">Add ›</span>
+          </button>
+          <div className="em-later">
+            <button onClick={() => emChoose('later')}>Remind me later</button>
+            <button onClick={() => emChoose('never')}>I’d rather not</button>
+          </div>
+        </div>
       )}
+      {emToast && <div className="em-toast"><span className="grow">{emToast === 'later' ? 'Okay, we’ll remind you in 2 weeks.' : 'Okay, we won’t ask again. You can add one any time in Profile.'}</span><button onClick={() => emChoose('clear')}>Undo</button></div>}
       {!preview && cu?.done_at && cu.usual_week_skipped_at && (
         <button className="em-card wk-card" onClick={() => setWkOpen(true)}>
           <span className="em-ic" aria-hidden="true">🗓</span>
@@ -187,7 +300,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
         <div className="scrim" onClick={() => setEmOpen(false)} />
         <SwipeSheet onClose={() => setEmOpen(false)} label="Emergency contact">
           <div><div className="kicker">ONLY RONNIE SEES THIS</div><div className="serif" style={{ fontSize: 26 }}>Emergency contact</div></div>
-          <EmergencyForm info={{ ...cu }} saveLabel="Save" onSaved={() => { setEmOpen(false); reloadCu(); }} />
+          <EmergencyForm info={{ ...cu }} saveLabel="Save" onSaved={() => { setEmOpen(false); setEmergencyReminder('clear'); reloadCu(); }} />
         </SwipeSheet>
       </>}
 
@@ -206,6 +319,18 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
 
       {doneToday.map((s) => {
         const team = teams[s.events.id];
+        if (todayDbl) {
+          // push 46 · double day: one small line per finished shift (replaces the done card until midnight)
+          const m = Math.max(0, Math.round((new Date(s.punches!.punch_out!).getTime() - new Date(s.punches!.punch_in!).getTime()) / 60000));
+          const mgrTodo = !!team && !preview && !s.events.hours_submitted_at;
+          return (
+            <div key={s.id} className="dbl-done">
+              <span className="ck" aria-hidden="true">✓</span>
+              <Link to={`${base}/shift/${s.id}`} className="grow"><b>{s.events.title} · done</b><span>Ended {t12(s.punches!.punch_out!)} · {Math.floor(m / 60)} h {String(m % 60).padStart(2, '0')}{team && !preview && s.events.hours_submitted_at ? ' · hours submitted' : ''}</span></Link>
+              {mgrTodo && <Link to={`/manage/${s.events.id}`} className="dbl-done-go">Team · submit ›</Link>}
+            </div>
+          );
+        }
         if (team && !preview) {
           const ended = team.every((m) => m.punches?.punch_out && new Date(m.punches.punch_out).getTime() <= Date.now());
           const total = team.reduce((n, m) => n + (m.punches?.punch_in && m.punches.punch_out ? hrs(m.punches.punch_in, m.punches.punch_out) : 0), 0);
@@ -242,7 +367,9 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
         );
       })}
 
-      {!next && !doneToday.length && <div className="card"><p className="muted" style={{ margin: 0 }}>No shifts booked yet.</p></div>}
+      {mtgLater.filter((m) => m.answer !== 'coming').map((m) => <MeetingCard key={m.id} m={m} to={mtgTo(m.id)} preview={preview} onAnswered={(a) => mtgAnswered(m.id, a)} />)}
+
+      {!next && !doneToday.length && !mtgToday.length && !mtgLater.filter((m) => m.answer !== 'coming').length && <div className="card"><p className="muted" style={{ margin: 0 }}>No shifts booked yet.</p></div>}
 
       {next && (() => {
         const addr = next.events.address || next.events.venues?.address || '';
@@ -252,12 +379,13 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
         const working = !!next.punches?.punch_in && new Date(next.punches.punch_in).getTime() <= Date.now();
         // push 28 · bubbles until the shift starts; running late all day on the event day until they're started
         const started = !!next.punches?.punch_in || Date.now() >= new Date(next.planned_start).getTime();
-        const managesIt = !!team && !preview;
+        // Nov 5 · know it's a manager right away (the team list loads a moment later → the late button used to flash)
+        const managesIt = (!!team || isLead(next) || next.events.manager_id === me.id || (next.events.co_manager_ids ?? []).includes(me.id)) && !preview;
         const lateOn = setting('bookings.running_late') !== 'off' && next.events.event_date === today && !next.punches?.punch_in && !managesIt && !next.time_tbc; // Settings (push 32)
         const req = chg.reqs[next.id];
         const mgrName = next.events.manager?.full_name ?? null;
         const myAlerts = mgrLate.filter((x) => x.event_id === next.events.id);
-        const needChange = !started && !managesIt && <NeedChange canSchedule={!(req?.status === 'pending' || (req?.status === 'keep' && !req.keep_reply))} onSchedule={() => setSheet({ kind: 'change', s: next })} onCancel={() => setSheet({ kind: 'cancel', s: next })} />;
+        const needChange = !started && <NeedChange canSchedule={!(req?.status === 'pending' || (req?.status === 'keep' && !req.keep_reply))} onSchedule={() => setSheet({ kind: 'change', s: next })} onCancel={() => setSheet({ kind: 'cancel', s: next })} />;
         // push 33e · booked, details not final: no Confirm, the 24 h starts once they're set
         if (!working && soon(next)) {
           const d = new Date(next.events.event_date + 'T12:00:00');
@@ -265,7 +393,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
             <section className="next details-coming" style={{ gap: 14, padding: 18 }}>
               <div className="top-line"><span className="day-word">{d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase()}</span><span className="soon-pill">Details coming</span></div>
               <div className="venue serif">You’re booked</div>
-              <StartPos start={null} role={role(next)} />
+              <StartPos start={null} role={pos(next)} mgr={coMgr(next)} />
               <div className="sub dc-text">The time and place are coming. You’ll be asked to confirm once they’re set, and you’ll have 24 hours from then.</div>
               {needChange}
             </section>
@@ -274,9 +402,77 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
         const waiting = !working && next.status === 'booked'; // push 33a · waiting for Confirm (details are final here)
         const confirmed = !working && next.status === 'confirmed';
         const by = x33[next.id]?.confirm_by ?? null;
-        const prev = changed(next);
+        if (isDbl) {
+          // push 46 · compact card: position in the pill, STARTS | ENDS on one row, then the next shift that day
+          const nx = laterSame[0];
+          return <>
+            <section className={'next dbl' + (changed(next) ? ' chg' : '') + (working ? ' working' : '') + (waiting ? ' to-confirm' : '') + (confirmed ? ' is-confirmed' : '')}>
+              <div className="top-line">
+                <span className="day-word">{working ? <><i className="live-dot" aria-hidden="true" />WORKING NOW</> : waiting ? <ConfirmPill by={by} />
+                  : next.events.event_date === today && !next.time_tbc ? <Countdown iso={minus(next.planned_start, next.arrive_before_min)} start={next.planned_start} plain /> : dayWord.toUpperCase()}</span>
+                <span className={'dbl-pill' + (coMgr(next) ? ' mgr' : '')}>{pos(next)} · {ofN(next)}</span>
+              </div>
+              <div className="spread" style={{ alignItems: 'center', gap: 12 }}>
+                <div style={{ minWidth: 0 }}>
+                  <div className="venue serif">{next.events.title}</div>
+                  {addr && <div className="sub" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{addr.split(',').slice(0, 2).join(' ·')}</div>}
+                </div>
+                {!isSetup(next.events) && <span className="wear-tile" style={{ width: 46, height: 46, borderRadius: 12 }} title={uniformLabel(uniformFor(next))}><UniformIcon kind={uniformFor(next)} size={34} /></span>}
+              </div>
+              <div className="dbl-times">
+                {working ? <>
+                  <div><small>Started</small><BigTime iso={next.punches!.punch_in!} small /></div>
+                  <div><small>On the clock</small><span className="big serif sm-big mint"><Elapsed iso={next.punches!.punch_in!} /></span></div>
+                </> : <>
+                  <div><small>Starts</small>{next.time_tbc ? <span className="big serif sm-big">TBC</span> : <BigTime iso={next.planned_start} small />}</div>
+                  <div><small>{next.planned_end && !next.time_tbc ? 'Ends ~ estimate' : 'Ends'}</small>{next.planned_end && !next.time_tbc ? <BigTime iso={next.planned_end} small /> : <span className="big serif sm-big">TBC</span>}</div>
+                </>}
+              </div>
+              {myAlerts.map((a) => (
+                <div key={a.id} className="mgr-late"><span className="grow">⏱ <b>{a.name.split(' ')[0]} running late</b> · ~{t12c(a.eta).replace(/\s?[AP]M$/, '')}{a.reason ? ` · ${a.reason.toLowerCase()}` : ''}{a.note ? ` · “${a.note}”` : ''}</span>
+                  <button onClick={() => mgrGotIt(a.id)}>Got it ✓</button></div>
+              ))}
+              {managesIt && <MgrRepliesLine eventId={next.events.id} />}
+              {lateOn && <LateBlock notice={chg.late[next.id] ?? null} mgr={mgrName} mgrPhone={next.events.manager?.phone} onOpen={() => setSheet({ kind: 'late', s: next })} />}
+              {working && nx && <div className="dbl-then-gold">Then <b>{nx.events.title} · {nx.time_tbc ? 'time TBC' : t12(nx.planned_start)}</b> · head over when you’re done here</div>}
+              {next.events.tentative && <div className="tbc-line">⏳ <b>To be confirmed</b> · the client hasn’t said yes yet. Please keep the date free.</div>}
+              {waiting && <>
+                <button className="confirm-glow" onClick={() => respond(next.id, 'confirmed')}>{next.events.tentative ? 'Keep the date for G&R' : 'Confirm my shift'}</button>
+                {by && <div className="confirm-by">{new Date(by).getTime() > Date.now() ? 'Confirm within 24 h' : 'Please confirm now'} · by {byLabel(by)}</div>}
+              </>}
+              {working && next.ends_own && !next.punches?.punch_out && !preview && <OwnClose s={next} onDone={load} />}
+              {gNotes[next.id] && !gNotes[next.id].seen_at && <div className="g-note"><span>📌 <b>Note from G&amp;R</b><br />{gNotes[next.id].body}</span>
+                <button onClick={() => { const id = next.id; setGNotes((m) => ({ ...m, [id]: { ...m[id], seen_at: new Date().toISOString() } })); if (!preview) noteSeen(id); }}>Got it</button></div>}
+              <div className="row2">
+                <Link className="light-btn" style={{ height: 46, borderRadius: 14 }} to={`${base}/shift/${next.id}`}>Details</Link>
+                {team && !preview && !waiting
+                  ? <Link className="team-btn" to={`/manage/${next.events.id}`}>My team · {team.length} ›</Link>
+                  : addr || next.events.venues?.pin_lat != null ? <a className="dir-btn" href={next.events.venues?.pin_lat != null && next.events.venues.pin_lng != null ? pinDirections({ lat: next.events.venues.pin_lat, lng: next.events.venues.pin_lng }) : mapsUrl(addr!)} target="_blank" rel="noreferrer">Directions</a>
+                  : <span className="dir-btn" aria-disabled>Directions</span>}
+              </div>
+              {isLead(next) && next.events.drive_folder_url && <a className="home-folder" href={next.events.drive_folder_url} target="_blank" rel="noreferrer">📁 Event Folder</a>}
+              <HomeLink s={next} />
+              {needChange}
+            </section>
+            {laterSame.map((s) => {
+              const ok = s.status === 'confirmed'; const tm = time(s.planned_start, 'en'); const mm = tm.match(/^(.*?)\s*([ap])\.?\s?m\.?$/i);
+              const kick = s.events.event_date === today ? 'TODAY' : s.events.event_date === addDay(today, 1) ? 'TOMORROW' : dayBadge(s.events.event_date, lang).dow.toUpperCase();
+              return (
+                <div key={s.id} className="dbl-then">
+                  <div className="dbl-then-line" aria-hidden="true"><span>then</span></div>
+                  <Link to={`${base}/shift/${s.id}`} className={'next-mini dbl-card' + (ok ? ' ok' : '')}>
+                    <div className="dbl-t">{soon(s) || s.time_tbc ? <b className="tbc">TBC</b> : <><b className="serif">{mm ? mm[1] : tm}</b><small>{mm ? mm[2].toUpperCase() + 'M' : ''}</small></>}</div>
+                    <div className="grow"><small>{kick} · {soon(s) ? 'DETAILS COMING' : ok ? '✓ CONFIRMED' : 'TO CONFIRM'}</small><b>{soon(s) ? 'You’re booked' : s.events.title}</b>
+                      <span>{pos(s)} · {ofN(s)}</span></div>
+                    {!isSetup(s.events) && <span className="row-wear"><UniformIcon kind={uniformFor(s)} size={30} /></span>}
+                  </Link>
+                </div>
+              );
+            })}
+          </>;
+        }
         return (
-          <section className={'next' + (working ? ' working' : '') + (waiting ? ' to-confirm' : '') + (confirmed ? ' is-confirmed' : '')} style={{ gap: 14, padding: 18 }}>
+          <section className={'next' + (changed(next) ? ' chg' : '') + (working ? ' working' : '') + (waiting ? ' to-confirm' : '') + (confirmed ? ' is-confirmed' : '')} style={{ gap: 14, padding: 18 }}>
             <div className="top-line">
               <span className="day-word">{working ? <><i className="live-dot" aria-hidden="true" />WORKING NOW</> : dayWord.toUpperCase()}</span>
               {working ? <span className="countdown">since {time(next.punches!.punch_in!, lang)}</span>
@@ -292,30 +488,36 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
               {!isSetup(next.events) && <span className="wear-tile" style={{ width: 52, height: 52, borderRadius: 14 }} title={uniformLabel(uniformFor(next))}><UniformIcon kind={uniformFor(next)} size={38} /></span>}
             </div>
             {working ? <>
-              <div className="pos-line"><small>Your position</small><span className="pos-pill-lg">{role(next)}</span></div>
+              <div className="pos-line"><small>Your position</small><span className="pos-pill-lg">{pos(next)}</span></div>
               <div className="row2">
                 <div className="tbox"><small>Started</small><BigTime iso={next.punches!.punch_in!} small /></div>
                 <div className="tbox"><small>On the clock</small><span className="big serif sm-big mint"><Elapsed iso={next.punches!.punch_in!} /></span></div>
               </div>
-            </> : <StartPos start={next.time_tbc ? null : next.planned_start} role={role(next)} />}
-            {prev && <ChangedBox prev={prev} s={next} role={role(next)} calOn={!!cal?.added_at} onSeen={() => changeSeen(next)} />}
+            </> : <StartPos start={next.time_tbc ? null : next.planned_start} role={pos(next)} mgr={coMgr(next)} />}
             {myAlerts.map((a) => (
               <div key={a.id} className="mgr-late"><span className="grow">⏱ <b>{a.name.split(' ')[0]} running late</b> · ~{t12c(a.eta).replace(/\s?[AP]M$/, '')}{a.reason ? ` · ${a.reason.toLowerCase()}` : ''}{a.note ? ` · “${a.note}”` : ''}</span>
                 <button onClick={() => mgrGotIt(a.id)}>Got it ✓</button></div>
             ))}
             {managesIt && <MgrRepliesLine eventId={next.events.id} />}
             {lateOn && <LateBlock notice={chg.late[next.id] ?? null} mgr={mgrName} mgrPhone={next.events.manager?.phone} onOpen={() => setSheet({ kind: 'late', s: next })} />}
+            {next.events.tentative && <div className="tbc-line">⏳ <b>To be confirmed</b> · the client hasn’t said yes yet. Please keep the date free.</div>}
             {waiting && <>
-              <button className="confirm-glow" onClick={() => respond(next.id, 'confirmed')}>Confirm my shift</button>
+              <button className="confirm-glow" onClick={() => respond(next.id, 'confirmed')}>{next.events.tentative ? 'Keep the date for G&R' : 'Confirm my shift'}</button>
               {by && <div className="confirm-by">{new Date(by).getTime() > Date.now() ? 'Confirm within 24 h' : 'Please confirm now'} · by {byLabel(by)}</div>}
             </>}
+            {working && next.ends_own && !next.punches?.punch_out && !preview && <OwnClose s={next} onDone={load} />}
+            {gNotes[next.id] && !gNotes[next.id].seen_at && <div className="g-note"><span>📌 <b>Note from G&amp;R</b><br />{gNotes[next.id].body}</span>
+                <button onClick={() => { const id = next.id; setGNotes((m) => ({ ...m, [id]: { ...m[id], seen_at: new Date().toISOString() } })); if (!preview) noteSeen(id); }}>Got it</button></div>}
             <div className="row2">
               <Link className="light-btn" style={{ height: 46, borderRadius: 14 }} to={`${base}/shift/${next.id}`}>Details</Link>
               {team && !preview && !waiting
                 ? <Link className="team-btn" to={`/manage/${next.events.id}`}>My team · {team.length} ›</Link>
-                : addr ? <a className="dir-btn" href={mapsUrl(addr)} target="_blank" rel="noreferrer">Directions</a>
+                : addr || next.events.venues?.pin_lat != null ? <a className="dir-btn" href={next.events.venues?.pin_lat != null && next.events.venues.pin_lng != null ? pinDirections({ lat: next.events.venues.pin_lat, lng: next.events.venues.pin_lng }) : mapsUrl(addr!)} target="_blank" rel="noreferrer">Directions</a>
                 : <span className="dir-btn" aria-disabled>Directions</span>}
             </div>
+            {isLead(next) && next.events.drive_folder_url && <a className="home-folder" href={next.events.drive_folder_url} target="_blank" rel="noreferrer">📁 Event Folder</a>}
+              <HomeLink s={next} />
+            {!started && !managesIt && !isLead(next) && next.events.event_date === today && !next.events.tentative && <FirstCut compact shiftId={next.id} at={next.cut_first_at} start={next.planned_start} mgr={mgrName} preview={preview} />}{/* push 64 */}
             {needChange}
           </section>
         );
@@ -327,14 +529,15 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
       {(() => {
         // push 33c · while on shift: the next shift shrinks to one line, then the red pill, then Coming up
         const working = !!next?.punches?.punch_in && new Date(next.punches.punch_in).getTime() <= Date.now();
-        const mini = working ? rest[0] : undefined;
-        const list = mini ? rest.slice(1) : rest;
+        // push 46 · double day: the following day's NEXT card always stays under the two shifts
+        const mini = isDbl ? restAfter[0] : working ? rest[0] : undefined;
+        const list = isDbl ? restAfter.slice(1) : mini ? rest.slice(1) : rest;
         return <>
           {mini && (() => { const b = dayBadge(mini.events.event_date, lang); const ok = mini.status === 'confirmed'; return (
-            <Link to={`${base}/shift/${mini.id}`} className={'next-mini' + (ok ? ' ok' : '')}>
+            <Link to={`${base}/shift/${mini.id}`} className={'next-mini' + (ok ? ' ok' : '') + (changed(mini) ? ' chg' : '')}>
               <div className="d"><small>{b.dow}</small><b>{b.day}</b></div>
-              <div className="grow"><small>NEXT · {soon(mini) ? 'DETAILS COMING' : ok ? '✓ CONFIRMED' : 'TO CONFIRM'}</small><b>{soon(mini) ? 'You’re booked' : mini.events.title}</b>
-                <span>{soon(mini) || mini.time_tbc ? 'Time TBC' : time(mini.planned_start, lang)} · {role(mini)} · {whenLabel(mini).split(' · ')[0].toLowerCase()}</span></div>
+              <div className="grow"><small className={changed(mini) ? 'chg-k' : ''}>NEXT · {changed(mini) ? 'CHANGED' : soon(mini) ? 'DETAILS COMING' : ok ? '✓ CONFIRMED' : 'TO CONFIRM'}</small><b>{soon(mini) ? 'You’re booked' : mini.events.title}</b>
+                <span>{soon(mini) || mini.time_tbc ? 'Time TBC' : time(mini.planned_start, lang)} · {pos(mini)} · {whenLabel(mini).split(' · ')[0].toLowerCase()}</span></div>
               <span className="row-wear"><UniformIcon kind={uniformFor(mini)} size={30} /></span>
             </Link>
           ); })()}
@@ -357,25 +560,40 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
               <CalIcon /><b className="grow">{waitingAsks} date{waitingAsks > 1 ? 's' : ''} to answer</b><span className="dp-go">Answer ›</span>
             </Link>
           )}
-          {list.filter((s) => s !== next && changed(s)).map((s) => <ChangedBox key={s.id} prev={changed(s)!} s={s} role={role(s)} calOn={!!cal?.added_at} onSeen={() => changeSeen(s)} standalone />)}
-          {list.length > 0 && (
+          {(list.length > 0 || mtgComing.length > 0) && (
             <>
               <div className="sec-head"><span className="serif">Coming up</span><Link to={myDatesTo('booked')}>All my dates ›</Link></div>
               <section className="agenda">
-                {list.slice(0, 5).map((s) => {
+                {/* Nov 5 · shifts and meetings in date order (max 5 shifts; meetings up to the last shift shown) */}
+                {(() => {
+                  const rs = (s: ShiftRow) => {
                   const b = dayBadge(s.events.event_date, lang);
                   const pend = !!s.events.details_pending;
                   return (
-                    <Link key={s.id} to={teams[s.events.id] && !preview ? `/manage/${s.events.id}` : `${base}/shift/${s.id}`} className="agenda-row" style={{ minHeight: 64 }}>
+                    <Link key={s.id} to={`${base}/shift/${s.id}`} className={'agenda-row' + (s.events.tentative ? ' tbc-row' : '')} style={{ minHeight: 64 }}>
                       <div className="d" style={{ width: 40, alignItems: 'center' }}><small>{b.dow}</small><b>{b.day}</b></div>
-                      <div className="what" style={{ gap: 5 }}><b className={pend ? 'muted' : ''}>{pend ? 'Place to come' : s.events.title}</b>
-                        <span className="pos-row2"><span className={'pos-pill' + (isLead(s) ? ' lead' : '')}>{role(s)}</span>{teams[s.events.id] && !preview ? <span>team {teams[s.events.id].length}</span> : null}</span></div>
+                      <div className="what" style={{ gap: 5 }}><b className={pend ? 'muted' : ''}>{pend ? 'Place to come' : s.events.title}{gNotes[s.id] && !gNotes[s.id].seen_at ? ' 📌' : ''}</b>{s.events.tentative && <small className="tbc-tag">⏳ TO BE CONFIRMED</small>}
+                        <span className="pos-row2"><span className={'pos-pill' + (isLead(s) ? ' lead' : '')}>{pos(s)}</span>{teams[s.events.id] && !preview ? <span>team {teams[s.events.id].length}</span> : null}</span></div>
                       <span className="row-wear" title={uniformLabel(uniformFor(s))}><UniformIcon kind={uniformFor(s)} size={30} /></span>
                       <div className="row-time"><small>Starts</small>{pend ? <b className="tbc">To come</b> : s.time_tbc ? <b className="tbc">Time TBC</b> : <b><span className="serif">{time(s.planned_start, lang).replace(/\s?[ap]\.?\s?m\.?/i, '')}</span><i>{/p\.?\s?m/i.test(time(s.planned_start, lang)) ? ' PM' : ' AM'}</i></b>}</div>
                       {soon(s) ? <span className="tag-soon">Details coming</span> : s.status === 'confirmed' ? <span className="ok-dot" aria-label="Confirmed" /> : notFinal(s) ? <span className="tag-soon">Details coming</span> : <span className="tag-ask" style={{ height: 26, fontSize: 11 }}>Confirm</span>}
                     </Link>
-                  );
-                })}
+                  ); };
+                  const rm = (m: (typeof mtgComing)[number]) => { const d = dayOfMtl(m.starts_at); const b = dayBadge(d, lang); const tm = time(m.starts_at, lang); return (
+                  <Link key={'m' + m.id} to={mtgTo(m.id)} className="agenda-row mtg-row" style={{ minHeight: 64 }}>
+                    <div className="d" style={{ width: 40, alignItems: 'center' }}><small>{b.dow}</small><b>{b.day}</b></div>
+                    <div className="what" style={{ gap: 5 }}><b>{m.title}</b><span className="pos-row2"><span className="pos-pill mtg">Meeting</span><span>✓ you’re coming</span></span></div>
+                    <span className="row-wear" aria-hidden="true" />
+                    <div className="row-time"><small>Starts</small><b><span className="serif">{tm.replace(/\s?[ap]\.?\s?m\.?/i, '')}</span><i>{/p\.?\s?m/i.test(tm) ? ' PM' : ' AM'}</i></b></div>
+                    <span className="ok-dot" aria-hidden="true" style={{ visibility: 'hidden' }} />
+                  </Link>); };
+                  const sh = list.slice(0, 5); const cut = list.length > 5 ? sh[sh.length - 1].planned_start : null;
+                  const items: { at: string; el: JSX.Element }[] = [
+                    ...sh.map((s) => ({ at: s.planned_start, el: rs(s) })),
+                    ...mtgComing.filter((m) => !cut || m.starts_at <= cut).map((m) => ({ at: m.starts_at, el: rm(m) })),
+                  ];
+                  return items.sort((x, y) => x.at.localeCompare(y.at)).map((x) => x.el);
+                })()}
               </section>
             </>
           )}
@@ -399,17 +617,17 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
       {notSure && <KnowsSheet title="When will you know?" latest={latestKnows(dueMaybes)} oneTap
         sub="Pick a new day. It can't be after the answer-by date." onClose={() => setNotSure(false)}
         onPick={async (by) => { setNotSure(false); if (preview) return; await supabase.rpc('dont_know_yet', { p_knows_by: by, p_note: null, p_ids: dueMaybes.map((d) => d.id) }); reloadDates(); }} />}
-      <TabBar base={base} badge={toAns.length} />
+      <TabBar base={base} badge={toAns.length + asks.filter((a) => a.kind === 'fill').length} />
     </main>
   );
 }
 
 /** push 33a · Shift starts + Your position in one light row (position centred under its label). */
-export function StartPos({ start, role }: { start: string | null; role: string }) {
+export function StartPos({ start, role, mgr = false }: { start: string | null; role: string; mgr?: boolean }) {
   return (
     <div className="start-pos">
       <div><small>Shift starts</small>{start ? <BigTime iso={start} small /> : <span className="big serif sm-big">TBC</span>}</div>
-      <div className="sp-pos"><small>Your position</small><span className="pos-pill-dark">{role}</span></div>
+      <div className="sp-pos"><small>Your position</small><span className={'pos-pill-dark' + (mgr ? ' mgr' : '')}>{role}</span></div>
     </div>
   );
 }
@@ -424,23 +642,29 @@ function ConfirmPill({ by }: { by: string | null }) {
   return <span className="confirm-pill"><i />{m <= 0 ? 'Confirm · overdue' : m < 60 ? `Confirm · ${m} min left` : `Confirm · ${Math.floor(m / 60)} h left`}</span>;
 }
 
-/** push 33f · gold "Your shift changed" box until Got it. */
-function ChangedBox({ prev, s, role, calOn, onSeen, standalone = false }: { prev: Prev; s: ShiftRow; role: string; calOn: boolean; onSeen: () => void; standalone?: boolean }) {
+/** push 33f · gold "Your shift changed" box until Got it. Nov 5 · one line per change (new value, old one struck), uniform + end time too. */
+function ChangedBox({ prev, s, role, calOn, onSeen }: { prev: Prev; s: ShiftRow; role: string; calOn: boolean; onSeen: () => void; standalone?: boolean }) {
+  const [cant, setCant] = useState(false);
   const place = s.events.venues?.name ?? s.events.title;
-  const bits: JSX.Element[] = [];
-  if (prev.start && new Date(prev.start).getTime() !== new Date(s.planned_start).getTime() && !s.time_tbc) bits.push(<span key="t">Now starts <b>{t12(s.planned_start)}</b> <s>{t12(prev.start)}</s></span>);
-  if (prev.place && prev.place !== place) bits.push(<span key="p">Now at <b>{place}</b> <s>{prev.place}</s></span>);
-  else if (prev.address && prev.address !== (s.events.address || s.events.venues?.address || '')) bits.push(<span key="a">New address <b>{s.events.address || s.events.venues?.address}</b></span>);
-  if (prev.position && prev.position.replace(/^bar\s*-\s*/i, '') !== role && !/^\d+$/.test(prev.position)) bits.push(<span key="r">Now <b>{role}</b> <s>{prev.position.replace(/^bar\s*-\s*/i, '')}</s></span>);
-  if (!bits.length) bits.push(<span key="x">Some details changed. Check Details.</span>);
+  const addr = s.events.address || s.events.venues?.address || '';
+  const rows: { k: string; nw: string; old?: string | null }[] = [];
+  if (prev.start && new Date(prev.start).getTime() !== new Date(s.planned_start).getTime() && !s.time_tbc) rows.push({ k: 'START TIME', nw: t12(s.planned_start), old: t12(prev.start) });
+  if ('end' in prev && (prev.end ?? null) !== (s.planned_end ?? null) && s.planned_end && (!prev.end || new Date(prev.end).getTime() !== new Date(s.planned_end).getTime())) rows.push({ k: 'END TIME', nw: '~ ' + t12(s.planned_end), old: prev.end ? '~ ' + t12(prev.end) : null });
+  if (prev.place && prev.place !== place) rows.push({ k: 'PLACE', nw: place + (addr ? ` · ${addr.split(',')[0]}` : ''), old: prev.place });
+  else if (prev.address && prev.address !== addr) rows.push({ k: 'ADDRESS', nw: addr, old: prev.address });
+  if (prev.position && prev.position.replace(/^bar\s*-\s*/i, '') !== role && !/^\d+$/.test(prev.position)) rows.push({ k: 'POSITION', nw: role, old: prev.position.replace(/^bar\s*-\s*/i, '') });
+  if (prev.uniform && prev.uniform_new && prev.uniform !== prev.uniform_new) rows.push({ k: 'UNIFORM', nw: prev.uniform_new, old: prev.uniform });
+  else if (prev.uniform_new) rows.push({ k: 'UNIFORM', nw: prev.uniform_new });
+  const day = new Date(s.events.event_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
   return (
-    <div className={'changed-box' + (standalone ? ' standalone' : '')}>
-      <div className="grow">
-        <b>Your shift changed{standalone ? ` · ${new Date(s.events.event_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}` : ''}</b>
-        {bits}
-        {calOn && <small>Your G&amp;R calendar updates by itself.</small>}
-      </div>
-      <button onClick={onSeen}>Got it</button>
+    <div className="chg-card" role="status">
+      <div className="chg-h"><span className="chg-i">!</span><b>Your shift changed</b><i>NEW</i></div>
+      <span className="chg-d">{day} · {place}</span>
+      {rows.length ? rows.map((r) => <div key={r.k} className="chg-l"><small>{r.k}</small><span><b>{r.nw}</b>{r.old ? <s>{r.old}</s> : null}</span></div>)
+        : <div className="chg-l"><span>Some details changed. Check Details.</span></div>}
+      {calOn && <small className="chg-cal">Your <Brand /> calendar updates by itself.</small>}
+      <div className="chg-btns"><button onClick={onSeen}>✓ Got it</button><button className="alt" onClick={() => setCant(true)}>Can’t make it</button></div>
+      {cant && <CantMakeIt shiftId={s.id} onClose={() => setCant(false)} />}
     </div>
   );
 }
@@ -495,7 +719,7 @@ function Elapsed({ iso }: { iso: string }) {
   const m = Math.max(0, Math.floor((now - new Date(iso).getTime()) / 60000));
   return <>{Math.floor(m / 60)} h {String(m % 60).padStart(2, '0')}</>;
 }
-function Countdown({ iso, start }: { iso: string; start: string }) {
+function Countdown({ iso, start, plain = false }: { iso: string; start: string; plain?: boolean }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const id = setInterval(() => setNow(Date.now()), 30000); return () => clearInterval(id); }, []);
   const ms = new Date(iso).getTime() - now;
@@ -506,9 +730,16 @@ function Countdown({ iso, start }: { iso: string; start: string }) {
     const m = Math.floor(ms / 60000); const d = Math.floor(m / 1440); const h = Math.floor((m % 1440) / 60); const mm = m % 60;
     label = d > 0 ? `in ${d} d ${h} h` : h > 0 ? `in ${h} h ${mm} min` : `in ${mm} min`;
   }
+  if (plain) return <>{label.toUpperCase()}</>; // push 46 · compact card kicker ("IN 45 MIN")
   return <span className="countdown"><i />{label}</span>;
 }
 
 export function Status({ s }: { s: ShiftRow['status'] }) {
   return s === 'confirmed' ? <span className="tag-ok">✓ Confirmed</span> : s === 'booked' ? <span className="tag-ask">To confirm</span> : <span className="tag-done">Declined</span>;
+}
+
+/** Nov 6 · 075 · the "how to get there" link (Instagram post, website…) right under Directions */
+function HomeLink({ s }: { s: ShiftRow }) {
+  const l = gettingThere(mergeLinks(s.events.venues?.links, s.events.links)); if (!l) return null;
+  return <a className="home-link" href={l.url} target="_blank" rel="noreferrer"><LinkIcon url={l.url} /><span className="grow">{l.label}</span><b>›</b></a>;
 }

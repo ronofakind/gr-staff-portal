@@ -6,6 +6,7 @@ import { SwipeSheet } from '../components/SwipeSheet';
 import { useUsualWeek, UsualWeekList, DAYS } from '../components/UsualWeek';
 import { PageHead } from '../components/ProfileMenu';
 import { ampm } from '../lib/myDates';
+import { Brand } from '../components/Brand';
 export { ampm };
 
 type Off = { id: string; from_date: string; to_date: string; reason: string | null };
@@ -59,7 +60,7 @@ export function Availability({ me, preview = false }: { me: Staff; preview?: boo
           </div>
         ))}
         {!off.length && <div className="card muted sm">No days off added.</div>}
-        <p className="muted sm" style={{ margin: '2px 6px' }}>Days off win over your usual week. Dates G&R sends you are answered in My dates.</p>
+        <p className="muted sm" style={{ margin: '2px 6px' }}>Days off win over your usual week. Dates <Brand /> sends you are answered in My dates.</p>
       </section>
       <div style={{ height: 90 }} />
 

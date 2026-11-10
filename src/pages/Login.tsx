@@ -19,7 +19,7 @@ export function Login({ mustSetPin }: { mustSetPin?: boolean }) {
   const [viaInvite] = useState(() => { try { const v = sessionStorage.getItem('gr_login_step') === 'forgot'; sessionStorage.removeItem('gr_login_step'); return v; } catch { return false; } });
   const [step, setStep] = useState<Step>(mustSetPin ? 'setpin' : saved ? (viaInvite ? 'forgot' : 'pin') : 'email');
   const [email, setEmail] = useState(saved);
-  const [len, setLen] = useState<PinLen>(6); const [known, setKnown] = useState(true); const [lenReady, setLenReady] = useState(!saved || !!mustSetPin);
+  const [len, setLen] = useState<PinLen>(6); const [, setKnown] = useState(true); const [lenReady, setLenReady] = useState(!saved || !!mustSetPin);
   const [value, setValue] = useState('');
   const [err, setErr] = useState(''); const [shake, setShake] = useState(false);
   const [busy, setBusy] = useState(false); const [sent, setSent] = useState(false);
@@ -99,7 +99,7 @@ export function Login({ mustSetPin }: { mustSetPin?: boolean }) {
             <span className="pin-kick" style={{ marginTop: 10 }}>ENTER YOUR CODE</span></div>
           <PinDots len={len} filled={value.length} shake={shake} />
           {err ? <p className="error center-t">{err}</p> : <span className="pin-hint">{busy ? 'Signing in…' : ' '}</span>}
-          {lenReady && !known && <button type="button" className="pin-link sm" onClick={() => { setLen(len === 6 ? 4 : 6); setValue(''); setErr(''); }}>{len === 6 ? 'I use a 4-digit code' : 'I use a 6-digit code'}</button>}
+          {lenReady && <button type="button" className="pin-link sm" onClick={() => { setLen(len === 6 ? 4 : 6); setValue(''); setErr(''); }}>{len === 6 ? 'I use a 4-digit code' : 'I use a 6-digit code'}</button>}
           <button type="button" className="pin-link" onClick={() => { setStep('forgot'); setErr(''); setValue(''); setSent(false); }}>Forgot your code?</button>
           <NumPad disabled={busy || !lenReady} onDigit={digit} onBack={() => setValue((x) => x.slice(0, -1))} />
         </div>
