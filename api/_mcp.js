@@ -60,6 +60,7 @@ const TOOLS = [
   { name: 'update_event', description: 'Change an event: guests, confirmed / to be confirmed, address, end, note, or one start time for every line (only while nobody is booked or the time is TBC). Call with confirm=false first, show the change, confirm=true after Ronnie says yes. Never deletes.', inputSchema: { type: 'object', required: ['event_id', 'confirm'], properties: { event_id: { type: 'string' }, guests: { type: 'integer' }, status: { type: 'string', enum: ['confirmed', 'tbc'] }, address: { type: 'string' }, ends: { type: 'string', description: 'e.g. "~ midnight", "~ 11 PM"' }, note: { type: 'string' }, start: { type: 'string', description: 'HH:MM or TBC' }, confirm: { type: 'boolean' } } }, annotations: { destructiveHint: false, title: 'Update event' } },
   { name: 'add_staff', description: 'Add a new staff profile (active, no invite sent: Ronnie sends the invite from the app). Call with confirm=false first, confirm=true after Ronnie says yes.', inputSchema: { type: 'object', required: ['full_name', 'confirm'], properties: { full_name: { type: 'string' }, phone: { type: 'string' }, email: { type: 'string' }, department: { type: 'string', enum: ['floor', 'bar'] }, positions: { type: 'array', items: { type: 'string' } }, neighbourhood: { type: 'string' }, confirm: { type: 'boolean' } } }, annotations: { destructiveHint: false, title: 'Add staff' } },
   { name: 'book_staff', description: 'Book a staff member on an event line (status booked, nothing is sent to them; confirmations go out from the app). Warns if they work elsewhere that day or said no. Call with confirm=false first, confirm=true after Ronnie says yes.', inputSchema: { type: 'object', required: ['event_id', 'staff_name', 'confirm'], properties: { event_id: { type: 'string' }, staff_name: { type: 'string' }, role: { type: 'string', description: 'default W on floor, BT on bar' }, start: { type: 'string', description: 'HH:MM, default the line / event start' }, confirm: { type: 'boolean' } } }, annotations: { destructiveHint: false, title: 'Book staff' } },
+  { name: 'change_role', description: 'Change the role of someone already booked on an event, e.g. make a waiter the MD (or the MD back to a waiter), optionally with a new start time. Nothing is sent to them. Call with confirm=false first, confirm=true after Ronnie says yes.', inputSchema: { type: 'object', required: ['event_id', 'staff_name', 'role', 'confirm'], properties: { event_id: { type: 'string' }, staff_name: { type: 'string' }, role: { type: 'string', description: 'MD, W, BUS, BM, BT, BB or WW' }, start: { type: 'string', description: 'HH:MM, optional (default: keep their time)' }, confirm: { type: 'boolean' } } }, annotations: { destructiveHint: false, title: 'Change role' } },
 ];
 
 const EV_COLS = 'id,event_date,title,department,start_time,staff_needed,staffing,guests,event_type,tentative,start_tbc,details_pending,address,ends_label,shifts(id,staff_id,position_code,planned_start,status,cancelled_at,attendance,notified_at,staff!shifts_staff_id_fkey(full_name))';
@@ -205,6 +206,26 @@ async function tool(name, a) {
     const [sh] = await post('shifts', { event_id: e.id, staff_id: s.id, position_code: code, position_detail: code === 'W' ? 'Waiter' : null, planned_start: startIso(e.event_date, st), status: 'booked', time_tbc: !!e.start_tbc || !!e.details_pending, added_by: ONLY, added_note: 'via Claude' });
     await log('shift', sh.id, { action: 'booked', staff: s.full_name, event: e.title, date: e.event_date });
     return `Booked ✓ ${preview}\nNothing was sent to ${s.full_name.split(' ')[0]}.`;
+  }
+  if (name === 'change_role') {
+    const [e] = await get(`events?id=eq.${enc(a.event_id)}&select=${EV_COLS}`); if (!e) return 'No event with that id. Use find_event first.';
+    const code = roleCode(a.role); if (!code) return `Unknown role "${a.role}". Use MD, W, BUS, BM, BT, BB or WW.`;
+    const norm = (x) => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    const live = (e.shifts || []).filter(liveShift); const q = norm(a.staff_name);
+    const hits = live.filter((s) => norm(s.staff?.full_name).includes(q) || q.split(/\s+/).every((w) => norm(s.staff?.full_name).includes(w)));
+    if (!hits.length) return `Nobody matching "${a.staff_name}" is booked on ${e.title}. Booked: ${live.map((s) => s.staff?.full_name).join(', ') || 'nobody'}.`;
+    if (hits.length > 1) return `Which one? ${hits.map((s) => s.staff?.full_name).join(' · ')}`;
+    const sh = hits[0]; const from = sh.position_code || 'W';
+    const st = a.start ? parseHM(a.start) : null; if (a.start && (!st || st === 'TBC')) return 'Give the start as HH:MM, or leave it out to keep their time.';
+    const curStart = new Intl.DateTimeFormat('en-GB', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(sh.planned_start));
+    const leads = live.filter((s) => s.id !== sh.id && (s.position_code || 'W') === code && (code === 'MD' || code === 'BM'));
+    const line = (e.staffing || []).find((l) => l.code === code);
+    const preview = `${dLabel(e.event_date)} · ${e.title}${e.department === 'bar' ? ' (bar)' : ''}\n${sh.staff?.full_name}: ${ROLE[from]?.[1] || from} → ${ROLE[code][1]}${st ? ` · start ${hm12(curStart)} → ${hm12(st)}` : ` · keeps ${hm12(curStart)}`}${leads.length ? `\n⚠ Already ${ROLE[code][1]}: ${leads.map((s) => s.staff?.full_name).join(', ')}${line ? ` (line needs ${line.count})` : ''}` : ''}${!line ? `\nNote: the event has no ${ROLE[code][1]} line; it will show as an extra on that role.` : ''}`;
+    if (!a.confirm) return `PREVIEW · nothing changed yet\n${preview}\nNothing is sent to them.\n\nCall change_role again with confirm=true only after Ronnie says yes.`;
+    const upd = { position_code: code, position_detail: ROLE[code][1], ...(st ? { planned_start: startIso(e.event_date, st) } : {}) };
+    await patch(`shifts?id=eq.${sh.id}`, upd);
+    await log('shift', sh.id, { action: 'role', staff: sh.staff?.full_name, from, to: code, ...(st ? { start: st } : {}), event: e.title, date: e.event_date });
+    return `Done ✓ ${preview}\nNothing was sent to ${String(sh.staff?.full_name || '').split(' ')[0]}.`;
   }
   return `Unknown tool ${name}`;
 }
