@@ -4050,3 +4050,11 @@ button.pf-go { border: none; background: none; padding: 4px 2px; font: 700 13px 
 .br-grid { display: grid; grid-template-columns: 2fr 70px 70px 70px 70px; gap: 8px; padding: 6px 0; border-bottom: 1px solid #EEE7DD; font-size: 13px; align-items: center; }
 .br-grid.br-h { font-size: 10.5px; letter-spacing: .1em; font-weight: 800; color: var(--muted, #7A7168); border: 0; }
 .br-items { display: flex; flex-direction: column; gap: 10px; } .br-items input, .br-items select { font: inherit; font-size: 13px; padding: 6px 9px; border-radius: 9px; border: 1px solid #CFC5B8; }
+.bc-tabs.four { grid-template-columns: repeat(4, 1fr); } .bc-tabs button:disabled { opacity: .4; }
+.bc-v.hl { color: #6B4A12; } .bc-rev { display: flex; justify-content: space-between; padding: 9px 0; border-bottom: 1px solid #EEE7DD; font-size: 15px; }
+.bc-log { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid #EEE7DD; font-size: 13px; align-items: baseline; } .bc-log > b { width: 68px; flex: none; }
+.bc-log.undone .grow { text-decoration: line-through; color: var(--muted, #7A7168); } .bc-log em { color: #9B2226; font-style: normal; text-decoration: none; display: inline; }
+.br-flags { display: flex; flex-direction: column; gap: 6px; } .br-flag { border-radius: 10px; padding: 8px 11px; font-size: 13px; }
+.br-flag.red { background: #F7E4E2; color: #9B2226; } .br-flag.amber { background: #FBF3E0; color: #6B4A12; }
+.br-grid { grid-template-columns: 2fr 80px 80px 80px !important; }
+.bc-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }

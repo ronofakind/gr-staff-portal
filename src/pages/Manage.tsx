@@ -1,5 +1,6 @@
 import { isBarPos } from '../components/Uniform';
 import { QuarterTime } from '../components/QuarterTime';
+import { BarCountCard } from '../components/BarCountCard';
 import { WheelTime, roundQ } from '../components/WheelTime';
 import { useEffect, useRef, useState } from 'react';
 import { SwipeSheet } from '../components/SwipeSheet';
@@ -113,7 +114,7 @@ const ROW_COLS = 'id,staff_id,ends_own,cut_first_at,position_code,position_detai
 const fullT = (iso: string) => new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' });
 const shortT = (iso: string) => fullT(iso).replace(/\s?[AP]M$/, '');
 type Ev = { id: string; title: string; event_date: string };
-type EvFull = Ev & { staffing?: { start: string; end?: string | null }[] | null; drive_folder_url?: string | null; address: string | null; start_time: string | null; end_time: string | null; description: string | null;
+type EvFull = Ev & { department?: string; staffing?: { start: string; end?: string | null }[] | null; drive_folder_url?: string | null; address: string | null; start_time: string | null; end_time: string | null; description: string | null;
   dress_code: string | null; hours_submitted_at: string | null; venues: { address: string | null; staff_notes: string | null; no_outside_food?: boolean } | null;
   /** push 39 · lead + co-managers (migration 037) for the "Benjamin · Isaac" line */
   manager_id?: string | null; co_manager_ids?: string[] | null; manager?: { full_name: string; nickname?: string | null } | null };
@@ -289,7 +290,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
 
   const load = async () => {
     const [e, s] = await Promise.all([
-      supabase.from('events').select('id,title,event_date,address,start_time,end_time,description,dress_code,hours_submitted_at,drive_folder_url,staffing,venues(address,staff_notes,no_outside_food),manager_id,co_manager_ids,manager:staff!events_manager_id_fkey(full_name,nickname)').eq('id', eventId!).single(),
+      supabase.from('events').select('id,title,event_date,department,address,start_time,end_time,description,dress_code,hours_submitted_at,drive_folder_url,staffing,venues(address,staff_notes,no_outside_food),manager_id,co_manager_ids,manager:staff!events_manager_id_fkey(full_name,nickname)').eq('id', eventId!).single(),
       (async () => {
         const q = (cols: string) => supabase.from('shifts').select(cols).eq('event_id', eventId!).neq('status', 'declined').order('planned_start');
         const r = await q(ROW_COLS + ',cancel_self,cancel_sent_to_manager,replacement_for');
@@ -490,6 +491,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
         {/* push 36e · Messages: 📣 Message my team, what he sent (Seen n of N), replies (REPLY / ✓ DONE) */}
         <MgrMessagesEntry eventId={ev.id} />
         <MgrCars eventId={ev.id} />{/* push 68 · carpools: a late car = a late group */}
+        {ev.department === 'bar' && <BarCountCard eventId={ev.id} />}{/* push 69 */}
       </div>
 
       {banner.map((r) => { const n = lateOf(r)!; const tel = r.staff?.phone?.replace(/[^\d+]/g, ''); return (
