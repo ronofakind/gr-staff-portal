@@ -5,7 +5,7 @@ export type BFlag = { level: 'red' | 'amber'; text: string };
 export function barFlags(items: BItem[], moves: BMove[], supplies: BSupply[], submittedAt: string | null, history?: Record<string, number[]>): BFlag[] {
   const f: BFlag[] = []; const t = totals(moves); const nm = (id: string) => { const i = items.find((x) => x.id === id); return i ? `${i.name}${i.size ? ' ' + i.size : ''}` : 'a bottle'; };
   const live = moves.filter((m) => !m.undone_at && m.step !== 'item');
-  if (!live.some((m) => m.step === 'start') && live.length) f.push({ level: 'red', text: 'No start count: bottles were taken out or brought back without one.' });
+  // (no "no start count" flag: some bottles aren't used from one event to the next · Ronnie, Nov 10)
   for (const [id, x] of Object.entries(t)) if (x.back > x.out + 1e-9) f.push({ level: 'red', text: `${nm(id)}: more came back (${q(x.back)}) than went out (${q(x.out)}).` });
   if (submittedAt && live.some((m) => m.step !== 'back') && !live.some((m) => m.step === 'back')) f.push({ level: 'red', text: 'Submitted with nothing brought back.' });
   for (const m of live) for (const i of m.items) {
