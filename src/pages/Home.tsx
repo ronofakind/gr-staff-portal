@@ -26,6 +26,7 @@ import { SwipeSheet } from '../components/SwipeSheet';
 import { useMyMeetings, dayOfMtl, todayMtl } from '../lib/meetings';
 import { MeetingCard } from '../components/Meeting';
 import { AskCard } from '../components/ShiftNotes';
+import { NightOffCards } from '../components/NightOffCard';
 import { useMyAsks } from '../lib/shiftAsks';
 import { AlertsCard } from '../components/Alerts';
 import { PastStrips } from '../components/PastStrip';
@@ -263,6 +264,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
         </div>;
       })()}
 
+      {!hbLocked && <NightOffCards preview={preview} onDone={load} />}{/* push 66 */}
       {!hbLocked && asks.map((a) => <AskCard key={a.ask_id} a={a} home preview={preview} onAnswered={(st) => { if (st !== 'gone') load(); setTimeout(reloadAsks, st === 'gone' ? 4000 : 2500); }} />)}
 
       {gone.filter((g) => !okd.includes(g.id)).map((g) => <CancelledCard key={g.id} title={g.title} date={g.date} late={g.late} onOk={() => okGone(g.id)} />)}

@@ -9,6 +9,7 @@ import { BoardAlso, type OtherShift } from './alsoWorking';
 import { needsSend, liveShift, doesBar, eventsBetween, allStaff, addDays, isoDay, dLabel, ap12, startIso, endIso, roleName, bookingChange, confirmationsSent, countOf, sendStateOf, type AEvent, type AStaff, type Client, type Venue } from './api';
 import { misfits, linksOf, other, condShort, RuleIcons, outOfArea, areasOf, type SLink, type SCond } from './rules';
 import { loadScoreData, scoreOf, type ScoreData } from './score';
+import { overBy } from './NightOff';
 import { locksBetween, setLock, lockTitle, NO_LOCKS, type Locks } from './locks';
 
 /* Push 23 · Bookings (admin). Practice mode by default: every change lives in a draft (booking_drafts) layered
@@ -521,6 +522,7 @@ export function Bookings() {
               <button type="button" aria-label="One more extra" onClick={() => setExtras(d, e, extras + 1)}>+</button></span> extras</span>
           </div>
           <div className="bk-bar"><i style={{ width: `${Math.min(100, (placed / Math.max(1, client)) * 100)}%` }} className={placed < client ? 'short' : ''} /></div>
+          {overBy(e) > 0 && e.staff_needed > 0 && <Link to={`/admin/event/${e.id}`} className="bk-nightoff">🌙 Overbooked by {overBy(e)} · ask someone to take the night off ›</Link>}{/* push 66 */}
           {(st.strength != null || placed > 0) && <div className="bk-ts">{st.strength != null ? <span>Team strength <b>{st.strength}</b></span> : <span />}{placed > 0 && <span className="bk-tsr"><span className="okc">{st.confirmed} of {st.booked} confirmed</span>{st.confirmed < pl.filter((p) => !p.suggested && p.shift_id).length && <button type="button" className="bk-call" onClick={() => confirmAll(d, e)}>✓ Confirm all</button>}</span>}</div>}
           {diff > 5 && top && <div className="bk-bal">{diff} below {seeTitle(top.e)} today · worth balancing</div>}
         </div>

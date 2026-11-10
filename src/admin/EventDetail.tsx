@@ -14,6 +14,7 @@ import { UniformIcon, PantsIcon, ShoesIcon, ApronIcon, TieIcon, WineKeyIcon, PIE
 import { EVENT_SELECT, EVENT_SELECT_28, missing034, ap12, dLabel, roleName, type AEvent } from './api';
 import { ReplacedBanners } from './Replace';
 import { TeamLocks } from './TeamLocks';
+import { NightOff } from './NightOff';
 
 const FOLD_KEY = 'gr-ed-fold';
 const readFold = (): Record<string, boolean> => { try { return JSON.parse(localStorage.getItem(FOLD_KEY) || '{}'); } catch { return {}; } };
@@ -98,10 +99,10 @@ export function EventDetail() {
       </div>
 
       <ReplacedBanners evs={evs} />
+      <NightOff evs={evs} onChange={() => {}} />
       <PastDebriefsFor title={e.title} eventId={e.id} />
 
       <div className="ed2-grid">
-        {e.event_date >= new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' }) && <TentativeCard evs={evs} onChange={load} />}
         {e.event_date >= new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' }) && <TentativeCard evs={evs} onChange={load} />}
         <Sec k="event" title="Event" open={isOpen('event')} setOpen={setFold} summary={[dLabel(e.event_date, { month: 'short', day: 'numeric' }), x?.venue?.name ?? e.title, e.guests ? `${e.guests} guests` : null].filter(Boolean).join(' · ')}>
           <div className="ed2-facts">

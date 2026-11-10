@@ -252,6 +252,12 @@ export function Today() {
       // push 36d · staff messages waiting on Ronnie (no email: the count lives here + on the Messages nav item)
       const { data: nr, error: nrErr } = await supabase.rpc('inbox_count');
       if (!nrErr && typeof nr === 'number' && nr > 0) n.unshift({ key: 'msgs', red: true, title: `${nr} staff message${nr > 1 ? 's' : ''} need${nr > 1 ? '' : 's'} a reply`, sub: 'Messages · Needs reply', action: 'Open', to: '/admin/messages' });
+      // push 66 · overbooked (booked > needed) → Want the night off? (event page)
+      const { data: ob, error: obErr } = await supabase.from('events').select('id,title,event_date,staff_needed,shifts(status,attendance)').gte('event_date', today).lte('event_date', addDays(today, 30));
+      if (!obErr) for (const x of (ob ?? []) as unknown as { id: string; title: string; event_date: string; staff_needed: number; shifts: { status: string; attendance: string | null }[] }[]) {
+        const have = x.shifts.filter((s) => s.status !== 'declined' && !s.attendance).length; const over = have - (x.staff_needed || 0);
+        if (over > 0 && x.staff_needed > 0) n.push({ key: 'ob' + x.id, title: `${x.title} · ${dLabel(x.event_date, { weekday: 'short', month: 'short', day: 'numeric' })} · overbooked by ${over}`, sub: `${have} booked for ${x.staff_needed} · ask one person if they want the night off`, action: 'Open', to: `/admin/event/${x.id}` });
+      }
       // push 63 · venues with events in the next 30 days and no area (no postal code to guess from) → set them once
       const { data: na, error: naErr } = await supabase.from('events').select('venue_id,venues!inner(id,name,area,postal_code)').gte('event_date', today).lte('event_date', addDays(today, 30)).is('venues.area', null);
       if (!naErr) { const vs = new Map<string, string>(); for (const r of (na ?? []) as unknown as { venues: { id: string; name: string; postal_code: string | null } }[]) if (!areaFromPostal(r.venues.postal_code)) vs.set(r.venues.id, r.venues.name);

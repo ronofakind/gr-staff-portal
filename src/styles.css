@@ -3985,3 +3985,17 @@ button.pf-go { border: none; background: none; padding: 4px 2px; font: 700 13px 
 .ask-times input { width: 18px; height: 18px; accent-color: #2F6B4F; flex: none; }
 .ask-times span { display: flex; flex-direction: column; gap: 1px; } .ask-times b { font-size: 13.5px; } .ask-times small { font-size: 12px; color: var(--muted, #7A7168); }
 .ask-times.off { opacity: .55; cursor: not-allowed; }
+
+/* push 66 · want the night off? */
+.no-card { display: flex; flex-direction: column; gap: 10px; }
+.no-bar { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: #FBF3E0; color: #6B4A12; }
+.no-list, .no-pick { display: flex; flex-direction: column; }
+.no-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #EEE7DD; }
+.no-row > b { width: 170px; font-size: 13.5px; }
+.no-tag { font-style: normal; font-size: 10.5px; font-weight: 800; letter-spacing: .04em; padding: 3px 7px; border-radius: 7px; background: #F1ECE5; color: #1F1A17; white-space: nowrap; }
+.no-tag.gold { background: #FBF3E0; color: #6B4A12; } .no-tag.ok { background: #E6F2EA; color: #2F6B4F; }
+.no-ask { border: 1.5px solid #9B2226 !important; }
+.bk-nightoff { display: block; font-size: 12px; font-weight: 700; color: #6B4A12; background: #FBF3E0; border-radius: 8px; padding: 5px 8px; margin-top: 4px; text-decoration: none; }
+.no-done { padding: 12px 14px; border-radius: 14px; background: #F1ECE5; font-size: 13.5px; } .no-done.ok { background: #E6F2EA; color: #2F6B4F; }
+.sn-btns .sn-yes.dark { background: #1F1A17; color: #fff; }
+.sn.sn-ask.home.no-ask { border: 1.5px solid #9B2226 !important; box-shadow: none !important; background: #fff; }
