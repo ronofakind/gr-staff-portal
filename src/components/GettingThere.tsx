@@ -4,7 +4,7 @@ import { QuarterTime } from './QuarterTime';
 
 /* Getting there · push 25d (G&R plans rides on far events) + push 68 carpool between staff (migration 093).
    Always first names, never "driver": a carpool, not a service. Numbers + car chat only for the people in the car, until they all finish. */
-type Mine = { id: string; kind: 'driver' | 'rider' | 'own'; pickup_spot: string | null; leave_at: string | null; seats: number | null; coming_from: string | null; car_driver_id: string | null; sent_at: string | null; request_to: string | null; lost_at: string | null } | null;
+type Mine = { id: string; kind: 'driver' | 'rider' | 'own'; pickup_spot: string | null; leave_at: string | null; seats: number | null; coming_from: string | null; car_driver_id: string | null; sent_at: string | null; seen_at?: string | null; request_to: string | null; lost_at: string | null } | null;
 type Car = { driver_id: string; open: boolean; pickup_spot: string | null; leave_at: string | null; seats: number | null; late_eta: string | null; people: { id: string; name: string; driving: boolean; phone: string | null }[] } | null;
 type Drv = { staff_id: string; name: string; pickup_spot: string | null; leave_at: string | null; seats: number; taken: number; asked: boolean };
 type Req = { staff_id: string; name: string; coming_from: string | null };
@@ -22,7 +22,7 @@ export function GettingThere({ eventId, eventDate, firstStart, travelMin, paidMi
   const [f, setF] = useState({ spot: '', leave: suggested, seats: 3, from: '', late: '' }); const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
   const load = async () => {
     if (preview) { setMine(null); return; }
-    const [{ data }, me] = await Promise.all([supabase.from('ride_offers').select('id,kind,pickup_spot,leave_at,seats,coming_from,car_driver_id,sent_at,request_to,lost_at').eq('event_id', eventId).maybeSingle(), supabase.rpc('me')]);
+    const [{ data }, me] = await Promise.all([supabase.from('ride_offers').select('id,kind,pickup_spot,leave_at,seats,coming_from,car_driver_id,sent_at,seen_at,request_to,lost_at').eq('event_id', eventId).maybeSingle(), supabase.rpc('me')]);
     setMeId((me.data as string) ?? null); const m = (data as Mine) ?? null; setMine(m);
     const c = await supabase.rpc('my_car', { p_event: eventId }); const cd = c.error ? null : (c.data as Car);
     // G&R-planned cars only show once Ronnie sent the plan; carpools agreed between staff are sent right away
@@ -53,6 +53,7 @@ export function GettingThere({ eventId, eventDate, firstStart, travelMin, paidMi
         {car ? (
           <div className="gt-ride">
             <small>YOUR CARPOOL{car.late_eta ? ' · RUNNING LATE' : ''}</small>
+            {mine?.sent_at && !mine.seen_at && <button className="big-btn dark gt-gotit" disabled={busy} onClick={() => rpc('ride_got_it', { p_event: eventId })}>✓ Got it</button>}{/* push 73 · seen on every device */}
             <b>{car.driver_id === meId ? `You’re driving · ${others.length} with you` : `Carpooling with ${driving ? first(driving.name) : '…'}`}{transport && car.driver_id === meId ? ' · gas covered' : ''}</b>
             <div className="gt-pick"><span>PICK-UP</span><b>{car.pickup_spot ?? '—'}</b><span>{car.late_eta ? <><s>{tm(car.leave_at)}</s> {tm(car.late_eta)}</> : tm(car.leave_at)}</span></div>
             {others.map((p) => (

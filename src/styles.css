@@ -4091,3 +4091,4 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; }
 .sb-bar small { display: block; }
 .sb-seen { display: flex; flex-direction: column; gap: 4px; }
 .sp-coming { display: block; font-size: 11px; opacity: .75; margin-top: 2px; }
+.gt-gotit { margin: 6px 0; } /* push 73 */

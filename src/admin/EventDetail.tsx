@@ -16,7 +16,7 @@ import { ReplacedBanners } from './Replace';
 import { TeamLocks } from './TeamLocks';
 import { NightOff } from './NightOff';
 import { BarReport } from './BarReport';
-import { PendingBar, SeenLine } from './SendBox'; // push 72
+import { PendingBar, SeenLine, RidesSeen } from './SendBox'; // push 72 · 73
 
 const FOLD_KEY = 'gr-ed-fold';
 const readFold = (): Record<string, boolean> => { try { return JSON.parse(localStorage.getItem(FOLD_KEY) || '{}'); } catch { return {}; } };
@@ -124,6 +124,7 @@ export function EventDetail() {
         {e.event_date >= new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' }) && <Sec k="confirm" title="Confirmations" open={isOpen('confirm')} setOpen={setFold} summary="who confirmed · who to text">
           <ConfirmTracker evs={evs} venue={x?.venue?.name ?? e.title} />
           {evs.map((v) => <SeenLine key={v.id} eventId={v.id} />)}{/* push 72 */}
+          {evs.map((v) => <RidesSeen key={'r' + v.id} eventId={v.id} />)}{/* push 73 */}
         </Sec>}
 
         <Sec k="locks" title="Team" open={isOpen('locks')} setOpen={setFold} summary="who's booked · 🔒 locked never move">

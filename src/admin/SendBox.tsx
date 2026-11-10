@@ -111,3 +111,29 @@ export function StartLabelGuard({ ids, onOk, onCancel, onAddTimes }: { ids: stri
     </div>
   </div></div>;
 }
+
+/** push 73 · Event page: "Rides seen: 6 of 9" → who hasn't, with Text. Admin only. */
+export function RidesSeen({ eventId }: { eventId: string }) {
+  const [rows, setRows] = useState<{ staff_id: string; full_name: string; phone: string | null; seen_at: string | null }[]>([]);
+  const [open, setOpen] = useState(false);
+  useEffect(() => { supabase.rpc('admin_rides_seen', { p_event: eventId }).then(({ data, error }) => setRows(error ? [] : (data ?? []) as typeof rows)); }, [eventId]);
+  if (!rows.length) return null;
+  const not = rows.filter((r) => !r.seen_at);
+  return <div className="sb-seen">
+    <button type="button" className="lnk" onClick={() => setOpen(!open)}>Rides seen: <b className={not.length ? 'gold' : 'okc'}>{rows.length - not.length} of {rows.length}</b>{not.length ? ' ›' : ' ✓'}</button>
+    {open && not.map((r) => { const h = sms(r.phone, `Hi ${r.full_name.split(' ')[0]}! Your carpool plan is in the G&R app, please open it and tap Got it.`);
+      return <div key={r.staff_id} className="sb-row in"><b>{r.full_name}</b>{h ? <a className="abtn sm" href={h}>Text</a> : <small className="muted">no phone</small>}</div>; })}
+  </div>;
+}
+
+/** push 73 · Today → Needs you: tonight / tomorrow ride plans nobody tapped Got it on. */
+export function UnseenRides({ tick = 0, onCount }: { tick?: number; onCount?: (n: number) => void }) {
+  const [rows, setRows] = useState<{ staff_id: string; full_name: string; phone: string | null; event_title: string; event_date: string }[]>([]);
+  useEffect(() => { supabase.rpc('admin_unseen_rides').then(({ data, error }) => setRows(error ? [] : (data ?? []) as typeof rows)); }, [tick]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { onCount?.(rows.length ? 1 : 0); });
+  if (!rows.length) return null;
+  return <div className="nh-card"><div className="nh-top"><b>{rows.length} {rows.length > 1 ? 'people haven’t' : 'person hasn’t'} seen their ride plan</b><i className="nh-tag gold">🚗 TONIGHT / TOMORROW</i></div>
+    {rows.map((r) => { const h = sms(r.phone, `Hi ${r.full_name.split(' ')[0]}! Your carpool plan for ${dl(r.event_date)} is in the G&R app, please open it and tap Got it.`);
+      return <div key={r.staff_id + r.event_title} className="sb-row in"><span className="grow"><b>{r.full_name}</b> <small className="muted">{dl(r.event_date)} · {r.event_title}</small></span>{h ? <a className="abtn sm" href={h}>Text</a> : <small className="muted">no phone</small>}</div>; })}
+  </div>;
+}
