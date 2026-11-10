@@ -82,7 +82,7 @@ export function Bookings() {
   const setDrag = (g: Drag | null) => { dragRef.current = g; try { document.body.classList.toggle('bk-dragging', !!g); } catch { /* ssr */ } };
   const dragStart = (ev: React.DragEvent, g: Drag) => { try { ev.dataTransfer.setData('text/plain', g.staff_id); ev.dataTransfer.effectAllowed = 'move'; } catch { /* old browsers */ } setDrag(g); };
   /** push 49 · a placed chip dropped on ANOTHER event → "Add a 2nd shift · keep both" / "Move · off <event 1>" / Cancel */
-  const [dropAsk, setDropAsk] = useState<{ p: Pl; to: { event_id: string; start: string; extra?: boolean } } | null>(null);
+  const [dropAsk, setDropAsk] = useState<{ p: Pl; to: { event_id: string; start: string; extra?: boolean; lead?: 'MD' | 'BM' } } | null>(null);
   const [hint, setHint] = useState<string>('');
   const [sendOf, setSendOf] = useState<string | null>(null); const [sendBusy, setSendBusy] = useState(false); // Nov 6 · SEND chip menu
   // Nov 6 · 📌 reminders for the next booking (068) · only Ronnie sees them
@@ -206,15 +206,17 @@ export function Bookings() {
     const moved = now.filter((p) => p.shift_id && real.some((r) => r.shift_id === p.shift_id && (r.event_id !== p.event_id || r.start !== p.start)));
     // Nov 5 · into / out of Extras on the same event (saved as your own pick)
     const marked = now.filter((p) => p.shift_id && real.some((r) => r.shift_id === p.shift_id && r.event_id === p.event_id && r.start === p.start && (!!r.extra !== !!p.extra || !!r.keep !== !!p.keep)));
-    return { added, removed, moved, marked };
+    // Nov 9 · role change only (e.g. dropped on the MD slot, same event and time) → position updated, nothing sent
+    const reroled = now.filter((p) => p.shift_id && real.some((r) => r.shift_id === p.shift_id && r.event_id === p.event_id && r.start === p.start && (r.code ?? 'W') !== p.code));
+    return { added, removed, moved, marked, reroled };
   };
   const allChanges = dates.map((d) => ({ d, ...changesFor(d) })).filter((c) => draft[c.d]);
-  const nChanges = allChanges.reduce((n, c) => n + c.added.length + c.removed.length + c.moved.length + c.marked.length, 0);
+  const nChanges = allChanges.reduce((n, c) => n + c.added.length + c.removed.length + c.moved.length + c.marked.length + c.reroled.length, 0);
 
   // ── placing ─────────────────────────────────────────────────────
   /** push 49 · is the person already (really) placed on this event that day? (one shift per person per event) */
   const onEvent = (d: string, sid: string, eventId: string, exceptKey?: string) => plOf(d).some((p) => p.staff_id === sid && p.event_id === eventId && !p.suggested && p.key !== exceptKey);
-  const place = (d: string, sid: string, to: { event_id: string; start: string; extra?: boolean }, fromKey?: string, both = false, add = false) => {
+  const place = (d: string, sid: string, to: { event_id: string; start: string; extra?: boolean; lead?: 'MD' | 'BM' }, fromKey?: string, both = false, add = false) => {
     if (rems[sid]?.length && !fromKey) setTimeout(() => setHint(`📌 ${name(sid).split(' ')[0]}: ${rems[sid][0].note} · click her name to add it to her confirmation`), 50);
     const c = cur(d); let pl = [...c.pl];
     const a = avOf(sid); let start = to.start;
@@ -228,9 +230,12 @@ export function Bookings() {
       const sameEv = existing.event_id === to.event_id;
       // Nov 5 · into Extras on the same event: same start time, only the Extras flag changes
       if (to.extra && sameEv) pl = pl.map((p) => (p.key === existing.key ? { ...p, extra: true, keep: false, suggested: false } : p));
-      else pl = pl.map((p) => (p.key === existing.key ? { ...p, event_id: to.event_id, start, line: start !== to.start ? to.start : undefined, extra: !!to.extra, keep: !to.extra, suggested: false } : p));
+      else { const e2 = evById[to.event_id]; const dflt = isBarEv(e2) ? (byId[sid]?.positions.includes('BT') ? 'BT' : 'BB') : 'W';
+        // Nov 9 · dropped on the MD / Bar manager slot → becomes the lead; dragged out of it → back to a normal role
+        const code = to.lead ?? (['MD', 'BM'].includes(existing.code) ? dflt : existing.code);
+        pl = pl.map((p) => (p.key === existing.key ? { ...p, code, event_id: to.event_id, start, line: start !== to.start ? to.start : undefined, extra: !to.lead && !!to.extra, keep: !to.extra, suggested: false } : p)); }
     } else {
-      const e = evById[to.event_id]; pl.push({ key: uid(), staff_id: sid, event_id: to.event_id, start, ...(start !== to.start ? { line: to.start } : {}), code: isBarEv(e) ? (byId[sid]?.positions.includes('BT') ? 'BT' : 'BB') : 'W', extra: !!to.extra });
+      const e = evById[to.event_id]; pl.push({ key: uid(), staff_id: sid, event_id: to.event_id, start, ...(start !== to.start ? { line: to.start } : {}), code: to.lead ?? (isBarEv(e) ? (byId[sid]?.positions.includes('BT') ? 'BT' : 'BB') : 'W'), extra: !to.lead && !!to.extra });
     }
     if (start !== to.start) setHint(`${name(sid).split(' ')[0]} can only start ${t12(start)} · gold “starts ${t12(start)}” tag on the name`);
     if (!existing || existing.event_id !== to.event_id) { const e = evById[to.event_id]; if (e) setWarns(warnFor(d, sid, e, pl)); }
@@ -278,9 +283,10 @@ export function Bookings() {
         for (const p of c.moved) if (p.shift_id && (p.extra || p.keep)) await supabase.rpc('admin_mark_extra', { p_shift: p.shift_id, p_kind: p.extra ? 'manual' : 'keep' });
         for (const p of c.moved) {
           const r = (base[c.d] ?? []).find((x) => x.shift_id === p.shift_id)!; const fe = evById[r.event_id]; const te = evById[p.event_id];
-          await supabase.from('shifts').update({ event_id: p.event_id, planned_start: startIso(te.event_date, p.start) }).eq('id', p.shift_id!);
+          await supabase.from('shifts').update({ event_id: p.event_id, planned_start: startIso(te.event_date, p.start), position_code: p.code, position_detail: roleName(p.code) }).eq('id', p.shift_id!);
           await bookingChange('moved', { staff_id: p.staff_id, shift_id: p.shift_id, from: { id: fe.id, event_date: fe.event_date, title: fe.title, sent: confirmationsSent(fe), start: startIso(fe.event_date, r.start) }, to: { id: te.id, event_date: te.event_date, title: te.title, sent: confirmationsSent(te), start: startIso(te.event_date, p.start) } }); n++;
         }
+        for (const p of c.reroled) { await supabase.from('shifts').update({ position_code: p.code, position_detail: roleName(p.code) }).eq('id', p.shift_id!); n++; }
         let repFor = replaceId && replaceOf ? replaceId : null;
         for (const p of c.added) {
           const e = evById[p.event_id];
@@ -421,7 +427,7 @@ export function Bookings() {
     const over = client ? Math.max(0, all.length - client) : 0; const extrasPlaced = flagged + over;
     return { pl, leads, leadSlots, leadStart: leadLines[0]?.start ?? leads[0]?.start ?? (e.start_time ?? '17:00').slice(0, 5), client, placed: client ? Math.min(all.length, client) : all.length, booked: all.length, extrasPlaced, extras: extrasOf(d, e), strength, confirmed };
   };
-  const onDrop = (d: string, to: { event_id: string; start: string; extra?: boolean }) => {
+  const onDrop = (d: string, to: { event_id: string; start: string; extra?: boolean; lead?: 'MD' | 'BM' }) => {
     const g = dragRef.current; setDrag(null); if (!g) return;
     if (g.add) { place(d, g.staff_id, to, undefined, false, true); return; }
     const p = g.key ? cur(d).pl.find((x) => x.key === g.key) : undefined;
@@ -516,7 +522,7 @@ export function Bookings() {
           {diff > 5 && top && <div className="bk-bal">{diff} below {seeTitle(top.e)} today · worth balancing</div>}
         </div>
         {(leadSlots > 0 || leads.length > 0) && (
-          <div className="bk-mds" onDragOver={(ev) => ev.preventDefault()} onDrop={(ev) => { ev.stopPropagation(); onDrop(d, { event_id: e.id, start: st.leadStart }); }}>
+          <div className="bk-mds" onDragOver={(ev) => ev.preventDefault()} onDrop={(ev) => { ev.stopPropagation(); onDrop(d, { event_id: e.id, start: st.leadStart, lead: leadCode }); }}>
             <div className="bk-gh"><b className="bk-mdh">{leadLabel} · {t12(st.leadStart)}</b><span className="muted sm">{leads.length} / {leadSlots}</span></div>
             {leads.map((p) => <Chip key={p.key} p={p} d={d} />)}
             {Array.from({ length: Math.max(0, leadSlots - leads.length) }, (_, i) => <div key={i} className="bk-open bk-mdopen">{leadCode} not set · drop here</div>)}
@@ -760,7 +766,7 @@ export function Bookings() {
       {nChanges > 0 && (
         <div className="bk-tray">
           <b>{nChanges} change{nChanges > 1 ? 's' : ''}</b>
-          <span>{allChanges.reduce((n, c) => n + c.added.length, 0)} added · {allChanges.reduce((n, c) => n + c.moved.length + c.marked.length, 0)} moved · {allChanges.reduce((n, c) => n + c.removed.length, 0)} removed · {mode === 'practice' ? 'practice · nobody alerted' : 'nobody alerted yet'}</span>
+          <span>{allChanges.reduce((n, c) => n + c.added.length, 0)} added · {allChanges.reduce((n, c) => n + c.moved.length + c.marked.length + c.reroled.length, 0)} moved · {allChanges.reduce((n, c) => n + c.removed.length, 0)} removed · {mode === 'practice' ? 'practice · nobody alerted' : 'nobody alerted yet'}</span>
           <span className="grow" />
           <button className="abtn sm" disabled={!hist.length} onClick={undo}>Undo</button>
           <button className="abtn sm" disabled={busy} onClick={() => save(false)}>Save</button>
