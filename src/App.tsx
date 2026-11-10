@@ -17,6 +17,7 @@ import { Hiring } from './admin/Hiring';
 import { Handbook } from './pages/Handbook';
 import { TaxPay } from './pages/TaxPay';
 import { Hours } from './admin/Hours';
+import { Payroll } from './admin/Payroll';
 import { Reliability } from './admin/Reliability';
 import { Calendar, CalendarRedirect } from './admin/Calendar';
 import { EventForm } from './admin/EventForm';
@@ -132,6 +133,7 @@ export function App() {
             <Route path="bookings" element={<Bookings />} />
             <Route path="messages" element={<Messages />} />
             <Route path="hours" element={<Hours />} />
+            <Route path="payroll" element={<Payroll />} />
             <Route path="reliability" element={<Reliability />} />
             <Route path="debriefs" element={<Debriefs />} />
             <Route path="rates" element={<Rates />} />

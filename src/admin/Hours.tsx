@@ -3,6 +3,7 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import type { MeetingHours } from '../lib/meetings';
+import { loadRates, byStaff, rateOn } from './pay';
 import { eventsBetween, addDays, isoDay, endIso, startIso, periodOf, hoursBetween, tTime, dLabel, flagsOf, flagText, type AEvent, type AShift } from './api';
 
 type Row = { e: AEvent; s: AShift };
@@ -12,6 +13,7 @@ export function Hours() {
   const [p, setP] = useState(periodOf(isoDay(new Date())));
   const [events, setEvents] = useState<AEvent[] | null>(null);
   const [closed, setClosed] = useState<string | null>(null);
+  const [locked, setLocked] = useState(false); // push 77 · RBC file made → fixes become a Correction in the next open period
   const [open, setOpen] = useState<string | null>(null);
   const [draft, setDraft] = useState<Record<string, { in?: string; out?: string }>>({});
   const [why, setWhy] = useState<Record<string, string>>({});
@@ -21,8 +23,8 @@ export function Hours() {
   const today = isoDay(new Date());
 
   const load = async () => {
-    const [evs, pp] = await Promise.all([eventsBetween(p.start, p.end), supabase.from('pay_periods').select('closed_at').eq('start_date', p.start).maybeSingle()]);
-    setEvents(evs.filter((e) => e.department !== 'bar')); setClosed((pp.data?.closed_at as string) ?? null);
+    const [evs, pp] = await Promise.all([eventsBetween(p.start, p.end), supabase.from('pay_periods').select('closed_at,locked_at').eq('start_date', p.start).maybeSingle()]);
+    setEvents(evs.filter((e) => e.department !== 'bar')); setClosed((pp.data?.closed_at as string) ?? null); setLocked(!!(pp.data as { locked_at?: string | null } | null)?.locked_at);
     supabase.rpc('meeting_hours', { p_from: p.start, p_to: p.end }).then(({ data, error }) => setMh(error ? [] : ((data ?? []) as MeetingHours[]).filter((x) => x.paid)));
     const ids = evs.flatMap((e) => e.shifts.map((x) => x.id));
     if (ids.length) { const { data: q } = await supabase.from('hours_questions').select('id,shift_id,kind,claimed_at,note,created_at').eq('status', 'open').in('shift_id', ids); setQs((q ?? []) as typeof qs); } else setQs([]);
@@ -62,6 +64,19 @@ export function Hours() {
     const pin = startIso(r.e.event_date, inT); const pout = outT ? endIso(r.e.event_date, inT, outT) : null;
     const { error } = await supabase.rpc('manager_set_punch', { p_shift: r.s.id, p_in: pin, p_out: pout });
     if (error) { setErr(error.message); return; }
+    if (locked) {
+      const was = hoursBetween(r.s.punches?.punch_in ?? null, r.s.punches?.punch_out ?? null, r.s.left_early);
+      const now = hoursBetween(pin, pout, r.s.left_early);
+      const rate = rateOn(byStaff((await loadRates()) ?? [])[r.s.staff_id], r.e.event_date);
+      if (now !== was && rate != null) {
+        let np = periodOf(addDays(p.end, 1));
+        for (let i = 0; i < 6; i++) { const { data: lk } = await supabase.from('pay_periods').select('locked_at').eq('start_date', np.start).maybeSingle(); if (!(lk as { locked_at?: string | null } | null)?.locked_at) break; np = periodOf(addDays(np.end, 1)); }
+        const { data: me } = await supabase.rpc('me');
+        const { error: e2 } = await supabase.from('pay_lines').insert({ staff_id: r.s.staff_id, period_start: np.start, kind: 'correction', amount: Math.round((now - was) * rate * 100) / 100, line_date: r.e.event_date,
+          note: `${now > was ? '+' : ''}${now - was} h · ${r.e.title} ${dLabel(r.e.event_date)} (period locked)`, source: 'flag_fix', created_by: me });
+        if (e2) setErr('Time saved, but the correction line failed: ' + e2.message);
+      }
+    }
     setDraft((x) => { const y = { ...x }; delete y[r.s.id]; return y; }); load();
   };
   const close = async (on: boolean) => {
@@ -127,7 +142,7 @@ export function Hours() {
               const resolve = async (st: 'fixed' | 'correct') => {
                 if (st === 'fixed' && draft[r.s.id]) await save(r);
                 const { data: me } = await supabase.rpc('me');
-                await supabase.from('hours_questions').update({ status: st, resolved_at: new Date().toISOString(), resolved_by: me, answer_note: (why[q.id] ?? '').trim() || null }).eq('id', q.id); load();
+                await supabase.from('hours_questions').update({ status: st, resolved_at: new Date().toISOString(), resolved_by: me, answer_note: (why[q.id] ?? '').trim() || (st === 'fixed' && locked ? 'Fixed, added to your next pay.' : null) }).eq('id', q.id); load();
               };
               return (
                 <div key={q.id} className="need">
