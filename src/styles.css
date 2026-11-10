@@ -4093,3 +4093,7 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; }
 .sp-coming { display: block; font-size: 11px; opacity: .75; margin-top: 2px; }
 .gt-gotit { margin: 6px 0; } /* push 73 */
 .ef-final { border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 6px 12px; font: 700 12px Inter, system-ui, sans-serif; cursor: pointer; } .ef-final.on { background: #1b7f5c; color: #fff; border-color: #1b7f5c; } /* push 74 */
+/* push 76 · check-up FR / EN switch */
+.cu-lang-sw { display: inline-flex; background: #EEE9E2; border-radius: 999px; padding: 2px; }
+.cu-lang-sw button { border: none; background: none; font: 800 11px Inter, system-ui, sans-serif; letter-spacing: .06em; padding: 4px 9px; border-radius: 999px; color: #7A7268; cursor: pointer; }
+.cu-lang-sw button.on { background: #1A1714; color: #fff; }
