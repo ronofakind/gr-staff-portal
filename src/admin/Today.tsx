@@ -1,6 +1,7 @@
 import { areaFromPostal } from './rules';
 import { NewHireNeeds } from './NewHireNeeds';
 import { PendingBar, UnseenNeeds, UnseenRides } from './SendBox'; // push 72 · 73
+import { ReferralNeeds } from './ReferralNeeds'; // push 75
 import { useEffect, useState } from 'react';
 import { DebriefCards, RecentDebriefs, useRecentDebriefs } from '../components/Debrief';
 import { MiniMonth } from './MiniMonth';
@@ -50,7 +51,7 @@ export function Today() {
   const [lm, setLm] = useState<{ e: AEvent; s: AShift }[]>([]); const [mgrs, setMgrs] = useState<Record<string, string>>({});
   const [lateBy, setLateBy] = useState<Record<string, { eta: string; reason: string | null }>>({});
   const [cutBy, setCutBy] = useState<Record<string, string>>({}); // push 64 · asked to be first cut
-  const [tick, setTick] = useState(0); const [nhN, setNhN] = useState(0); const [unN, setUnN] = useState(0); const [rdN, setRdN] = useState(0); // push 71 · 72 · 73
+  const [tick, setTick] = useState(0); const [nhN, setNhN] = useState(0); const [unN, setUnN] = useState(0); const [rdN, setRdN] = useState(0); const [rfN, setRfN] = useState(0); // push 71 · 72 · 73 · 75
   // push 47 · Can't make it / Not confirmed → Find replacement
   const [late, setLate] = useState<Late[]>([]); const [seen, setSeen] = useState<Record<string, string | null>>({}); const [nudged, setNudged] = useState<Record<string, string>>({});
   const [asks, setAsks] = useState<AdminAsk[]>([]);
@@ -330,7 +331,7 @@ export function Today() {
   const deb = useRecentDebriefs(tonightIds, tick);
   const nEv = new Set(tonight.map((e) => e.title)).size;
   const next7 = Array.from({ length: 7 }, (_, i) => addDays(today, i));
-  const needsN = nhN + unN + rdN + shown.length + askNeeds.length + lm.length + (late.length ? 1 : 0);
+  const needsN = nhN + unN + rdN + rfN + shown.length + askNeeds.length + lm.length + (late.length ? 1 : 0);
   const gone = (ids: string[]) => { setWeek((v) => (v ?? []).filter((x) => !ids.includes(x.id))); setAhead((v) => v.filter((x) => !ids.includes(x.id))); };
   const doneV = (e: AEvent) => !!e.hours_submitted_at;
   const tonightSorted = [...tonight].sort((a, b) => Number(doneV(a)) - Number(doneV(b)) || a.title.localeCompare(b.title) || (a.department === 'bar' ? 1 : -1));
@@ -345,6 +346,7 @@ export function Today() {
         <PendingBar tick={tick} onSent={() => setTick((x) => x + 1)} />
         <UnseenNeeds tick={tick} onCount={setUnN} />{/* push 72 */}
         <UnseenRides tick={tick} onCount={setRdN} />{/* push 73 */}
+        <ReferralNeeds tick={tick} onCount={setRfN} />{/* push 75 */}
         {lm.map(({ e, s }) => <CantMakeIt key={s.id} e={e} s={s} mgr={e.manager_id ? mgrs[e.manager_id] ?? null : null} ask={asks.find((a) => a.kind === 'fill' && a.status === 'open' && a.replace_for === s.id)} onFind={() => setRep({ s, e })} onChanged={() => setTick((t) => t + 1)} />)}
         <NotConfirmed rows={late} seen={seen} nudged={nudged} asks={asks} onReplace={(r) => setRep({ s: r.s, e: r.e })} onChanged={() => setTick((t) => t + 1)} />
         {askNeeds.map((a) => <AskNeed key={a.id} a={a} onChanged={() => setTick((t) => t + 1)} />)}
