@@ -7,7 +7,7 @@ import { setting, autoExtras } from '../lib/settings';
 import { DeptTag } from './DeptTag';
 import { BoardAlso, type OtherShift } from './alsoWorking';
 import { needsSend, liveShift, doesBar, eventsBetween, allStaff, addDays, isoDay, dLabel, ap12, startIso, endIso, roleName, bookingChange, confirmationsSent, countOf, sendStateOf, type AEvent, type AStaff, type Client, type Venue } from './api';
-import { misfits, linksOf, other, condShort, RuleIcons, type SLink, type SCond } from './rules';
+import { misfits, linksOf, other, condShort, RuleIcons, outOfArea, areasOf, type SLink, type SCond } from './rules';
 import { loadScoreData, scoreOf, type ScoreData } from './score';
 import { locksBetween, setLock, lockTitle, NO_LOCKS, type Locks } from './locks';
 
@@ -136,8 +136,8 @@ export function Bookings() {
     setRl(allLinks); setLinks(allLinks.filter((x) => x.kind === 'together').map((x) => [x.staff_a, x.staff_b]));
     setConds((Array.isArray(c.data) ? c.data as Cond[] : []).filter((x) => x && typeof x.staff_id === 'string'));
     if (!sd) loadScoreData().then(setSd);
-    if (!clients.length) supabase.from('clients').select('id,name,kind').then(({ data }) => setClients(Array.isArray(data) ? data as Client[] : []));
-    if (!venues.length) supabase.from('venues').select('id,name').then(({ data }) => setVenues(Array.isArray(data) ? data as Venue[] : []));
+    if (!clients.length) supabase.from('clients').select('id,name,kind,area').then(({ data }) => setClients(Array.isArray(data) ? data as unknown as Client[] : []));
+    if (!venues.length) supabase.from('venues').select('id,name,area,postal_code').then(({ data }) => setVenues(Array.isArray(data) ? data as unknown as Venue[] : []));
     const cnt: Record<string, number> = {}; for (const r of (s30.data ?? []) as { staff_id: string }[]) cnt[r.staff_id] = (cnt[r.staff_id] ?? 0) + 1; setShifts30(cnt);
     const yr: Record<string, [number, number]> = {}; for (const r of (hist90.data ?? []) as { staff_id: string; status: string }[]) { const x = (yr[r.staff_id] ??= [0, 0]); x[r.status === 'yes' ? 0 : 1]++; }
     setYesRate(Object.fromEntries(Object.entries(yr).map(([k, [y, n]]) => [k, y / (y + n)])));
@@ -336,7 +336,7 @@ export function Bookings() {
     const late: typeof pool = [];
     /** '' = fits. Skips misfits (venue, private houses only, weekday, old min guests) and never puts "keep apart" people together. */
     const ok = (sid: string, e: AEvent) => {
-      const m = misfits(sid, e, { conds, clients, venues, big }).filter((x) => x.kind !== 'only_if_needed' && x.kind !== 'big_dates_only');
+      const m = misfits(sid, e, { conds, clients, venues, big }).filter((x) => x.kind !== 'only_if_needed' && x.kind !== 'big_dates_only' && (x.kind !== 'areas' || outOfArea(sid, e, { conds, venues, clients })));
       if (m.length) return m[0].text;
       const ap = apartOf(sid).find((x) => [...pl, ...out].some((p) => p.event_id === e.id && p.staff_id === x));
       if (ap) return `kept apart from ${name(ap).split(' ')[0]}`;
@@ -903,15 +903,15 @@ export function Bookings() {
         </div></div>
       )}
 
-      {askMore && events && staff.length > 0 && <AskMore date={date} dept={fillDept} events={(events ?? []).filter((e) => e.event_date === date)} staff={staff} av={av} wk={wk} off={off} conds={conds} links={links}
+      {askMore && events && staff.length > 0 && <AskMore date={date} dept={fillDept} events={(events ?? []).filter((e) => e.event_date === date)} staff={staff} av={av} wk={wk} off={off} conds={conds} links={links} venues={venues} clients={clients}
         booked={bookedOn(date)} shifts30={shifts30} yesRate={yesRate} extras={(e) => extrasOf(date, e)} practice={mode === 'practice'} spots={spots} spotAt={replaceAt} onClose={() => setAskMore(false)} onAsked={load} />}
     </div>
   );
 }
 
 /** Ask more people: who to ask so the date fills, by rank, weekday fit, recent shifts and yes rate. */
-function AskMore({ date, dept, events, staff, av, wk, off, conds, links, booked, shifts30, yesRate, extras, practice, onClose, onAsked, spots, spotAt }: {
-  date: string; dept: 'floor' | 'bar'; events: AEvent[]; staff: AStaff[]; av: Av[]; wk: Wk[]; off: Set<string>; conds: Cond[]; links: [string, string][];
+function AskMore({ date, dept, events, staff, av, wk, off, conds, links, booked, shifts30, yesRate, extras, practice, onClose, onAsked, spots, spotAt, venues, clients }: {
+  date: string; dept: 'floor' | 'bar'; events: AEvent[]; staff: AStaff[]; av: Av[]; wk: Wk[]; off: Set<string>; conds: Cond[]; links: [string, string][]; venues: Venue[]; clients: Client[];
   booked: Set<string>; shifts30: Record<string, number>; yesRate: Record<string, number>; extras: (e: AEvent) => number; practice: boolean; onClose: () => void; onAsked: () => void;
   /** push 28: "Find a replacement" → ask for exactly this many spots (pre-ticks enough people for it) */ spots?: number; spotAt?: string | null;
 }) {
@@ -929,7 +929,7 @@ function AskMore({ date, dept, events, staff, av, wk, off, conds, links, booked,
     && wk.find((w) => w.staff_id === s.id && w.dow === dow)?.status !== 'no' && !/manual booking only|leaving|do not book/i.test(s.staff_private?.notes ?? ''))
     .map((s) => { const u = wk.find((w) => w.staff_id === s.id && w.dow === dow); const k = condsOf(s.id).map((c) => c.kind);
       const linkedBooked = links.some((l) => l.includes(s.id) && [...booked, ...av.filter((a) => a.status === 'yes').map((a) => a.staff_id)].includes(l[0] === s.id ? l[1] : l[0]));
-      const hb = setting('ask.hold_back'); const held = (shifts30[s.id] ?? 0) >= hb.shifts ? `${hb.shifts}+ shifts in ${hb.days} days` : k.includes('big_dates_only') ? 'only for very big dates' : k.includes('only_if_needed') ? 'only when we really need them' : '';
+      const hb = setting('ask.hold_back'); const outA = evs.length > 0 && evs.every((e) => outOfArea(s.id, e, { conds: conds as SCond[], venues, clients })); const held = outA ? `⌖ outside their area (${(areasOf(conds as SCond[], s.id) ?? []).join(', ')})` : (shifts30[s.id] ?? 0) >= hb.shifts ? `${hb.shifts}+ shifts in ${hb.days} days` : k.includes('big_dates_only') ? 'only for very big dates' : k.includes('only_if_needed') ? 'only when we really need them' : '';
       return { s, u, rate: yesRate[s.id] ?? 0.5, n30: shifts30[s.id] ?? 0, held, linkedBooked }; })
     .sort((a, b) => Number(b.linkedBooked) - Number(a.linkedBooked) || (a.s.staff_private?.ranking ?? 9999) - (b.s.staff_private?.ranking ?? 9999) || Number(!!b.u) - Number(!!a.u) || a.n30 - b.n30 || b.rate - a.rate);
   const main = cands.filter((c) => !c.held); const held = cands.filter((c) => c.held);

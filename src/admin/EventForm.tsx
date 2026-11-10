@@ -11,6 +11,7 @@ import { tiersFor } from './Availability';
 import { AddressInput, type AddressParts } from '../components/AddressInput';
 import { defaultPieces, defaultItems, UniformIcon, TieIcon, ApronIcon, PantsIcon, ShoesIcon, WineKeyIcon, PIECE, type UniformKind, type UniItems, type UniItemsMap, type UniLineKey } from '../components/Uniform';
 import { useEventLayout, EditEventLayout, type BlockKey } from './EventLayout';
+import { loadRules, outOfArea, type SCond } from './rules';
 import { setting } from '../lib/settings';
 import { AlsoWorking, type OtherShift } from './alsoWorking';
 
@@ -168,6 +169,8 @@ export function EventForm() {
   const [fold, setFoldMap] = useState<Record<number, boolean>>(readFold);
   const isOpen = (n: number) => fold[n] ?? true;
   const setFold = (n: number, o: boolean) => { const f = { ...fold, [n]: o }; setFoldMap(f); try { localStorage.setItem(FOLD_KEY, JSON.stringify(f)); } catch { /* private mode */ } };
+  const [areaCtx, setAreaCtx] = useState<{ conds: SCond[]; venues: { id: string; area?: string | null; postal_code?: string | null }[]; clients: { id: string; name: string; area?: string | null }[] }>({ conds: [], venues: [], clients: [] });
+  useEffect(() => { loadRules().then(async ({ conds }) => { const [v, c] = await Promise.all([supabase.from('venues').select('id,area,postal_code'), supabase.from('clients').select('id,name,area')]); setAreaCtx({ conds, venues: (v.data ?? []) as never[], clients: (c.data ?? []) as never[] }); }); }, []);
   const elay = useEventLayout(); const [editLay, setEditLay] = useState(false); const [uniEdit, setUniEdit] = useState(false);
   const [openB, setOpenBMap] = useState<Partial<Record<BlockKey, boolean>>>({});
   const isOpenB = (k: BlockKey) => openB[k] ?? (elay.lay.mode[k] ?? 'open') === 'open';
@@ -452,7 +455,8 @@ export function EventForm() {
   const ask = async (d: string, dept: 'floor' | 'bar', needed: number, start: string) => {
     const pool = staff.filter((s) => (dept === 'bar' ? doesBar(s) : s.department !== 'bar'))
       .filter((s) => dept === 'bar' || (tierOf(s) && tiers.includes(tierOf(s)!)))
-      .filter((s) => !day.avail[s.id] && !day.booked[s.id] && !day.off.has(s.id) && !day.weeklyNo.has(s.id) && !lines.some((l) => l.names.includes(s.id)));
+      .filter((s) => !day.avail[s.id] && !day.booked[s.id] && !day.off.has(s.id) && !day.weeklyNo.has(s.id) && !lines.some((l) => l.names.includes(s.id)))
+      .filter((s) => !outOfArea(s.id, { event_date: d, venue_id: venueId, event_private: { client_id: clientId || null, client: client?.name ?? null } } as unknown as Parameters<typeof outOfArea>[1], areaCtx)); // push 63
     const { data: prev } = await supabase.from('avail_asks').select('tiers_sent').eq('for_date', d).eq('department', dept).maybeSingle();
     const { data: a, error } = await supabase.from('avail_asks').upsert({
       for_date: d, department: dept, label: 'Evening event', approx_start: start, staff_needed: needed,

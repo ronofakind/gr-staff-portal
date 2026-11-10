@@ -1,3 +1,4 @@
+import { areaFromPostal } from './rules';
 import { useEffect, useState } from 'react';
 import { DebriefCards, RecentDebriefs, useRecentDebriefs } from '../components/Debrief';
 import { MiniMonth } from './MiniMonth';
@@ -249,6 +250,10 @@ export function Today() {
       // push 36d · staff messages waiting on Ronnie (no email: the count lives here + on the Messages nav item)
       const { data: nr, error: nrErr } = await supabase.rpc('inbox_count');
       if (!nrErr && typeof nr === 'number' && nr > 0) n.unshift({ key: 'msgs', red: true, title: `${nr} staff message${nr > 1 ? 's' : ''} need${nr > 1 ? '' : 's'} a reply`, sub: 'Messages · Needs reply', action: 'Open', to: '/admin/messages' });
+      // push 63 · venues with events in the next 30 days and no area (no postal code to guess from) → set them once
+      const { data: na, error: naErr } = await supabase.from('events').select('venue_id,venues!inner(id,name,area,postal_code)').gte('event_date', today).lte('event_date', addDays(today, 30)).is('venues.area', null);
+      if (!naErr) { const vs = new Map<string, string>(); for (const r of (na ?? []) as unknown as { venues: { id: string; name: string; postal_code: string | null } }[]) if (!areaFromPostal(r.venues.postal_code)) vs.set(r.venues.id, r.venues.name);
+        if (vs.size) n.push({ key: 'area-venues', title: `${vs.size} venue${vs.size === 1 ? ' has' : 's have'} no area`, sub: [...vs.values()].slice(0, 4).join(' · ') + (vs.size > 4 ? ' …' : '') + ' · needed for “only these areas” staff', action: 'Set them', to: '/admin/venues' }); }
       // push 61 · 5 days out: anything still missing from the client (start times TBC, venue, guest count) → Ask client
       const { data: mi, error: miErr } = await supabase.from('events').select('id,event_date,title,department,start_tbc,details_pending,guests,created_at').gte('event_date', today).lte('event_date', addDays(today, 5)).order('event_date');
       if (!miErr) {
