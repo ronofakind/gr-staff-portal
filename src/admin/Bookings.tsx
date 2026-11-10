@@ -1,3 +1,4 @@
+import { ShiftExpenseToggle } from './Expenses';
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { StaffProfile } from './StaffProfile';
@@ -837,6 +838,7 @@ export function Bookings() {
                 setNText(mNotes[sh.id] ?? sn?.note ?? ''); setNScope(mNotes[sh.id] ? 'shift' : sn ? (sn.shifts ? 'first3' : 'always') : fresh ? 'first3' : 'shift'); } setPhone({ ...phone, step: 'note' }); }}>{ic('c|M12 7v5l3 2')}<span className="grow">Note for the manager{(sh.leave_by || mNotes[sh.id] || sNotes[sid]) && <small className="gold"> · {sh.leave_by ? `leaves ${t12(hm(sh.leave_by))}` : sNotes[sid] && !mNotes[sh.id] ? (sNotes[sid].shifts ? '📌 first 3 shifts' : '📌 every shift') : 'note set'}</small>}</span><span className="bk-mch">›</span></button>}
               <button className="bk-mli" onClick={() => { setProf(sid); close(); }}>{ic('c|M12 8v.01|M12 11v5')}<span className="grow">Profile · ranking · knows</span><span className="bk-mch">›</span></button>
               <Link className="bk-mli" to={`/admin/messages?staff=${sid}`} onClick={close}>{ic('M4 5h16v11H9l-5 4z')}<span className="grow">Message</span><span className="bk-mch">›</span></Link>
+              {sh && <div className="bk-mli"><span className="bk-mi" aria-hidden="true" style={{ display: 'inline-flex', justifyContent: 'center' }}>🧾</span><span className="grow">Expense for this shift<small className="muted"> · 2 days after</small></span><ShiftExpenseToggle shiftId={p.shift_id!} eventDate={date} /></div>}{/* push 79 */}
             </div>
             <button className="bk-mrm" onClick={() => { remove(date, p.key); close(); }}>Remove</button>
           </>; })() : step === 'time' && p ? (() => { const lineT = p.line ?? p.start; const okT = /^\d{2}:\d{2}$/.test(ownT);

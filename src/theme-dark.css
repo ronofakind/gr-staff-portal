@@ -1973,6 +1973,16 @@ html[data-theme="dark"] { --teams: #8487CC; --teams-bg: #1F2137; --teams-ink: #8
 :where(html[data-theme="dark"]) .cu-lang-sw button.on { background: #E1DEDB; color: #1A1714; }
 :where(html[data-theme="dark"]) .th-opt { box-shadow: 0 0 0 1px #302C26; }
 :where(html[data-theme="dark"]) .th-opt.on { box-shadow: 0 0 0 2px #C19E2F; }
+:where(html[data-theme="dark"]) .exp-fab { background: #2A2622; color: #F5F2ED; box-shadow: 0 8px 20px rgba(0,0,0,0.6); }
+:where(html[data-theme="dark"]) .exp-done { box-shadow: inset 4px 0 0 #C19E2F; }
+:where(html[data-theme="dark"]) .exp-k { border: 1.5px solid #49433B; background: #1F1D1A; color: #E1DEDB; }
+:where(html[data-theme="dark"]) .exp-k.on { background: #E1DEDB; border-color: #E1DEDB; color: #1A1714; }
+:where(html[data-theme="dark"]) .exp-f select, :where(html[data-theme="dark"]) .exp-f input, :where(html[data-theme="dark"]) .exp-note { border: 1.5px solid #49433B; background: #1F1D1A; color: #E1DEDB; }
+:where(html[data-theme="dark"]) .exp-photo { border: 1.5px dashed #4C4641; background: #1F1D1A; }
+:where(html[data-theme="dark"]) .exp-photo.on { border-color: #3C7C5E; color: #8CC5AA; }
+:where(html[data-theme="dark"]) .exp-allow { border: 1.5px solid #49433B; background: #1F1D1A; color: #E1DEDB; }
+:where(html[data-theme="dark"]) .exp-allow.on { background: #24332C; border-color: #3C7C5E; color: #8CC5AA; }
+:where(html[data-theme="dark"]) .exp-rc img { box-shadow: 0 0 0 1px #302C26; }
 html[data-theme="dark"] { color-scheme: dark; }
 html[data-theme="dark"] body { background: #121110; color: #F1ECE4; }
 html[data-theme="dark"] img[src$="logo-mark.png"]:not(.adm-side img):not(.side-logo), html[data-theme="dark"] img[src$="logo-full.png"] { filter: invert(1) hue-rotate(180deg); mix-blend-mode: normal !important; }

@@ -1,3 +1,4 @@
+import { MyExpenses } from '../components/Expense';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase, type Staff } from '../lib/supabase';
@@ -141,6 +142,7 @@ export function Hours({ me }: { me: Staff }) {
           ))}
         </section>
         <PayNotes per={per} />
+        <MyExpenses me={me.id} fr={me.language === 'fr'} />
         <p className="muted sm" style={{ margin: '4px 6px' }}>Hours are rounded to 15 min · minimum 4 h per shift (except left early) · paid start = call time · paid on the 1st and the 16th.</p>
         <button className="link-btn" style={{ alignSelf: 'flex-start', margin: '0 6px' }} onClick={() => setView('past')}>Past pay periods ›</button>
       </> : view === 'past' ? <>
@@ -217,7 +219,7 @@ function PayNotes({ per }: { per: { start: string; end: string } }) {
   const [rows, setRows] = useState<{ kind: string; line_date: string | null; period_start: string; amount: number | null; source: string }[]>([]);
   const [bank, setBank] = useState(0);
   useEffect(() => { supabase.rpc('my_pay_notes').then(({ data, error }) => setRows(error ? [] : (data ?? []) as typeof rows)); supabase.rpc('my_banked').then(({ data, error }) => setBank(error ? 0 : Number(data ?? 0))); }, []);
-  const mine = rows.filter((r) => r.period_start === per.start);
+  const mine = rows.filter((r) => r.period_start === per.start && r.source !== 'expense'); // expenses show in My expenses
   if (!mine.length && !bank) return null;
   const dl = (d: string) => D(d).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }).replace('.', '');
   return (

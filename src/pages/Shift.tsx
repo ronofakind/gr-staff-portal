@@ -1,3 +1,4 @@
+import { ExpenseShiftButton } from '../components/Expense';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { supabase, SHIFT_SELECT, isSetup, type ShiftRow } from '../lib/supabase';
@@ -193,6 +194,7 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team, past }
             <div><small>Ended</small>{s.punches?.punch_out ? <BigTime iso={s.punches.punch_out} small /> : <span className="big serif sm-big">–</span>}</div>
           </div>
         </section>
+        {!preview && past && <ExpenseShiftButton me={past.id} shift={{ id: s.id, title: venueName, date: ev.event_date }} />}{/* push 79 */}
         {past && managesShift(s, past.id) && <PastManager eventId={ev.id} eventDate={ev.event_date} sentAt={ev.hours_submitted_at ?? null} me={past} />}
       </> : <section className="d3-hero">
         <div className="d3-kick">{dayWord.toUpperCase()}{cd ? ` · ${cd.toUpperCase()}` : ''}</div>

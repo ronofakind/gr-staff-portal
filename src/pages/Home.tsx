@@ -1,3 +1,4 @@
+import { ExpenseHome } from '../components/Expense';
 import { QuarterTime } from '../components/QuarterTime';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -617,6 +618,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
       {notSure && <KnowsSheet title="When will you know?" latest={latestKnows(dueMaybes)} oneTap
         sub="Pick a new day. It can't be after the answer-by date." onClose={() => setNotSure(false)}
         onPick={async (by) => { setNotSure(false); if (preview) return; await supabase.rpc('dont_know_yet', { p_knows_by: by, p_note: null, p_ids: dueMaybes.map((d) => d.id) }); reloadDates(); }} />}
+      {me.role !== 'admin' && <ExpenseHome me={me.id} fr={me.language === 'fr'} preview={preview} />}{/* push 79 */}
       <TabBar base={base} badge={toAns.length + asks.filter((a) => a.kind === 'fill').length} />
     </main>
   );

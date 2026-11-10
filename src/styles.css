@@ -4104,3 +4104,21 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; }
 .th-opt { border: 0; border-radius: 14px; padding: 10px; text-align: left; cursor: pointer; box-shadow: 0 0 0 1px #E4DCD1; font: 600 13px Inter, system-ui, sans-serif; display: flex; flex-direction: column; gap: 6px; }
 .th-opt.on { box-shadow: 0 0 0 2px #C9A227; }
 .th-opt i { display: block; height: 40px; border-radius: 8px; }
+
+/* push 79 · staff expenses */
+.exp-fab { position: fixed; right: max(16px, calc(50vw - 244px)); bottom: calc(88px + env(safe-area-inset-bottom)); z-index: 30; width: 54px; height: 54px; border-radius: 27px; border: 0; background: #1A1714; color: #F6F2EC; font: 300 30px/1 Inter, system-ui, sans-serif; box-shadow: 0 8px 20px rgba(26,23,20,.25); cursor: pointer; }
+.exp-done { display: flex; align-items: center; gap: 10px; border: 0; text-align: left; cursor: pointer; box-shadow: inset 4px 0 0 #C9A227; font: inherit; color: inherit; }
+.exp-done .grow { display: flex; flex-direction: column; gap: 2px; }
+.exp-add { font-weight: 700; font-size: 13px; white-space: nowrap; }
+.exp-sheet { padding-top: 18px; }
+.exp-kinds { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.exp-k { height: 44px; border-radius: 12px; border: 1.5px solid #DCD3C7; background: #fff; font: 600 14px Inter, system-ui, sans-serif; color: #1A1714; cursor: pointer; }
+.exp-k.on { background: #1A1714; border-color: #1A1714; color: #F6F2EC; }
+.exp-f { display: flex; flex-direction: column; gap: 4px; }
+.exp-f select, .exp-f input, .exp-note { height: 46px; border-radius: 12px; border: 1.5px solid #DCD3C7; background: #fff; padding: 0 12px; font: 500 15px Inter, system-ui, sans-serif; color: #1A1714; }
+.exp-photo { display: flex; align-items: center; justify-content: center; min-height: 64px; border-radius: 14px; border: 1.5px dashed #CFC5B8; background: #fff; font-weight: 600; font-size: 14px; cursor: pointer; text-align: center; padding: 8px; }
+.exp-photo.on { border-style: solid; border-color: #2F6B4F; color: #2F6B4F; }
+.exp-allow { height: 32px; padding: 0 12px; border-radius: 10px; border: 1.5px solid #DCD3C7; background: #fff; font: 700 12px Inter, system-ui, sans-serif; color: #1A1714; cursor: pointer; white-space: nowrap; }
+.exp-allow.on { background: #E3F3EC; border-color: #2F6B4F; color: #2F6B4F; }
+.exp-rc img { max-width: 220px; max-height: 260px; border-radius: 10px; display: block; box-shadow: 0 0 0 1px #E4DCD1; }
+.exp-sw { padding: 10px 0; }
