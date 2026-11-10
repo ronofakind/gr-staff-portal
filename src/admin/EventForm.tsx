@@ -301,6 +301,7 @@ export function EventForm() {
   const venue = venues.find((v) => v.id === venueId) ?? null;
   const trSuggested = !!(venue as (Venue & { always_offer_rides?: boolean }) | null)?.always_offer_rides;
   const trOn = tr.on ?? trSuggested;
+  const [carpoolSet, setCarpool] = useState<boolean | null>(null); const carpool = carpoolSet ?? (!isNew ? !!tr.rides : trSuggested); // push 68 · carpool without paid transport
   const paidTravel = Math.round((tr.travel * 2) / 15) * 15;
   useEffect(() => { if (venue?.address && !address) setAddress(venue.address); }, [venue?.id]);
   const client = clients.find((c) => c.id === clientId) ?? null;
@@ -439,7 +440,7 @@ export function EventForm() {
         start_time: start, end_time: endT, ends_label: ends, staff_needed: ls.reduce((n, l) => n + l.count, 0),
         manager_id: lead ? keep(lead)[0] ?? null : null, description: note || null, notes: staffNote || null,
         uniform_floor: uFloor, uniform_bar: uBar, uniform_floor_w: uFloorW, uniform_bar_w: uBarW, uniform_items: lineItems(), drive_folder_url: folder.trim() || null, staffing: ls.map(({ dept: d, code, start: s, end, count, tbc, hold }) => ({ dept: d, code, start: s, end: end || null, count, ...(tbc ? { tbc: true } : {}), ...(hold ? { hold } : {}) })), guests: guests ? Number(guests) : null, event_type: eventType || null, extras: extras === '' ? null : Number(extras), extras_billing: 'client', // push 61 · extras always on the invoice for now
-        transport: trOn, travel_min: trOn ? tr.travel : null, paid_travel_min: trOn ? paidTravel : null, gas_per_car: trOn ? Number(tr.gas) || 0 : null, transport_billing: trOn ? tr.billing : null, rides: trOn && tr.rides,
+        transport: trOn, travel_min: trOn ? tr.travel : null, paid_travel_min: trOn ? paidTravel : null, gas_per_car: trOn ? Number(tr.gas) || 0 : null, transport_billing: trOn ? tr.billing : null, rides: tr.rides && (trOn || carpool),
       };
       const res = old ? await supabase.from('events').update(row).eq('id', old.id).select('id').single() : await supabase.from('events').insert(row).select('id').single();
       if (res.error) throw res.error;
@@ -711,6 +712,7 @@ export function EventForm() {
             </div>
           </div>
         </div>
+        {!trOn && <div className="tr-card"><div className="sw-row"><button type="button" role="switch" aria-checked={carpool} className={'sw' + (carpool ? ' on' : '')} onClick={() => { setCarpool(!carpool); setTr({ ...tr, rides: !carpool }); }}><span className="sw-track"><span className="sw-knob" /></span><span className="sw-lbl">{carpool ? 'ON' : 'OFF'}</span></button><b>Carpool</b><span className="muted sm">staff offer seats and carpool between themselves · no paid travel, no gas</span></div></div>}
         <div className={'tr-card' + (trOn ? ' on' : '')}>
           <div className="sw-row">
             <button type="button" role="switch" aria-checked={trOn} className={'sw' + (trOn ? ' on' : '')} onClick={() => setTr({ ...tr, on: !trOn })}><span className="sw-track"><span className="sw-knob" /></span><span className="sw-lbl">{trOn ? 'ON' : 'OFF'}</span></button>

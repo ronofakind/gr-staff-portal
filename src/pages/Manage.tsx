@@ -33,6 +33,26 @@ const LANG_LV = ['', 'Basic', 'Good', 'Fluent'];
 const cap = (x: string) => x[0] + x.slice(1).toLowerCase();
 const txt = (x: unknown) => (typeof x === 'string' && x.trim() ? x.trim() : null);
 /** ABOUT rows (empty ones hidden). Languages only once set (onboarding question comes later). */
+/** push 68 · carpools on my event: who rides with whom, late tag, Call <first name> / Text the car. Read only. */
+function MgrCars({ eventId }: { eventId: string }) {
+  const [cars, setCars] = useState<{ driver_id: string; driver: string; phone: string | null; pickup_spot: string | null; leave_at: string | null; late_eta: string | null; riders: string[] }[]>([]);
+  useEffect(() => { supabase.rpc('event_cars', { p_event: eventId }).then(({ data, error }) => { if (!error && Array.isArray(data)) setCars(data as typeof cars); }); }, [eventId]);
+  if (!cars.length) return null;
+  const tm = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' }) : '');
+  const tel = (p: string | null) => (p ?? '').replace(/[^\d+]/g, '');
+  return (
+    <section className="mgr-cars">
+      <b className="gt-kick">CARPOOLS · {cars.length}</b>
+      {cars.map((c) => { const fn = c.driver.split(' ')[0]; return (
+        <div key={c.driver_id} className="mgr-car">
+          <div className="row" style={{ gap: 8, alignItems: 'center' }}><b className="grow">🚗 {fn} · {c.riders.length + 1} people</b>{c.late_eta ? <i className="fc-tag">RUNNING LATE · ETA {tm(c.late_eta)}</i> : <i className="fc-tag ok">ON TIME</i>}</div>
+          <span className="muted sm">Leaving {tm(c.leave_at) || '—'}{c.pickup_spot ? ` from ${c.pickup_spot}` : ''}{c.late_eta ? ' · late as a group' : ''}{c.riders.length ? ` · ${c.riders.map((r) => r.split(' ')[0]).join(', ')}` : ''}</span>
+          {tel(c.phone) && <a className="abtn sm" href={`tel:${tel(c.phone)}`}>📞 Call {fn}</a>}
+        </div>); })}
+    </section>
+  );
+}
+
 function aboutOf(i?: Info) {
   if (!i) return { exp: null, knows: null, langs: [] as [string, number][], note: null };
   const lvl = i.experience && ['SENIOR', 'MID', 'JUNIOR'].includes(i.experience) ? cap(i.experience) : null;
@@ -469,6 +489,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
         {/* Nov 5 · Event Folder lives on Home only (Ronnie: too messy here) */}
         {/* push 36e · Messages: 📣 Message my team, what he sent (Seen n of N), replies (REPLY / ✓ DONE) */}
         <MgrMessagesEntry eventId={ev.id} />
+        <MgrCars eventId={ev.id} />{/* push 68 · carpools: a late car = a late group */}
       </div>
 
       {banner.map((r) => { const n = lateOf(r)!; const tel = r.staff?.phone?.replace(/[^\d+]/g, ''); return (

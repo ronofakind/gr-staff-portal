@@ -178,7 +178,7 @@ export function EventDetail() {
           <Billing evs={evs} onChange={load} />
         </Sec>}
 
-        {evs.some((v) => v.transport) && <Sec k="rides" title="Rides" wide open={isOpen('rides')} setOpen={setFold} summary="Transport · cars and riders">
+        {evs.some((v) => v.transport || v.rides) && <Sec k="rides" title="Rides" wide open={isOpen('rides')} setOpen={setFold} summary={evs.some((v) => v.transport) ? 'Transport · cars and riders' : 'Carpool · cars and riders'}>
           <RidesAdmin evs={evs} />
         </Sec>}
 

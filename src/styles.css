@@ -4009,3 +4009,24 @@ button.pf-go { border: none; background: none; padding: 4px 2px; font: 700 13px 
 .er-val { font: inherit; font-weight: 700; padding: 7px 10px; border-radius: 9px; border: 1px solid #CFC5B8; background: #fff; }
 .er-flag { background: #FBF3E0; color: #6B4A12; border-radius: 10px; padding: 9px 6px; }
 .ef-aibar { background: #E5ECF6; color: #2B4C7E; border-radius: 12px; padding: 10px 14px; font-size: 13.5px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+/* push 68 · carpool */
+.gt-person { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid rgba(0,0,0,.06); }
+.gt-person b { display: block; font-size: 14px; } .gt-person small { display: block; font-size: 12px; color: var(--muted, #7A7168); }
+.gt-ic { font-size: 18px; text-decoration: none; padding: 4px; }
+.gt-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; } .gt-acts .big-btn { text-align: center; text-decoration: none; }
+.gt-acts .big-btn.gold { background: #FBF3E0; color: #6B4A12; grid-column: 1 / -1; }
+.gt-list, .gt-req { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.gt-req { background: #FBF3E0; border-radius: 14px; padding: 12px; } .gt-kick.gold { color: #6B4A12; }
+.gt-lost { background: #FBF3E0; color: #6B4A12; border-radius: 12px; padding: 10px 12px; font-size: 13.5px; margin-top: 6px; }
+.car-chat { background: #F6F2EC; border-radius: 14px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.car-msgs { max-height: 240px; overflow: auto; display: flex; flex-direction: column; gap: 6px; }
+.car-msg { background: #fff; border-radius: 10px; padding: 7px 10px; font-size: 13.5px; align-self: flex-start; max-width: 88%; }
+.car-msg.me { align-self: flex-end; background: #E6F2EA; } .car-msg small { display: block; font-size: 10.5px; color: var(--muted, #7A7168); }
+.car-in { flex: 1; font: inherit; padding: 9px 11px; border-radius: 10px; border: 1px solid #CFC5B8; background: #fff; }
+.mgr-cars { display: flex; flex-direction: column; gap: 8px; background: #fff; border-radius: 16px; padding: 14px; box-shadow: 0 0 0 1px #E8E0D5; }
+.mgr-car { display: flex; flex-direction: column; gap: 4px; padding-top: 8px; border-top: 1px solid #EEE7DD; }
+.mgr-car .abtn { align-self: flex-start; text-decoration: none; } .fc-tag.ok { background: #E6F2EA; color: #2F6B4F; }
+.ride-edit { display: flex; gap: 6px; flex-wrap: wrap; } .ride-edit input, .ride-edit select { font: inherit; font-size: 12.5px; padding: 5px 7px; border-radius: 8px; border: 1px solid #CFC5B8; background: #fff; }
+.ride-edit input:first-child { flex: 1; min-width: 120px; }
+.gt-ride .gt-note { letter-spacing: 0; text-transform: none; font-weight: 400; font-size: 12px; color: var(--muted, #7A7168); }

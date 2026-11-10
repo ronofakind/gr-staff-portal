@@ -231,7 +231,7 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team, past }
       {sheet === 'change' && <ChangeSheet s={s} preview={preview} onClose={() => setSheet(null)} onSent={() => { setSheet(null); chg.reload(); }} />}
 
       {!gone && <FromTheMeeting eventId={ev.id} meetingBase={preview ? '/admin' : ''} />}{/* push 38 · pinned meeting notes */}
-      {ev.transport && ev.rides && <GettingThere eventId={ev.id} eventDate={ev.event_date} firstStart={s.planned_start} travelMin={ev.travel_min ?? 60} paidMin={ev.paid_travel_min ?? 0} preview={preview} />}
+      {ev.rides && <GettingThere eventId={ev.id} eventDate={ev.event_date} firstStart={s.planned_start} travelMin={ev.travel_min ?? 60} paidMin={ev.paid_travel_min ?? 0} transport={!!ev.transport} preview={preview} />}{/* push 68 · carpool on any event with rides on */}
       </>}
       <SecTitle icon="pin">Where</SecTitle>
       <section className="d3-card d3-where d37-wcard">

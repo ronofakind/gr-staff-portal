@@ -252,6 +252,13 @@ export function Today() {
       // push 36d · staff messages waiting on Ronnie (no email: the count lives here + on the Messages nav item)
       const { data: nr, error: nrErr } = await supabase.rpc('inbox_count');
       if (!nrErr && typeof nr === 'number' && nr > 0) n.unshift({ key: 'msgs', red: true, title: `${nr} staff message${nr > 1 ? 's' : ''} need${nr > 1 ? '' : 's'} a reply`, sub: 'Messages · Needs reply', action: 'Open', to: '/admin/messages' });
+      // push 68 · carpools: running late (tonight) and people who lost their carpool
+      const { data: rl, error: rlErr } = await supabase.from('ride_offers').select('kind,late_eta,lost_at,car_driver_id,event_id,staff:staff!ride_offers_staff_id_fkey(full_name),events!inner(title,event_date)').gte('events.event_date', today).or('late_eta.not.is.null,lost_at.not.is.null');
+      if (!rlErr) for (const r of (rl ?? []) as unknown as { kind: string; late_eta: string | null; lost_at: string | null; car_driver_id: string | null; event_id: string; staff: { full_name: string } | null; events: { title: string; event_date: string } }[]) {
+        const nm = r.staff?.full_name.split(' ')[0] ?? '?';
+        if (r.kind === 'driver' && r.late_eta && r.events.event_date === today) n.unshift({ key: 'cl' + r.event_id + nm, red: true, title: `⏱ ${nm}’s carpool to ${r.events.title} is running late`, sub: `New time ${tTime(r.late_eta)} · the whole car is late`, action: 'Open', to: `/admin/event/${r.event_id}` });
+        if (r.kind === 'rider' && r.lost_at && !r.car_driver_id) n.unshift({ key: 'cx' + r.event_id + nm, red: true, title: `${nm} lost their carpool · ${r.events.title}`, sub: `${dLabel(r.events.event_date, { weekday: 'short', month: 'short', day: 'numeric' })} · we told them we’re working on a solution`, action: 'Find a car', to: `/admin/event/${r.event_id}` });
+      }
       // push 66 · overbooked (booked > needed) → Want the night off? (event page)
       const { data: ob, error: obErr } = await supabase.from('events').select('id,title,event_date,staff_needed,shifts(status,attendance)').gte('event_date', today).lte('event_date', addDays(today, 30));
       if (!obErr) for (const x of (ob ?? []) as unknown as { id: string; title: string; event_date: string; staff_needed: number; shifts: { status: string; attendance: string | null }[] }[]) {
