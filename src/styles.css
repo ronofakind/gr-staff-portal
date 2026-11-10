@@ -4063,3 +4063,14 @@ button.pf-go { border: none; background: none; padding: 4px 2px; font: 700 13px 
 .dbr-ed i.red { background: #F7E4E2; color: #9B2226; }
 .db-edit { width: min(720px, 94vw); display: flex; flex-direction: column; gap: 12px; } .db-edrow { display: flex; flex-direction: column; gap: 6px; } .db-edrow b { font-size: 13.5px; }
 .db-edin { font: inherit; padding: 8px 10px; border-radius: 10px; border: 1px solid #CFC5B8; }
+/* push 71 · new hires in Needs you */
+.nh-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+.nh-card { background: #fff; border: 1px solid var(--line); border-left: 4px solid #E0C27A; border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; }
+.nh-card.stuck { border-left-color: var(--accent); }
+.nh-top { display: flex; align-items: center; gap: 8px; justify-content: space-between; } .nh-top b { font-size: 14px; }
+.nh-tag { font-style: normal; font-size: 10px; font-weight: 800; letter-spacing: .06em; padding: 3px 7px; border-radius: 6px; background: #F1ECE4; color: #6B6259; white-space: nowrap; }
+.nh-tag.red { background: var(--accent-bg); color: var(--accent); } .nh-tag.gold { background: #F6EBD0; color: #8A6A1F; }
+.nh-bar { display: block; height: 6px; border-radius: 3px; background: #EEE8DF; overflow: hidden; } .nh-bar i { display: block; height: 6px; background: #5CC08E; border-radius: 3px; }
+.nh-card.stuck .nh-bar i { background: var(--accent); }
+.nh-acts { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.pay-miss { background: var(--accent-bg); border-radius: 12px; padding: 10px 12px; font-size: 13px; display: flex; flex-direction: column; gap: 4px; } .pay-miss b { color: var(--accent); }

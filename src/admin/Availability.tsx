@@ -5,6 +5,7 @@ import { tiersForCount } from '../lib/settings';
 import { allStaff, eventsBetween, isoDay, startIso, type AEvent, type AStaff } from './api';
 import { ampm } from '../pages/Availability';
 import { defaultAnswerBy, toLocalInput, fromLocalInput } from '../lib/myDates';
+import { useNewHires, juniorClash } from '../lib/newHires'; // push 71
 
 type Tier = 'A' | 'B' | 'C';
 type Ask = { id: string; for_date: string; department: string; label: string; approx_start: string | null; staff_needed: number; tiers_sent: Tier[]; created_at: string };
@@ -70,6 +71,7 @@ export function Availability() {
   const rank = (s: AStaff) => s.staff_private?.ranking ?? 9999;
 
   /** Why someone is skipped automatically for a date (or null). */
+  const nhs = useNewHires();
   const skipWhy = (s: AStaff, d: string) => {
     const o = off.find((x) => x.staff_id === s.id && x.from_date <= d && x.to_date >= d && (x.every_dow == null || x.every_dow === dow(d)));
     if (o) return `Day off${o.reason ? ` (${o.reason})` : ''}`;
@@ -77,6 +79,7 @@ export function Availability() {
     if (w?.status === 'no' && !opened.has(`${s.id}|${d}`)) return `Not on ${D(d).toLocaleDateString('en-CA', { weekday: 'long' })}s`;
     const evs = byDate[d] ?? [];
     if (evs.length && evs.every((e) => outOfArea(s.id, e, areaCtx))) return `⌖ Outside their area (${(areasOf(areaCtx.conds, s.id) ?? []).join(', ')})`;
+    if (evs.length && evs.every((e) => juniorClash(nhs[s.id], e.event_type) === 'no')) return 'Junior · cocktail dînatoire + canapés only'; // push 71
     return null;
   };
   const freeFrom = (s: AStaff, d: string) => { const w = weekly.find((x) => x.staff_id === s.id && x.dow === dow(d)); return w && w.status !== 'no' ? w.from_time : null; };

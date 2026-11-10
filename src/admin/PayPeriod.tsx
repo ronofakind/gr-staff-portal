@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { eventsBetween, addDays, isoDay, periodOf, dLabel, type AEvent } from './api';
+import { loadNewHires, missingFor, missingText } from '../lib/newHires';
 import { loadRates, byStaff, eventCost, sumCost, driversBy, invoicesFor, money, type Cost, type Invoice, type RateRow } from './pay';
 
 /** Nov 8 · push 54 · Today → Pay period: staff cost so far / booked ahead / est. total vs last period + profit per event once its invoice is sent. */
-type Data = { cur: { start: string; end: string }; so: Cost; ahead: Cost; last: Cost; rows: { e: AEvent; c: Cost; inv: Invoice }[]; unsent: number };
+type Data = { miss: { name: string; what: string }[]; cur: { start: string; end: string }; so: Cost; ahead: Cost; last: Cost; rows: { e: AEvent; c: Cost; inv: Invoice }[]; unsent: number };
 export function PayPeriod() {
   const [d, setD] = useState<Data | null>(null); const [none, setNone] = useState(false);
   useEffect(() => { (async () => {
     const today = isoDay(new Date()); const cur = periodOf(today); const prev = periodOf(addDays(cur.start, -1));
-    const [rr, evs] = await Promise.all([loadRates(), eventsBetween(prev.start, cur.end)]);
+    const [rr, evs, nh] = await Promise.all([loadRates(), eventsBetween(prev.start, cur.end), loadNewHires()]);
     if (!rr) { setNone(true); return; }
     const rates: Record<string, RateRow[]> = byStaff(rr);
     const ids = evs.map((e) => e.id); const [drv, inv] = await Promise.all([driversBy(ids), invoicesFor(ids)]);
@@ -22,7 +23,11 @@ export function PayPeriod() {
     const past = inCur.filter((e) => e.event_date <= today);
     const rows = past.filter((e) => invBy[e.id]).map((e) => ({ e, c: cost(e), inv: invBy[e.id] as Invoice })).sort((a, b) => b.e.event_date.localeCompare(a.e.event_date));
     const unsent = past.filter((e) => !invBy[e.id] && e.shifts.some((s) => s.punches?.punch_in)).length;
-    setD({ cur, so, ahead, last, rows, unsent });
+    // push 71 · new hires who worked (this or last period) but we don't have everything to pay them
+    const miss = new Map<string, { name: string; what: string }>();
+    for (const e of evs) for (const sh of e.shifts) { const id = sh.staff_id as string | undefined; if (!id || !sh.punches?.punch_in || miss.has(id)) continue;
+      const m = missingFor(nh[id]).filter((x) => x !== 'handbook'); if (m.length) miss.set(id, { name: sh.staff?.full_name ?? '?', what: missingText(m) }); }
+    setD({ miss: [...miss.values()], cur, so, ahead, last, rows, unsent });
   })().catch(() => setNone(true)); }, []);
   if (none) return <div className="adm-card muted sm">Pay rates aren't in the app yet.</div>;
   if (!d) return <div className="muted">Loading…</div>;
@@ -38,6 +43,7 @@ export function PayPeriod() {
         <div><small>BOOKED AHEAD</small><b className="serif dim">+ {money(d.ahead.cost)}</b><span className="muted sm">to {dLabel(d.cur.end, { month: 'short', day: 'numeric' })}</span></div>
         <div><small>EST. TOTAL</small><b className="serif">≈ {money(est)}</b><span className="muted sm">last period {money(d.last.cost)}</span></div>
       </div>
+      {d.miss.length > 0 && <div className="pay-miss"><b>Before you pay</b>{d.miss.map((m) => <span key={m.name}>{m.name} worked, but we have {m.what}</span>)}</div>}
       <div className="pp-bar"><i style={{ width: `${est ? (d.so.cost / est) * 100 : 0}%` }} /></div>
       <div className="pp-split">
         {([['Floor', d.so.floor], ['Bar', d.so.bar], ['MDs + BMs', d.so.mgr], ['Gas + travel', d.so.gas + d.so.travel]] as [string, number][]).map(([l, v]) => <div key={l}><span>{l}</span><b>{money(v)}</b></div>)}

@@ -216,7 +216,8 @@ export function OnboardingList({ rows, all }: { rows: ObRow[]; all?: boolean }) 
         const where = !r.setup ? 'set up' : !r.hb_done_at ? 'handbook' : r.paid_by === 'payroll' && !r.tax_done_at ? 'tax & pay' : '';
         return (
           <div key={r.staff_id} className={'ob-row' + (stuck ? ' stuck' : '')}>
-            <span className="grow"><b>{r.staff?.full_name ?? '—'}</b><small className="muted">{obOpen(r) ? `${stuck ? 'stuck on' : 'on'} ${where} · accepted ${d === 0 ? 'today' : d + ' day' + (d > 1 ? 's' : '') + ' ago'}` : '✓ ready'} · {r.paid_by}</small></span>
+            <span className="grow"><b>{r.staff?.full_name ?? '—'}</b>{obOpen(r) && (() => { const tot = n + (r.paid_by === 'payroll' ? 2 : 0) + 1; const dn = (r.hb_done_at ? n : read) + (r.paid_by === 'payroll' && r.tax_done_at ? 2 : 0) + (r.setup ? 1 : 0);
+              return <span className="nh-bar" style={{ margin: '4px 0', maxWidth: 220 }}><i style={{ width: Math.round((dn / tot) * 100) + '%' }} /></span>; })()}<small className="muted">{obOpen(r) ? `${stuck ? 'stuck on' : 'on'} ${where} · accepted ${d === 0 ? 'today' : d + ' day' + (d > 1 ? 's' : '') + ' ago'}` : '✓ ready'} · {r.paid_by}</small></span>
             <span className="ob-steps">
               <i className={r.setup ? 'ok' : ''}>Set up</i>
               <i className={r.hb_done_at ? 'ok' : read ? 'mid' : ''}>Handbook {r.hb_done_at ? '✓' : `${read}/${n}`}</i>
@@ -281,8 +282,20 @@ type Tax = { first_name: string | null; middle_name: string | null; last_name: s
   qb_status: 'sending' | 'done' | 'error' | null; qb_vendor_id: string | null; qb_note: string | null; qb_at: string | null };
 export function TaxCard({ staffId }: { staffId: string }) {
   const [t, setT] = useState<Tax | null>(null); const [show, setShow] = useState(false); const [tick, setTick] = useState(0);
-  useEffect(() => { supabase.from('staff_tax').select('*').eq('staff_id', staffId).maybeSingle().then(({ data }) => setT((data as Tax) ?? null)); }, [staffId, tick]);
-  if (!t) return null;
+  const [ob, setOb] = useState<{ paid_by: string; hb_done_at: string | null; payroll_status: string | null; payroll_for: string | null; level: string | null; table_ok_at: string | null } | null>(null);
+  useEffect(() => { supabase.from('staff_tax').select('*').eq('staff_id', staffId).maybeSingle().then(({ data }) => setT((data as Tax) ?? null));
+    supabase.from('staff_onboarding').select('paid_by,hb_done_at,payroll_status,payroll_for,level,table_ok_at').eq('staff_id', staffId).maybeSingle().then(({ data }) => setOb(data ?? null)); }, [staffId, tick]);
+  // push 71 · booked before the paperwork: what's still missing (stays flagged until pay)
+  const obLine = ob && <>{ob.payroll_status && <span className="muted sm">Payroll sheet: {ob.payroll_status === 'done' ? '✓ added' : ob.payroll_status === 'sending' ? `adding (${ob.payroll_for ?? ''} pay period)` : 'not added, see Today'}</span>}
+    {(ob.level ?? '').toUpperCase() === 'JUNIOR' && <span className="row" style={{ gap: 8, alignItems: 'center' }}><span className="muted sm">{ob.table_ok_at ? 'Junior · table service OK' : 'Junior · cocktail dînatoire + canapés only'}</span>
+      <button className="lnk sm" onClick={async () => { await supabase.from('staff_onboarding').update({ table_ok_at: ob.table_ok_at ? null : new Date().toISOString() }).eq('staff_id', staffId); setTick((x) => x + 1); }}>{ob.table_ok_at ? 'Back to cocktail only' : 'Add table service'}</button></span>}</>;
+  if (!t) return ob ? (
+    <div className="adm-card stack" style={{ gap: 8 }}>
+      <span className="kick">TAX AND PAY · ONLY YOU SEE THIS</span>
+      {ob.paid_by === 'payroll' ? <div className="pay-miss"><b>Not sent yet</b><span>No SIN · no void cheque / PayPal · no address{ob.hb_done_at ? '' : ' · handbook not done'}. You can still book them; it's flagged before pay.</span></div>
+        : <span className="muted sm">Paid cash · no tax and pay needed.{ob.hb_done_at ? '' : ' Handbook not done.'}</span>}
+      {obLine}
+    </div>) : null;
   const open = async (path: string | null) => { if (!path) return; const w = window.open('', '_blank'); const { data } = await supabase.storage.from('tax-docs').createSignedUrl(path, 600); if (data && w) w.location.href = data.signedUrl; else w?.close(); };
   const up = (x: string | null | undefined) => (x ?? '').toUpperCase();
   const name = up([t.first_name, t.middle_name, t.last_name].filter(Boolean).join(' ') || t.legal_name);
@@ -306,10 +319,11 @@ export function TaxCard({ staffId }: { staffId: string }) {
         {t.sin_card_path && <button className="abtn sm" onClick={() => open(t.sin_card_path)}>Open SIN card</button>}
       </div>
       {t.qb_status === null && <div className="row" style={{ gap: 10, alignItems: 'center' }}><button className="abtn dark" onClick={() => setQb('sending')}>Add to QuickBooks</button><span className="muted sm">Supplier · ALL CAPS · T4A on · Individual</span></div>}
-      {t.qb_status === 'sending' && <div className="cu-box amber"><span>Sending to QuickBooks · done within the hour (it checks for a duplicate first). <button className="lnk" onClick={() => setQb(null)}>Cancel</button></span></div>}
+      {t.qb_status === 'sending' && <div className="cu-box amber"><span>Sending to QuickBooks · done by 8 AM (it checks for a duplicate first). <button className="lnk" onClick={() => setQb(null)}>Cancel</button></span></div>}
       {t.qb_status === 'error' && <div className="cu-box amber"><b>QuickBooks didn’t take it</b><span>{t.qb_note}</span><button className="abtn sm" style={{ alignSelf: 'flex-start' }} onClick={() => setQb('sending')}>Try again</button></div>}
       {t.qb_status === 'done' && <div className="cu-box ok"><b>✓ In QuickBooks{t.qb_vendor_id ? ` · supplier #${t.qb_vendor_id}` : ''}</b>
         <span>{t.qb_note ?? 'T4A on.'} {t.qb_vendor_id && <a href={`https://qbo.intuit.com/app/vendordetail?nameId=${t.qb_vendor_id}`} target="_blank" rel="noreferrer">Open in QuickBooks ↗</a>}</span></div>}
+      {obLine}
     </div>
   );
 }

@@ -10,6 +10,7 @@ import { needsSend, liveShift, doesBar, eventsBetween, allStaff, addDays, isoDay
 import { misfits, linksOf, other, condShort, RuleIcons, outOfArea, areasOf, type SLink, type SCond } from './rules';
 import { loadScoreData, scoreOf, type ScoreData } from './score';
 import { overBy } from './NightOff';
+import { useNewHires, juniorClash, missingFor, missingText } from '../lib/newHires'; // push 71
 import { locksBetween, setLock, lockTitle, NO_LOCKS, type Locks } from './locks';
 
 /* Push 23 · Bookings (admin). Practice mode by default: every change lives in a draft (booking_drafts) layered
@@ -71,6 +72,7 @@ export function Bookings() {
   const [links, setLinks] = useState<[string, string][]>([]); const [conds, setConds] = useState<Cond[]>([]);
   const [rl, setRl] = useState<SLink[]>([]); const [clients, setClients] = useState<Client[]>([]); const [venues, setVenues] = useState<Venue[]>([]);
   const [sd, setSd] = useState<ScoreData | null>(null); const [warns, setWarns] = useState<Warn[]>([]);
+  const nh = useNewHires(); // push 71 · Junior = cocktail only · missing tax & pay
   const [shifts30, setShifts30] = useState<Record<string, number>>({}); const [yesRate, setYesRate] = useState<Record<string, number>>({});
   const [base, setBase] = useState<Record<string, Pl[]>>({});
   const [draft, setDraft] = useState<Record<string, Draft>>({});
@@ -189,6 +191,9 @@ export function Bookings() {
       out.push({ key: 'ap' + x, cls: 'red', text: <><b>{f(sid)} + {f(x)}</b> are kept apart{why ? ` (${why})` : ''}. Book anyway?</> });
     }
     for (const m of misfits(sid, e, { conds, clients, venues, big: isBig(d) })) out.push({ key: m.kind, cls: 'gold', text: <><b>{f(sid)}</b> {m.text}.</> });
+    { const jc = juniorClash(nh[sid], e.event_type); // push 71
+      if (jc) out.push({ key: 'jr', cls: 'gold', text: <><b>{f(sid)}</b> is Junior · cocktail dînatoire + canapés only{jc === 'unknown' ? ' (this event has no type set)' : ` · this is ${e.event_type}`}. Book anyway?</> });
+      const ms = missingFor(nh[sid]); if (ms.length) out.push({ key: 'tx', cls: 'gold', text: <><b>{f(sid)}</b> is new · {missingText(ms)} yet. You can book; it stays flagged before pay.</> }); }
     for (const x of partnerOf(sid)) if (!pl.some((p) => p.staff_id === x) && av.some((a) => a.staff_id === x && a.status === 'yes') && !off.has(x + d)) {
       out.push({ key: 'tg' + x, cls: 'ok', text: <><b>{f(x)}</b> works well with {f(sid)} · said yes to this date. <button className="lnk" onClick={() => { place(d, x, { event_id: e.id, start: pl.find((p) => p.staff_id === sid)?.start ?? (e.start_time ?? '17:00').slice(0, 5) }); setWarns((w) => w.filter((y) => y.key !== 'tg' + x)); }}>Add {f(x)}</button></> });
     }

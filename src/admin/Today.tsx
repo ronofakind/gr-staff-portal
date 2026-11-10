@@ -1,4 +1,5 @@
 import { areaFromPostal } from './rules';
+import { NewHireNeeds } from './NewHireNeeds';
 import { useEffect, useState } from 'react';
 import { DebriefCards, RecentDebriefs, useRecentDebriefs } from '../components/Debrief';
 import { MiniMonth } from './MiniMonth';
@@ -48,7 +49,7 @@ export function Today() {
   const [lm, setLm] = useState<{ e: AEvent; s: AShift }[]>([]); const [mgrs, setMgrs] = useState<Record<string, string>>({});
   const [lateBy, setLateBy] = useState<Record<string, { eta: string; reason: string | null }>>({});
   const [cutBy, setCutBy] = useState<Record<string, string>>({}); // push 64 · asked to be first cut
-  const [tick, setTick] = useState(0);
+  const [tick, setTick] = useState(0); const [nhN, setNhN] = useState(0); // push 71
   // push 47 · Can't make it / Not confirmed → Find replacement
   const [late, setLate] = useState<Late[]>([]); const [seen, setSeen] = useState<Record<string, string | null>>({}); const [nudged, setNudged] = useState<Record<string, string>>({});
   const [asks, setAsks] = useState<AdminAsk[]>([]);
@@ -328,7 +329,7 @@ export function Today() {
   const deb = useRecentDebriefs(tonightIds, tick);
   const nEv = new Set(tonight.map((e) => e.title)).size;
   const next7 = Array.from({ length: 7 }, (_, i) => addDays(today, i));
-  const needsN = shown.length + askNeeds.length + lm.length + (late.length ? 1 : 0);
+  const needsN = nhN + shown.length + askNeeds.length + lm.length + (late.length ? 1 : 0);
   const gone = (ids: string[]) => { setWeek((v) => (v ?? []).filter((x) => !ids.includes(x.id))); setAhead((v) => v.filter((x) => !ids.includes(x.id))); };
   const doneV = (e: AEvent) => !!e.hours_submitted_at;
   const tonightSorted = [...tonight].sort((a, b) => Number(doneV(a)) - Number(doneV(b)) || a.title.localeCompare(b.title) || (a.department === 'bar' ? 1 : -1));
@@ -339,6 +340,7 @@ export function Today() {
       <Section k="needs" mode={md('needs')} title={<>Needs you {needsN > 0 && <b className="accent sm">{needsN}</b>}</>}
         right={<span className="row" style={{ gap: 8 }}>{archivedToday.length > 0 && <button className="lnk sm" onClick={() => setShowArch(!showArch)}>Archived ({archivedToday.length})</button>}{shown.length > 0 && <button className="abtn sm" onClick={() => archive(shown)}>{ARCH_ICON} All</button>}</span>}>
         <NicknameCards />
+        <NewHireNeeds tick={tick} onCount={setNhN} />{/* push 71 */}
         {lm.map(({ e, s }) => <CantMakeIt key={s.id} e={e} s={s} mgr={e.manager_id ? mgrs[e.manager_id] ?? null : null} ask={asks.find((a) => a.kind === 'fill' && a.status === 'open' && a.replace_for === s.id)} onFind={() => setRep({ s, e })} onChanged={() => setTick((t) => t + 1)} />)}
         <NotConfirmed rows={late} seen={seen} nudged={nudged} asks={asks} onReplace={(r) => setRep({ s: r.s, e: r.e })} onChanged={() => setTick((t) => t + 1)} />
         {askNeeds.map((a) => <AskNeed key={a.id} a={a} onChanged={() => setTick((t) => t + 1)} />)}

@@ -14,6 +14,7 @@ import { useEventLayout, EditEventLayout, type BlockKey } from './EventLayout';
 import { loadRules, outOfArea, type SCond } from './rules';
 import { setting } from '../lib/settings';
 import { AlsoWorking, type OtherShift } from './alsoWorking';
+import { loadNewHires, juniorClash } from '../lib/newHires'; // push 71
 import { takeAiApply, endLabelFor, hhmm, AI_APPLY_KEY, type AApply } from './EmailReview';
 
 export const MEN: [string, string][] = [['white_shirt', 'White dress shirt'], ['black_shirt', 'Black dress shirt'], ['black_tshirt', 'Black T-shirt']];
@@ -485,6 +486,8 @@ export function EventForm() {
       .filter((s) => dept === 'bar' || (tierOf(s) && tiers.includes(tierOf(s)!)))
       .filter((s) => !day.avail[s.id] && !day.booked[s.id] && !day.off.has(s.id) && !day.weeklyNo.has(s.id) && !lines.some((l) => l.names.includes(s.id)))
       .filter((s) => !outOfArea(s.id, { event_date: d, venue_id: venueId, event_private: { client_id: clientId || null, client: client?.name ?? null } } as unknown as Parameters<typeof outOfArea>[1], areaCtx)); // push 63
+    const nhs = await loadNewHires(); const pool2 = pool.filter((s) => juniorClash(nhs[s.id], eventType || null) !== 'no'); // push 71 · Juniors: cocktail only
+    pool.length = 0; pool.push(...pool2);
     const { data: prev } = await supabase.from('avail_asks').select('tiers_sent').eq('for_date', d).eq('department', dept).maybeSingle();
     const { data: a, error } = await supabase.from('avail_asks').upsert({
       for_date: d, department: dept, label: 'Evening event', approx_start: start, staff_needed: needed, show_times: showTimes && timesOk,
