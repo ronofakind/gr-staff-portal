@@ -4360,3 +4360,6 @@ a.ch-name-link { display: block; text-decoration: none; color: inherit; } a.ch-n
 @media (prefers-reduced-motion: reduce) { .cmg-ask { animation: none; box-shadow: 0 0 10px 1px rgba(155,34,38,.25); } }
 .cmg-mtg { box-shadow: inset 4px 0 0 #6B64D8, 0 1px 2px rgba(26,23,20,.06), 0 8px 24px rgba(26,23,20,.08); }
 .cmg-more { background: var(--ink); color: #F6F2EC; border: 0; }
+/* Nov 11 · symmetry: time, role and uniform icon share one 28 px line, centered */
+.cmg-strip b, .cmg-wear { height: 28px; line-height: 28px; display: flex; align-items: center; justify-content: center; }
+.cmg-wear img { display: block; }
