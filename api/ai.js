@@ -39,7 +39,10 @@ export default async function handler(req, res) {
       // push 71 · first gig → payroll sheet: new hires Ronnie said Yes to (staff_onboarding.payroll_status = 'sending')
       const pr = await get('staff_onboarding?payroll_status=eq.sending&select=staff_id,payroll_for,staff:staff!staff_onboarding_staff_id_fkey(full_name)');
       const payroll = pr.map((r) => ({ staff_id: r.staff_id, name: r.staff?.full_name ?? null, gig_date: r.payroll_for }));
-      return res.json({ vendors: rows, payroll });
+      // push 79e · approved expenses not yet copied to the payroll sheet
+      const ex = await get('expenses?status=eq.approved&sheet_status=is.null&select=id,kind,amount,exp_date,staff:staff!expenses_staff_id_fkey(full_name)&order=exp_date&limit=50');
+      const expenses = ex.map((e) => ({ id: e.id, name: e.staff?.full_name ?? null, kind: e.kind, amount: Number(e.amount), date: e.exp_date }));
+      return res.json({ vendors: rows, payroll, expenses });
     }
 
     // Nov 8 · push 55b · AI first read of new applications. GET ?apps=1 → new ones not read yet, with a 1-hour CV link.
@@ -145,6 +148,16 @@ export default async function handler(req, res) {
           if (r.ok) payroll++;
         }
       }
+      // push 79e · expenses copied to the payroll sheet: { expenses: [{ id, status: 'done'|'error', note }] }
+      let expenses = 0;
+      if (Array.isArray(body.expenses)) {
+        for (const v of body.expenses.slice(0, 50)) {
+          if (!/^[0-9a-f-]{36}$/i.test(v?.id || '') || !['done', 'error'].includes(v.status)) continue;
+          const r = await fetch(`${URL_}/rest/v1/expenses?id=eq.${v.id}&status=eq.approved`, { method: 'PATCH', headers: H({ Prefer: 'return=minimal' }),
+            body: JSON.stringify({ sheet_status: v.status, sheet_note: s(v.note, 300), sheet_at: new Date().toISOString() }) });
+          if (r.ok) expenses++;
+        }
+      }
       let added = 0;
       if (rows.length) {
         const r = await fetch(`${URL_}/rest/v1/ai_items?on_conflict=dedupe_key`, { method: 'POST', headers: H({ Prefer: 'resolution=ignore-duplicates,return=representation' }), body: JSON.stringify(rows) });
@@ -152,7 +165,7 @@ export default async function handler(req, res) {
         added = (await r.json()).length;
       }
       if (body.checked) await fetch(`${URL_}/rest/v1/ai_settings?id=eq.1`, { method: 'PATCH', headers: H(), body: JSON.stringify({ inbox_checked_at: new Date().toISOString() }) });
-      return res.json({ added, skipped: rows.length - added, invoices, reads, vendors, payroll });
+      return res.json({ added, skipped: rows.length - added, invoices, reads, vendors, payroll, expenses });
     }
     return res.status(405).json({ error: 'GET or POST' });
   } catch (e) {
