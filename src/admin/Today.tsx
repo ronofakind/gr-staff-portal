@@ -1,5 +1,9 @@
-import { siteOrigin } from '../lib/native';
 import { areaFromPostal } from './rules';
+import { NewHireNeeds } from './NewHireNeeds';
+import { PendingBar, UnseenNeeds, UnseenRides } from './SendBox'; // push 72 · 73
+import { ExpenseNeeds } from './Expenses';
+import { MeetingNotesNeeds } from './MeetingNotesNeeds';
+import { ReferralNeeds } from './ReferralNeeds'; // push 75
 import { useEffect, useState } from 'react';
 import { DebriefCards, RecentDebriefs, useRecentDebriefs } from '../components/Debrief';
 import { MiniMonth } from './MiniMonth';
@@ -49,7 +53,7 @@ export function Today() {
   const [lm, setLm] = useState<{ e: AEvent; s: AShift }[]>([]); const [mgrs, setMgrs] = useState<Record<string, string>>({});
   const [lateBy, setLateBy] = useState<Record<string, { eta: string; reason: string | null }>>({});
   const [cutBy, setCutBy] = useState<Record<string, string>>({}); // push 64 · asked to be first cut
-  const [tick, setTick] = useState(0);
+  const [tick, setTick] = useState(0); const [nhN, setNhN] = useState(0); const [unN, setUnN] = useState(0); const [rdN, setRdN] = useState(0); const [rfN, setRfN] = useState(0); const [exN, setExN] = useState(0); const [mnN, setMnN] = useState(0); // push 71 · 72 · 73 · 75 · 79 · 80
   // push 47 · Can't make it / Not confirmed → Find replacement
   const [late, setLate] = useState<Late[]>([]); const [seen, setSeen] = useState<Record<string, string | null>>({}); const [nudged, setNudged] = useState<Record<string, string>>({});
   const [asks, setAsks] = useState<AdminAsk[]>([]);
@@ -200,7 +204,7 @@ export function Today() {
             if (!st.email) { alert(`${fn} has no email. Add it on their profile first.`); return; }
             if (!confirm(`Email a reset code + link to ${st.email}?`)) return;
             // Same email as "Forgot your code?" on the sign-in screen (6-digit code + link → choose a new code).
-            const { error } = await supabase.auth.signInWithOtp({ email: st.email, options: { shouldCreateUser: false, emailRedirectTo: siteOrigin() } });
+            const { error } = await supabase.auth.signInWithOtp({ email: st.email, options: { shouldCreateUser: false, emailRedirectTo: window.location.origin } });
             if (error) { alert(error.message); return; }
             await supabase.from('reset_requests').update({ handled_at: new Date().toISOString(), handled_by: (await supabase.rpc('me')).data ?? null }).eq('id', r.id);
             setTick((t) => t + 1);
@@ -281,12 +285,12 @@ export function Today() {
       if (!naErr) { const vs = new Map<string, string>(); for (const r of (na ?? []) as unknown as { venues: { id: string; name: string; postal_code: string | null } }[]) if (!areaFromPostal(r.venues.postal_code)) vs.set(r.venues.id, r.venues.name);
         if (vs.size) n.push({ key: 'area-venues', title: `${vs.size} venue${vs.size === 1 ? ' has' : 's have'} no area`, sub: [...vs.values()].slice(0, 4).join(' · ') + (vs.size > 4 ? ' …' : '') + ' · needed for “only these areas” staff', action: 'Set them', to: '/admin/venues' }); }
       // push 61 · 5 days out: anything still missing from the client (start times TBC, venue, guest count) → Ask client
-      const { data: mi, error: miErr } = await supabase.from('events').select('id,event_date,title,department,start_tbc,details_pending,guests,created_at').gte('event_date', today).lte('event_date', addDays(today, 5)).order('event_date');
+      const { data: mi, error: miErr } = await supabase.from('events').select('id,event_date,title,department,start_tbc,details_pending,guests,guests_final,created_at').gte('event_date', today).lte('event_date', addDays(today, 5)).order('event_date');
       if (!miErr) {
         const byKey = new Map<string, { id: string; date: string; title: string; miss: Set<string> }>();
-        for (const e of (mi ?? []) as { id: string; event_date: string; title: string; department: string; start_tbc: boolean | null; details_pending: boolean | null; guests: number | null; created_at: string }[]) {
+        for (const e of (mi ?? []) as { id: string; event_date: string; title: string; department: string; start_tbc: boolean | null; details_pending: boolean | null; guests: number | null; guests_final?: boolean; created_at: string }[]) {
           // guest count is only asked on events made from push 61 on (older ones never had it filled)
-          const miss = [...(e.start_tbc ? ['start times'] : []), ...(e.details_pending ? ['venue / address'] : []), ...(e.guests == null && e.created_at >= '2026-11-09T22:00:00Z' ? ['final guest count'] : [])];
+          const miss = [...(e.start_tbc ? ['start times'] : []), ...(e.details_pending ? ['venue / address'] : []), ...(!e.guests_final && e.created_at >= '2026-11-09T22:00:00Z' ? ['final guest count'] : [])];
           if (!miss.length) continue;
           const k = e.event_date + '|' + (e.details_pending ? e.id : e.title);
           const cur = byKey.get(k) ?? { id: e.id, date: e.event_date, title: e.details_pending ? 'Venue to come' : e.title, miss: new Set<string>() };
@@ -329,7 +333,7 @@ export function Today() {
   const deb = useRecentDebriefs(tonightIds, tick);
   const nEv = new Set(tonight.map((e) => e.title)).size;
   const next7 = Array.from({ length: 7 }, (_, i) => addDays(today, i));
-  const needsN = shown.length + askNeeds.length + lm.length + (late.length ? 1 : 0);
+  const needsN = nhN + unN + rdN + rfN + exN + mnN + shown.length + askNeeds.length + lm.length + (late.length ? 1 : 0);
   const gone = (ids: string[]) => { setWeek((v) => (v ?? []).filter((x) => !ids.includes(x.id))); setAhead((v) => v.filter((x) => !ids.includes(x.id))); };
   const doneV = (e: AEvent) => !!e.hours_submitted_at;
   const tonightSorted = [...tonight].sort((a, b) => Number(doneV(a)) - Number(doneV(b)) || a.title.localeCompare(b.title) || (a.department === 'bar' ? 1 : -1));
@@ -340,6 +344,13 @@ export function Today() {
       <Section k="needs" mode={md('needs')} title={<>Needs you {needsN > 0 && <b className="accent sm">{needsN}</b>}</>}
         right={<span className="row" style={{ gap: 8 }}>{archivedToday.length > 0 && <button className="lnk sm" onClick={() => setShowArch(!showArch)}>Archived ({archivedToday.length})</button>}{shown.length > 0 && <button className="abtn sm" onClick={() => archive(shown)}>{ARCH_ICON} All</button>}</span>}>
         <NicknameCards />
+        <NewHireNeeds tick={tick} onCount={setNhN} />{/* push 71 */}
+        <PendingBar tick={tick} onSent={() => setTick((x) => x + 1)} />
+        <UnseenNeeds tick={tick} onCount={setUnN} />{/* push 72 */}
+        <UnseenRides tick={tick} onCount={setRdN} />{/* push 73 */}
+        <ReferralNeeds tick={tick} onCount={setRfN} />{/* push 75 */}
+        <ExpenseNeeds tick={tick} onCount={setExN} />{/* push 79 */}
+        <MeetingNotesNeeds tick={tick} onCount={setMnN} />{/* push 80 */}
         {lm.map(({ e, s }) => <CantMakeIt key={s.id} e={e} s={s} mgr={e.manager_id ? mgrs[e.manager_id] ?? null : null} ask={asks.find((a) => a.kind === 'fill' && a.status === 'open' && a.replace_for === s.id)} onFind={() => setRep({ s, e })} onChanged={() => setTick((t) => t + 1)} />)}
         <NotConfirmed rows={late} seen={seen} nudged={nudged} asks={asks} onReplace={(r) => setRep({ s: r.s, e: r.e })} onChanged={() => setTick((t) => t + 1)} />
         {askNeeds.map((a) => <AskNeed key={a.id} a={a} onChanged={() => setTick((t) => t + 1)} />)}

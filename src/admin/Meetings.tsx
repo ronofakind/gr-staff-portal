@@ -98,6 +98,7 @@ export function MeetingForm() {
   const [staff, setStaff] = useState<AStaff[]>([]);
   const [events, setEvents] = useState<EvLite[]>([]);
   const [f, setF] = useState({ title: '', date: '', start: '11:00', dur: 60, place: 'teams' as PlaceKind, link: '', address: '', about: '' });
+  const [md, setMd] = useState<string>(''); // push 80 · Ronnie picks the meeting MD
   const [inv, setInv] = useState<string[]>([]); const [evIds, setEvIds] = useState<string[]>(sp.get('event') ? [sp.get('event')!] : []);
   const [q, setQ] = useState(''); const [pick, setPick] = useState(false);
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false); const [loaded, setLoaded] = useState(!id);
@@ -111,7 +112,7 @@ export function MeetingForm() {
       const p = data as MeetingPage | null; if (!p) { setErr('Meeting not found.'); return; }
       const m = p.meeting;
       setF({ title: m.title, date: dayOfMtl(m.starts_at), start: hm24(m.starts_at), dur: m.duration_min, place: m.place_kind, link: m.link ?? '', address: m.address ?? '', about: m.about ?? '' });
-      setInv(p.invites.map((i) => i.staff_id)); setEvIds(p.events.map((e) => e.id)); setLoaded(true);
+      setInv(p.invites.map((i) => i.staff_id)); setEvIds(p.events.map((e) => e.id)); setMd(m.md_id ?? ''); setLoaded(true);
     });
   }, [id]);
 
@@ -134,6 +135,7 @@ export function MeetingForm() {
       p_id: id ?? null, p_title: f.title, p_starts_at: mtlIso(f.date, f.start), p_duration_min: f.dur, p_place_kind: f.place,
       p_link: f.place === 'in_person' ? null : f.link, p_address: f.place === 'in_person' ? f.address : null, p_about: f.about, p_invite: inv, p_events: evIds,
     });
+    if (!error) { const e2 = await supabase.rpc('admin_set_meeting_md', { p_meeting: data as string, p_md: md && inv.includes(md) ? md : null }); if (e2.error) { setBusy(false); setErr(e2.error.message); return; } }
     setBusy(false);
     if (error) { setErr(error.message); return; }
     nav(`/admin/meeting/${data as string}`, { replace: true });
@@ -151,7 +153,7 @@ export function MeetingForm() {
           <div className="mtg-f"><small>START</small><QuarterTime className="mtg-in qt" value={f.start} onChange={(v) => set('start', v)} label="Start" /></div>
         </div>
         <div className="mtg-f"><small>HOW LONG</small><div className="seg">{LENGTHS.map((l) => <button key={l.min} className={f.dur === l.min ? 'on' : ''} onClick={() => set('dur', l.min)}>{l.label}</button>)}</div>
-          <span className="muted sm">Paid hours = this length from the start, for everyone who says Coming.</span></div>
+          <span className="muted sm">Paid hours = this length from the start, for everyone who says Coming (or In → Out when the MD clocks people).</span></div>
         <div className="mtg-f"><small>WHERE</small><div className="seg">{PLACES.map((p) => <button key={p.k} className={f.place === p.k ? 'on' : ''} onClick={() => set('place', p.k)}>{p.label}</button>)}</div></div>
         {f.place === 'in_person'
           ? <div className="mtg-f"><small>ADDRESS</small><AddressInput className="mtg-in" value={f.address} onChange={(v) => set('address', v)} onPick={(p) => set('address', p.formatted)} placeholder="Street, city" /></div>
@@ -173,6 +175,13 @@ export function MeetingForm() {
             <span className="muted sm">Lists managers, MDs, bar managers and 2ICs (role or position on their profile).</span>
           </div>}
         </div>
+
+        {inv.length > 0 && <div className="mtg-f"><small>MEETING MD · CLOCKS PEOPLE IN / OUT</small>
+          <select className="mtg-in" value={inv.includes(md) ? md : ''} onChange={(e) => setMd(e.target.value)}>
+            <option value="">No MD (everyone Coming is paid for the set length)</option>
+            {inv.map((sid) => <option key={sid} value={sid}>{staff.find((x) => x.id === sid)?.full_name ?? nameOf(sid)}</option>)}
+          </select>
+          <span className="muted sm">The MD taps In / Out for each person on the call. Paid from In to Out, 15-min rounding, no 4-hour minimum.</span></div>}
 
         <div className="mtg-f"><small>FOR THIS EVENT (OPTIONAL)</small>
           {evIds.map((eid) => { const e = events.find((x) => x.id === eid); return (
@@ -324,4 +333,29 @@ function PaidHours({ m, hours, onSaved }: { m: MeetingRow; hours: MeetingHours[]
       {err && <p className="error">{err}</p>}
     </div>
   </>);
+}
+
+/** push 80 · Bookings: the day's meetings (Teams colour) with the MD and who's coming. "+ Add" = edit the invite list. */
+export function BookingsMeetings({ date }: { date: string }) {
+  const [list, setList] = useState<MeetingPage[]>([]);
+  useEffect(() => { (async () => {
+    const ms = await meetingsBetween(date, date);
+    const pages = await Promise.all(ms.map((m) => supabase.rpc('meeting_page', { p_meeting: m.id }).then(({ data }) => data as MeetingPage | null)));
+    setList(pages.filter(Boolean) as MeetingPage[]);
+  })(); }, [date]);
+  if (!list.length) return null;
+  return <>{list.map((p) => {
+    const m = p.meeting; const md = p.invites.find((i) => i.staff_id === m.md_id);
+    return (
+      <div key={m.id} className="bk-mtg">
+        <div className="bk-mtg-top"><Link to={`/admin/meeting/${m.id}`}><b>📹 Meeting · {m.title}</b></Link><span className="bk-mtg-when">{placeName(m).toUpperCase()} · {t12(m.starts_at)} · {lengthLabel(m.duration_min)}</span></div>
+        {p.events.length > 0 && <small className="muted">About: {p.events.map((e) => `${e.title} · ${dayShort(e.event_date + 'T12:00:00')}`).join(' · ')}</small>}
+        <div className="bk-mtg-ppl">
+          {md && <span className="bk-mtg-p"><b>MD</b> {md.full_name}</span>}
+          {p.invites.filter((i) => i.staff_id !== m.md_id).map((i) => <span key={i.staff_id} className={'bk-mtg-p' + (i.answer === 'cant' ? ' no' : '')}>{i.full_name}{i.answer === 'coming' ? ' ✓' : i.answer === 'cant' ? ' · can’t' : ''}</span>)}
+          {!md && <Link className="bk-mtg-p add" to={`/admin/meeting/${m.id}/edit`}>Pick the MD</Link>}
+          <Link className="bk-mtg-p add" to={`/admin/meeting/${m.id}/edit`}>+ Add</Link>
+        </div>
+      </div>);
+  })}</>;
 }

@@ -1,5 +1,3 @@
-import { Capacitor } from '@capacitor/core';
-
 /**
  * Push 31b step 6 · Add G&R to the Home Screen.
  * Imported first thing in main.tsx so Android Chrome's `beforeinstallprompt` is caught before the check-up renders.
@@ -27,15 +25,17 @@ export async function promptInstall(): Promise<boolean> {
 
 const ua = () => (typeof navigator === 'undefined' ? '' : navigator.userAgent || '');
 /** Running from the Home Screen icon (installed). */
+/** Inside the App Store / Google Play app (it opens this site; the native bridge sets window.Capacitor). */
+export const isNativeApp = () => !!(typeof window !== 'undefined' && (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.());
 export const isStandalone = () =>
-  Capacitor.isNativePlatform() || // the store app counts as installed
+  isNativeApp() ||
   (typeof window !== 'undefined' && window.matchMedia?.('(display-mode: standalone)').matches) ||
   (typeof navigator !== 'undefined' && (navigator as Navigator & { standalone?: boolean }).standalone === true);
 export const isIOS = () => /iPhone|iPad|iPod/i.test(ua()) || (/Macintosh/.test(ua()) && typeof navigator !== 'undefined' && navigator.maxTouchPoints > 1);
 export const isAndroid = () => /Android/i.test(ua());
 export const isPhone = () => isIOS() || isAndroid();
 /** WhatsApp / Instagram / Facebook / Messenger / Line … in-app browsers can't install a web app. */
-export const isInAppBrowser = () => !Capacitor.isNativePlatform() && /FBAN|FBAV|FB_IAB|FBIOS|Instagram|WhatsApp|Messenger|MessengerForiOS|\bLine\/|MicroMessenger|Snapchat|TikTok|musical_ly|LinkedInApp|GSA\/|; wv\)/i.test(ua());
+export const isInAppBrowser = () => !isNativeApp() && /FBAN|FBAV|FB_IAB|FBIOS|Instagram|WhatsApp|Messenger|MessengerForiOS|\bLine\/|MicroMessenger|Snapchat|TikTok|musical_ly|LinkedInApp|GSA\/|; wv\)/i.test(ua());
 
 /** Android: open this page in Chrome from an in-app browser. */
 export const chromeIntentUrl = () => {

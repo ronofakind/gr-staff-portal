@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { PendingBar, StartLabelGuard } from './SendBox'; // push 72
 import { Link, useSearchParams } from 'react-router-dom';
 import { DeptTag } from './DeptTag';
 import { supabase } from '../lib/supabase';
@@ -94,10 +95,9 @@ export function Day() {
     await bookingChange('removed', { staff_id: sh.staff_id, shift_id: sh.id, from: info(from, hm(sh.planned_start)) });
   });
   const setLeave = (e: AEvent, sh: AShift, t: string) => run(async () => { await supabase.from('shifts').update({ leave_by: t ? endIso(e.event_date, hm(sh.planned_start), t) : null }).eq('id', sh.id); });
-  const sendFor = (list: AEvent[]) => run(async () => {
-    const ids = list.flatMap((e) => e.shifts.filter((s) => s.status !== 'declined' && needsSend(s)).map((s) => s.id));
-    if (ids.length) await supabase.from('shifts').update({ notified_at: new Date().toISOString() }).in('id', ids);
-  });
+  const [guardIds, setGuardIds] = useState<string[] | null>(null); // push 72 · no start time → rough label first
+  const sendFor = (list: AEvent[]) => { const ids = list.flatMap((e) => e.shifts.filter((s) => s.status !== 'declined' && needsSend(s)).map((s) => s.id)); if (ids.length) setGuardIds(ids); };
+  const sendNow = (ids: string[]) => run(async () => { await supabase.from('shifts').update({ notified_at: new Date().toISOString() }).in('id', ids); });
 
   const drop = (e: AEvent, start?: string) => {
     const d = drag; setDrag(null); setOver(null); if (!d) return;
@@ -142,6 +142,8 @@ export function Day() {
           <a className="abtn dark" href={phones.length ? `sms:/open?addresses=${phones.join(',')}` : undefined}>Message everyone</a>
         </div>
       </div>
+      <PendingBar events={evs.map((e) => e.id)} tick={busy ? 1 : 0} label="this day" />{/* push 72 */}
+      {guardIds && <StartLabelGuard ids={guardIds} onCancel={() => setGuardIds(null)} onOk={() => { const ids = guardIds; setGuardIds(null); sendNow(ids); }} />}
 
       <div className="dv-chips">
         <span><b>{evs.length}</b> events</span>

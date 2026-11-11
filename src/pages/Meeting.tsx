@@ -16,6 +16,14 @@ export function Meeting({ backTo = '/' }: { backTo?: string }) {
   const { cal, setCal } = useMyCalendar();
   const load = () => supabase.rpc('meeting_page', { p_meeting: id }).then(({ data, error }) => setP(error ? null : ((data as MeetingPage | null) ?? null)));
   useEffect(() => { load(); supabase.rpc('meeting_seen', { p_meeting: id }).then(() => {}, () => {}); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // push 80 · live: refresh every 5 s from 30 min before until 3 h after the start (notes + who's in)
+  const st = p?.meeting.starts_at;
+  useEffect(() => {
+    if (!st) return; const t0 = +new Date(st);
+    const live = () => Date.now() > t0 - 30 * 60e3 && Date.now() < t0 + 3 * 3600e3;
+    const iv = window.setInterval(() => { if (live() && !document.hidden) load(); }, 5000);
+    return () => window.clearInterval(iv);
+  }, [st]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (p === undefined) return <div className="loading" />;
   if (p === null) return (
@@ -65,6 +73,8 @@ export function Meeting({ backTo = '/' }: { backTo?: string }) {
         ))}
       </>}
 
+      {p.is_md && !gone && <><SecTitle>Who’s on the call · you’re the MD</SecTitle><ClockPanel p={p} onChanged={load} /></>}
+
       {m.about && <><SecTitle>What it’s about</SecTitle><section className="d3-card mtg-about">{m.about}</section></>}
 
       <SecTitle>Who’s invited</SecTitle>
@@ -86,9 +96,40 @@ export function Meeting({ backTo = '/' }: { backTo?: string }) {
       </>}
 
       <SecTitle>{`Notes${p.notes.filter((n) => !n.deleted_at).length ? ` · ${p.notes.filter((n) => !n.deleted_at).length}` : ''}`}</SecTitle>
-      <MeetingNotes meetingId={m.id} meetingStart={m.starts_at} notes={p.notes} meId={p.me} onChanged={load} />
-      <p className="muted sm mtg-center">Everyone invited can add notes during or after the meeting. Ronnie picks the ones that go on the event page.</p>
+      <MeetingNotes meetingId={m.id} meetingStart={m.starts_at} notes={p.notes} meId={p.me} onChanged={load} myName={(() => { const me = p.invites.find((i) => i.staff_id === p.me); return me ? (me.nickname || me.full_name.split(' ')[0]) : ''; })()} />
+      <p className="muted sm mtg-center">One shared list: everyone sees notes as they’re written. Tap ✓ Same or Add to it instead of writing the same thing twice. Ronnie gets them after the meeting.</p>
       <div style={{ height: 24 }} />
     </main>
   );
+}
+
+/** push 80 · the meeting MD clocks people in / out. Paid from In to Out, 15-min rounding, no 4-hour minimum. */
+function ClockPanel({ p, onChanged }: { p: MeetingPage; onChanged: () => void }) {
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState('');
+  const go = async (staff: string | null, kind: 'in' | 'out' | 'end' | 'undo') => {
+    if (kind === 'end' && !window.confirm('End the meeting and clock everyone out now?')) return;
+    setBusy(true); setErr('');
+    const { error } = await supabase.rpc('md_meeting_clock', { p_meeting: p.meeting.id, p_staff: staff, p_kind: kind });
+    setBusy(false); if (error) setErr(error.message); else onChanged();
+  };
+  const list = p.invites.filter((i) => i.answer !== 'cant' || i.paid_in);
+  const anyIn = list.some((i) => i.paid_in && !i.paid_out);
+  return (
+    <section className="d3-card mtg-clock">
+      {list.map((i) => {
+        const st = i.paid_out ? 'out' : i.paid_in ? 'in' : 'none';
+        return (
+          <div key={i.staff_id} className={'mtg-crow' + (st === 'in' ? ' in' : '')}>
+            <Avatar name={i.full_name} url={i.photo_url} size={32} />
+            <b className="grow">{i.staff_id === p.me ? `${i.nickname || i.full_name.split(' ')[0]} (you)` : i.full_name}</b>
+            <small>{st === 'none' ? (i.answer === 'coming' ? 'not in yet' : 'no answer') : `in ${t12(i.paid_in!)}${i.paid_out ? ` · out ${t12(i.paid_out)}` : ''}`}</small>
+            {st === 'none' && <button className="mtg-cbtn dark" disabled={busy} onClick={() => go(i.staff_id, 'in')}>In</button>}
+            {st === 'in' && <button className="mtg-cbtn" disabled={busy} onClick={() => go(i.staff_id, 'out')}>Out</button>}
+            {st === 'out' && <button className="mtg-cbtn" disabled={busy} onClick={() => go(i.staff_id, 'in')} title="Back in (new In time)">In</button>}
+          </div>);
+      })}
+      {anyIn && <button className="mtg-cend" disabled={busy} onClick={() => go(null, 'end')}>End meeting · everyone out</button>}
+      <small className="muted" style={{ marginTop: 8 }}>Paid from In to Out, rounded to 15 min. No 4-hour minimum for meetings. Not clocked in = not paid (Ronnie can fix it).</small>
+      {err && <p className="error">{err}</p>}
+    </section>);
 }

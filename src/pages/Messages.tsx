@@ -9,7 +9,7 @@ import { TeamChat } from '../components/TeamChat';
 import { TimeWheel, ampm15 } from '../components/TimeWheel';
 import { AnnounceView, ANN_SELECT, ANN_SELECT_36, wantsGotIt, type Ann } from '../components/Announce';
 import {
-  CONV_COLS, MSG_COLS, RONNIE_PHOTO, TOPICS, first, fmtH, hm24, hmNear, markRideSeen, ridesSeen, ronnieSub, shortDate, t12, todayIso, topicLabel, useSigned, whenShort,
+  CONV_COLS, MSG_COLS, RONNIE_PHOTO, TOPICS, first, fmtH, hm24, hmNear, ronnieSub, shortDate, t12, todayIso, topicLabel, useSigned, whenShort,
   type Conv, type Msg, type Topic,
 } from '../lib/messages';
 import { meetingMorningCheck } from '../lib/meetings';
@@ -116,8 +116,8 @@ function Inbox({ me }: { me: Staff }) {
       if (al.error) al = await alertsQ('id,kind,title,body,event_id,created_at,seen_at'); // migration 043 not applied yet
       const alerts = (al.data ?? []) as unknown as AlertRow[];
       const evIds = [...new Set(alerts.map((a) => a.event_id).filter(Boolean))] as string[];
-      const { data: rides } = await supabase.from('ride_offers').select('id,event_id,kind,sent_at,events(title,event_date)').eq('staff_id', me.id).not('sent_at', 'is', null).gte('sent_at', cut);
-      const rideRows = (rides ?? []) as unknown as { id: string; event_id: string; kind: string; sent_at: string; events: { title: string; event_date: string } | null }[];
+      const { data: rides } = await supabase.from('ride_offers').select('id,event_id,kind,sent_at,seen_at,events(title,event_date)').eq('staff_id', me.id).not('sent_at', 'is', null).gte('sent_at', cut);
+      const rideRows = (rides ?? []) as unknown as { id: string; event_id: string; kind: string; sent_at: string; seen_at: string | null; events: { title: string; event_date: string } | null }[];
       const allEv = [...new Set([...evIds, ...rideRows.map((r) => r.event_id)])];
       const shiftOf: Record<string, string> = {};
       if (allEv.length) { const { data: ms } = await supabase.from('shifts').select('id,event_id').eq('staff_id', me.id).in('event_id', allEv); for (const x of (ms ?? []) as { id: string; event_id: string }[]) shiftOf[x.event_id] = x.id; }
@@ -126,9 +126,8 @@ function Inbox({ me }: { me: Staff }) {
         open: () => { if (!a.seen_at) supabase.rpc('alert_seen', { p_id: a.id }).then(() => setTick((t) => t + 1)); if (a.meeting_id) nav(`/meeting/${a.meeting_id}`); } });
       for (const a of alerts.filter((x) => !x.kind.startsWith('meeting'))) list.push({ key: 'n' + a.id, at: a.created_at, icon: '🗓', title: `${lbl[a.kind] ?? 'Your schedule'} · ${a.title}`, sub: a.body ?? '', unread: !a.seen_at, from: 'shift',
         open: () => { setAlert({ ...a, shift: a.event_id ? shiftOf[a.event_id] ?? null : null }); if (!a.seen_at) supabase.rpc('alert_seen', { p_id: a.id }).then(() => setTick((t) => t + 1)); } });
-      const seenR = ridesSeen();
-      for (const r of rideRows) list.push({ key: 'r' + r.id, at: r.sent_at, icon: '🚗', title: `Ride plan${r.events ? ` · ${shortDate(r.events.event_date)}` : ''}`, sub: r.kind === 'driver' ? `You’re driving · ${r.events?.title ?? ''}` : `${r.events?.title ?? ''} · tap to see your car`, unread: !seenR.includes(r.id), from: 'shift',
-        open: () => { markRideSeen(r.id); const s = shiftOf[r.event_id]; nav(s ? `/shift/${s}` : '/my-dates'); } });
+      for (const r of rideRows) list.push({ key: 'r' + r.id, at: r.sent_at, icon: '🚗', title: `Ride plan${r.events ? ` · ${shortDate(r.events.event_date)}` : ''}`, sub: r.kind === 'driver' ? `You’re driving · ${r.events?.title ?? ''}` : `${r.events?.title ?? ''} · tap to see your car`, unread: !r.seen_at, from: 'shift',
+        open: () => { const s = shiftOf[r.event_id]; nav(s ? `/shift/${s}` : '/my-dates'); } });
       const { data: hq } = await supabase.from('hours_questions').select('id,status,answer_note,resolved_at,shifts(events(title,event_date))').eq('staff_id', me.id).neq('status', 'open').gte('resolved_at', cut);
       for (const q of (hq ?? []) as unknown as { id: string; status: string; answer_note: string | null; resolved_at: string; shifts: { events: { title: string; event_date: string } | null } | null }[]) {
         const e = q.shifts?.events;

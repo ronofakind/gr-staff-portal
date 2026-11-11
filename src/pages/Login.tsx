@@ -1,4 +1,3 @@
-import { siteOrigin } from '../lib/native';
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { setting, useSettings } from '../lib/settings';
@@ -52,7 +51,7 @@ export function Login({ mustSetPin }: { mustSetPin?: boolean }) {
   };
 
   const sendCode = () => run(async () => {
-    const { error } = await supabase.auth.signInWithOtp({ email: email.trim(), options: { shouldCreateUser: true, emailRedirectTo: siteOrigin() } });
+    const { error } = await supabase.auth.signInWithOtp({ email: email.trim(), options: { shouldCreateUser: true, emailRedirectTo: window.location.origin } });
     if (error) throw new Error(/rate|seconds/i.test(error.message) ? 'An email was just sent. Wait a minute before asking for another one.' : error.message);
     localStorage.setItem('gr_email', email.trim());
     setSent(true); setStep('code'); setValue('');

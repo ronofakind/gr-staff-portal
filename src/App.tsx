@@ -1,3 +1,4 @@
+import { loadTheme } from './lib/theme';
 import { ConnectClaude } from './pages/ConnectClaude';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
@@ -17,6 +18,7 @@ import { Hiring } from './admin/Hiring';
 import { Handbook } from './pages/Handbook';
 import { TaxPay } from './pages/TaxPay';
 import { Hours } from './admin/Hours';
+import { Payroll } from './admin/Payroll';
 import { Reliability } from './admin/Reliability';
 import { Calendar, CalendarRedirect } from './admin/Calendar';
 import { EventForm } from './admin/EventForm';
@@ -76,7 +78,7 @@ export function App() {
 
   const loadMe = (uid: string) => supabase.from('staff').select('id,full_name,nickname,email,phone,language,role,photo_url')
     .eq('auth_user_id', uid).maybeSingle()
-    .then(({ data }) => setMe((data as Staff) ?? null));
+    .then(({ data }) => { setMe((data as Staff) ?? null); if (data) loadTheme((data as Staff).id, (data as Staff).role === 'admin'); });
   const sessionUid = session?.user.id ?? (session === null ? null : undefined);
   useEffect(() => {
     if (!session) { setMe(session === null ? null : undefined); return; }
@@ -132,6 +134,7 @@ export function App() {
             <Route path="bookings" element={<Bookings />} />
             <Route path="messages" element={<Messages />} />
             <Route path="hours" element={<Hours />} />
+            <Route path="payroll" element={<Payroll />} />
             <Route path="reliability" element={<Reliability />} />
             <Route path="debriefs" element={<Debriefs />} />
             <Route path="rates" element={<Rates />} />

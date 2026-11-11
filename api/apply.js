@@ -29,7 +29,7 @@ async function referrer(id) {
 }
 
 export default async function handler(req, res) {
-  // Native app (Capacitor) calls from capacitor://localhost / https://localhost: allow it, answer preflight.
+  // Native app (App Store / Google Play) calls from capacitor://localhost / https://localhost: allow it, answer preflight.
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');

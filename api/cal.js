@@ -12,7 +12,7 @@ const fold = (line) => { const out = []; let s = line; while (s.length > 73) { o
 const hm = (iso) => new Date(iso).toLocaleTimeString('en-CA', { timeZone: 'America/Toronto', hour: 'numeric', minute: '2-digit' });
 
 export default async function handler(req, res) {
-  // Native app (Capacitor) calls from capacitor://localhost / https://localhost: allow it, answer preflight.
+  // Native app (App Store / Google Play) calls from capacitor://localhost / https://localhost: allow it, answer preflight.
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');

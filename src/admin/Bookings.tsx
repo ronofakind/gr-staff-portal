@@ -1,3 +1,5 @@
+import { ShiftExpenseToggle } from './Expenses';
+import { BookingsMeetings } from './Meetings';
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { StaffProfile } from './StaffProfile';
@@ -6,10 +8,12 @@ import { supabase } from '../lib/supabase';
 import { setting, autoExtras } from '../lib/settings';
 import { DeptTag } from './DeptTag';
 import { BoardAlso, type OtherShift } from './alsoWorking';
-import { needsSend, liveShift, doesBar, eventsBetween, allStaff, addDays, isoDay, dLabel, ap12, startIso, endIso, roleName, bookingChange, confirmationsSent, countOf, sendStateOf, type AEvent, type AStaff, type Client, type Venue } from './api';
+import { needsSend, liveShift, doesBar, eventsBetween, allStaff, addDays, isoDay, dLabel, ap12, startIso, endIso, roleName, bookingChange, confirmationsSent, countOf, sendStateOf, guestsText, type AEvent, type AStaff, type Client, type Venue } from './api';
 import { misfits, linksOf, other, condShort, RuleIcons, outOfArea, areasOf, type SLink, type SCond } from './rules';
 import { loadScoreData, scoreOf, type ScoreData } from './score';
 import { overBy } from './NightOff';
+import { useNewHires, juniorClash, missingFor, missingText } from '../lib/newHires'; // push 71
+import { SendBox, PendingBar, StartLabelGuard } from './SendBox'; // push 72
 import { locksBetween, setLock, lockTitle, NO_LOCKS, type Locks } from './locks';
 
 /* Push 23 · Bookings (admin). Practice mode by default: every change lives in a draft (booking_drafts) layered
@@ -71,6 +75,8 @@ export function Bookings() {
   const [links, setLinks] = useState<[string, string][]>([]); const [conds, setConds] = useState<Cond[]>([]);
   const [rl, setRl] = useState<SLink[]>([]); const [clients, setClients] = useState<Client[]>([]); const [venues, setVenues] = useState<Venue[]>([]);
   const [sd, setSd] = useState<ScoreData | null>(null); const [warns, setWarns] = useState<Warn[]>([]);
+  const nh = useNewHires(); // push 71 · Junior = cocktail only · missing tax & pay
+  const [sendEvs, setSendEvs] = useState<string[] | null>(null); const [guard, setGuard] = useState<string[] | null>(null); const [pTick, setPTick] = useState(0); // push 72
   const [shifts30, setShifts30] = useState<Record<string, number>>({}); const [yesRate, setYesRate] = useState<Record<string, number>>({});
   const [base, setBase] = useState<Record<string, Pl[]>>({});
   const [draft, setDraft] = useState<Record<string, Draft>>({});
@@ -189,6 +195,9 @@ export function Bookings() {
       out.push({ key: 'ap' + x, cls: 'red', text: <><b>{f(sid)} + {f(x)}</b> are kept apart{why ? ` (${why})` : ''}. Book anyway?</> });
     }
     for (const m of misfits(sid, e, { conds, clients, venues, big: isBig(d) })) out.push({ key: m.kind, cls: 'gold', text: <><b>{f(sid)}</b> {m.text}.</> });
+    { const jc = juniorClash(nh[sid], e.event_type); // push 71
+      if (jc) out.push({ key: 'jr', cls: 'gold', text: <><b>{f(sid)}</b> is Junior · cocktail dînatoire + canapés only{jc === 'unknown' ? ' (this event has no type set)' : ` · this is ${e.event_type}`}. Book anyway?</> });
+      const ms = missingFor(nh[sid]); if (ms.length) out.push({ key: 'tx', cls: 'gold', text: <><b>{f(sid)}</b> is new · {missingText(ms)} yet. You can book; it stays flagged before pay.</> }); }
     for (const x of partnerOf(sid)) if (!pl.some((p) => p.staff_id === x) && av.some((a) => a.staff_id === x && a.status === 'yes') && !off.has(x + d)) {
       out.push({ key: 'tg' + x, cls: 'ok', text: <><b>{f(x)}</b> works well with {f(sid)} · said yes to this date. <button className="lnk" onClick={() => { place(d, x, { event_id: e.id, start: pl.find((p) => p.staff_id === sid)?.start ?? (e.start_time ?? '17:00').slice(0, 5) }); setWarns((w) => w.filter((y) => y.key !== 'tg' + x)); }}>Add {f(x)}</button></> });
     }
@@ -302,8 +311,11 @@ export function Bookings() {
         }
         await supabase.from('booking_drafts').delete().eq('admin_id', me).eq('for_date', c.d);
       }
-      setMsg(`${n} change${n === 1 ? '' : 's'} saved to the schedule.${send ? ' Send the confirmations from the Day view.' : ''}`);
-      await load();
+      const touched = [...new Set(allChanges.flatMap((c) => [...c.added, ...c.moved, ...c.removed, ...c.reroled].map((p) => p.event_id)
+        .concat(c.moved.map((p) => (base[c.d] ?? []).find((x) => x.shift_id === p.shift_id)?.event_id ?? ''))))].filter(Boolean);
+      setMsg(`${n} change${n === 1 ? '' : 's'} saved to the schedule. Nobody is told until you send.`);
+      await load(); setPTick((x) => x + 1);
+      if (send) setSendEvs(touched); // push 72 · Save + send → the "About to send" box
     }
     setBusy(false); setReview(false);
   };
@@ -514,7 +526,7 @@ export function Bookings() {
         <div className="bk-colh">
           <div className="bk-see">{dept === 'both' && <i className={'bk-dtag' + (isBarEv(e) ? ' is-bar' : '')}>{isBarEv(e) ? 'BAR' : 'FLOOR'}</i>}AS STAFF SEE IT</div>
           <Link to={`/admin/event/${e.id}`} className="serif bk-title">{e.tentative ? '⏳ ' : ''}{seeTitle(e)}</Link>
-          <div className="muted sm">{[e.event_private?.client, e.event_type, e.guests ? `${e.guests} guests` : null].filter(Boolean).join(' · ')}</div>
+          <div className="muted sm">{[e.event_private?.client, e.event_type, guestsText(e)].filter(Boolean).join(' · ')}</div>
           <div className="bk-cc">
             <span className="bk-ccn">{client > 0 ? <><b>{placed} / {client}</b> <span className="muted sm">client count</span></> : <><b>{placed}</b> <Link to={`/admin/event/${e.id}/edit`} className="gold sm strong">client count not set ›</Link></>}</span>
             <span className="bk-xs">+ {st.extrasPlaced} / <span className="bk-step" onClick={(ev) => ev.stopPropagation()}>
@@ -640,18 +652,21 @@ export function Bookings() {
         const list = e.shifts.filter((x) => liveShift(x) && !x.attendance && needsSend(x));
         const told = list.filter((x) => x.status === 'confirmed');
         const why = (x: typeof list[number]) => (x.status !== 'confirmed' ? (x.notified_at ? 'changed after it was sent' : 'not sent yet') : x.notified_at ? 'changed after it was sent' : 'changed after they confirmed');
-        const mark = async (ids: string[]) => { if (!ids.length) return; setSendBusy(true); const { error } = await supabase.from('shifts').update({ notified_at: new Date().toISOString() }).in('id', ids); setSendBusy(false); if (error) { setHint(error.message); return; } setSendOf(null); await load(); };
+        const mark = async (ids: string[], ok = false) => { if (!ids.length) return; if (!ok) { setGuard(ids); return; } setSendBusy(true); const { error } = await supabase.from('shifts').update({ notified_at: new Date().toISOString() }).in('id', ids); setSendBusy(false); if (error) { setHint(error.message); return; } setSendOf(null); await load(); };
         return (
           <div className="bk-sendm">
             <div className="bk-sendm-h"><b>{seeTitle(e)} · {dLabel(e.event_date, { weekday: 'short', month: 'short', day: 'numeric' })}</b><button className="lnk" aria-label="Close" onClick={() => setSendOf(null)}>×</button></div>
             {list.length ? <ul>{list.map((x) => <li key={x.id}><b>{x.staff?.full_name ?? '?'}</b><small>{why(x)}</small></li>)}</ul> : <small className="muted">Nothing to send.</small>}
             <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
               <button className="abtn dark" disabled={sendBusy || !list.length} onClick={() => mark(list.map((x) => x.id))}>Send to {list.length}</button>
-              {told.length > 0 && <button className="abtn" disabled={sendBusy} onClick={() => mark(told.map((x) => x.id))}>Already told them{told.length < list.length ? ` · ${told.length}` : ''}</button>}
+              {told.length > 0 && <button className="abtn" disabled={sendBusy} onClick={() => mark(told.map((x) => x.id), true)}>Already told them{told.length < list.length ? ` · ${told.length}` : ''}</button>}
             </div>
             <small className="muted">Already told them clears SEND for people who confirmed with you, without sending anything.{told.length < list.length ? ' People still to confirm need the real send.' : ''}</small>
           </div>);
       })()}
+      {guard && <StartLabelGuard ids={guard} onCancel={() => setGuard(null)} onAddTimes={() => { const id = sendOf; setGuard(null); if (id) navB(`/admin/event/${id}/edit`); }}
+        onOk={async () => { const ids = guard; setGuard(null); setSendBusy(true); const { error } = await supabase.from('shifts').update({ notified_at: new Date().toISOString() }).in('id', ids); setSendBusy(false); if (error) { setHint(error.message); return; } setSendOf(null); await load(); }} />}
+      {sendEvs && <SendBox events={sendEvs} onClose={() => { setSendEvs(null); setPTick((x) => x + 1); }} onSent={() => { setMsg('Sent.'); load(); }} />}
       {hint && <div className="bk-hint" onClick={() => setHint('')}>{hint} ×</div>}
       {undoConf && <div className="bk-undo"><span>✓ {undoConf.ids.length} confirmed · {undoConf.title}</span><button type="button" onClick={undoConfirmAll}>Undo</button></div>}
       {warns.length > 0 && <div className="bk-warns">{warns.map((w) => <div key={w.key} className={'bk-warn ' + w.cls}><span className="grow">{w.text}</span><button className="lnk" aria-label="Dismiss" onClick={() => setWarns(warns.filter((x) => x.key !== w.key))}>×</button></div>)}<small className="muted">Warnings never block you; you can still book.</small></div>}
@@ -733,6 +748,7 @@ export function Bookings() {
                     <div className="bk-balbar"><i className={s.strength != null && max - s.strength > 5 ? 'gold' : ''} style={{ width: `${Math.max(0, Math.min(100, s.strength ?? 0))}%` }} /></div>
                   </div>))}
               </div>); })()}
+            <BookingsMeetings date={date} />{/* push 80 */}
             <div className="bk-cols">{dayEvs(date).length ? dayEvs(date).map((e, i, all) => <Fragment key={e.id}>{dept === 'both' && i > 0 && isBarEv(e) && !isBarEv(all[i - 1]) && <div className="bk-split" aria-hidden="true" />}<Column e={e} d={date} /></Fragment>) : <div className="adm-card muted">No {dept === 'both' ? '' : dept + ' '}events on this day. <Link to={`/admin/event/new?d=${date}`}>+ New event</Link></div>}</div>
           </div>
         </div>
@@ -768,6 +784,7 @@ export function Bookings() {
         </div>
       )}
 
+      {mode !== 'practice' && <PendingBar tick={pTick} onSent={load} />}{/* push 72 */}
       {nChanges > 0 && (
         <div className="bk-tray">
           <b>{nChanges} change{nChanges > 1 ? 's' : ''}</b>
@@ -823,6 +840,7 @@ export function Bookings() {
                 setNText(mNotes[sh.id] ?? sn?.note ?? ''); setNScope(mNotes[sh.id] ? 'shift' : sn ? (sn.shifts ? 'first3' : 'always') : fresh ? 'first3' : 'shift'); } setPhone({ ...phone, step: 'note' }); }}>{ic('c|M12 7v5l3 2')}<span className="grow">Note for the manager{(sh.leave_by || mNotes[sh.id] || sNotes[sid]) && <small className="gold"> · {sh.leave_by ? `leaves ${t12(hm(sh.leave_by))}` : sNotes[sid] && !mNotes[sh.id] ? (sNotes[sid].shifts ? '📌 first 3 shifts' : '📌 every shift') : 'note set'}</small>}</span><span className="bk-mch">›</span></button>}
               <button className="bk-mli" onClick={() => { setProf(sid); close(); }}>{ic('c|M12 8v.01|M12 11v5')}<span className="grow">Profile · ranking · knows</span><span className="bk-mch">›</span></button>
               <Link className="bk-mli" to={`/admin/messages?staff=${sid}`} onClick={close}>{ic('M4 5h16v11H9l-5 4z')}<span className="grow">Message</span><span className="bk-mch">›</span></Link>
+              {sh && <div className="bk-mli"><span className="bk-mi" aria-hidden="true" style={{ display: 'inline-flex', justifyContent: 'center' }}>🧾</span><span className="grow">Expense for this shift<small className="muted"> · 2 days after</small></span><ShiftExpenseToggle shiftId={p.shift_id!} eventDate={date} /></div>}{/* push 79 */}
             </div>
             <button className="bk-mrm" onClick={() => { remove(date, p.key); close(); }}>Remove</button>
           </>; })() : step === 'time' && p ? (() => { const lineT = p.line ?? p.start; const okT = /^\d{2}:\d{2}$/.test(ownT);
@@ -903,7 +921,7 @@ export function Bookings() {
           </div>)}
           <div className="row" style={{ gap: 8, justifyContent: 'flex-end' }}>
             <button className="abtn" onClick={() => save(false)}>Save, send later</button>
-            <button className="abtn dark" disabled={busy} onClick={() => save(true)}>{mode === 'practice' ? 'Practice · nothing sent' : `Save ${nChanges} now`}</button>
+            <button className="abtn dark" disabled={busy} onClick={() => save(true)}>{mode === 'practice' ? 'Practice · nothing sent' : `Save ${nChanges} + choose who's told`}</button>
           </div>
         </div></div>
       )}

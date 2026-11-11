@@ -21,13 +21,13 @@ export type AEvent = {
   id: string; event_date: string; title: string; address: string | null; department: 'floor' | 'bar' | 'kitchen';
   description: string | null; dress_code: string | null; bring: string | null;
   start_time: string | null; end_time: string | null; staff_needed: number; details_pending?: boolean | null; manager_id: string | null; hours_submitted_at: string | null; hours_submitted_by?: string | null;
-  venue_id: string | null; guests?: number | null; event_type?: string | null; extras?: number | null; extras_billing?: 'gr' | 'client' | null; transport?: boolean; travel_min?: number | null; paid_travel_min?: number | null; gas_per_car?: number | null; transport_billing?: 'client' | 'gr' | null; rides?: boolean; ends_label?: string | null; staffing?: Line[]; notes?: string | null; uniform_floor?: string; uniform_bar?: string; uniform_floor_w?: string | null; uniform_bar_w?: string | null; drive_folder_url?: string | null; tentative?: boolean; links?: unknown; timeline: { time: string; label: string }[];
+  venue_id: string | null; guests?: number | null; guests_max?: number | null; guests_final?: boolean; event_type?: string | null; extras?: number | null; extras_billing?: 'gr' | 'client' | null; transport?: boolean; travel_min?: number | null; paid_travel_min?: number | null; gas_per_car?: number | null; transport_billing?: 'client' | 'gr' | null; rides?: boolean; ends_label?: string | null; staffing?: Line[]; notes?: string | null; uniform_floor?: string; uniform_bar?: string; uniform_floor_w?: string | null; uniform_bar_w?: string | null; drive_folder_url?: string | null; tentative?: boolean; links?: unknown; timeline: { time: string; label: string }[];
   event_private: { client: string | null; client_id?: string | null; punch_code: string ; pay_method?: 'invoice' | 'cash'; qb_doc_type?: 'estimate' | 'invoice' | null; qb_doc_number?: string | null; cash_received_at?: string | null; qb_removed_at?: string | null } | null;
   shifts: AShift[];
 };
 
 const EVENT_SELECT_T = `id,event_date,title,address,department,description,dress_code,bring,start_time,end_time,details_pending,
-  staff_needed,manager_id,hours_submitted_at,hours_submitted_by,venue_id,timeline,event_private(client,client_id,punch_code,pay_method,qb_doc_type,qb_doc_number,cash_received_at,qb_removed_at),guests,event_type,extras,extras_billing,transport,travel_min,paid_travel_min,gas_per_car,transport_billing,rides,ends_label,staffing,notes,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,drive_folder_url,tentative,links,
+  staff_needed,manager_id,hours_submitted_at,hours_submitted_by,venue_id,timeline,event_private(client,client_id,punch_code,pay_method,qb_doc_type,qb_doc_number,cash_received_at,qb_removed_at),guests,guests_max,guests_final,event_type,extras,extras_billing,transport,travel_min,paid_travel_min,gas_per_car,transport_billing,rides,ends_label,staffing,notes,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,drive_folder_url,tentative,links,
   shifts(id,event_id,staff_id,position_code,position_detail,planned_start,planned_end,status,changed_at,notified_at,attendance,left_early,attendance_reason,leave_by,manager_note,note_archived_at,note_archived_by,responded_at,punches(punch_in,punch_out),staff:staff!shifts_staff_id_fkey(full_name,phone)P28)`;
 /** push 28 shift columns (migration 034). */
 export const P28_SHIFT_COLS = ',cancelled_at,cancel_reason,cancel_note,cancel_self,cancel_late,cancel_sent_to_manager,replacement_for';
@@ -166,8 +166,8 @@ export const ap12 = (t: string | null | undefined) => { if (!t) return ''; const
 export const confirmationsSent = (e: { shifts: { notified_at: string | null }[] }) => e.shifts.some((s) => s.notified_at);
 const aDate = (iso: string) => new Date(iso + 'T12:00:00').toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' }).replace(/\./g, '');
 /**
- * Record a booking change and, if that event's confirmations were already sent, alert the person (Home card).
- * Not sent yet → silent; they get the details when confirmations go out.
+ * Record a booking change and, if that event's confirmations were already sent, stage a note for the person (push 72:
+ * it waits in change_outbox until a send button). Not sent yet → silent; they get the details when confirmations go out.
  */
 export async function bookingChange(kind: 'booked' | 'moved' | 'removed', p: {
   staff_id: string; shift_id?: string | null; to?: { id: string; event_date: string; title: string; sent: boolean; start: string };
@@ -184,7 +184,8 @@ export async function bookingChange(kind: 'booked' | 'moved' | 'removed', p: {
   if (kind === 'removed' && p.from?.sent) alert = { title: `You're no longer on ${aDate(p.from.event_date)}`, body: `${p.from.title} · that shift was removed. Questions? Text Ronnie.`, event_id: null };
   if (kind === 'moved' && p.pos && p.to && (p.to.sent || p.from?.sent) && !alert) alert = { title: 'Your shift changed', body: `${aDate(p.to.event_date)} · ${p.to.title} · now ${p.pos.new} (was ${p.pos.old})`, event_id: p.to.id };
   if (!alert) return;
-  const { data: al } = await supabase.from('staff_alerts').insert({ staff_id: p.staff_id, kind, ...alert }).select('id').maybeSingle();
+  // push 72 · nothing goes out on Save: the change waits in the outbox until Ronnie presses a send button (Home card + note + alert then).
+  const al = null as { id: string } | null;
   // push 40 · the same change as a note in their conversation with Ronnie (Got it / Can't make it). Errors (044 not applied) are ignored.
   const lines: { label: string; old: string | null; new: string | null }[] = [];
   if (kind === 'moved' && p.from && p.to) {
@@ -195,8 +196,8 @@ export async function bookingChange(kind: 'booked' | 'moved' | 'removed', p: {
   const at = kind === 'removed' ? p.from : p.to;
   if (at) await supabase.rpc('admin_shift_note', {
     p_staff: p.staff_id, p_kind: kind === 'moved' ? 'changed' : kind === 'booked' ? 'new' : 'removed', p_shift: kind === 'removed' ? null : p.shift_id ?? null,
-    p_alert: (al as { id: string } | null)?.id ?? null,
-    p_meta: { date: at.event_date, venue: at.title, start: at.start, position: p.position ?? null, lines },
+    p_alert: al?.id ?? null,
+    p_meta: { date: at.event_date, venue: at.title, start: at.start, position: p.position ?? null, lines, event_id: at.id, shift_ref: p.shift_id ?? null },
   }).then(() => {}, () => {});
 }
 
@@ -231,3 +232,7 @@ export function sendStateOf(e: AEvent, today: string): 'sent' | 'ready' | 'later
 export const BAR_POS = /^(BAR|BM|BT|BB|BARTENDER|BARBACK|BAR MANAGER)$/i;
 export const doesBar = (s: { department: string; positions?: string[] | null }) => s.department === 'bar' || (s.positions ?? []).some((p) => BAR_POS.test(p.trim()));
 export const isBothDept = (s: { department: string; positions?: string[] | null }) => s.department !== 'bar' && doesBar(s);
+
+/** push 74 · "100–150 · not final" / "140 · final ✓" (admin only). */
+export const guestsText = (e: { guests?: number | null; guests_max?: number | null; guests_final?: boolean }) =>
+  !e.guests ? null : e.guests_final ? `${e.guests} guests · final ✓` : `${e.guests}${e.guests_max ? '–' + e.guests_max : ''} guests · not final`;

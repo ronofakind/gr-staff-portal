@@ -48,14 +48,14 @@ export function BarReport({ e }: { e: AEvent }) {
         <button className="abtn sm" onClick={() => setEdit(!edit)}>{edit ? 'Close the list' : 'Edit the list for this venue / client'}</button>
         <Link className="abtn sm" to={`/bar/${e.id}`}>Open the count</Link>
       </div>
-      {edit && <BarItems e={e} onChange={load} />}
+      {edit && <BarList venueId={e.venue_id ?? null} clientId={e.event_private?.client_id ?? null} onChange={load} />}
     </div>
   );
 }
 
 type Item = { id: string; kind: BKind; name: string; size: string | null };
-function BarItems({ e, onChange }: { e: AEvent; onChange: () => void }) {
-  const venueId = e.venue_id ?? null; const clientId = e.event_private?.client_id ?? null;
+/** The bar list (bottles + supplies) of a venue, or of a client used without a venue. Also on Venues & clients (push 69b). */
+export function BarList({ venueId, clientId, onChange = () => {} }: { venueId: string | null; clientId: string | null; onChange?: () => void }) {
   const [scope, setScope] = useState<'venue' | 'client'>(venueId ? 'venue' : 'client'); const [items, setItems] = useState<Item[]>([]); const [sup, setSup] = useState(false);
   const [f, setF] = useState<{ name: string; size: string; kind: BKind }>({ name: '', size: '750 ml', kind: 'spirit' }); const [err, setErr] = useState('');
   const key = scope === 'venue' ? venueId : clientId;

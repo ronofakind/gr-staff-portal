@@ -11,11 +11,12 @@ import { ConfirmTracker } from './Confirmations';
 import { RidesAdmin } from './Rides';
 import { ShiftView } from '../pages/Shift';
 import { UniformIcon, PantsIcon, ShoesIcon, ApronIcon, TieIcon, WineKeyIcon, PIECE, defaultItems, uniformLabel, type UniItemsMap, type UniLineKey, type UniformKind } from '../components/Uniform';
-import { EVENT_SELECT, EVENT_SELECT_28, missing034, ap12, dLabel, roleName, type AEvent } from './api';
+import { EVENT_SELECT, EVENT_SELECT_28, missing034, ap12, dLabel, roleName, guestsText, type AEvent } from './api';
 import { ReplacedBanners } from './Replace';
 import { TeamLocks } from './TeamLocks';
 import { NightOff } from './NightOff';
 import { BarReport } from './BarReport';
+import { PendingBar, SeenLine, RidesSeen } from './SendBox'; // push 72 · 73
 
 const FOLD_KEY = 'gr-ed-fold';
 const readFold = (): Record<string, boolean> => { try { return JSON.parse(localStorage.getItem(FOLD_KEY) || '{}'); } catch { return {}; } };
@@ -79,7 +80,7 @@ export function EventDetail() {
           <div className="row wrap" style={{ gap: 6, marginTop: 8 }}>
             <span className="tag">{dLabel(e.event_date, { weekday: 'short', month: 'short', day: 'numeric' })}</span>
             {e.event_type && <span className="tag">{e.event_type}</span>}
-            {e.guests ? <span className="tag">{e.guests} guests</span> : null}
+            {guestsText(e) ? <span className="tag">{guestsText(e)}</span> : null}
             {floor && <span className="tag">Floor {nFloor}</span>}
             {bar && <span className="tag bar-tag">Bar {nBar}</span>}
           </div>
@@ -99,20 +100,21 @@ export function EventDetail() {
         </div>
       </div>
 
+      <PendingBar events={evs.map((v) => v.id)} onSent={load} label="this event" />{/* push 72 */}
       <ReplacedBanners evs={evs} />
       <NightOff evs={evs} onChange={() => {}} />
       <PastDebriefsFor title={e.title} eventId={e.id} />
 
       <div className="ed2-grid">
         {e.event_date >= new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' }) && <TentativeCard evs={evs} onChange={load} />}
-        <Sec k="event" title="Event" open={isOpen('event')} setOpen={setFold} summary={[dLabel(e.event_date, { month: 'short', day: 'numeric' }), x?.venue?.name ?? e.title, e.guests ? `${e.guests} guests` : null].filter(Boolean).join(' · ')}>
+        <Sec k="event" title="Event" open={isOpen('event')} setOpen={setFold} summary={[dLabel(e.event_date, { month: 'short', day: 'numeric' }), x?.venue?.name ?? e.title, guestsText(e)].filter(Boolean).join(' · ')}>
           <div className="ed2-facts">
             <F l="Date" v={dLabel(e.event_date, { weekday: 'long', month: 'long', day: 'numeric' })} />
             <F l="Venue" v={x?.venue?.name ?? e.title} />
             <F l={<>Client <i className="only">only you</i></>} v={p?.client ?? '—'} />
             <F l="Address" v={e.address ?? x?.venue?.address ?? '—'} />
             <F l="Event type" v={e.event_type ?? '—'} />
-            <F l="Guests" v={e.guests ? String(e.guests) : '—'} />
+            <F l="Guests" v={guestsText(e) ?? '—'} />
             <F l="First start" v={floor && bar && firstOf(floor) !== firstOf(bar) ? `Floor ${ap12(firstOf(floor))} · Bar ${ap12(firstOf(bar))}` : ap12(firstOf(floor ?? bar)) || 'TBC'} />
             <F l="Ends" v={ends} />
           </div>
@@ -121,6 +123,8 @@ export function EventDetail() {
 
         {e.event_date >= new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' }) && <Sec k="confirm" title="Confirmations" open={isOpen('confirm')} setOpen={setFold} summary="who confirmed · who to text">
           <ConfirmTracker evs={evs} venue={x?.venue?.name ?? e.title} />
+          {evs.map((v) => <SeenLine key={v.id} eventId={v.id} />)}{/* push 72 */}
+          {evs.map((v) => <RidesSeen key={'r' + v.id} eventId={v.id} />)}{/* push 73 */}
         </Sec>}
 
         <Sec k="locks" title="Team" open={isOpen('locks')} setOpen={setFold} summary="who's booked · 🔒 locked never move">
@@ -226,7 +230,7 @@ function uniformRows(evs: AEvent[], map: UniItemsMap | null) {
   const f = evs.find((v) => v.department === 'floor'); const b = evs.find((v) => v.department === 'bar');
   const rows: { key: UniLineKey; label: string; tiles: Tile[] }[] = [];
   const add = (key: UniLineKey, label: string, kind: string, bar: boolean, women: boolean) => rows.push({ key, label, tiles: tilesFor(kind, bar, women, map?.[key] ?? defaultItems(kind, bar)) });
-  if (f) { add('floor_m', 'FLOOR · MEN', f.uniform_floor ?? 'white_shirt', false, false); add('floor_w', 'FLOOR · WOMEN', f.uniform_floor_w ?? f.uniform_floor ?? 'white_shirt', false, true); }
+  if (f) { add('floor_m', 'FLOOR · MEN', f.uniform_floor ?? 'black_shirt', false, false); add('floor_w', 'FLOOR · WOMEN', f.uniform_floor_w ?? f.uniform_floor ?? 'black_shirt', false, true); }
   if (b) { add('bar_m', 'BAR · MEN', b.uniform_bar ?? 'black_shirt', true, false); add('bar_w', 'BAR · WOMEN', b.uniform_bar_w ?? 'dress', true, true); }
   return rows;
 }

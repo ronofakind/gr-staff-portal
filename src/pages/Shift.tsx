@@ -1,4 +1,4 @@
-import { siteOrigin } from '../lib/native';
+import { ExpenseShiftButton } from '../components/Expense';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { supabase, SHIFT_SELECT, isSetup, type ShiftRow } from '../lib/supabase';
@@ -114,7 +114,7 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team, past }
   const ev = s.events;
   const address = ev.address || ev.venues?.address || '';
   const arrive = minus(s.planned_start, s.arrive_before_min);
-  const cal = s.cal_token && !/android/i.test(navigator.userAgent) ? `${siteOrigin()}/api/cal?t=${s.cal_token}` : calendarUrl(ev.title, arrive, s.planned_end, address);
+  const cal = s.cal_token && !/android/i.test(navigator.userAgent) ? `/api/cal?t=${s.cal_token}` : calendarUrl(ev.title, arrive, s.planned_end, address);
 
   const kind = uniformFor(s);
   const role = s.position_code === 'MD' ? 'MD' : s.position_detail ? s.position_detail.replace(/^bar\s*-\s*/i, '') : isBar(s.position_code, null) ? 'Bar' : 'Waiter';
@@ -160,7 +160,7 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team, past }
   const mins = Math.round((new Date(s.planned_start).getTime() - Date.now()) / 60000);
   const cd = s.punches?.punch_in ? 'working now' : mins <= 0 ? 'started' : mins < 60 ? `in ${mins} min` : mins < 48 * 60 ? `in ${Math.round(mins / 60)} h` : '';
   const setup = isSetup(ev);
-  const facts = [ev.event_type, ev.guests ? `${ev.guests} guests` : null].filter(Boolean).join(' · ');
+  const facts = [ev.event_type, ev.guests && ev.guests_final && s.status === 'confirmed' ? `${ev.guests} guests` : null].filter(Boolean).join(' · '); // push 74 · only the final count, never a range
   const [street, ...cityParts] = (address || venueName).split(',');
   const city = cityParts.join(',').trim();
   const area = cityParts[0]?.trim() ?? '';
@@ -194,11 +194,12 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team, past }
             <div><small>Ended</small>{s.punches?.punch_out ? <BigTime iso={s.punches.punch_out} small /> : <span className="big serif sm-big">–</span>}</div>
           </div>
         </section>
+        {!preview && past && <ExpenseShiftButton me={past.id} shift={{ id: s.id, title: venueName, date: ev.event_date }} />}{/* push 79 */}
         {past && managesShift(s, past.id) && <PastManager eventId={ev.id} eventDate={ev.event_date} sentAt={ev.hours_submitted_at ?? null} me={past} />}
       </> : <section className="d3-hero">
         <div className="d3-kick">{dayWord.toUpperCase()}{cd ? ` · ${cd.toUpperCase()}` : ''}</div>
         <div><div className="serif d3-venue">{venueName}</div>{(facts || ev.description) && <div className="d3-sub">{facts || ev.description}</div>}</div>
-        <StartPos start={s.time_tbc ? null : s.planned_start} role={role} />
+        <StartPos start={s.time_tbc ? null : s.planned_start} role={role} label={s.start_label} />
         {!setup && (
           <div className="d37-uni" role="button" tabIndex={0} onClick={seeUniform} onKeyDown={(e) => { if (e.key === 'Enter') seeUniform(); }}>
             <div className="d37-uni-ics">

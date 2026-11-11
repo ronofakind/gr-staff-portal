@@ -36,7 +36,29 @@ export default async function handler(req, res) {
     // Full fields incl. SIN (the task puts it straight into QuickBooks and never prints it).
     if (req.method === 'GET' && req.query.vendors) {
       const rows = await get('staff_tax?qb_status=eq.sending&select=staff_id,first_name,middle_name,last_name,legal_name,email,phone,street,apt,city,province,postal_code,address,sin,qb_at');
-      return res.json({ vendors: rows });
+      // push 71 · first gig → payroll sheet: new hires Ronnie said Yes to (staff_onboarding.payroll_status = 'sending')
+      const pr = await get('staff_onboarding?payroll_status=eq.sending&select=staff_id,payroll_for,staff:staff!staff_onboarding_staff_id_fkey(full_name)');
+      const payroll = pr.map((r) => ({ staff_id: r.staff_id, name: r.staff?.full_name ?? null, gig_date: r.payroll_for }));
+      // push 79e · approved expenses not yet copied to the payroll sheet
+      const ex = await get('expenses?status=eq.approved&sheet_status=is.null&select=id,kind,amount,exp_date,staff:staff!expenses_staff_id_fkey(full_name)&order=exp_date&limit=50');
+      const expenses = ex.map((e) => ({ id: e.id, name: e.staff?.full_name ?? null, kind: e.kind, amount: Number(e.amount), date: e.exp_date }));
+      return res.json({ vendors: rows, payroll, expenses });
+    }
+
+    // push 80 · meeting notes Ronnie sent to an event ("Add to the event"): GET ?notes=1
+    if (req.method === 'GET' && req.query.notes) {
+      const ns = await get('meeting_notes?apply_status=eq.sending&deleted_at=is.null&select=id,body,meeting_id,created_at,author:staff!meeting_notes_author_id_fkey(full_name),meetings(title,starts_at)&limit=20');
+      const out = [];
+      for (const n of ns) {
+        const [kids, evs] = await Promise.all([
+          get(`meeting_notes?parent_id=eq.${n.id}&deleted_at=is.null&select=body`),
+          get(`meeting_events?meeting_id=eq.${n.meeting_id}&select=events(id,title,event_date,department,guests,address,start_time,end_time,venues(name))`),
+        ]);
+        out.push({ id: n.id, body: n.body, added: kids.map((k) => k.body), author: n.author?.full_name ?? null, meeting: n.meetings?.title ?? null, meeting_at: n.meetings?.starts_at ?? null,
+          events: evs.map((e) => e.events).filter(Boolean).map((e) => ({ id: e.id, date: e.event_date, title: e.title, venue: e.venues?.name ?? null, dept: e.department, guests: e.guests ?? null,
+            address: e.address ?? null, start: e.start_time ? e.start_time.slice(0, 5) : null, end: e.end_time ? e.end_time.slice(0, 5) : null })) });
+      }
+      return res.json({ notes: out });
     }
 
     // Nov 8 · push 55b · AI first read of new applications. GET ?apps=1 → new ones not read yet, with a 1-hour CV link.
@@ -90,7 +112,7 @@ export default async function handler(req, res) {
     if (req.method === 'POST') {
       const list = Array.isArray(body.items) ? body.items.slice(0, 40) : [];
       const rows = list.filter((i) => i && i.dedupe_key && i.who).map((i) => ({
-        source: 'email', kind: KINDS.has(i.kind) ? i.kind : 'other', dedupe_key: s(i.dedupe_key, 200),
+        source: String(i.dedupe_key).startsWith('note:') ? 'meeting' : 'email', kind: KINDS.has(i.kind) ? i.kind : 'other', dedupe_key: s(i.dedupe_key, 200), // push 80 · meeting notes
         event_id: /^[0-9a-f-]{36}$/i.test(i.event_id || '') ? i.event_id : null,
         who: s(i.who, 120), quote: s(i.quote, 400), event_hint: s(i.event_hint, 160), email_url: /^https:\/\/mail\.google\.com\//.test(i.email_url || '') ? s(i.email_url, 400) : null,
         lines: Array.isArray(i.lines) ? i.lines.slice(0, 6).map((l) => ({ label: s(l?.label, 40), old: s(l?.old, 120), new: s(l?.new, 160), ...(FIELDS.has(l?.field) ? { field: l.field, value: s(l?.value, 160) } : {}) })) : [],
@@ -132,6 +154,35 @@ export default async function handler(req, res) {
           if (r.ok) vendors++;
         }
       }
+      // push 71 · payroll sheet results: { payroll: [{ staff_id, status: 'done'|'error', note }] }
+      let payroll = 0;
+      if (Array.isArray(body.payroll)) {
+        for (const v of body.payroll.slice(0, 30)) {
+          if (!/^[0-9a-f-]{36}$/i.test(v?.staff_id || '') || !['done', 'error'].includes(v.status)) continue;
+          const r = await fetch(`${URL_}/rest/v1/staff_onboarding?staff_id=eq.${v.staff_id}&payroll_status=eq.sending`, { method: 'PATCH', headers: H({ Prefer: 'return=minimal' }),
+            body: JSON.stringify({ payroll_status: v.status, payroll_note: s(v.note, 300), payroll_at: new Date().toISOString() }) });
+          if (r.ok) payroll++;
+        }
+      }
+      // push 80 · meeting notes turned into review cards: { notes: [{ id, status: 'done'|'error' }] }
+      let notes = 0;
+      if (Array.isArray(body.notes)) {
+        for (const v of body.notes.slice(0, 20)) {
+          if (!/^[0-9a-f-]{36}$/i.test(v?.id || '') || !['done', 'error'].includes(v.status)) continue;
+          const r = await fetch(`${URL_}/rest/v1/meeting_notes?id=eq.${v.id}&apply_status=eq.sending`, { method: 'PATCH', headers: H({ Prefer: 'return=minimal' }), body: JSON.stringify({ apply_status: v.status }) });
+          if (r.ok) notes++;
+        }
+      }
+      // push 79e · expenses copied to the payroll sheet: { expenses: [{ id, status: 'done'|'error', note }] }
+      let expenses = 0;
+      if (Array.isArray(body.expenses)) {
+        for (const v of body.expenses.slice(0, 50)) {
+          if (!/^[0-9a-f-]{36}$/i.test(v?.id || '') || !['done', 'error'].includes(v.status)) continue;
+          const r = await fetch(`${URL_}/rest/v1/expenses?id=eq.${v.id}&status=eq.approved`, { method: 'PATCH', headers: H({ Prefer: 'return=minimal' }),
+            body: JSON.stringify({ sheet_status: v.status, sheet_note: s(v.note, 300), sheet_at: new Date().toISOString() }) });
+          if (r.ok) expenses++;
+        }
+      }
       let added = 0;
       if (rows.length) {
         const r = await fetch(`${URL_}/rest/v1/ai_items?on_conflict=dedupe_key`, { method: 'POST', headers: H({ Prefer: 'resolution=ignore-duplicates,return=representation' }), body: JSON.stringify(rows) });
@@ -139,7 +190,7 @@ export default async function handler(req, res) {
         added = (await r.json()).length;
       }
       if (body.checked) await fetch(`${URL_}/rest/v1/ai_settings?id=eq.1`, { method: 'PATCH', headers: H(), body: JSON.stringify({ inbox_checked_at: new Date().toISOString() }) });
-      return res.json({ added, skipped: rows.length - added, invoices, reads, vendors });
+      return res.json({ added, skipped: rows.length - added, invoices, reads, vendors, payroll, expenses, notes });
     }
     return res.status(405).json({ error: 'GET or POST' });
   } catch (e) {
