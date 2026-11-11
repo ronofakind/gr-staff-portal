@@ -50,7 +50,7 @@ export default async function handler(req, res) {
     if (req.method === 'GET' && req.query.beo) {
       const tz = 'America/Toronto'; const today = new Date().toLocaleDateString('en-CA', { timeZone: tz });
       const in2 = new Date(Date.now() + 2 * 864e5).toLocaleDateString('en-CA', { timeZone: tz });
-      const evs = await get(`events?department=eq.bar&event_date=gte.${today}&event_date=lte.${in2}&drive_folder_url=not.is.null&select=id,event_date,title,start_time,drive_folder_url,venues(name),bar_counts(beo_file,beo_modified,beo_read_at,beo_initial_at,beo_final_at)&order=event_date`);
+      const evs = await get(`events?department=eq.bar&event_date=gte.${today}&event_date=lte.${in2}&select=id,event_date,title,start_time,drive_folder_url,venues(name),bar_counts(beo_file,beo_modified,beo_read_at,beo_initial_at,beo_final_at)&order=event_date`);
       const ids = evs.map((e) => e.id).join(',') || '00000000-0000-0000-0000-000000000000';
       const started = new Set((await get(`bar_moves?step=eq.start&undone_at=is.null&event_id=in.(${ids})&select=event_id`)).map((m) => m.event_id));
       const off = (d) => { const p = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'shortOffset' }).formatToParts(new Date(d + 'T12:00:00Z')).find((x) => x.type === 'timeZoneName')?.value ?? 'GMT-5';
