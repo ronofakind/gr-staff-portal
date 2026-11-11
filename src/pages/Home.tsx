@@ -552,7 +552,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
                           {pend || s.time_tbc ? <span className="cu-time tbc">Time TBC</span> : <span className="cu-time">{time(s.planned_start, lang)}</span>}</span>
                         {(soon(s) || (s.status !== 'confirmed' && notFinal(s))) && <small className="cu-soon">Details coming</small>}
                       </div>
-                      <span className="cu-st">{soon(s) || (s.status !== 'confirmed' && notFinal(s)) ? null : s.status === 'confirmed' ? <span className="ok-dot" aria-label="Confirmed" /> : <span className="tag-ask" style={{ height: 26, fontSize: 11, padding: '0 9px' }}>Confirm</span>}</span>
+                      <span className="cu-st">{soon(s) || (s.status !== 'confirmed' && notFinal(s)) ? null : s.status === 'confirmed' ? <span className="cu-ok" aria-label="Confirmed">✓</span> : <span className="tag-ask" style={{ height: 26, fontSize: 11, padding: '0 9px' }}>Confirm</span>}</span>
                     </Link>
                   ); };
                   const rm = (m: (typeof mtgComing)[number]) => { const d = dayOfMtl(m.starts_at); const b = dayBadge(d, lang); const tm = time(m.starts_at, lang); return (
