@@ -3,28 +3,31 @@ import { supabase } from '../lib/supabase';
 
 /** Nov 8 · Today v4 · ✎ Edit layout: order, 📌 pin, Open / Folded / Hidden. Saved per admin in admin_prefs (080),
  *  so desktop and phone match. Before 080 (or offline) it falls back to this browser only. */
-export type SecKey = 'needs' | 'ai' | 'tonight' | 'debriefs' | 'ratings' | 'late' | 'month' | 'meetings' | 'sheet' | 'pay' | 'hiring';
+export type SecKey = 'needs' | 'messages' | 'ai' | 'tonight' | 'debriefs' | 'ratings' | 'late' | 'month' | 'meetings' | 'sheet' | 'pay' | 'hiring';
 export type Mode = 'open' | 'folded' | 'hidden';
 export type Layout = { order: SecKey[]; pinned: SecKey[]; mode: Partial<Record<SecKey, Mode>> };
 export const SEC_LABEL: Record<SecKey, string> = {
-  needs: 'Needs you', ai: 'AI · to review', tonight: 'Tonight', debriefs: 'Last night · debriefs', ratings: 'New staff ratings',
+  needs: 'Needs you', messages: 'Messages', ai: 'AI · to review', tonight: 'Tonight', debriefs: 'Last night · debriefs', ratings: 'New staff ratings',
   late: 'Late 30 min +', month: 'This month', meetings: 'Meetings', sheet: 'Sheet changes', pay: 'Pay period', hiring: 'Hiring',
 };
 /** Full width on desktop (the rest fill 2 columns in order). */
 export const WIDE: SecKey[] = ['sheet']; // Nov 8 · Tonight is half width (push 60: beside This month; Next 7 days dropped)
 export const DEFAULT_LAYOUT: Layout = {
-  order: ['needs', 'ai', 'tonight', 'month', 'hiring', 'debriefs', 'ratings', 'pay', 'late', 'meetings', 'sheet'],
-  pinned: ['needs', 'ai'],
+  order: ['needs', 'messages', 'ai', 'tonight', 'month', 'hiring', 'debriefs', 'ratings', 'pay', 'late', 'meetings', 'sheet'],
+  pinned: ['needs', 'messages', 'ai'],
   mode: { late: 'folded', meetings: 'folded', sheet: 'folded' },
 };
 const KEY = 'today_layout'; const LS = 'gr_today_layout';
 function clean(v: unknown): Layout {
   const all = DEFAULT_LAYOUT.order;
   const x = (v && typeof v === 'object' ? v : {}) as Partial<Layout>;
+  const hadMsgs = Array.isArray(x.order) && x.order.includes('messages' as SecKey);
   const order = (Array.isArray(x.order) ? x.order.filter((k): k is SecKey => all.includes(k as SecKey)) : []).filter((k, i, a) => a.indexOf(k) === i);
   // A section added later (e.g. Hiring, push 55) goes right after the one before it in the default order, not at the bottom.
   all.forEach((k, i) => { if (order.includes(k)) return; const prev = all.slice(0, i).reverse().find((p) => order.includes(p)); order.splice(prev ? order.indexOf(prev) + 1 : 0, 0, k); });
   const pinned = Array.isArray(x.pinned) ? x.pinned.filter((k): k is SecKey => all.includes(k as SecKey)) : DEFAULT_LAYOUT.pinned;
+  // Nov 11 · Messages is new: pinned right under Needs you the first time (Ronnie can move it after)
+  if (Array.isArray(x.pinned) && !hadMsgs && !pinned.includes('messages')) pinned.splice(pinned.includes('needs') ? pinned.indexOf('needs') + 1 : 0, 0, 'messages');
   const mode = { ...DEFAULT_LAYOUT.mode, ...(x.mode && typeof x.mode === 'object' ? x.mode : {}) };
   return { order, pinned, mode };
 }

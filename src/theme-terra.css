@@ -1230,4 +1230,5 @@ html[data-theme="terra"] { --teams: #5B5FC7; --teams-bg: #EEEFFB; --teams-ink: #
 :where(html[data-theme="terra"]) .needs-bar { background: #A95435; color: #FBFAF6; box-shadow: 0 6px 18px rgba(176,69,46,0.25); }
 :where(html[data-theme="terra"]) .msg-grp-h .grow > span { color: #47483E; }
 :where(html[data-theme="terra"]) .msg-grp-h small { color: var(--muted, #777A68); }
+:where(html[data-theme="terra"]) .mt-row:hover { background: #3B4A3F; }
 html[data-theme="terra"] body { background: #EEF0E8; color: #2A2A24; }

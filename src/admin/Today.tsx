@@ -4,6 +4,7 @@ import { PendingBar, UnseenNeeds, UnseenRides } from './SendBox'; // push 72 · 
 import { ExpenseNeeds } from './Expenses';
 import { MeetingNotesNeeds } from './MeetingNotesNeeds';
 import { ReferralNeeds } from './ReferralNeeds'; // push 75
+import { MessagesToday, useInboxToday } from './MessagesToday'; // Nov 11
 import { useEffect, useState } from 'react';
 import { DebriefCards, RecentDebriefs, useRecentDebriefs } from '../components/Debrief';
 import { MiniMonth } from './MiniMonth';
@@ -339,6 +340,7 @@ export function Today() {
   const tonightSorted = [...tonight].sort((a, b) => Number(doneV(a)) - Number(doneV(b)) || a.title.localeCompare(b.title) || (a.department === 'bar' ? 1 : -1));
   const md = (k: SecKey) => lay.mode[k];
 
+  const msgN = useInboxToday(tick).open.length;
   const SECS: Record<SecKey, () => JSX.Element> = {
     needs: () => (
       <Section k="needs" mode={md('needs')} title={<>Needs you {needsN > 0 && <b className="accent sm">{needsN}</b>}</>}
@@ -390,6 +392,10 @@ export function Today() {
     month: () => (
       <Section k="month" mode={md('month')} title="This month" right={<Link to="/admin/month">Full month ›</Link>}>
         <MiniMonth />
+      </Section>),
+    messages: () => (
+      <Section k="messages" mode={md('messages')} title={<>Messages {msgN > 0 && <b className="accent sm">{msgN}</b>}</>} right={<Link to="/admin/messages">All messages ›</Link>}>
+        <MessagesToday tick={tick} />
       </Section>),
     hiring: () => (
       <Section k="hiring" mode={md('hiring')} title={<>Hiring {nApps > 0 && <b className="accent sm">{nApps}</b>}</>} right={<Link to="/admin/hiring">All applications ›</Link>}>
