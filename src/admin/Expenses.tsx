@@ -11,7 +11,7 @@ export function ExpenseSwitch({ staffId }: { staffId: string }) {
   const [on, setOn] = useState<boolean | null>(null);
   useEffect(() => { supabase.from('staff').select('can_expense').eq('id', staffId).maybeSingle().then(({ data, error }) => setOn(error ? null : !!(data as { can_expense: boolean } | null)?.can_expense)); }, [staffId]);
   if (on === null) return null; // before migration 104
-  const flip = async () => { const v = !on; setOn(v); const { error } = await supabase.from('staff').update({ can_expense: v }).eq('id', staffId); if (error) setOn(!v); };
+  const flip = async () => { const v = !on; setOn(v); const { error } = await supabase.rpc('admin_set_can_expense', { p_staff: staffId, p_on: v }); if (error) { setOn(!v); window.alert(error.message); } };
   return (
     <div className="st-row exp-sw"><div className="st-l"><b>Can add expenses</b><small>Floating + on their Home, any day (Parking, Uber, Gas, Other). You approve each one.</small></div>
       <button type="button" role="switch" aria-checked={on} className={'sw' + (on ? ' on' : '')} onClick={flip}><span className="sw-track"><span className="sw-knob" /></span><span className="sw-lbl">{on ? 'ON' : 'OFF'}</span></button></div>);
