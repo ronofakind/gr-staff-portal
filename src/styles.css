@@ -4278,3 +4278,8 @@ button.bc-beo.add { background: transparent; border-style: dashed; color: var(--
 .msg-grp-h .grow { display: flex; flex-direction: column; gap: 2px; min-width: 0; } .msg-grp-h .grow > span { font-size: 12.5px; color: #4A433C; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .msg-grp-h small { color: var(--muted, #7A7168); white-space: nowrap; }
 .msg-dot.in { display: inline-block; position: static; margin-right: 6px; vertical-align: middle; }
+
+/* Nov 11 · Coming up: fixed columns so the uniform, start time and status line up on every row */
+.agenda-row .row-st { width: 72px; flex: 0 0 72px; display: flex; align-items: center; justify-content: center; }
+.agenda-row .row-st .tag-soon { white-space: normal; height: auto; padding: 4px 8px; text-align: center; line-height: 1.15; font-size: 10.5px; }
+.agenda-row .row-st .tag-ask { padding: 0 9px; }

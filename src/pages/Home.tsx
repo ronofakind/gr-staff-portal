@@ -548,7 +548,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
                         <span className="pos-row2"><span className={'pos-pill' + (isLead(s) ? ' lead' : '')}>{pos(s)}</span>{teams[s.events.id] && !preview ? <span>team {teams[s.events.id].length}</span> : null}</span></div>
                       <span className="row-wear" title={uniformLabel(uniformFor(s))}><UniformIcon kind={uniformFor(s)} size={30} /></span>
                       <div className="row-time"><small>Starts</small>{pend ? <b className="tbc">To come</b> : s.time_tbc ? <b className="tbc">Time TBC</b> : <b><span className="serif">{time(s.planned_start, lang).replace(/\s?[ap]\.?\s?m\.?/i, '')}</span><i>{/p\.?\s?m/i.test(time(s.planned_start, lang)) ? ' PM' : ' AM'}</i></b>}</div>
-                      {soon(s) ? <span className="tag-soon">Details coming</span> : s.status === 'confirmed' ? <span className="ok-dot" aria-label="Confirmed" /> : notFinal(s) ? <span className="tag-soon">Details coming</span> : <span className="tag-ask" style={{ height: 26, fontSize: 11 }}>Confirm</span>}
+                      <span className="row-st">{soon(s) ? <span className="tag-soon">Details coming</span> : s.status === 'confirmed' ? <span className="ok-dot" aria-label="Confirmed" /> : notFinal(s) ? <span className="tag-soon">Details coming</span> : <span className="tag-ask" style={{ height: 26, fontSize: 11 }}>Confirm</span>}</span>
                     </Link>
                   ); };
                   const rm = (m: (typeof mtgComing)[number]) => { const d = dayOfMtl(m.starts_at); const b = dayBadge(d, lang); const tm = time(m.starts_at, lang); return (
@@ -557,7 +557,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
                     <div className="what" style={{ gap: 5 }}><b>{m.title}</b><span className="pos-row2"><span className="pos-pill mtg">Meeting</span><span>✓ you’re coming</span></span></div>
                     <span className="row-wear" aria-hidden="true" />
                     <div className="row-time"><small>Starts</small><b><span className="serif">{tm.replace(/\s?[ap]\.?\s?m\.?/i, '')}</span><i>{/p\.?\s?m/i.test(tm) ? ' PM' : ' AM'}</i></b></div>
-                    <span className="ok-dot" aria-hidden="true" style={{ visibility: 'hidden' }} />
+                    <span className="row-st" aria-hidden="true" />
                   </Link>); };
                   const sh = list.slice(0, 5); const cut = list.length > 5 ? sh[sh.length - 1].planned_start : null;
                   const items: { at: string; el: JSX.Element }[] = [
