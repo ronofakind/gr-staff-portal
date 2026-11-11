@@ -2,6 +2,11 @@
 import { EVENTS_ROOT, accessToken, bearer, findOrCreateFolder, sb } from '../_google.js';
 
 export default async function handler(req, res) {
+  // Native app (App Store / Google Play) calls from capacitor://localhost / https://localhost: allow it, answer preflight.
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  if (req.method === 'OPTIONS') { res.status(204).end(); return; }
   if (req.method !== 'POST') { res.status(405).end(); return; }
   const jwt = bearer(req); const { event_id, month, name } = req.body || {};
   if (!jwt || !event_id || !month || !name) { res.status(400).json({ error: 'Missing details' }); return; }

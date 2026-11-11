@@ -103,6 +103,11 @@ function mevent(m, now) {
 }
 
 export default async function handler(req, res) {
+  // Native app (App Store / Google Play) calls from capacitor://localhost / https://localhost: allow it, answer preflight.
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  if (req.method === 'OPTIONS') { res.status(204).end(); return; }
   const t = String(req.query.t || '').trim();
   if (!/^[0-9a-f-]{36}$/i.test(t) || !URL_ || !KEY) { res.status(404).send('Not found'); return; }
   const r = await fetch(`${URL_}/rest/v1/rpc/calendar_feed`, {

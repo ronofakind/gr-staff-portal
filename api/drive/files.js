@@ -3,6 +3,11 @@
 import { accessToken, bearer, drive, folderIdOf, rpc, sb } from '../_google.js';
 
 export default async function handler(req, res) {
+  // Native app (App Store / Google Play) calls from capacitor://localhost / https://localhost: allow it, answer preflight.
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  if (req.method === 'OPTIONS') { res.status(204).end(); return; }
   const jwt = bearer(req); const event = String(req.query.event || '');
   if (!jwt || !/^[0-9a-f-]{36}$/i.test(event)) { res.status(400).json({ files: [] }); return; }
   const ev = await sb(`events?id=eq.${event}&select=drive_folder_url`, jwt);

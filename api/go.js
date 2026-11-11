@@ -33,6 +33,11 @@ async function auth(path, method, body) {
 }
 
 export default async function handler(req, res) {
+  // Native app (App Store / Google Play) calls from capacitor://localhost / https://localhost: allow it, answer preflight.
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  if (req.method === 'OPTIONS') { res.status(204).end(); return; }
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('X-Robots-Tag', 'noindex');
   const ready = !!(URL_ && SERVICE);

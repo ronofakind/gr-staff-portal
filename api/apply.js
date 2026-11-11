@@ -29,6 +29,11 @@ async function referrer(id) {
 }
 
 export default async function handler(req, res) {
+  // Native app (App Store / Google Play) calls from capacitor://localhost / https://localhost: allow it, answer preflight.
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  if (req.method === 'OPTIONS') { res.status(204).end(); return; }
   res.setHeader('Cache-Control', 'no-store');
   if (!URL_ || !SERVICE) return res.status(503).json({ error: 'not set up' });
   try {
