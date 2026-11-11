@@ -1,4 +1,5 @@
 import { ThemePicker } from '../components/ThemePicker';
+import { currentTheme } from '../lib/theme';
 import { useEffect, useState } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { supabase, type Staff } from '../lib/supabase';
@@ -18,7 +19,7 @@ import { Brand } from '../components/Brand';
 import { DeleteAccountLink } from './DeleteAccount';
 
 type Extra = { transport: string | null; positions: string[] | null; shirt_size: string | null; pants_size: string | null; dress_size: string | null };
-const POSITIONS = ['Waiter', 'Bartender', 'Barback'];
+const POSITIONS = ['Waiter', 'Bartender', 'Barback', 'Cook']; // Ronnie Nov 10: Cook yes, MD never self-picked
 const SHIRT = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
 const PANTS = ['28', '30', '32', '34', '36', '38', '40', '42'];
 const DRESS = ['0', '2', '4', '6', '8', '10', '12', '14', '16'];
@@ -36,6 +37,15 @@ export function Profile({ me }: { me: Staff }) {
   const [phone, setPhone] = useState(me.phone ?? ''); const nav = useNavigate();
   const { info: cu, reload: reloadCu } = useCheckup(); const [emOpen, setEmOpen] = useState(false); const [whyOpen, setWhyOpen] = useState(false);
   const [pinLen, setPinLen] = useState<PinLen | null>(null);
+  const fr = me.language === 'fr'; const [sizesOpen, setSizesOpen] = useState(false); const [colOpen, setColOpen] = useState(false); // push 82
+  const [since, setSince] = useState<string | null>(null);
+  useEffect(() => { (async () => { // "with G&R since": first shift, else the date they joined the app
+    const { data } = await supabase.from('shifts').select('events!inner(event_date)').eq('staff_id', me.id).order('event_date', { referencedTable: 'events', ascending: true }).limit(1);
+    const d = (data?.[0] as unknown as { events?: { event_date: string } } | undefined)?.events?.event_date ?? (me as unknown as { created_at?: string }).created_at?.slice(0, 10);
+    if (d) setSince(new Date(d + 'T12:00:00').toLocaleDateString(fr ? 'fr-CA' : 'en-CA', { month: 'short', year: 'numeric' }).replace('.', ''));
+  })(); }, [me.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const themeName = (() => { const t = currentTheme(); return t === 'dark' ? (fr ? 'Sombre' : 'Dark') : t === 'terra' ? 'Terracotta & Sage' : (fr ? 'Classique' : 'Classic'); })();
+  const setLang = async (l: 'en' | 'fr') => { if ((me.language ?? 'en') === l) return; me.language = l; setMsg('Saving…'); const { error } = await supabase.from('staff').update({ language: l }).eq('id', me.id); setMsg(error ? error.message : '✓ Saved'); };
   useEffect(() => { if (me.email) resolvePinLen(me.email).then((r) => setPinLen(r.known ? r.len : null)); }, [me.email]);
 
   useEffect(() => {
@@ -63,12 +73,13 @@ export function Profile({ me }: { me: Staff }) {
         <span className="sm strong" style={{ color: msg.startsWith('✓') ? 'var(--ok)' : 'var(--muted)' }}>{msg}</span>
       </div>
 
+      {/* push 82 · Profile regrouped (board ProfileV3, Ronnie Nov 10): identity · 3 tiles · About me · Work · App · G&R */}
       <section className="card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div className="row" style={{ gap: 16 }}>
           <PhotoPicker name={me.full_name} url={url} onPick={pick} size={84} />
           <div style={{ minWidth: 0 }}>
             <div style={{ fontSize: 18, fontWeight: 700 }}>{me.full_name}</div>
-            <div className="muted sm">{me.role === 'manager' ? 'Manager' : me.role === 'admin' ? 'Admin' : 'Staff'}</div>
+            <div className="muted sm">{me.role === 'manager' ? 'Manager' : me.role === 'admin' ? 'Admin' : 'Staff'}{since ? ` · with G&R since ${since}` : ''}</div>
           </div>
         </div>
         <button className="nick-row" onClick={() => setNickOpen(true)}>
@@ -76,63 +87,61 @@ export function Profile({ me }: { me: Staff }) {
         </button>
       </section>
 
-      <div className="sec-head"><span className="serif">Contact &amp; login</span></div>
+      <div className="pf-tiles">
+        <button className="pf-tile" onClick={() => nav('/hours')}><span aria-hidden="true">⏱</span><b>{fr ? 'Mes heures' : 'My hours'}</b><small>{fr ? 'cette période' : 'this pay period'}</small></button>
+        <button className="pf-tile" onClick={() => nav('/handbook')}><span aria-hidden="true">📘</span><b>{fr ? 'Guide' : 'Handbook'}</b><small>G&amp;R standards</small></button>
+        {cal && me.role !== 'admin'
+          ? <button className="pf-tile" onClick={() => setCalOpen(true)}><span aria-hidden="true">📅</span><b>{fr ? 'Calendrier' : 'Calendar'}</b><small className={cal.added_at ? 'okc' : ''}>{cal.added_at ? (fr ? '✓ ajouté' : '✓ added') : (fr ? 'à ajouter' : 'not added')}</small></button>
+          : <span />}
+      </div>
+
+      <div className="sec-head"><span className="serif">{fr ? 'Moi' : 'About me'}</span></div>
       <section className="sizes">
         <div className="size-row"><span className="row-l">Email</span><span className="row-v">{me.email}</span></div>
-        <button className="size-row edit-row" onClick={() => setEdit('phone')}><span className="row-l">Phone</span><span className="row-v">{phone || '—'}</span><span className="row-a">Edit ›</span></button>
-        {me.role !== 'admin' && cu && <button className="size-row edit-row" onClick={() => setEmOpen(true)}><span className="row-l">Emergency</span><span className={'row-v' + (cu.emergency_phone ? '' : ' empty')}>{cu.emergency_phone ? `${cu.emergency_name ?? ''}${cu.emergency_relation ? ` · ${cu.emergency_relation}` : ''}` : 'Not added'}</span><span className="row-a">{cu.emergency_phone ? 'Edit ›' : 'Add ›'}</span></button>}
+        <button className="size-row edit-row" onClick={() => setEdit('phone')}><span className="row-l">{fr ? 'Téléphone' : 'Phone'}</span><span className="row-v">{phone || '—'}</span><span className="row-a">Edit ›</span></button>
+        {me.role !== 'admin' && cu && <button className="size-row edit-row" onClick={() => setEmOpen(true)}><span className="row-l">{fr ? 'Urgence' : 'Emergency'}</span><span className={'row-v' + (cu.emergency_phone ? '' : ' empty')}>{cu.emergency_phone ? `${cu.emergency_name ?? ''} · ${cu.emergency_phone}` : (fr ? 'À ajouter' : 'Not added')}</span><span className="row-a">Edit ›</span></button>}
         <button className="size-row edit-row" onClick={() => setEdit('pin')}><span className="row-l">Code</span><span className="row-v">{pinLen === 4 ? '••••' : '••••••'}</span><span className="row-a">Change ›</span></button>
       </section>
 
       {x && <>
-        <div className="sec-head"><span className="serif">How I get to events</span></div>
-        <div className="row2" style={{ gap: 10 }}>
-          {(['car', 'transit'] as const).map((t) => (
-            <button key={t} className={'opt-big' + (x.transport === t ? ' on' : '')} onClick={() => save({ transport: t })}>
-              {t === 'car'
-                ? <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 17h14v-5l-2-5H7l-2 5z" /><path d="M3 12h18" /><circle cx="7.5" cy="17" r="1.8" /><circle cx="16.5" cy="17" r="1.8" /></svg>
-                : <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="5" y="3" width="14" height="15" rx="3" /><path d="M5 11h14M9 21l1-3M15 21l-1-3" /><circle cx="8.5" cy="14.5" r="1" /><circle cx="15.5" cy="14.5" r="1" /></svg>}
-              {t === 'car' ? 'Car' : 'Transit'}
-            </button>
-          ))}
-        </div>
-
-        <div className="sec-head"><span className="serif">Positions I can work</span><span className="muted sm">Pick all that apply</span></div>
-        <div className="chips">
-          {POSITIONS.map((p) => (
-            <button key={p} className={'bubble' + (has(p) ? ' on' : '')}
-              onClick={() => save({ positions: has(p) ? pos.filter((q) => q.toLowerCase() !== p.toLowerCase()) : [...pos, p] })}>
-              {has(p) && '✓ '}{p}
-            </button>
-          ))}
-        </div>
-
-        <div className="sec-head"><span className="serif">Uniform sizes <button type="button" className="why-q" aria-label="Why we ask for your sizes" onClick={() => setWhyOpen(true)}>?</button></span></div>
+        <div className="sec-head"><span className="serif">{fr ? 'Travail' : 'Work'}</span><span className="muted sm">{fr ? 'pour les réservations' : 'used for bookings'}</span></div>
         <section className="sizes">
-          <SizeRow label="Shirt" hint="the letter on the tag" value={x.shirt_size} options={SHIRT} onChange={(v) => save({ shirt_size: v })} />
-          <SizeRow label="Pants (waist)" hint="jeans tag W32 L30 → 32" value={x.pants_size} options={PANTS} onChange={(v) => save({ pants_size: v })} />
-          <SizeRow label="Dress" hint="between sizes? pick the bigger" value={x.dress_size} options={DRESS} none="Not needed" onChange={(v) => save({ dress_size: v })} />
+          <div className="size-row"><span className="row-l">{fr ? 'Transport' : 'Getting there'}</span>
+            <span className="row-v"><span className="pf-seg">{(['car', 'transit'] as const).map((t) => <button key={t} className={x.transport === t ? 'on' : ''} onClick={() => save({ transport: t })}>{t === 'car' ? (fr ? '🚗 Auto' : '🚗 Car') : (fr ? '🚇 Transport' : '🚇 Transit')}</button>)}</span></span></div>
+          <button className="size-row edit-row" onClick={() => setSizesOpen(!sizesOpen)}><span className="row-l">{fr ? 'Tailles' : 'Sizes'}</span>
+            <span className={'row-v' + ([x.shirt_size, x.pants_size].some((v) => !v) ? ' empty' : '')}>{[x.shirt_size ?? '—', x.pants_size ?? '—', x.dress_size ?? '—'].join(' · ')}</span>
+            <span className="row-a">{sizesOpen ? 'Done' : 'Edit ›'}</span></button>
+          {sizesOpen && <>
+            <SizeRow label="Shirt" hint="the letter on the tag" value={x.shirt_size} options={SHIRT} onChange={(v) => save({ shirt_size: v })} />
+            <SizeRow label="Pants (waist)" hint="jeans tag W32 L30 → 32" value={x.pants_size} options={PANTS} onChange={(v) => save({ pants_size: v })} />
+            <SizeRow label="Dress" hint="between sizes? pick the bigger" value={x.dress_size} options={DRESS} none="Not needed" onChange={(v) => save({ dress_size: v })} />
+            <button type="button" className="size-row pf-why" onClick={() => setWhyOpen(true)}>Why we ask for your sizes ›</button>
+          </>}
         </section>
-        <p className="size-count">{[x.shirt_size, x.pants_size, x.dress_size].filter(Boolean).length} of 3 filled{!x.dress_size ? ' · Dress: leave “Not needed” if it doesn’t apply' : ''}</p>
+        <section className="card pf-pos">
+          <small className="muted">{fr ? 'Postes que je peux faire' : 'Positions I can work'}</small>
+          <div className="chips">
+            {POSITIONS.map((p) => (
+              <button key={p} className={'bubble' + (has(p) ? ' on' : '')}
+                onClick={() => save({ positions: has(p) ? pos.filter((q) => q.toLowerCase() !== p.toLowerCase()) : [...pos, p] })}>
+                {has(p) && '✓ '}{p}
+              </button>
+            ))}
+          </div>
+        </section>
       </>}
 
-      {cal && me.role !== 'admin' && <div className="sec-head"><span className="serif"><Brand /> calendar</span></div>}
-      {cal && me.role !== 'admin' && <section className="sizes">
-        <button className="size-row edit-row" onClick={() => setCalOpen(true)}><span className="row-l">Calendar</span><span className={'row-v' + (cal.added_at ? ' ok' : ' empty')}>{cal.added_at ? '✓ Added' : 'Not added'}</span><span className="row-a">{cal.added_at ? 'Add again ›' : 'Add ›'}</span></button>
-      </section>}
-
-      {me.role !== 'admin' && <AlertsProfileRow me={me} />}
-
-      {/* push 78 · App colours */}
-      <div className="sec-head"><span className="serif">{me.language === 'fr' ? 'Couleurs de l’app' : 'App colours'}</span></div>
-      <section className="card"><ThemePicker staffId={me.id} fr={me.language === 'fr'} /></section>
-
-      {/* push 56 · Refer a friend (their link fills "Referred by" on the apply page) + the handbook any time */}
-      <div className="sec-head"><span className="serif">Refer a friend</span></div>
+      <div className="sec-head"><span className="serif">App</span></div>
       <section className="sizes">
-        <ReferRow me={me} />
-        <button className="size-row edit-row" onClick={() => nav('/handbook')}><span className="row-l">Handbook</span><span className="row-v">G&R standards</span><span className="row-a">Read ›</span></button>
+        {me.role !== 'admin' && <AlertsProfileRow me={me} bare />}
+        <div className="size-row"><span className="row-l">{fr ? 'Langue' : 'Language'}</span>
+          <span className="row-v"><span className="pf-seg">{(['en', 'fr'] as const).map((l) => <button key={l} className={(me.language ?? 'en') === l ? 'on' : ''} onClick={() => setLang(l)}>{l === 'en' ? 'English' : 'Français'}</button>)}</span></span></div>
+        <button className="size-row edit-row" onClick={() => setColOpen(!colOpen)}><span className="row-l">{fr ? 'Couleurs' : 'Colours'}</span><span className="row-v">{themeName}</span><span className="row-a">{colOpen ? 'Done' : 'Change ›'}</span></button>
+        {colOpen && <div className="pf-inset"><ThemePicker staffId={me.id} fr={fr} /></div>}
       </section>
+
+      <div className="sec-head"><span className="serif">G&amp;R</span></div>
+      <ReferCard me={me} fr={fr} />
 
       <button className="btn" onClick={() => supabase.auth.signOut().then(() => window.location.replace('/'))}>Log out</button>
       {me.role !== 'admin' && <DeleteAccountLink />}
@@ -272,13 +281,18 @@ function NickSheet({ me, nick, onClose, onSaved }: { me: Staff; nick: string | n
   );
 }
 
-function ReferRow({ me }: { me: Staff }) {
+/** push 82 · Refer a friend: its own dark card, Share (phone share sheet) + Copy. */
+function ReferCard({ me, fr }: { me: Staff; fr: boolean }) {
   const [ok, setOk] = useState(false);
   const link = `https://${window.location.host}/apply?r=${me.id}`;
-  const share = async () => {
-    const text = `G&R is hiring for events in Montreal. Apply here (3 min): ${link}`;
-    try { if (navigator.share) { await navigator.share({ text }); return; } } catch { return; }
-    try { await navigator.clipboard.writeText(text); setOk(true); setTimeout(() => setOk(false), 2000); } catch { /* */ }
-  };
-  return <button className="size-row edit-row" onClick={share}><span className="row-l">Your link</span><span className={'row-v' + (ok ? ' ok' : '')}>{ok ? '✓ Copied' : 'When they apply, we know you sent them'}</span><span className="row-a">Share ›</span></button>;
+  const text = fr ? `G&R engage pour des événements à Montréal. Postule ici (3 min) : ${link}` : `G&R is hiring for events in Montreal. Apply here (3 min): ${link}`;
+  const copy = async () => { try { await navigator.clipboard.writeText(text); setOk(true); setTimeout(() => setOk(false), 2000); } catch { /* */ } };
+  const share = async () => { try { if (navigator.share) { await navigator.share({ text }); return; } } catch { return; } copy(); };
+  return (
+    <section className="pf-refer">
+      <span className="pf-refer-k">{fr ? 'RÉFÈRE UN AMI' : 'REFER A FRIEND'}</span>
+      <span className="pf-refer-t">{fr ? 'Tu connais quelqu’un de bien pour G&R?' : 'Know someone great for G&R?'}</span>
+      <span className="pf-refer-s">{fr ? 'Envoie-lui ton lien. Sa candidature montre que tu l’as référé.' : 'Send them your link. Their application shows you referred them.'}</span>
+      <div className="pf-refer-b"><button className="pf-share" onClick={share}>{fr ? 'Partager mon lien' : 'Share my link'}</button><button className="pf-copy" onClick={copy}>{ok ? '✓' : (fr ? 'Copier' : 'Copy')}</button></div>
+    </section>);
 }

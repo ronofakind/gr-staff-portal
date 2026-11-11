@@ -48,18 +48,17 @@ export function AlertsCard({ me }: { me: Staff }) {
 }
 
 /** Profile row → opens the Notifications sheet. Hidden while alerts aren't set up. */
-export function AlertsProfileRow({ me }: { me: Staff }) {
+export function AlertsProfileRow({ me, bare = false }: { me: Staff; bare?: boolean }) {
   const a = useAlerts(); const [open, setOpen] = useState(false);
   if (!a.state || a.state === 'dormant') return null;
-  return <>
-    <div className="sec-head"><span className="serif">Notifications</span></div>
-    <section className="sizes">
+  const row = (
       <button className="size-row edit-row" onClick={() => setOpen(true)}>
-        <span className="row-l">Phone alerts</span>
+        <span className="row-l">{bare ? 'Alerts' : 'Phone alerts'}</span>
         <span className={'row-v' + (a.state === 'on' ? ' ok' : ' empty')}>{a.state === 'on' ? '✓ On' : 'Off'}</span>
         <span className="row-a">Change ›</span>
-      </button>
-    </section>
+      </button>);
+  return <>
+    {bare ? row : <><div className="sec-head"><span className="serif">Notifications</span></div><section className="sizes">{row}</section></>}
     {open && <>
       <div className="scrim" onClick={() => setOpen(false)} />
       <SwipeSheet onClose={() => setOpen(false)} label="Notifications">

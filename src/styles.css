@@ -4186,3 +4186,23 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; }
 .bk-mtg-p { padding: 4px 9px; border-radius: 8px; background: #fff; border: 1px solid #E4DCD1; color: #1A1714; text-decoration: none; }
 .bk-mtg-p.no { border: 1px dashed #B0452E; color: #B0452E; }
 .bk-mtg-p.add { border: 1.5px dashed #CFC5B8; color: #7A7268; }
+
+/* push 82 · Profile regrouped */
+.pf-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.pf-tile { border: 0; background: #fff; border-radius: 16px; padding: 12px 10px; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; text-align: left; cursor: pointer; font: inherit; color: inherit; }
+.pf-tile span { font-size: 20px; }
+.pf-tile b { font-size: 13px; }
+.pf-tile small { font-size: 11px; color: #7A7268; }
+.pf-seg { display: inline-flex; gap: 4px; background: #F1ECE4; border-radius: 10px; padding: 3px; }
+.pf-seg button { border: 0; background: none; border-radius: 8px; padding: 6px 10px; font: 600 13px Inter, system-ui, sans-serif; color: #7A7268; cursor: pointer; }
+.pf-seg button.on { background: #fff; color: #1A1714; box-shadow: 0 1px 2px rgba(26,23,20,.12); }
+.pf-pos { display: flex; flex-direction: column; gap: 8px; }
+.pf-why { justify-content: center; color: #7A7268; font-size: 12.5px; text-decoration: underline; }
+.pf-inset { padding: 12px 14px; border-top: 1px solid #F0EAE2; }
+.pf-refer { background: #1A1714; color: #F6F2EC; border-radius: 20px; padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+.pf-refer-k { font-size: 10.5px; font-weight: 800; letter-spacing: .14em; color: #C9A227; }
+.pf-refer-t { font-family: Fraunces, Georgia, serif; font-size: 20px; line-height: 1.15; }
+.pf-refer-s { font-size: 12.5px; color: #CFC5B8; }
+.pf-refer-b { display: flex; gap: 8px; }
+.pf-share { flex: 1; height: 42px; border-radius: 12px; border: 0; background: #C9A227; color: #1A1714; font: 800 14px Inter, system-ui, sans-serif; cursor: pointer; }
+.pf-copy { height: 42px; padding: 0 16px; border-radius: 12px; border: 1px solid #4A433C; background: none; color: #F6F2EC; font: 700 14px Inter, system-ui, sans-serif; cursor: pointer; }
