@@ -183,8 +183,8 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
   const restAfter = isDbl ? rest.filter((s) => s.events.event_date !== next!.events.event_date) : rest;
   const todayDbl = dayShifts(night).length >= 2;
   // push 33e · not final = details pending or time TBC: "Details coming", never a Confirm button
-  const notFinal = (s: ShiftRow) => !!s.events.details_pending || !!s.time_tbc;
-  const soon = (s: ShiftRow) => !!s.events.details_pending || (!!s.time_tbc && s.status === 'booked');
+  const notFinal = (s: ShiftRow) => !!s.events.details_pending || !!s.time_tbc || !!s.pool_hold;
+  const soon = (s: ShiftRow) => !!s.events.details_pending || (!!s.time_tbc && s.status === 'booked') || !!s.pool_hold; // push 97
   const pending = shifts.filter((s) => s.status === 'booked' && !notFinal(s) && s !== next); // the next shift confirms on its own card
   const changed = (s: ShiftRow) => { const x = x33[s.id]; return s.status === 'confirmed' && x?.change_prev && x.change_sent_at && !x.change_seen_at ? x.change_prev : null; }; // push 72 · only once sent
   const toAns = (myDates ?? []).filter((d) => toAnswer(d));
@@ -383,9 +383,9 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
           return (
             <section className="next details-coming" style={{ gap: 14, padding: 18 }}>
               <div className="top-line"><span className="day-word">{d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase()}</span><span className="soon-pill">Details coming</span></div>
-              <div className="venue serif">You’re booked</div>
+              <div className="venue serif">{next.pool_hold ? `You’re on · ${next.events.title}` : 'You’re booked'}</div>
               <StartPos start={null} role={pos(next)} mgr={coMgr(next)} />
-              <div className="sub dc-text">The time and place are coming. You’ll be asked to confirm once they’re set, and you’ll have 24 hours from then.</div>
+              <div className="sub dc-text">{next.pool_hold ? 'The time is coming. You’ll get the details to confirm about 4 days before.' : 'The time and place are coming. You’ll be asked to confirm once they’re set, and you’ll have 24 hours from then.'}</div>
               {needChange}
             </section>
           );

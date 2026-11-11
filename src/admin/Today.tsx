@@ -257,6 +257,10 @@ export function Today() {
           : { key: 'qb' + r.staff_id, title: `${nm} · tax and pay done`, sub: 'Ready to add to QuickBooks', action: 'Add to QuickBooks', to: `/admin/staff?open=${r.staff_id}`,
             onAct: async () => { await supabase.from('staff_tax').update({ qb_status: 'sending', qb_at: new Date().toISOString(), qb_note: null }).eq('staff_id', r.staff_id); setTick((t) => t + 1); } });
       }
+      // push 97 · day pool: 4 days out → ready to confirm the placed people and release the rest
+      { const { data: ph, error: phe } = await supabase.from('shifts').select('id,events!inner(event_date)').eq('pool_hold', true).gte('events.event_date', today).lte('events.event_date', addDays(today, 4));
+        if (!phe) { const per: Record<string, number> = {}; for (const r of (ph ?? []) as unknown as { events: { event_date: string } }[]) per[r.events.event_date] = (per[r.events.event_date] ?? 0) + 1;
+          for (const [d, k] of Object.entries(per)) n.unshift({ key: 'pool' + d, red: true, title: `${dLabel(d, { weekday: 'short', month: 'short', day: 'numeric' })} · 4 days out · ready to confirm ${k} ${k === 1 ? 'person' : 'people'}`, sub: 'Day pool · one tap sends the confirmations and releases the rest', action: 'Open', to: `/admin/pool/${d}` }); } }
       // Nov 11 · 5 days out, venue + start time must be there (Ronnie): one red line per event that still misses one
       { const to5 = addDays(today, 5);
         const { data: d5, error: d5e } = await supabase.from('events').select('id,event_date,title,department,details_pending,start_tbc,venue_id').gte('event_date', today).lte('event_date', to5).order('event_date');

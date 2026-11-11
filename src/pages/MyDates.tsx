@@ -31,7 +31,7 @@ const t12 = (iso: string) => new Date(iso).toLocaleTimeString('en-US', { hour: '
 const dow3 = (iso: string) => D(iso).toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
 const monthName = (iso: string) => D(iso).toLocaleDateString('en-US', { month: 'long' });
 const dowMon0 = (iso: string) => (D(iso).getDay() + 6) % 7; // 0 = Monday (staff_weekly)
-const notFinal = (s: Shift) => !!s.events.details_pending || !!s.time_tbc;
+const notFinal = (s: Shift) => !!s.events.details_pending || !!s.time_tbc || !!(s as { pool_hold?: boolean }).pool_hold; // push 97
 
 /** Push 35b · My dates: List (Answer · Booked · Answered) | Calendar. Replaces the Schedule tab. */
 export function MyDates({ me, base = '', preview = false }: { me: Staff; base?: string; preview?: boolean }) {
@@ -62,7 +62,7 @@ export function MyDates({ me, base = '', preview = false }: { me: Staff; base?: 
   const past = usePastEvents(me.id, 30, fbOn);
 
   const loadShifts = () => supabase.from('shifts')
-    .select('id,status,attendance,planned_start,time_tbc,confirm_by,confirmed_by,events!inner(id,event_date,title,details_pending,venues(name))')
+    .select('id,status,attendance,pool_hold,planned_start,time_tbc,confirm_by,confirmed_by,events!inner(id,event_date,title,details_pending,venues(name))')
     .eq('staff_id', me.id).neq('status', 'declined').gte('events.event_date', today)
     .then(({ data, error }) => {
       if (error) console.warn('[my dates · shifts]', error.message);
@@ -258,7 +258,7 @@ function AnsweredRow({ d, onTap, until, times }: { d: MyDate; onTap: () => void;
   if (d.status === 'yes') return (
     <div className="md-card row">
       <DateSq iso={d.for_date} kind="yes" />
-      <div className="grow" style={{ minWidth: 0 }}><b>Yes · {until ? `day only ${d.from_time ? ampm15(d.from_time.slice(0, 5)) : ''}–${ampm15(until)}` : d.from_time ? ampm15(d.from_time.slice(0, 5)) : 'any time'}</b><span className="md-tag yes">NOT BOOKED YET</span><small className="md-sub">{times ? timesText(times) + (times.length > 1 || times[0].starts.length > 1 ? ' · we’ll tell you which' : '') : whereText(d)}</small></div>
+      <div className="grow" style={{ minWidth: 0 }}><b>Yes · {until ? `day only ${d.from_time ? ampm15(d.from_time.slice(0, 5)) : ''}–${ampm15(until)}` : d.from_time ? ampm15(d.from_time.slice(0, 5)) : 'any time'}</b><span className="md-tag yes">NOT BOOKED YET</span><small className="md-sub">We’ll confirm by <b>{(() => { const x = new Date(d.for_date + 'T12:00:00'); x.setDate(x.getDate() - 4); return x.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }); })()}</b></small>{/* push 97 */}<small className="md-sub">{times ? timesText(times) + (times.length > 1 || times[0].starts.length > 1 ? ' · we’ll tell you which' : '') : whereText(d)}</small></div>
       <button className="md-chg" onClick={onTap}>Change</button>
     </div>
   );

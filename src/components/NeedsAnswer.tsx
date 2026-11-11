@@ -64,7 +64,7 @@ export function useNeeds(me: Staff, preview = false) {
   }, [me.id, preview, tick]);
   const reload = () => { setTick((t) => t + 1); reloadAsks(); reloadDates(); };
   const list = rows ?? [];
-  const notFinal = (s: Row) => !!s.events.details_pending || !!s.time_tbc || !!s.events.tentative;
+  const notFinal = (s: Row) => !!s.events.details_pending || !!s.time_tbc || !!s.events.tentative || !!(s as { pool_hold?: boolean }).pool_hold; // push 97
   const confirm = list.filter((s) => s.status === 'booked' && !notFinal(s));
   const changed = list.filter((s) => s.status === 'confirmed' && s.change_prev && s.change_sent_at && !s.change_seen_at);
   const chEv = new Set([...changed, ...confirm].map((s) => s.events.id));

@@ -642,6 +642,7 @@ export function Bookings() {
                 {st === 'sent' ? <span className="bk-wok">✓</span> : st === 'ready' && d >= today0 ? <span className="bk-wsend" role="button" tabIndex={0} onClick={(ev) => { ev.stopPropagation(); setSendOf(sendOf === e.id ? null : e.id); }}>SEND</span> : st === 'later' ? <span className="bk-wlater">○</span> : null}
               </button>); })}
             {evs.length > 3 && <span className="bk-wmore">+{evs.length - 3} more</span>}
+            {evs.filter((e) => !isBarEv(e)).length >= 2 && <Link className="bk-wpool" to={`/admin/pool/${d}`} onClick={(ev) => ev.stopPropagation()}>Day pool ›</Link>}{/* push 97 */}
           </div>); })
           : <span className="grow muted sm" style={{ textAlign: 'center' }}>{dLabel(range.from)} – {dLabel(range.to)}</span>}
         <button className="round" onClick={() => setP('date', addDays(date, 7))}>›</button>
