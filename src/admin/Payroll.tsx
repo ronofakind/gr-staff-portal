@@ -1,6 +1,7 @@
 // push 77 · Payroll in the app (migration 102). One page per pay period (1–15 paid the 16th, 16–end paid the 1st).
 // Main view = name + total pay. Tap → hours by date × rate, travel, gas, meetings, extra lines. "Make RBC file" builds the
 // same filler script as the rbc-payroll-import skill and locks the period. Admin only.
+import { zipSync } from 'fflate';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -15,7 +16,7 @@ export const KINDS: [string, string, 1 | -1 | 0][] = [
   ['paypal', 'PayPal (already paid)', -1], ['cash', 'Paid cash', -1], ['cra', 'Payment to CRA', -1], ['banked', 'Bank hours', -1], ['payout', 'Pay out banked hours', 1],
 ];
 const kindName = (k: string) => KINDS.find((x) => x[0] === k)?.[1] ?? k;
-type Line = { id: string; staff_id: string; period_start: string; col_id?: string | null; kind: string; amount: number; hours: number | null; line_date: string | null; note: string | null; source: string };
+type Line = { id: string; staff_id: string; period_start: string; col_id?: string | null; source_id?: string | null; kind: string; amount: number; hours: number | null; line_date: string | null; note: string | null; source: string };
 type PShift = { id: string; date: string; title: string; hours: number; rate: number | null; pay: number; travel: number; gas: number; paypal: boolean; noEnd: boolean };
 type Person = { id: string; name: string; shifts: PShift[]; mtg: { date: string; title: string; hours: number; pay: number }[]; lines: Line[]; hours: number; base: number; total: number; noRate: boolean; noEnd: number };
 type Period = { locked_at: string | null; closed_at: string | null; rbc_lines: { staff_id: string; name: string; rbc_name: string; amount: number }[] | null; rbc_total: number | null };
@@ -133,6 +134,7 @@ export function Payroll() {
             <div className={'sm ' + (locked ? 'okc strong' : 'muted')}>{locked ? `Locked ${dLabel(per!.locked_at!.slice(0, 10))} · RBC file ${money2(Number(per!.rbc_total ?? 0))} · fixes go to the next period` : `Open · paid ${payDayLabel(p)}`}</div></div>
           <button className="sq" aria-label="Next period" onClick={() => step(1)}>›</button></div>
         <div className="row wrap">
+          {lines.some((l) => l.source === 'expense') && <button className="abtn" disabled={busy} onClick={async () => { setBusy(true); setErr((await zipReceipts(lines, people, p)) ?? ''); setBusy(false); }}>🧾 Download receipts</button>}
           {locked ? <>
             <button className="abtn" onClick={() => download(per!.rbc_lines ?? [])}>Download RBC file again</button>
             <button className="abtn" disabled={busy} onClick={() => window.confirm('Unlock this period? The RBC file was already made.') && run(() => supabase.rpc('admin_unlock_period', { p_start: p.start }))}>Unlock</button>
@@ -228,7 +230,7 @@ function Detail({ x, locked, period, bank, rate, pn, onDone }: { x: Person; lock
               <td style={{ textAlign: 'right' }}>{money2(s.pay + s.travel + s.gas)}</td></tr>))}
           {x.mtg.map((g, i) => <tr key={'m' + i}><td>{dLabel(g.date)} · Meeting · {g.title}</td><td>{g.hours} h</td><td style={{ textAlign: 'right' }}>{money2(g.pay)}</td></tr>)}
           {x.lines.map((l) => (
-            <tr key={l.id}><td>{kindName(l.kind)}{l.line_date ? ` · ${dLabel(l.line_date)}` : ''}{l.hours ? ` · ${l.hours} h` : ''}{l.source === 'flag_fix' ? ' · staff flag' : ''}{notes && l.note ? <span className="muted"> · {l.note}</span> : null}</td>
+            <tr key={l.id}><td>{kindName(l.kind)}{l.line_date ? ` · ${dLabel(l.line_date)}` : ''}{l.hours ? ` · ${l.hours} h` : ''}{l.source === 'flag_fix' ? ' · staff flag' : ''}{l.source === 'expense' && l.source_id ? <> · <button className="lnk sm" onClick={() => openReceipt(l.source_id!)}>🧾 Receipt</button></> : null}{notes && l.note ? <span className="muted"> · {l.note}</span> : null}</td>
               <td>{!locked && <button className="lnk sm" onClick={() => del(l.id)}>Remove</button>}</td>
               <td style={{ textAlign: 'right' }} className={l.amount < 0 ? 'accent' : ''}>{l.amount < 0 ? '− ' : '+ '}{money2(Math.abs(l.amount))}</td></tr>))}
           <tr><td className="strong">Total</td><td>{x.lines.some((l) => l.note) && <button className="lnk sm" onClick={() => setNotes(!notes)}>{notes ? 'Hide notes' : 'Show notes'}</button>}</td><td style={{ textAlign: 'right' }} className="strong">{money2(x.total)}</td></tr>
@@ -381,4 +383,32 @@ function DayPop({ x, d, period, rate, onClose, onDone }: { x: Person; d: string;
       <small className="muted">Staff see “{dLabel(d)} · hours” in their Hours tab, never the note.</small>
       {err && <p className="error">{err}</p>}
     </div>);
+}
+
+// push 79d · receipts: open one (Payroll detail) or download every approved receipt of the period in one zip.
+async function openReceipt(expenseId: string) {
+  const w = window.open('', '_blank');
+  const { data: e } = await supabase.from('expenses').select('receipt_path').eq('id', expenseId).maybeSingle();
+  const path = (e as { receipt_path: string | null } | null)?.receipt_path;
+  const { data } = path ? await supabase.storage.from('receipts').createSignedUrl(path, 600) : { data: null };
+  if (data?.signedUrl && w) w.location.href = data.signedUrl; else { w?.close(); window.alert('No receipt photo for this one.'); }
+}
+async function zipReceipts(lines: Line[], people: Person[], p: { start: string; end: string }): Promise<string | null> {
+  const ids = lines.filter((l) => l.source === 'expense' && l.source_id).map((l) => l.source_id!);
+  const { data, error } = await supabase.from('expenses').select('id,staff_id,kind,amount,exp_date,receipt_path').in('id', ids);
+  if (error) return error.message;
+  const files: Record<string, Uint8Array> = {}; const miss: string[] = [];
+  const nm = (id: string) => people.find((x) => x.id === id)?.name ?? 'Unknown';
+  for (const e of (data ?? []) as { id: string; staff_id: string; kind: string; amount: number; exp_date: string; receipt_path: string | null }[]) {
+    const base = `${e.exp_date} ${nm(e.staff_id)} ${e.kind[0].toUpperCase() + e.kind.slice(1)} ${Number(e.amount).toFixed(2)}`.replace(/[\\/:*?"<>|]/g, '');
+    if (!e.receipt_path) { miss.push(base); continue; }
+    const dl = await supabase.storage.from('receipts').download(e.receipt_path);
+    if (dl.error || !dl.data) { miss.push(base); continue; }
+    let name = base + '.' + (e.receipt_path.split('.').pop() || 'jpg'); let i = 2; while (files[name]) name = `${base} (${i++}).${e.receipt_path.split('.').pop() || 'jpg'}`;
+    files[name] = new Uint8Array(await dl.data.arrayBuffer());
+  }
+  if (!Object.keys(files).length) return 'No receipt photos to download.';
+  const zip = zipSync(files, { level: 0 });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([zip], { type: 'application/zip' })); a.download = `G&R receipts ${p.start} to ${p.end}.zip`; a.click();
+  return miss.length ? `Downloaded. Missing photo: ${miss.join(' · ')}` : null;
 }
