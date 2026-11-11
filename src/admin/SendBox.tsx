@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 
-type Row = { id: string; staff_id: string; full_name: string; phone: string | null; event_id: string | null; event_title: string; event_date: string; kind: string; level: 'buzz' | 'soft' | 'silent'; message: string };
+type Row = { id: string; staff_id: string; full_name: string; phone: string | null; event_id: string | null; event_title: string; event_date: string; kind: string; level: 'buzz' | 'soft' | 'silent'; message: string; reason?: string | null };
 const LV: Record<string, string> = { buzz: 'Buzz · phone alert', soft: 'Soft · in the app, no buzz', silent: 'Nothing · the page just updates' };
 const dl = (d: string) => new Date(d + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 const sms = (p: string | null, body: string) => { const t = (p ?? '').replace(/[^\d+]/g, ''); return t ? `sms:${t}?&body=${encodeURIComponent(body)}` : null; };
@@ -18,7 +18,13 @@ export function SendBox({ events, onClose, onSent }: { events?: string[] | null;
   const [rows, setRows] = useState<Row[] | null>(null);
   const [open, setOpen] = useState<string | null>(null);
   const [busy, setBusy] = useState(false); const [err, setErr] = useState('');
-  useEffect(() => { supabase.rpc('admin_pending_changes', { p_events: events?.length ? events : null }).then(({ data, error }) => { if (error) setErr(error.message); setRows((data ?? []) as Row[]); }); }, [events]);
+  const [why, setWhy] = useState<Record<string, string>>({});
+  const load = () => supabase.rpc('admin_pending_changes', { p_events: events?.length ? events : null }).then(({ data, error }) => { if (error) setErr(error.message); setRows((data ?? []) as Row[]); });
+  useEffect(() => { load(); }, [events]); // eslint-disable-line react-hooks/exhaustive-deps
+  // push 91 · removed: optional short reason they'll see
+  const saveWhy = async (r: Row) => { const v = (why[r.id] ?? '').trim(); if (v === (r.reason ?? '')) return;
+    const { error } = await supabase.rpc('admin_outbox_reason', { p_id: r.id, p_reason: v }); if (error) setErr(error.message); else load(); };
+  const removed = (rows ?? []).filter((r) => r.kind === 'removed');
   const by = (lv: string) => (rows ?? []).filter((r) => r.level === lv);
   const send = async (mode: 'auto' | 'soft' | 'buzz') => {
     setBusy(true); setErr('');
@@ -38,10 +44,15 @@ export function SendBox({ events, onClose, onSent }: { events?: string[] | null;
         {open && <div className="sb-list"><div className="kick">{LV[open]}</div>
           {by(open).length ? by(open).map((r) => <div key={r.id} className="sb-row"><b>{r.full_name}</b><small className="muted">{dl(r.event_date)} · {r.event_title}</small><span className="sm">{r.message}</span></div>) : <span className="muted sm">Nobody.</span>}
         </div>}
+        {removed.length > 0 && <div className="sb-list"><div className="kick">🗓 Shift removed · reason (optional, they see it)</div>
+          {removed.map((r) => <div key={r.id} className="sb-row"><b>{r.full_name}</b><small className="muted">{dl(r.event_date)} · {r.event_title}</small>
+            <input className="mtg-in" style={{ width: "100%" }} maxLength={200} placeholder="e.g. The client cut the team to 8" value={why[r.id] ?? r.reason ?? ''}
+              onChange={(e) => setWhy({ ...why, [r.id]: e.target.value })} onBlur={() => saveWhy(r)} /></div>)}
+        </div>}
         <div className="sb-acts">
-          <button className="abtn dark" disabled={busy} onClick={() => send('auto')}>Send</button>
-          <button className="abtn" disabled={busy} onClick={() => send('soft')}>All soft</button>
-          <button className="abtn" disabled={busy} onClick={() => send('buzz')}>All buzz</button>
+          <button className="abtn dark" disabled={busy} onClick={async () => { for (const r of removed) await saveWhy(r); send('auto'); }}>Send</button>
+          <button className="abtn" disabled={busy} onClick={async () => { for (const r of removed) await saveWhy(r); send('soft'); }}>All soft</button>
+          <button className="abtn" disabled={busy} onClick={async () => { for (const r of removed) await saveWhy(r); send('buzz'); }}>All buzz</button>
           <button className="lnk sm" onClick={onClose}>Not now</button>
         </div>
         <small className="muted">Send follows the rules. All soft / All buzz force that level for everyone in this send. Nothing stays nothing unless you pick All buzz.</small>
