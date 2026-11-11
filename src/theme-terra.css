@@ -991,7 +991,7 @@ html[data-theme="terra"] { --teams: #5B5FC7; --teams-bg: #EEEFFB; --teams-ink: #
 :where(html[data-theme="terra"]) .ap-lv button.on { background: #FBFAF6; }
 :where(html[data-theme="terra"]) .ap-check.small { color: #47483E; }
 :where(html[data-theme="terra"]) .ap-check > span:first-child { background: #FBFAF6; color: #FBFAF6; }
-:where(html[data-theme="terra"]) .ap-check > span.on { color: #FBFAF6; }
+:where(html[data-theme="terra"]) .ap-check > span.on, :where(html[data-theme="terra"]) .ap-check > span:first-child.on, :where(html[data-theme="terra"]) html[data-theme] .ap-check > span:first-child.on { color: #FBFAF6 !important; }
 :where(html[data-theme="terra"]) .ap-file { background: #FBFAF6; }
 :where(html[data-theme="terra"]) .ap-red-t { color: #9B4D31; }
 :where(html[data-theme="terra"]) .ap-pick button { background: #FBFAF6; }

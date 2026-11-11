@@ -1674,7 +1674,7 @@ html[data-theme="dark"] { --teams: #8487CC; --teams-bg: #1F2137; --teams-ink: #8
 :where(html[data-theme="dark"]) .ap-lv button.on { background: #1F1D1A; box-shadow: 0 1px 0 #302C27; }
 :where(html[data-theme="dark"]) .ap-check.small { color: #BDB7B2; }
 :where(html[data-theme="dark"]) .ap-check > span:first-child { box-shadow: inset 0 0 0 1.5px #4A453F; background: #1F1D1A; color: #F1ECE4; }
-:where(html[data-theme="dark"]) .ap-check > span.on { background: #D4D0CC; color: #1A1714; }
+:where(html[data-theme="dark"]) .ap-check > span.on, :where(html[data-theme="dark"]) .ap-check > span:first-child.on, :where(html[data-theme="dark"]) html[data-theme] .ap-check > span:first-child.on { background: #D4D0CC !important; color: #1A1714 !important; }
 :where(html[data-theme="dark"]) .ap-drop { border: 2px dashed #49433B; }
 :where(html[data-theme="dark"]) .ap-file { background: #1F1D1A; box-shadow: 0 1px 0 #302C26; }
 :where(html[data-theme="dark"]) .ap-red-t { color: #D7797C; }
