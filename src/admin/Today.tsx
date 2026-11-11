@@ -257,6 +257,15 @@ export function Today() {
           : { key: 'qb' + r.staff_id, title: `${nm} · tax and pay done`, sub: 'Ready to add to QuickBooks', action: 'Add to QuickBooks', to: `/admin/staff?open=${r.staff_id}`,
             onAct: async () => { await supabase.from('staff_tax').update({ qb_status: 'sending', qb_at: new Date().toISOString(), qb_note: null }).eq('staff_id', r.staff_id); setTick((t) => t + 1); } });
       }
+      // Nov 11 · 5 days out, venue + start time must be there (Ronnie): one red line per event that still misses one
+      { const to5 = addDays(today, 5);
+        const { data: d5, error: d5e } = await supabase.from('events').select('id,event_date,title,department,details_pending,start_tbc,venue_id').gte('event_date', today).lte('event_date', to5).order('event_date');
+        if (!d5e) { const seen = new Set<string>();
+          for (const e of (d5 ?? []) as { id: string; event_date: string; title: string; department: string; details_pending: boolean | null; start_tbc: boolean | null; venue_id: string | null }[]) {
+            const miss = [!e.venue_id || e.details_pending ? 'venue' : null, e.start_tbc || e.details_pending ? 'start time' : null].filter(Boolean);
+            const k = e.event_date + '|' + e.title; if (!miss.length || seen.has(k)) continue; seen.add(k);
+            n.unshift({ key: 'd5' + e.id, red: true, title: `${dLabel(e.event_date, { weekday: 'short', month: 'short', day: 'numeric' })} · ${e.title}: ${miss.join(' + ')} missing`, sub: '5 days out · venue and start time should be in by now', action: 'Open', to: `/admin/event/${e.id}` });
+          } } }
       // push 36d · staff messages waiting on Ronnie (no email: the count lives here + on the Messages nav item)
       const { data: nr, error: nrErr } = await supabase.rpc('inbox_count');
       if (!nrErr && typeof nr === 'number' && nr > 0) n.unshift({ key: 'msgs', red: true, title: `${nr} staff message${nr > 1 ? 's' : ''} need${nr > 1 ? '' : 's'} a reply`, sub: 'Messages · Needs reply', action: 'Open', to: '/admin/messages' });

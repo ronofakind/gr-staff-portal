@@ -1,3 +1,4 @@
+import { setting } from '../lib/settings';
 import { loadRules, outOfArea, areasOf, type SCond } from './rules';
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
@@ -63,7 +64,12 @@ export function Availability() {
   useEffect(() => { load(); }, [month]);
 
   const byDate = useMemo(() => { const m: Record<string, AEvent[]> = {}; for (const e of events) (m[e.event_date] ??= []).push(e); return m; }, [events]);
-  const need = (d: string) => (byDate[d] ?? []).reduce((n, e) => n + e.staff_needed, 0);
+  // Nov 11 · staff needed per day: the event's lines, else an estimate from guests (seated 1/15, cocktail + stations 1/30, +15%) + 1 MD
+  const R = setting('staffing.ratios');
+  const est = (e: AEvent) => { const g = Math.max(Number(e.guests) || 0, e.guests_final ? 0 : Number(e.guests_max) || 0); if (!g) return 0;
+    const ck = /cocktail|station|d[iî]natoire/i.test(e.event_type ?? ''); return Math.ceil(Math.ceil(g / (ck ? R.cocktail : R.seated)) * (1 + R.buffer / 100)) + 1; };
+  const need = (d: string) => (byDate[d] ?? []).reduce((n, e) => n + (e.staff_needed || est(e)), 0);
+  const [best, setBest] = useState(true); // Nov 11 · ask the best-ranked people, 2× what the day needs (Ronnie)
   const startOf = (d: string) => (byDate[d] ?? []).map((e) => e.start_time).filter(Boolean).sort()[0] ?? null;
   const askFor = (d: string) => asks.find((a) => a.for_date === d && a.department === 'floor');
   const floor = staff.filter((s) => s.active && s.department !== 'bar');
@@ -84,9 +90,13 @@ export function Availability() {
   };
   const freeFrom = (s: AStaff, d: string) => { const w = weekly.find((x) => x.staff_id === s.id && x.dow === dow(d)); return w && w.status !== 'no' ? w.from_time : null; };
   const alreadyAsked = (s: AStaff, d: string) => rows.some((r) => r.staff_id === s.id && r.for_date === d);
-  const recipients = (d: string, tiers: Tier[]) => floor
-    .filter((s) => tierOf(s) && tiers.includes(tierOf(s)!) && !alreadyAsked(s, d))
-    .filter((s) => !skipWhy(s, d) || include.has(`${s.id}|${d}`));
+  const TORD: Record<string, number> = { A: 0, B: 1, C: 2 };
+  const askedOn = (d: string) => rows.filter((r) => r.for_date === d).length;
+  const recipients = (d: string, tiers: Tier[]) => best
+    ? floor.filter((s) => tierOf(s) && !alreadyAsked(s, d) && (!skipWhy(s, d) || include.has(`${s.id}|${d}`)))
+        .sort((a, b) => (TORD[tierOf(a)!] ?? 9) - (TORD[tierOf(b)!] ?? 9) || rank(a) - rank(b)).slice(0, Math.max(0, 2 * Math.max(need(d), 1) - askedOn(d)))
+    : floor.filter((s) => tierOf(s) && tiers.includes(tierOf(s)!) && !alreadyAsked(s, d))
+      .filter((s) => !skipWhy(s, d) || include.has(`${s.id}|${d}`));
   const skipped = (d: string, tiers: Tier[]) => floor.filter((s) => tierOf(s) && tiers.includes(tierOf(s)!) && !alreadyAsked(s, d) && skipWhy(s, d) && !include.has(`${s.id}|${d}`));
 
   const selDates = Object.keys(sel).sort();
@@ -179,11 +189,13 @@ export function Availability() {
 
         <aside className="ask-side">
           <b>{selDates.length ? `${selDates.length} date${selDates.length > 1 ? 's' : ''} selected` : 'Tap dates to ask'}</b>
+          <div className="seg" style={{ margin: '6px 0' }}><button type="button" className={best ? 'on' : ''} onClick={() => setBest(true)}>Best 2× per day</button><button type="button" className={!best ? 'on' : ''} onClick={() => setBest(false)}>By tier</button></div>
+          {best && <small className="muted">For each day: the best-ranked free people (A → B → C, then ranking), twice what the day needs. Each person gets one message with only their days.</small>}
           {selDates.map((d) => (
             <div key={d} className="ask-date">
-              <div className="grow"><b>{fmt(d)}</b><small>Need {need(d)} · ask ~{Math.ceil(need(d) * 1.5)} · {awayText(d)}</small>
+              <div className="grow"><b>{fmt(d)}</b><small>Need {need(d)}{byDate[d]?.some((e) => !e.staff_needed && est(e)) ? ' (estimate)' : ''} · {best ? `asking ${recipients(d, sel[d]).length} best-ranked (2×${askedOn(d) ? `, ${askedOn(d)} already asked` : ''})` : `ask ~${Math.ceil(need(d) * 1.5)}`} · {awayText(d)}</small>
                 <label className="ab-line">Answer by <input type="datetime-local" value={abSel[d] ?? toLocalInput(defaultAnswerBy(d))} onChange={(e) => setAbSel({ ...abSel, [d]: e.target.value })} /> ✎</label></div>
-              <div className="tier-pick">{TIERS.map((t) => <button key={t} className={'tier-dot ' + t + (sel[d].includes(t) ? '' : ' off')} onClick={() => setTiers(d, t)}>{t}</button>)}</div>
+              {!best && <div className="tier-pick">{TIERS.map((t) => <button key={t} className={'tier-dot ' + t + (sel[d].includes(t) ? '' : ' off')} onClick={() => setTiers(d, t)}>{t}</button>)}</div>}
               {skipped(d, sel[d]).length > 0 && (
                 <details className="skipped"><summary>{skipped(d, sel[d]).length} skipped automatically</summary>
                   {skipped(d, sel[d]).map((s) => <button key={s.id} onClick={() => setInclude(new Set([...include, `${s.id}|${d}`]))}>{s.full_name} <small>{skipWhy(s, d)}</small> <u>ask anyway</u></button>)}
@@ -192,7 +204,7 @@ export function Availability() {
           ))}
           {selDates.length > 0 && <>
             <div className="who">{TIERS.map((t, i) => <span key={t}><i className={'tier-dot ' + t}>{t}</i>{perTier[i]} people</span>)}</div>
-            <p className="muted sm" style={{ margin: 0 }}>Each person sees only the dates their tier was asked for. People whose usual week says “No” or who have a day off are skipped.</p>
+            <p className="muted sm" style={{ margin: 0 }}>{best ? 'Each person sees only the dates they were picked for. They read: “We’re planning these dates… a yes doesn’t book you yet.”' : 'Each person sees only the dates their tier was asked for.'} People whose usual week says “No” or who have a day off are skipped.</p>
             <button className="btn primary" disabled={busy || !total.size} onClick={() => send(selDates.map((d) => ({ d, tiers: sel[d] })))}>{busy ? 'Sending…' : `Ask ${total.size} people`}</button>
           </>}
         </aside>

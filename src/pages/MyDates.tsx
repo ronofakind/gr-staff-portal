@@ -181,6 +181,7 @@ export function MyDates({ me, base = '', preview = false }: { me: Staff; base?: 
                 <button className="md-dky-btn" onClick={() => { setDky(null); setDkyOpen(true); }}>Tell him</button>
               </div>
             )}
+            {answerList.length > 0 && <div className="md-plan-note">📅 We’re planning these dates. Tell us which ones you can work: a yes doesn’t book you yet, we confirm as events are confirmed.</div>}{/* Nov 11 · month ask wording, promises nothing */}
             {answerList.map((d) => justDone.has(d.id) && !toAnswer(d, today)
               ? <AnsweredRow key={d.id} d={d} times={timesBy[d.id]} until={untilBy[d.id]} onTap={() => setSheet({ d, mode: 'pick' })} />
               : <AnswerRow key={d.id} d={d} times={timesBy[d.id]} onYes={() => setSheet({ d, mode: 'yes' })} onMaybe={() => setSheet({ d, mode: 'maybe' })} onNo={() => save(d, 'no')} />)}

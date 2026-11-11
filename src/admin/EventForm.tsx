@@ -396,7 +396,7 @@ export function EventForm() {
   const sug = (() => {
     const g = Math.max(Number(guests) || 0, gFinal ? 0 : Number(guestsMax) || 0); if (!g || g < 1) return null; // push 74 · worst case = top of the range
     const R = setting('staffing.ratios'); const up = (n: number) => Math.ceil(n * (1 + R.buffer / 100));
-    const cocktail = /cocktail/i.test(eventType);
+    const cocktail = /cocktail|station|d[iî]natoire/i.test(eventType); // Nov 11 · cocktail + stations 1/30 · seated + family style 1/15
     let base = showFloor ? Math.ceil(g / (cocktail ? R.cocktail : R.seated)) : 0; let floor = showFloor ? up(base) : 0;
     if (showFloor && g < R.small) { base = Math.max(base, 3); floor = Math.max(floor, 3); }
     const md = showFloor ? (g >= R.md2 ? 2 : 1) : 0;

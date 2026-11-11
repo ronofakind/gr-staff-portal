@@ -67,7 +67,7 @@ export const DEFAULTS: Settings = {
   'bookings.new_tag_shifts': 3,
   'extras.rule': { over: 7, pct: 10 },
   'extras.default_billing': 'gr',
-  'staffing.ratios': { seated: 15, cocktail: 25, bar: 40, buffer: 15, md2: 300, small: 50 },
+  'staffing.ratios': { seated: 15, cocktail: 30, bar: 40, buffer: 15, md2: 300, small: 50 },
   'transport.office': 'C-4865 rue Dagenais',
   'transport.far_min': 45,
   'transport.client_pays': true,
