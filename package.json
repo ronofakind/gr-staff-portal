@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "prebuild": "node scripts/gen-dark.mjs",
+    "prebuild": "node scripts/gen-dark.mjs && node scripts/gen-terra.mjs",
     "build": "tsc -b && vite build",
     "preview": "vite preview"
   },

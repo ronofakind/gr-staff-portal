@@ -78,7 +78,7 @@ export function App() {
 
   const loadMe = (uid: string) => supabase.from('staff').select('id,full_name,nickname,email,phone,language,role,photo_url')
     .eq('auth_user_id', uid).maybeSingle()
-    .then(({ data }) => { setMe((data as Staff) ?? null); if (data) loadTheme((data as Staff).id); });
+    .then(({ data }) => { setMe((data as Staff) ?? null); if (data) loadTheme((data as Staff).id, (data as Staff).role === 'admin'); });
   const sessionUid = session?.user.id ?? (session === null ? null : undefined);
   useEffect(() => {
     if (!session) { setMe(session === null ? null : undefined); return; }

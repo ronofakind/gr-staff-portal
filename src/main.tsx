@@ -5,6 +5,7 @@ import ReactDOM from 'react-dom/client';
 import { App } from './App';
 import './styles.css';
 import './theme-dark.css';
+import './theme-terra.css';
 import { applyTheme, currentTheme } from './lib/theme';
 applyTheme(currentTheme()); // push 78 · before first paint, no flash
 import { registerSW } from 'virtual:pwa-register';

@@ -116,7 +116,7 @@ export function Settings() {
         {saved ? <span className="okc strong sm">✓ Saved {saved}</span> : last ? <span className="muted sm">Last change {new Date(last).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }).replace('.', '')} · {tLabel(last)}</span> : null}
       </div>
       {err && <p className="error">{err}</p>}
-      {myId && <section className="adm-card st-sec"><div className="st-sec-h"><span className="serif">App colours</span><small className="muted">your own dashboard (desktop + phone) · staff pick theirs in Profile</small></div><ThemePicker staffId={myId} /></section>}
+      {myId && <section className="adm-card st-sec"><div className="st-sec-h"><span className="serif">App colours</span><small className="muted">your own dashboard (desktop + phone) · staff pick theirs in Profile</small></div><ThemePicker staffId={myId} admin /></section>}
       <div className="st-grid">
         {SECTIONS.map((sec) => (
           <section key={sec.title} className={'adm-card st-sec' + (sec.off ? ' off' : '')} aria-disabled={sec.off ? true : undefined}>
