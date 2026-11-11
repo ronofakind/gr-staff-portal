@@ -1,4 +1,5 @@
 import { ShiftExpenseToggle } from './Expenses';
+import { BookingsMeetings } from './Meetings';
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { StaffProfile } from './StaffProfile';
@@ -747,6 +748,7 @@ export function Bookings() {
                     <div className="bk-balbar"><i className={s.strength != null && max - s.strength > 5 ? 'gold' : ''} style={{ width: `${Math.max(0, Math.min(100, s.strength ?? 0))}%` }} /></div>
                   </div>))}
               </div>); })()}
+            <BookingsMeetings date={date} />{/* push 80 */}
             <div className="bk-cols">{dayEvs(date).length ? dayEvs(date).map((e, i, all) => <Fragment key={e.id}>{dept === 'both' && i > 0 && isBarEv(e) && !isBarEv(all[i - 1]) && <div className="bk-split" aria-hidden="true" />}<Column e={e} d={date} /></Fragment>) : <div className="adm-card muted">No {dept === 'both' ? '' : dept + ' '}events on this day. <Link to={`/admin/event/new?d=${date}`}>+ New event</Link></div>}</div>
           </div>
         </div>

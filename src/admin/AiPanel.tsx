@@ -6,7 +6,7 @@ import { EmailReview, type ALine } from './EmailReview';
 /** Nov 7 · AI plan step 1 (migration 079). Top of Today: "✦ AI · n waiting for your OK" + Done today.
  *  ✉ client emails (hourly Claude task via /api/ai) · ⚡ app changes (trigger, instant). Nothing is applied by itself. */
 type Item = {
-  id: string; source: 'email' | 'app'; kind: string; event_id: string | null; shift_id: string | null; staff_id: string | null;
+  id: string; source: 'email' | 'app' | 'meeting'; kind: string; event_id: string | null; shift_id: string | null; staff_id: string | null;
   who: string | null; quote: string | null; lines: ALine[]; event_hint: string | null;
   email_url: string | null; sure: boolean; status: 'waiting' | 'done' | 'ignored'; done_note: string | null; created_at: string; done_at: string | null;
   events: { title: string; event_date: string } | null;
@@ -88,12 +88,12 @@ export function AiPanel({ bare = false }: { bare?: boolean } = {}) {
 }
 
 function Waiting({ i, set }: { i: Item; set: (i: Item, st: 'done' | 'ignored', note?: string) => void }) {
-  const [rev, setRev] = useState(false); const canReview = i.source === 'email' && i.lines.some((l) => l.field) && ['count_change', 'time_change', 'address', 'new_event', 'other'].includes(i.kind);
+  const [rev, setRev] = useState(false); const canReview = (i.source === 'email' || i.source === 'meeting') && i.lines.some((l) => l.field) && ['count_change', 'time_change', 'address', 'new_event', 'other'].includes(i.kind);
 
             const [t, tone] = TAG[i.kind] ?? TAG.other; const p = primary(i);
             return (
               <div key={i.id} className="ai-item">
-                <div className="ai-top"><span aria-hidden="true">{i.source === 'email' ? '✉' : '⚡'}</span><span className={'ai-tag ' + tone}>{t}</span><b>{i.who}</b><span className="muted sm">{ago(i.created_at)}</span>{!i.sure && <span className="ai-look">needs a look</span>}</div>
+                <div className="ai-top"><span aria-hidden="true">{i.source === 'email' ? '✉' : i.source === 'meeting' ? '📝' : '⚡'}</span><span className={'ai-tag ' + tone}>{t}</span><b>{i.who}</b><span className="muted sm">{ago(i.created_at)}</span>{!i.sure && <span className="ai-look">needs a look</span>}</div>
                 {i.quote && <div className="ai-quote">“{i.quote}”</div>}
                 {(i.events || i.event_hint) && <div className="ai-line"><span>Event</span><b>{i.events ? `${day(i.events.event_date)} · ${i.events.title}` : i.event_hint}</b></div>}
                 {i.lines.filter((l) => l.label !== 'Shift' || !i.events).map((l, k) => (

@@ -12,7 +12,8 @@ export type MyMeeting = {
   id: string; title: string; starts_at: string; duration_min: number; place_kind: PlaceKind; link: string | null; address: string | null;
   about: string | null; answer: Answer; cancelled_at: string | null; n_invited: number;
 };
-export type MeetingRow = Omit<MyMeeting, 'answer' | 'n_invited'> & { notes_visibility: 'managers' | 'team'; created_at: string; updated_at: string };
+export type MeetingRow = Omit<MyMeeting, 'answer' | 'n_invited'> & { notes_visibility: 'managers' | 'team'; created_at: string; updated_at: string;
+  md_id?: string | null; clock_started_at?: string | null }; // push 80
 export type Invitee = {
   staff_id: string; full_name: string; nickname: string | null; photo_url: string | null; phone: string | null; answer: Answer; answered_at: string | null;
   paid: boolean | null; paid_in: string | null; paid_out: string | null;
@@ -20,10 +21,11 @@ export type Invitee = {
 export type MNote = {
   id: string; author_id: string | null; author: string | null; author_nickname: string | null; author_photo: string | null; body: string;
   pinned: boolean; edited_at: string | null; deleted_at: string | null; created_at: string;
+  parent_id?: string | null; same?: string[]; same_me?: boolean; done_at?: string | null; apply_status?: 'sending' | 'done' | 'error' | null; // push 80
 };
 export type LinkedEvent = { id: string; title: string; event_date: string; department: string; venue: string };
 export type MeetingPage = {
-  meeting: MeetingRow; me: string | null; is_admin: boolean; my_answer: Answer;
+  meeting: MeetingRow; me: string | null; is_admin: boolean; is_md?: boolean; my_answer: Answer;
   organizer: { id: string; full_name: string; photo_url: string | null } | null;
   invites: Invitee[]; events: LinkedEvent[]; notes: MNote[];
 };
