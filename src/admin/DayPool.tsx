@@ -95,7 +95,7 @@ export function DayPool() {
           <small className="muted">Best first (A → B → C, then ranking). Tap an event to place someone. Staff see nothing until you confirm.</small>
           {!pool.length && <span className="muted sm">Nobody waiting. Send the dates from Availability.</span>}
           {pool.map((a) => <P key={a.staff_id} id={a.staff_id} note={a.from_time ? `from ${a.from_time.slice(0, 5)}` : undefined}
-            right={<span className="dp-go">{evs.map((e) => <button key={e.id} className="abtn sm" disabled={busy} onClick={() => place(a.staff_id, e)}>→ {(e.venues?.name ?? e.title).split(' ')[0]}</button>)}</span>} />)}
+            right={<span className="dp-go">{evs.map((e) => <button key={e.id} className="abtn sm" disabled={busy} onClick={() => place(a.staff_id, e)}>→ {(e.venues?.name ?? e.title).replace(/^(Le|La|Les|Salon|Maison|Théâtre)\s+/i, '').slice(0, 14)}</button>)}</span>} />)}
           {maybes.length > 0 && <small className="muted">Maybe ({maybes.length}): {maybes.map((m) => byId[m.staff_id]?.full_name).join(' · ')}</small>}
           {backups.length > 0 && <>
             <div className="spread" style={{ marginTop: 10 }}><b>Backups</b><small className="muted">released · not in their app</small></div>
