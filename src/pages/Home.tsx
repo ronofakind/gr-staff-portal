@@ -542,22 +542,25 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
                   const b = dayBadge(s.events.event_date, lang);
                   const pend = !!s.events.details_pending;
                   return (
-                    <Link key={s.id} to={`${base}/shift/${s.id}`} className={'agenda-row' + (s.events.tentative ? ' tbc-row' : '')} style={{ minHeight: 64 }}>
+                    <Link key={s.id} to={`${base}/shift/${s.id}`} className={'agenda-row cu2' + (s.events.tentative ? ' tbc-row' : '')}>
                       <div className="d" style={{ width: 40, alignItems: 'center' }}><small>{b.dow}</small><b>{b.day}</b></div>
-                      <div className="what" style={{ gap: 5 }}><b className={pend ? 'muted' : ''}>{pend ? 'Place to come' : s.events.title}{gNotes[s.id] && !gNotes[s.id].seen_at ? ' 📌' : ''}</b>{s.events.tentative && <small className="tbc-tag">⏳ TO BE CONFIRMED</small>}
-                        <span className="pos-row2"><span className={'pos-pill' + (isLead(s) ? ' lead' : '')}>{pos(s)}</span>{teams[s.events.id] && !preview ? <span>team {teams[s.events.id].length}</span> : null}</span></div>
-                      <span className="row-wear" title={uniformLabel(uniformFor(s))}><UniformIcon kind={uniformFor(s)} size={30} /></span>
-                      <div className="row-time"><small>Starts</small>{pend ? <b className="tbc">To come</b> : s.time_tbc ? <b className="tbc">Time TBC</b> : <b><span className="serif">{time(s.planned_start, lang).replace(/\s?[ap]\.?\s?m\.?/i, '')}</span><i>{/p\.?\s?m/i.test(time(s.planned_start, lang)) ? ' PM' : ' AM'}</i></b>}</div>
-                      <span className="row-st">{soon(s) ? <span className="tag-soon">Details coming</span> : s.status === 'confirmed' ? <span className="ok-dot" aria-label="Confirmed" /> : notFinal(s) ? <span className="tag-soon">Details coming</span> : <span className="tag-ask" style={{ height: 26, fontSize: 11 }}>Confirm</span>}</span>
+                      <div className="what">
+                        <b className={'cu-title' + (pend ? ' muted' : '')}>{pend ? 'Venue TBC' : s.events.title}{gNotes[s.id] && !gNotes[s.id].seen_at ? ' 📌' : ''}</b>
+                        {s.events.tentative && <small className="tbc-tag">⏳ TO BE CONFIRMED</small>}
+                        <span className="cu-meta"><span className={'pos-pill' + (isLead(s) ? ' lead' : '')}>{pos(s)}</span>
+                          <span className="cu-wear" title={uniformLabel(uniformFor(s))}><UniformIcon kind={uniformFor(s)} size={20} /></span>
+                          {pend || s.time_tbc ? <span className="cu-time tbc">Time TBC</span> : <span className="cu-time">{time(s.planned_start, lang)}</span>}</span>
+                        {(soon(s) || (s.status !== 'confirmed' && notFinal(s))) && <small className="cu-soon">Details coming</small>}
+                      </div>
+                      <span className="cu-st">{soon(s) || (s.status !== 'confirmed' && notFinal(s)) ? null : s.status === 'confirmed' ? <span className="ok-dot" aria-label="Confirmed" /> : <span className="tag-ask" style={{ height: 26, fontSize: 11, padding: '0 9px' }}>Confirm</span>}</span>
                     </Link>
                   ); };
                   const rm = (m: (typeof mtgComing)[number]) => { const d = dayOfMtl(m.starts_at); const b = dayBadge(d, lang); const tm = time(m.starts_at, lang); return (
-                  <Link key={'m' + m.id} to={mtgTo(m.id)} className="agenda-row mtg-row" style={{ minHeight: 64 }}>
+                  <Link key={'m' + m.id} to={mtgTo(m.id)} className="agenda-row cu2 mtg-row">
                     <div className="d" style={{ width: 40, alignItems: 'center' }}><small>{b.dow}</small><b>{b.day}</b></div>
-                    <div className="what" style={{ gap: 5 }}><b>{m.title}</b><span className="pos-row2"><span className="pos-pill mtg">Meeting</span><span>✓ you’re coming</span></span></div>
-                    <span className="row-wear" aria-hidden="true" />
-                    <div className="row-time"><small>Starts</small><b><span className="serif">{tm.replace(/\s?[ap]\.?\s?m\.?/i, '')}</span><i>{/p\.?\s?m/i.test(tm) ? ' PM' : ' AM'}</i></b></div>
-                    <span className="row-st" aria-hidden="true" />
+                    <div className="what"><b className="cu-title">{m.title}</b>
+                      <span className="cu-meta"><span className="pos-pill mtg">Meeting</span><span className="cu-time">{tm}</span></span></div>
+                    <span className="cu-st" aria-hidden="true" />
                   </Link>); };
                   const sh = list.slice(0, 5); const cut = list.length > 5 ? sh[sh.length - 1].planned_start : null;
                   const items: { at: string; el: JSX.Element }[] = [
