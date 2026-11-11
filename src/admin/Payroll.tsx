@@ -18,7 +18,7 @@ export const KINDS: [string, string, 1 | -1 | 0][] = [
 const kindName = (k: string) => KINDS.find((x) => x[0] === k)?.[1] ?? k;
 type Line = { id: string; staff_id: string; period_start: string; col_id?: string | null; source_id?: string | null; kind: string; amount: number; hours: number | null; line_date: string | null; note: string | null; source: string };
 type PShift = { id: string; date: string; title: string; hours: number; rate: number | null; pay: number; travel: number; gas: number; paypal: boolean; noEnd: boolean };
-type Person = { id: string; name: string; shifts: PShift[]; mtg: { date: string; title: string; hours: number; pay: number }[]; lines: Line[]; hours: number; base: number; total: number; noRate: boolean; noEnd: number };
+type Person = { id: string; name: string; shifts: PShift[]; mtg: { date: string; title: string; hours: number; pay: number }[]; lines: Line[]; hours: number; base: number; total: number; noRate: boolean; noEnd: number; salary: boolean };
 type Period = { locked_at: string | null; closed_at: string | null; rbc_lines: { staff_id: string; name: string; rbc_name: string; amount: number }[] | null; rbc_total: number | null };
 type PName = { staff_id: string; rbc_name: string | null; skip: string | null };
 const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -76,9 +76,10 @@ export function Payroll() {
     if (miss.length) { const { data } = await supabase.from('staff').select('id,full_name').in('id', miss); setExtra(Object.fromEntries(((data ?? []) as { id: string; full_name: string }[]).map((x) => [x.id, x.full_name]))); } else setExtra({});
   })(); }, [p.start, t]);
 
+  const isSal = (id: string) => /salar/i.test(names[id]?.skip ?? ''); // push 86 · on salary (Georges, Benjamin, Pepe, Michael Brown, Ronald)
   const people: Person[] = useMemo(() => {
     const m = new Map<string, Person>();
-    const get = (id: string, name: string) => { if (!m.has(id)) m.set(id, { id, name, shifts: [], mtg: [], lines: [], hours: 0, base: 0, total: 0, noRate: false, noEnd: 0 }); return m.get(id)!; };
+    const get = (id: string, name: string) => { if (!m.has(id)) m.set(id, { id, name, shifts: [], mtg: [], lines: [], hours: 0, base: 0, total: 0, noRate: false, noEnd: 0, salary: isSal(id) }); return m.get(id)!; };
     for (const e of evs ?? []) for (const s of e.shifts) {
       if (s.status === 'declined' || s.attendance || !s.punches?.punch_in) continue;
       const x = get(s.staff_id, s.staff?.full_name ?? '?');
@@ -89,29 +90,30 @@ export function Payroll() {
       const gas = e.transport && e.gas_per_car && drivers.has(e.id + '|' + s.staff_id) ? Number(e.gas_per_car) : 0;
       const pay = rate == null ? 0 : r2(h * rate);
       x.shifts.push({ id: s.id, date: e.event_date, title: e.title + (e.department === 'bar' ? ' · bar' : ''), hours: h, rate, pay, travel, gas, paypal: ppd.has(s.id), noEnd });
+      if (x.salary) { x.hours += h; x.base += gas; if (noEnd) x.noEnd++; continue; } // push 86 · salary: hours tracked, not paid here
       x.hours += h; x.base += pay + travel + gas; if (rate == null) x.noRate = true; if (noEnd) x.noEnd++;
     }
     for (const g of mh) { const x = get(g.staff_id, g.full_name); const rate = rateOn(rates[g.staff_id], g.meeting_date); const pay = rate == null ? 0 : r2(Number(g.hours) * rate);
-      x.mtg.push({ date: g.meeting_date, title: g.title, hours: Number(g.hours), pay }); x.hours += Number(g.hours); x.base += pay; if (rate == null) x.noRate = true; }
+      x.mtg.push({ date: g.meeting_date, title: g.title, hours: Number(g.hours), pay: x.salary ? 0 : pay }); x.hours += Number(g.hours); if (!x.salary) { x.base += pay; if (rate == null) x.noRate = true; } }
     for (const l of lines) { const x = get(l.staff_id, extra[l.staff_id] ?? roster.find((r) => r.id === l.staff_id)?.full_name ?? '?'); x.lines.push(l); if (l.kind === 'hours') x.hours += Number(l.hours ?? 0); }
     for (const id of added) if (!m.has(id)) get(id, roster.find((r) => r.id === id)?.full_name ?? '?');
     for (const x of m.values()) x.total = r2(x.base + x.lines.reduce((n, l) => n + l.amount, 0));
     return [...m.values()].sort((a, b) => a.name.localeCompare(b.name));
-  }, [evs, rates, drivers, mh, lines, extra, ppd, roster, added]);
+  }, [evs, rates, drivers, mh, lines, extra, ppd, roster, added, names]);
 
   const cash = (id: string) => nh[id]?.paid_by === 'cash';
   const rbcName = (x: Person) => (names[x.id]?.rbc_name || x.name).toUpperCase().trim();
-  const why = (x: Person) => names[x.id]?.skip ? `skipped · ${names[x.id]!.skip}` : cash(x.id) ? 'paid cash' : x.total <= 0 ? (x.total < 0 ? 'negative total' : '$0') : null;
+  const why = (x: Person) => x.salary ? (x.total > 0 ? null : 'salary') : names[x.id]?.skip ? `skipped · ${names[x.id]!.skip}` : cash(x.id) ? 'paid cash' : x.total <= 0 ? (x.total < 0 ? 'negative total' : '$0') : null;
   const inFile = people.filter((x) => !why(x));
   const fileLines = (() => { const m = new Map<string, { staff_id: string; name: string; rbc_name: string; amount: number }>();
     for (const x of inFile) { const k = rbcName(x); const o = m.get(k); if (o) o.amount = r2(o.amount + x.total); else m.set(k, { staff_id: x.id, name: x.name, rbc_name: k, amount: x.total }); }
     return [...m.values()]; })();
   const total = r2(people.reduce((n, x) => n + x.total, 0));
-  const noEnd = people.filter((x) => x.noEnd); const noRate = people.filter((x) => x.noRate);
+  const noEnd = people.filter((x) => x.noEnd && !x.salary); const noRate = people.filter((x) => x.noRate && !x.salary);
   const [sheetErr, setSheetErr] = useState<{ id: string; staff_id: string; kind: string; amount: number; sheet_note: string | null }[]>([]); // push 79e
   useEffect(() => { const ids = lines.filter((l) => l.source === 'expense' && l.source_id).map((l) => l.source_id!); if (!ids.length) { setSheetErr([]); return; }
     supabase.from('expenses').select('id,staff_id,kind,amount,sheet_note').in('id', ids).eq('sheet_status', 'error').then(({ data }) => setSheetErr((data ?? []) as typeof sheetErr)); }, [lines]);
-  const before = people.map((x) => ({ x, m: missingFor(nh[x.id]).filter((y) => y !== 'handbook') })).filter((y) => y.m.length);
+  const before = people.filter((x) => !x.salary).map((x) => ({ x, m: missingFor(nh[x.id]).filter((y) => y !== 'handbook') })).filter((y) => y.m.length);
   const step = (n: number) => { setOpen(null); setRbc(false); setP(n < 0 ? periodOf(addDays(p.start, -1)) : periodOf(addDays(p.end, 1))); };
   const run = async (f: () => PromiseLike<{ error: { message: string } | null }>) => { setBusy(true); setErr(''); const { error } = await f(); setBusy(false); if (error) setErr(error.message); else setT((x) => x + 1); };
 
@@ -186,8 +188,8 @@ export function Payroll() {
               {people.map((x) => (
                 <Fragment key={x.id}>
                   <tr className="click" onClick={() => setOpen(open === x.id ? null : x.id)}>
-                    <td className="strong">{x.name}{why(x) ? <span className="ftag">{why(x)}</span> : null}{bank[x.id] ? <span className="ftag">{bank[x.id]} h banked</span> : null}</td>
-                    <td>{x.hours}{x.noEnd ? <span className="accent"> + ?</span> : ''}</td>
+                    <td className="strong">{x.name}{x.salary ? <span className="ftag">salary{x.total > 0 ? ' · expenses in the RBC file' : ' · hours tracked'}</span> : null}{why(x) && !x.salary ? <span className="ftag">{why(x)}</span> : null}{bank[x.id] ? <span className="ftag">{bank[x.id]} h banked</span> : null}</td>
+                    <td>{x.hours}{x.noEnd && !x.salary ? <span className="accent"> + ?</span> : ''}</td>
                     <td style={{ textAlign: 'right' }} className="strong">{x.noRate ? <span className="accent">no rate · </span> : null}{money2(x.total)}</td>
                   </tr>
                   {open === x.id && <tr className="sub"><td colSpan={3}><Detail x={x} locked={locked} period={p.start} bank={bank[x.id] ?? 0} rate={rateOn(rates[x.id], p.end)} pn={names[x.id]} onDone={() => setT((n) => n + 1)} /></td></tr>}
@@ -255,7 +257,8 @@ function Detail({ x, locked, period, bank, rate, pn, onDone }: { x: Person; lock
           {x.shifts.map((s) => <label key={s.id}><input type="checkbox" checked={pp.has(s.id)} onChange={() => { const n = new Set(pp); n.has(s.id) ? n.delete(s.id) : n.add(s.id); setPp(n); }} /> {dLabel(s.date)}</label>)}</div>)}
       <div className="row wrap sm" style={{ gap: 6 }}><span className="muted">RBC name</span>
         <input value={nm} placeholder={x.name.toUpperCase()} onChange={(e) => setNm(e.target.value)} />
-        <input value={skip} placeholder="Skip reason (e.g. employee)" onChange={(e) => setSkip(e.target.value)} />
+        <input value={skip} placeholder="Skip reason (e.g. paid cash)" onChange={(e) => setSkip(e.target.value)} />
+        {!/salar/i.test(skip) && <button className="abtn sm" onClick={() => setSkip('salary')} title="Hours still tracked · only expenses and extra lines go in the RBC file">On salary</button>}
         {(nm !== (pn?.rbc_name ?? '') || skip !== (pn?.skip ?? '')) && <button className="abtn sm" onClick={saveName}>Save</button>}</div>
       {err && <p className="error">{err}</p>}
     </div>
@@ -305,7 +308,7 @@ function Grid({ p, people, cols, locked, rates, isCash, roster, onAdd, onOpen, o
   const block = (list: Person[]) => list.map((x) => (
     <Fragment key={x.id}>
       <tr className={open === x.id ? 'on' : ''}>
-        <th className="pg-n" onClick={() => onOpen(x.id)}>{x.name.toUpperCase()}{isCash(x.id) ? <span className="ftag">CASH</span> : null}</th>
+        <th className="pg-n" onClick={() => onOpen(x.id)}>{x.name.toUpperCase()}{isCash(x.id) ? <span className="ftag">CASH</span> : x.salary ? <span className="ftag">SALARY</span> : null}</th>
         {days.map((d) => dayCell(x, d))}
         <td className="pg-h">{fmt(x.hours)}</td>
         <td className="pg-r">{rateOn(rates[x.id], p.end) == null ? '—' : money2(rateOn(rates[x.id], p.end)!)}</td>
@@ -315,7 +318,7 @@ function Grid({ p, people, cols, locked, rates, isCash, roster, onAdd, onOpen, o
               : v ? (c.ctype === 'hours' ? `${fmt(v)} h` : (v < 0 ? '−' : '+') + fmt(Math.abs(v))) : ''}</td>; })}
         {autos.map((k) => { const v = x.lines.filter((l) => !l.col_id && l.kind !== 'hours' && autoKey(l) === k).reduce((n, l) => n + l.amount, 0);
           return <td key={k} className={'pg-x' + (v < 0 ? ' off' : v > 0 ? ' add' : '')} onClick={() => onOpen(x.id)}>{v ? (v < 0 ? '−' : '+') + fmt(Math.abs(v)) : ''}</td>; })}
-        <td className="pg-t">{x.noRate ? <span className="accent">no rate</span> : money2(x.total)}</td>
+        <td className="pg-t">{x.noRate ? <span className="accent">no rate</span> : x.salary && !x.total ? <span className="muted">salary</span> : money2(x.total)}</td>
       </tr>
       {open === x.id && <tr className="sub"><td colSpan={days.length + 4 + cols.length + autos.length}>{detail(x)}</td></tr>}
     </Fragment>));
