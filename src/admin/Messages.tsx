@@ -182,8 +182,8 @@ function AdminConversation({ id, row, onBack, onUnread, onDone, toast }: { id: s
     <div className="stack ib-conv">
       <div className="ib-chead">
         <button className="sq" aria-label="Back" onClick={onBack}>‹</button>
-        <Avatar name={name} url={who?.photo_url ?? row?.staff_photo} size={40} />
-        <div className="grow" style={{ minWidth: 0 }}><b>{name}{conv?.kind === 'manager' ? ` → ${first(mgrName)}` : ''}</b>{lastShift?.event_id ? <Link className="muted sm ch-sub-link" to={`/admin/event/${lastShift.event_id}`}>{sub} ›</Link> : <small className="muted">{sub}</small>}</div>
+        {conv?.staff_id ? <Link to={`/admin/staff?open=${conv.staff_id}`} title="Open the profile"><Avatar name={name} url={who?.photo_url ?? row?.staff_photo} size={40} /></Link> : <Avatar name={name} url={who?.photo_url ?? row?.staff_photo} size={40} />}
+        <div className="grow" style={{ minWidth: 0 }}>{conv?.staff_id ? <Link className="ch-name-link" to={`/admin/staff?open=${conv.staff_id}`} title="Open the profile"><b>{name}</b> <small className="muted">Profile ›</small></Link> : <b>{name}</b>}<b>{conv?.kind === 'manager' ? ` → ${first(mgrName)}` : ''}</b>{lastShift?.event_id ? <Link className="muted sm ch-sub-link" to={`/admin/event/${lastShift.event_id}`}>{sub} ›</Link> : <small className="muted">{sub}</small>}</div>
         {/* Nov 6 · read it, nothing to answer → one visible click */}
         {conv && conv.status !== 'done' && <button className="abtn sm ok" onClick={() => { onDone({ id: conv.id }, true); setTick((t) => t + 1); }}>✓ No reply needed</button>}
         {tel && <a className="abtn sm" href={`tel:${tel}`}>Call</a>}

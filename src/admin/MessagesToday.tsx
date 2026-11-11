@@ -23,7 +23,7 @@ export function MessagesToday({ tick = 0 }: { tick?: number }) {
     {open.slice(0, 5).map((r) => { const sh = r.last_meta?.shift; const ev = sh?.event_id ?? r.event_id; const day = sh?.date ?? r.event_date;
       return <div key={r.id} className={'mt-row' + (r.admin_unread ? ' hot' : '')} role="button" tabIndex={0}
         onClick={() => nav(`/admin/messages?c=${r.id}`)} onKeyDown={(e) => { if (e.key === 'Enter') nav(`/admin/messages?c=${r.id}`); }}>
-        <Avatar name={r.staff_name} url={r.staff_photo} size={36} />
+        <Link to={`/admin/staff?open=${r.staff_id}`} title="Open the profile" onClick={(e) => e.stopPropagation()}><Avatar name={r.staff_name} url={r.staff_photo} size={36} /></Link>
         <span className="mt-main"><span className="mt-top"><b>{r.staff_name}</b><small className="muted">{whenShort(r.last_message_at)}</small></span>
           <span className="mt-body">{r.last_body}</span>
           {day && (ev ? <Link className="ch-shift ch-shift-link mt-shift" to={`/admin/event/${ev}`} onClick={(e) => e.stopPropagation()}>🗓 {shortDate(day)}{sh?.title ?? r.event_title ? ` · ${sh?.title ?? r.event_title}` : ''} ›</Link>
