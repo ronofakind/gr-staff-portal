@@ -19,6 +19,7 @@ export function BarCount() {
   const [draft, setDraft] = useState<Record<string, number>>({}); const [review, setReview] = useState(false);
   const [sup, setSup] = useState<BSupply[]>([]); const [busy, setBusy] = useState(false); const [msg, setMsg] = useState(''); const [err, setErr] = useState('');
   const [itemEd, setItemEd] = useState<{ id: string | null; kind: BKind; name: string; size: string; other?: boolean } | null>(null);
+  const [beo, setBeo] = useState<{ name: string | null; read_at: string; qty: Record<string, number> } | null>(null); // push 89
   const [ct, setCt] = useState(0); const cat = useCatalog(eventId!, ct); const [picking, setPicking] = useState(false); // push 85
   const [sw, setSw] = useState<string | null>(null); const x0 = useRef<{ id: string; x: number; y: number } | null>(null); const [drag, setDrag] = useState<{ id: string; dx: number } | null>(null); // push 88 · swipe to remove
   const [hand, setHand] = useState(false); const [undo, setUndo] = useState<{ id: string; reason: string } | null>(null);
@@ -26,6 +27,7 @@ export function BarCount() {
     const { data, error } = await supabase.rpc('bar_count_get', { p_event: eventId });
     if (error) { setErr(error.message); setD(null); return; }
     const x = data as Data | null; setD(x); if (!x) return;
+    supabase.rpc('bar_count_beo', { p_event: eventId }).then(({ data: b, error: be }) => setBeo(be ? null : (b as typeof beo)));
     const saved = x.count?.supplies ?? [];
     setSup(x.event.supplies ? x.items.filter((i) => i.kind === 'supply').map((i) => saved.find((s) => s.item_id === i.id) ?? { item_id: i.id, name: i.name, level: null }) : []);
     if (!keepMode) setMode(x.moves.some((m) => m.step === 'start' && !m.undone_at) ? 'more' : 'start');
@@ -77,6 +79,7 @@ export function BarCount() {
       ) : <>
       {mode !== 'log' && !(mode === 'start' && started) && cat && cat.list.length > 0 && <BarSearchAdd eventId={eventId!} list={cat.list} have={new Set(cat.list.filter((x) => x.on).map((x) => x.id))}
         onAdded={() => { load(true); setCt((x) => x + 1); }} onAddNew={(name) => setItemEd({ id: null, kind: 'spirit', name, size: '750 ml' })} />}
+      {beo && mode !== 'log' && <div className="bc-note">📄 From the bar BEO{beo.name ? ` · ${beo.name}` : ''} · read {new Date(beo.read_at).toLocaleString('en-CA', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' })}</div>}
       {!started && d.picked && mode === 'start' && <button className="lnk" style={{ alignSelf: 'flex-start' }} onClick={() => setPicking(true)}>Change tonight’s bottles</button>}
       {mode === 'start' && started ? <div className="bc-note ok">✓ Start count confirmed {tm(started.at)} by {started.by?.split(' ')[0]}. Use + More out for anything else.</div> : mode !== 'log' && <>
         {!bottles.length && <p className="muted">No list for this venue yet. Add the bottles below: they stay on the list for next time.</p>}
@@ -93,7 +96,7 @@ export function BarCount() {
                   else if (dx > 40 && sw === i.id) { x0.current = null; setSw(null); } }}
                 onTouchEnd={() => { x0.current = null; setDrag(null); }} onTouchCancel={() => { x0.current = null; setDrag(null); }}>
                 {sw === i.id && <span className="bc-del"><button className="lnk" onClick={() => setSw(null)}>Keep</button><button className="bc-rm" disabled={busy} onClick={() => unpick(i.id)}>Remove</button></span>}
-                <span className="grow"><b>{i.name}</b><small>{[i.size, t ? `out ${q(t.out)}` : null, t?.back ? `back ${q(t.back)}` : null, t ? `used ${q(usedOf(t))}` : null].filter(Boolean).join(' · ')} · <button className="lnk" onClick={() => setItemEd({ id: i.id, kind: i.kind, name: i.name, size: i.size ?? '' })}>✎</button></small></span>
+                <span className="grow"><b>{i.name}</b>{beo?.qty[i.id] != null && <i className="bc-beo">BEO · {q(Number(beo.qty[i.id]))}</i>}<small>{[i.size, t ? `out ${q(t.out)}` : null, t?.back ? `back ${q(t.back)}` : null, t ? `used ${q(usedOf(t))}` : null].filter(Boolean).join(' · ')} · <button className="lnk" onClick={() => setItemEd({ id: i.id, kind: i.kind, name: i.name, size: i.size ?? '' })}>✎</button></small></span>
                 <button className="bc-st" aria-label="less" onClick={() => bump(i, -1)}>−</button><b className={'bc-v' + (dv ? ' hl' : '')}>{dv ? (mode === 'more' ? '+' : '') + q(dv) : '0'}</b><button className="bc-st dark" aria-label="more" disabled={mode === 'back' && room(i.id) <= dv} onClick={() => bump(i, 1)}>+</button>
               </div>); })}
           </section>))}

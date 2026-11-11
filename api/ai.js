@@ -45,6 +45,17 @@ export default async function handler(req, res) {
       return res.json({ vendors: rows, payroll, expenses });
     }
 
+    // push 89 · bar BEO: GET ?beo=1 → bar events in the next 14 days with a Drive folder (+ what was read last time)
+    if (req.method === 'GET' && req.query.beo) {
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' });
+      const to = new Date(Date.now() + 14 * 864e5).toLocaleDateString('en-CA', { timeZone: 'America/Toronto' });
+      const evs = await get(`events?department=eq.bar&event_date=gte.${today}&event_date=lte.${to}&drive_folder_url=not.is.null&select=id,event_date,title,drive_folder_url,venues(name),bar_counts(beo_file,beo_modified,beo_read_at)&order=event_date`);
+      const started = new Set((await get(`bar_moves?step=eq.start&undone_at=is.null&event_id=in.(${evs.map((e) => e.id).join(',') || '00000000-0000-0000-0000-000000000000'})&select=event_id`)).map((m) => m.event_id));
+      return res.json({ events: evs.map((e) => { const c = Array.isArray(e.bar_counts) ? e.bar_counts[0] : e.bar_counts;
+        return { id: e.id, date: e.event_date, title: e.title, venue: e.venues?.name ?? null, folder: e.drive_folder_url, started: started.has(e.id),
+          beo_file: c?.beo_file ?? null, beo_modified: c?.beo_modified ?? null, beo_read_at: c?.beo_read_at ?? null }; }) });
+    }
+
     // push 80 · meeting notes Ronnie sent to an event ("Add to the event"): GET ?notes=1
     if (req.method === 'GET' && req.query.notes) {
       const ns = await get('meeting_notes?apply_status=eq.sending&deleted_at=is.null&select=id,body,meeting_id,created_at,author:staff!meeting_notes_author_id_fkey(full_name),meetings(title,starts_at)&limit=20');
@@ -183,6 +194,16 @@ export default async function handler(req, res) {
           if (r.ok) expenses++;
         }
       }
+      // push 89 · bar BEO read: { beo: [{ event_id, file_id, name, modified, items: [{ name, size, kind, qty }] }] }
+      let beo = 0;
+      if (Array.isArray(body.beo)) {
+        for (const v of body.beo.slice(0, 20)) {
+          if (!/^[0-9a-f-]{36}$/i.test(v?.event_id || '') || !Array.isArray(v.items)) continue;
+          const items = v.items.slice(0, 150).map((i) => ({ name: s(i?.name, 120), size: s(i?.size, 30), kind: s(i?.kind, 10), qty: i?.qty == null || isNaN(Number(i.qty)) ? null : Number(i.qty) }));
+          const r = await fetch(`${URL_}/rest/v1/rpc/bar_beo_apply`, { method: 'POST', headers: H(), body: JSON.stringify({ p_event: v.event_id, p_file: s(v.file_id, 120), p_name: s(v.name, 200), p_modified: s(v.modified, 60), p_items: items }) });
+          if (r.ok) beo++;
+        }
+      }
       let added = 0;
       if (rows.length) {
         const r = await fetch(`${URL_}/rest/v1/ai_items?on_conflict=dedupe_key`, { method: 'POST', headers: H({ Prefer: 'resolution=ignore-duplicates,return=representation' }), body: JSON.stringify(rows) });
@@ -190,7 +211,7 @@ export default async function handler(req, res) {
         added = (await r.json()).length;
       }
       if (body.checked) await fetch(`${URL_}/rest/v1/ai_settings?id=eq.1`, { method: 'PATCH', headers: H(), body: JSON.stringify({ inbox_checked_at: new Date().toISOString() }) });
-      return res.json({ added, skipped: rows.length - added, invoices, reads, vendors, payroll, expenses, notes });
+      return res.json({ added, skipped: rows.length - added, invoices, reads, vendors, payroll, expenses, notes, beo });
     }
     return res.status(405).json({ error: 'GET or POST' });
   } catch (e) {
