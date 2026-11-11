@@ -4342,3 +4342,21 @@ a.ch-name-link { display: block; text-decoration: none; color: inherit; } a.ch-n
 .cmg-mtg { padding: 14px 16px; box-shadow: inset 4px 0 0 #6B64D8; }
 .cmg-mline { font-size: 13px; color: var(--muted); } .cmg-mline b { color: var(--ink); } .cmg-mline span { color: #6B64D8; font-weight: 700; }
 .cmg-more { height: 46px; border-radius: 23px; border: 1.5px solid #D9CFC3; background: transparent; font: inherit; font-size: 14px; font-weight: 700; color: var(--ink); cursor: pointer; }
+/* Nov 11 · Coming up v7 A (board ComingUpV7): more contrast. White tiles that float, warmer strip, darker labels,
+   stronger green pill; Confirm = same light tint in red + a soft glow so it reads as the call to action. */
+.cmg-list { gap: 14px; }
+.cmg-tile { background: #fff; border: 0; box-shadow: 0 1px 2px rgba(26,23,20,.06), 0 8px 24px rgba(26,23,20,.08); }
+.cmg-tile.ask { border: 0; box-shadow: 0 0 0 1.5px #E3AFAF, 0 8px 24px rgba(155,34,38,.10); }
+.cmg-tile.tbc-row { border: 0; box-shadow: 0 0 0 1.5px #C9A227, 0 8px 24px rgba(26,23,20,.08); }
+.cmg-tile .d small, .cmg-strip small { color: #6E655B; }
+.cmg-tile .d b { color: var(--ink); }
+.cmg-name > b { font-weight: 700; color: var(--ink); }
+.cmg-addr { color: #6E655B; }
+.cmg-strip { background: #F1EBE2; }
+.cmg-strip b { font-size: 14.5px; }
+.cmg-ok { background: #DCEFE4; color: #14603F; }
+.cmg-ask { height: 30px; padding: 0 14px; border-radius: 15px; background: #F7DEDE; color: #9B2226; font-weight: 800; animation: cmg-glow 2s ease-in-out infinite; }
+@keyframes cmg-glow { 0%, 100% { box-shadow: 0 0 0 0 rgba(155,34,38,.35); } 50% { box-shadow: 0 0 0 6px rgba(155,34,38,0), 0 0 14px 2px rgba(155,34,38,.28); } }
+@media (prefers-reduced-motion: reduce) { .cmg-ask { animation: none; box-shadow: 0 0 10px 1px rgba(155,34,38,.25); } }
+.cmg-mtg { box-shadow: inset 4px 0 0 #6B64D8, 0 1px 2px rgba(26,23,20,.06), 0 8px 24px rgba(26,23,20,.08); }
+.cmg-more { background: var(--ink); color: #F6F2EC; border: 0; }
