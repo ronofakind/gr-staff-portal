@@ -9,7 +9,7 @@ import {
 } from './api';
 import { tiersFor } from './Availability';
 import { AddressInput, type AddressParts } from '../components/AddressInput';
-import { defaultPieces, defaultItems, UniformIcon, TieIcon, ApronIcon, PantsIcon, ShoesIcon, WineKeyIcon, PIECE, type UniformKind, type UniItems, type UniItemsMap, type UniLineKey } from '../components/Uniform';
+import { defaultPieces, defaultItems, UniformIcon, TieIcon, HairIcon, ApronIcon, PantsIcon, ShoesIcon, WineKeyIcon, PIECE, type UniformKind, type UniItems, type UniItemsMap, type UniLineKey } from '../components/Uniform';
 import { useEventLayout, EditEventLayout, type BlockKey } from './EventLayout';
 import { loadRules, outOfArea, type SCond } from './rules';
 import { setting } from '../lib/settings';
@@ -89,7 +89,7 @@ function Fold({ n, title, summary, open, setOpen, children, id, state }: { n: nu
   );
 }
 /** Push 61 · uniform at a glance, with the app's own icons (board EventPageV3). */
-const PIECE_ICON: Record<string, (p: { size?: number }) => React.ReactElement> = { [PIECE.tie]: TieIcon, [PIECE.apron]: ApronIcon, [PIECE.pants]: PantsIcon, [PIECE.key]: WineKeyIcon };
+const PIECE_ICON: Record<string, (p: { size?: number }) => React.ReactElement> = { [PIECE.tie]: TieIcon, [PIECE.apron]: ApronIcon, [PIECE.pants]: PantsIcon, [PIECE.key]: WineKeyIcon, [PIECE.hair]: HairIcon };
 function UniLook({ t, sub, kind, it, bar }: { t: string; sub?: string; kind: string; it: UniItems; bar?: boolean }) {
   const name = kind.startsWith('custom:') ? kind.slice(7) || 'See notes' : ({ white_shirt: 'WHITE dress shirt', black_shirt: 'BLACK dress shirt', black_tshirt: 'Black T-shirt', dress: 'Black cocktail dress' } as Record<string, string>)[kind] ?? kind;
   return (
@@ -167,6 +167,7 @@ export function EventForm() {
   const [rateSet, setRateSet] = useState<string | null>(null);
   const [items, setItemsMap] = useState<UniItemsMap>({});
   const setItems = (k: UniLineKey, i: UniItems) => setItemsMap((m) => ({ ...m, [k]: i }));
+  const [uniFrom, setUniFrom] = useState<string | null>(null); const [uniToClient, setUniToClient] = useState(false); // Nov 11
   const [mode, setModeRaw] = useState<Mode>('floor');
   const [fold, setFoldMap] = useState<Record<number, boolean>>(readFold);
   const isOpen = (n: number) => fold[n] ?? true;
@@ -311,17 +312,36 @@ export function EventForm() {
   useEffect(() => { if (venue?.address && !address) setAddress(venue.address); }, [venue?.id]);
   const client = clients.find((c) => c.id === clientId) ?? null;
   // push 32: new events take the client's extras / transport billing (Venues & clients). Saved events keep theirs.
+  // Nov 11 · picking / changing the client fills its usual uniform (not on load of a saved event: its uniform is kept)
+  const prevClient = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (!loaded) return;
+    const was = prevClient.current; prevClient.current = clientId;
+    if (was === undefined && !isNew) return; // first load of a saved event
+    if (was !== clientId && client) applyClientUni(client);
+  }, [clientId, loaded]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!isNew || !client) return;
     if (client.extras_billing) setExtrasBill(client.extras_billing);
     if (client.transport_billing) setTr((t) => ({ ...t, billing: client.transport_billing! }));
   }, [client?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Nov 11 · uniform follows the CLIENT (clients use each other's venues); venue only when the client has none
+  const applyClientUni = (c: Client | null | undefined) => {
+    if (!c?.uniform_floor && !c?.uniform_bar) return false;
+    if (c.uniform_floor) setUFloor(c.uniform_floor); if (c.uniform_bar) setUBar(c.uniform_bar);
+    setUFloorW(c.uniform_floor_w ?? c.uniform_floor ?? uFloorW); setUBarW(c.uniform_bar_w ?? c.uniform_bar ?? 'dress');
+    setItemsMap(c.uniform_items ?? {}); setUniFrom(c.name); return true;
+  };
   const pickVenue = (v: Venue) => {
     setVenueId(v.id); setTitle(v.name); setAddress(v.address ?? '');
     if (v.usual_client_id) setClientId(v.usual_client_id);
-    if (v.uniform_floor) setUFloor(v.uniform_floor); if (v.uniform_bar) setUBar(v.uniform_bar);
-    setUFloorW(v.uniform_floor_w ?? v.uniform_floor ?? uFloorW); setUBarW(v.uniform_bar_w ?? 'dress');
-    setItemsMap(v.uniform_items ?? {}); setPrivateId(null);
+    const c = clients.find((x) => x.id === (v.usual_client_id ?? clientId));
+    if (!applyClientUni(c)) {
+      if (v.uniform_floor) setUFloor(v.uniform_floor); if (v.uniform_bar) setUBar(v.uniform_bar);
+      setUFloorW(v.uniform_floor_w ?? v.uniform_floor ?? uFloorW); setUBarW(v.uniform_bar_w ?? 'dress');
+      setItemsMap(v.uniform_items ?? {}); setUniFrom(null);
+    }
+    setPrivateId(null);
   };
   /** A private-home client is also the venue: title, client, address and uniforms come from the client card. */
   const pickPrivate = (c: Client) => {
@@ -418,14 +438,16 @@ export function EventForm() {
     const priv = privateId ? clients.find((c) => c.id === privateId) : null;
     if (priv) {
       vId = null; cId = priv.id;
-      await supabase.from('clients').update({ uniform_floor: uFloor, uniform_bar: uBar, uniform_floor_w: uFloorW, uniform_bar_w: uBarW, uniform_items: lineItems(), ...(!priv.address && address ? { address } : {}) }).eq('id', priv.id);
+      await supabase.from('clients').update({ ...(uniToClient ? { uniform_floor: uFloor, uniform_bar: uBar, uniform_floor_w: uFloorW, uniform_bar_w: uBarW, uniform_items: lineItems() } : {}), ...(!priv.address && address ? { address } : {}) }).eq('id', priv.id);
     } else if (!vId && title.trim()) {
       const { data: v, error } = await supabase.from('venues').insert({ name: title.trim(), address: address || null, uniform_floor_w: uFloorW, uniform_bar_w: uBarW, ...(parts ? { street: parts.street, unit: unit || parts.unit || null, city: parts.city, province: parts.province, postal_code: parts.postal_code } : {}), usual_client_id: cId, uniform_floor: uFloor, uniform_bar: uBar, uniform_items: lineItems() }).select('id').single();
       if (error && !error.message.includes('duplicate')) throw error;
       vId = v?.id ?? (await supabase.from('venues').select('id').eq('name', title.trim()).single()).data?.id ?? null; setVenueId(vId);
     } else if (vId) {
-      await supabase.from('venues').update({ uniform_floor: uFloor, uniform_bar: uBar, uniform_floor_w: uFloorW, uniform_bar_w: uBarW, uniform_items: lineItems(), ...(venue && !venue.address && address ? { address } : {}), ...(venue && !venue.usual_client_id && cId ? { usual_client_id: cId } : {}) }).eq('id', vId);
+      const vUp = { ...(venue && !venue.address && address ? { address } : {}), ...(venue && !venue.usual_client_id && cId ? { usual_client_id: cId } : {}) }; // Nov 11 · the venue's uniform is no longer changed from here
+      if (Object.keys(vUp).length) await supabase.from('venues').update(vUp).eq('id', vId);
     }
+    if (uniToClient && cId && !priv) await supabase.from('clients').update({ uniform_floor: uFloor, uniform_bar: uBar, uniform_floor_w: uFloorW, uniform_bar_w: uBarW, uniform_items: lineItems() }).eq('id', cId); // Nov 11 · only when ticked
     if (linksVenue && vId && links.length) { // 075 · also on the venue: add the ones it doesn't have
       const cur = asLinks((await supabase.from('venues').select('links').eq('id', vId).maybeSingle()).data?.links);
       const add = links.filter((l) => !cur.some((c) => c.url === l.url));
@@ -653,9 +675,11 @@ export function EventForm() {
         {uniWarn.map((w) => <div key={w} className="ul-warn">⚠ {w}</div>)}
         {!uniEdit ? <button type="button" className="lnk" style={{ marginTop: 8 }} onClick={() => setUniEdit(true)}>Edit uniforms ›</button> : <>
         <div className="uni-card">
-          <div className="muted sm" style={{ paddingBottom: 6 }}>Showing <b>{mode === 'both' ? 'Floor + Bar' : mode === 'bar' ? 'Bar' : 'Floor'}</b> · from the Staffing toggle above{venue || privateId ? ' · filled from the ' + (privateId ? 'client card' : 'venue') : ''}</div>
+          <div className="muted sm" style={{ paddingBottom: 6 }}>Showing <b>{mode === 'both' ? 'Floor + Bar' : mode === 'bar' ? 'Bar' : 'Floor'}</b> · from the Staffing toggle above{uniFrom ? ` · filled from ${uniFrom}’s usual` : venue || privateId ? ' · filled from the ' + (privateId ? 'client card' : 'venue') : ''}</div>
           {showFloor && <UniDept label="Floor" sub="MD · waiters · busboys" bar={false} men={uFloor} women={uFloorW} setMen={setUFloor} setWomen={setUFloorW} items={items} setItems={setItems} />}
           {showBar && <UniDept label="Bar" sub="BM · bartenders · barbacks" bar men={uBar} women={uBarW} setMen={setUBar} setWomen={setUBarW} items={items} setItems={setItems} />}
+          {(client || privateId) && <label className="row" style={{ gap: 8, alignItems: 'center', margin: '6px 0' }}><input type="checkbox" checked={uniToClient} onChange={(e) => setUniToClient(e.target.checked)} />
+            <span>Make this <b>{client?.name ?? 'the client'}</b>’s usual uniform <span className="muted sm">(off = only this event)</span></span></label>}
           <small className="muted"><b className="okc">Green ✓</b> = they wear it · tap to switch off (crossed out) · tap again to switch on. <b style={{ color: '#8A6A12' }}>Gold</b> = something you added for this event · × removes it. Staff see exactly the pieces left on for their line.</small>
         </div>
         <button type="button" className="abtn sm" style={{ marginTop: 8 }} onClick={() => setUniEdit(false)}>Done</button></>}

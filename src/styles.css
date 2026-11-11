@@ -4304,3 +4304,4 @@ a.ch-sub-link { display: block; text-decoration: none; } a.ch-sub-link:hover { t
 .mt-done { flex: 0 0 auto; align-self: center; white-space: nowrap; }
 @media (max-width: 640px) { .mt-done { font-size: 11px; padding: 0 8px; } }
 a.ch-name-link { display: block; text-decoration: none; color: inherit; } a.ch-name-link:hover b { text-decoration: underline; }
+.d37-dress-note { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; } /* Nov 11 */

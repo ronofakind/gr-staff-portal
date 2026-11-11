@@ -10,7 +10,7 @@ import { TeamChatCard } from './TeamChatCard';
 import { ConfirmTracker } from './Confirmations';
 import { RidesAdmin } from './Rides';
 import { ShiftView } from '../pages/Shift';
-import { UniformIcon, PantsIcon, ShoesIcon, ApronIcon, TieIcon, WineKeyIcon, PIECE, defaultItems, uniformLabel, type UniItemsMap, type UniLineKey, type UniformKind } from '../components/Uniform';
+import { UniformIcon, PantsIcon, ShoesIcon, ApronIcon, TieIcon, HairIcon, WineKeyIcon, PIECE, defaultItems, uniformLabel, type UniItemsMap, type UniLineKey, type UniformKind } from '../components/Uniform';
 import { EVENT_SELECT, EVENT_SELECT_28, missing034, ap12, dLabel, roleName, guestsText, type AEvent } from './api';
 import { ReplacedBanners } from './Replace';
 import { TeamLocks } from './TeamLocks';
@@ -217,9 +217,9 @@ function tilesFor(kind: string, bar: boolean, women: boolean, items: { on: strin
   const piece: Record<string, Tile> = {
     [PIECE.tie]: { icon: <TieIcon size={40} />, name: 'Tie' }, [PIECE.pants]: { icon: <PantsIcon size={40} />, name: 'Pants' },
     [PIECE.shoes]: { icon: <ShoesIcon size={40} who={women || dress ? 'women' : 'men'} />, name: 'Shoes' },
-    [PIECE.apron]: { icon: <ApronIcon size={40} />, name: 'Apron' }, [PIECE.key]: { icon: <WineKeyIcon size={40} />, name: 'Wine key' },
+    [PIECE.apron]: { icon: <ApronIcon size={40} />, name: 'Apron' }, [PIECE.key]: { icon: <WineKeyIcon size={40} />, name: 'Wine key' }, [PIECE.hair]: { icon: <HairIcon size={40} />, name: 'Hair tied back' },
   };
-  const order = [PIECE.tie, PIECE.pants, PIECE.shoes, PIECE.apron, PIECE.key] as string[];
+  const order = [PIECE.tie, PIECE.pants, PIECE.shoes, PIECE.hair, PIECE.apron, PIECE.key] as string[];
   return [
     { icon: <UniformIcon kind={kind as UniformKind} size={40} />, name: uniformLabel(kind).replace(' + tie', '') },
     ...order.filter((x) => items.on.includes(x)).map((x) => piece[x]),

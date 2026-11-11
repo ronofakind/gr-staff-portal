@@ -69,6 +69,10 @@ export function ShoesIcon({ size = 44, who = 'both' }: { size?: number; who?: 'm
 }
 export function ApronIcon({ size = 44 }: { size?: number }) { return pic('/uniform/apron.png', size); }
 
+/** Nov 11 · hair tied back (back of the head, ponytail) */
+export function HairIcon({ size = 44 }: { size?: number }) {
+  return <svg width={size} height={size} viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="19" r="12.5" fill="#1A1714" /><path d="M24 29c-3 0-4.5 2-4.5 5 0 5 2 9 4.5 12 2.5-3 4.5-7 4.5-12 0-3-1.5-5-4.5-5z" fill="#1A1714" /><rect x="20.5" y="29.5" width="7" height="3.6" rx="1.6" fill="#C9A227" /><path d="M18 12c3-2 9-2 12 0" stroke="#4A433C" strokeWidth="1.2" fill="none" strokeLinecap="round" /><path d="M16 17c4-3 12-3 16 0" stroke="#4A433C" strokeWidth="1.2" fill="none" strokeLinecap="round" /></svg>;
+}
 export function TieIcon({ size = 44 }: { size?: number }) { return pic('/uniform/tie.png', size); }
 export function WineKeyIcon({ size = 44 }: { size?: number }) { return pic('/uniform/winekey.png', size); }
 /** Bar positions: bar manager, barback, bartender. */
@@ -78,13 +82,13 @@ export const isBarPos = (code: string | null, detail: string | null) => /^(BM|BB
 export type UniItems = { on: string[]; off: string[]; extra: string[] };
 export type UniLineKey = 'floor_m' | 'floor_w' | 'bar_m' | 'bar_w';
 export type UniItemsMap = Partial<Record<UniLineKey, UniItems>>;
-export const PIECE = { tie: 'Black tie', apron: 'Black apron', pants: 'Black pants', shoes: 'Black shoes', key: 'Wine key' } as const;
+export const PIECE = { tie: 'Black tie', apron: 'Black apron', pants: 'Black pants', shoes: 'Black shoes', key: 'Wine key', hair: 'Hair tied back' } as const;
 
 /** Pieces that go with a shirt pick, and whether each is worn by default (tie floor only, wine key bar, no apron with dress or black T-shirt). */
 export function defaultPieces(kind: string, bar: boolean): { name: string; on: boolean }[] {
   const p = (name: string, on: boolean) => ({ name, on });
   if (kind.startsWith('custom:')) return [];
-  if (kind === 'dress') return [...(bar ? [p(PIECE.key, true)] : []), p(PIECE.shoes, true), p(PIECE.apron, false)];
+  if (kind === 'dress') return [...(bar ? [p(PIECE.key, true)] : []), p(PIECE.shoes, true), p(PIECE.hair, false), p(PIECE.apron, false)];
   if (kind === 'black_tshirt') return [...(bar ? [p(PIECE.key, true)] : []), p(PIECE.pants, true), p(PIECE.shoes, true), p(PIECE.apron, false), ...(bar ? [] : [p(PIECE.tie, false)])];
   return bar ? [p(PIECE.key, true), p(PIECE.apron, true), p(PIECE.pants, true), p(PIECE.shoes, true), p(PIECE.tie, false)]
     : [p(PIECE.tie, true), p(PIECE.apron, true), p(PIECE.pants, true), p(PIECE.shoes, true)];

@@ -5,7 +5,7 @@ import { supabase, SHIFT_SELECT, isSetup, type ShiftRow } from '../lib/supabase'
 import { useT } from '../lib/i18n';
 import { minus, mapsUrl } from '../lib/format';
 import { Avatar, PhotoViewer } from '../components/Avatar';
-import { UniformIcon, uniformFor, uniformLabel, PantsIcon, ShoesIcon, ApronIcon, TieIcon, WineKeyIcon, isBarPos, lineKey, PIECE } from '../components/Uniform';
+import { UniformIcon, uniformFor, uniformLabel, PantsIcon, ShoesIcon, ApronIcon, TieIcon, HairIcon, WineKeyIcon, isBarPos, lineKey, PIECE } from '../components/Uniform';
 import { Status, isBar, StartPos, BigTime } from './Home';
 import { GettingThere } from '../components/GettingThere';
 import { PinnedAnnouncements } from '../components/Announce';
@@ -131,12 +131,13 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team, past }
   const pieceTile: Record<string, Piece> = {
     [PIECE.tie]: { key: 'tie', icon: (z) => <TieIcon size={z} />, name: 'Black tie' },
     [PIECE.pants]: { key: 'pants', icon: (z) => <PantsIcon size={z} />, name: 'Black dress pants', no: 'No jeans' },
-    [PIECE.shoes]: { key: 'shoes', icon: shoes, name: who === 'women' ? 'Black flats' : 'Black dress shoes', no: 'No running shoes' }, // Nov 11 · women: black flats
+    [PIECE.shoes]: { key: 'shoes', icon: shoes, name: who === 'women' ? 'Black flats' : 'Black formal shoes', no: who === 'women' ? 'No boots, no running shoes' : 'No running shoes' }, // Nov 11 · women: black flats
+    [PIECE.hair]: { key: 'hair', icon: (z) => <HairIcon size={z} />, name: 'Hair tied back' },
     [PIECE.apron]: { key: 'apron', icon: (z) => <ApronIcon size={z} />, name: 'Black apron' },
     [PIECE.key]: { key: 'key', icon: (z) => <WineKeyIcon size={z} />, name: 'Wine key' },
   };
   const plus = (name: string): Piece => ({ key: 'x:' + name, icon: () => <span className="uni-extra">+</span>, name, extra: true });
-  const order = [PIECE.tie, PIECE.pants, PIECE.shoes, PIECE.apron, PIECE.key] as string[];
+  const order = [PIECE.tie, PIECE.pants, PIECE.shoes, PIECE.hair, PIECE.apron, PIECE.key] as string[];
   const tiles0: Piece[] = picked ? [
     ...order.filter((p) => picked.on.includes(p)).map((p) => pieceTile[p]),
     ...picked.on.filter((p) => !order.includes(p)).map(plus),
@@ -273,6 +274,7 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team, past }
             <div style={{ minWidth: 0 }}>
               <small>{dress ? 'Dress' : kind === 'black_tshirt' ? 'Top' : 'Shirt'} · {bar ? 'Bar' : 'Floor'} uniform</small>
               <div className="serif">{shirtLabel}</div>
+              {dress && <small className="d37-dress-note">Long sleeves preferred</small>}
             </div>
           </div>
           {tiles.length > 0 && <div className="d37-tiles">
