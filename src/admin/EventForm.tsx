@@ -168,6 +168,7 @@ export function EventForm() {
   const [items, setItemsMap] = useState<UniItemsMap>({});
   const setItems = (k: UniLineKey, i: UniItems) => setItemsMap((m) => ({ ...m, [k]: i }));
   const [uniFrom, setUniFrom] = useState<string | null>(null); const [uniToClient, setUniToClient] = useState(false); // Nov 11
+  const [catererId, setCatererId] = useState(''); // push 95 · Food by
   const [mode, setModeRaw] = useState<Mode>('floor');
   const [fold, setFoldMap] = useState<Record<number, boolean>>(readFold);
   const isOpen = (n: number) => fold[n] ?? true;
@@ -222,9 +223,9 @@ export function EventForm() {
 
   // Lists
   useEffect(() => {
-    supabase.from('venues').select('id,name,address,usual_client_id,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,uniform_items,always_offer_rides,archived_at').order('name').then(({ data }) => setVenues((data ?? []) as Venue[]));
+    supabase.from('venues').select('id,name,address,usual_client_id,usual_caterer_id,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,uniform_items,always_offer_rides,archived_at').order('name').then(({ data }) => setVenues((data ?? []) as Venue[]));
     // push 32: + extras_billing / transport_billing (a picked client sets the billing on new events; 038 not applied → old columns)
-    const cq = (extra: string) => supabase.from('clients').select('id,name,rate_sets,kind,address,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,uniform_items,drive_folder_default,archived_at' + extra).order('name');
+    const cq = (extra: string) => supabase.from('clients').select('id,name,rate_sets,kind,address,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,uniform_items,drive_folder_default,is_caterer,caterer_label,uniform_special,archived_at' + extra).order('name');
     cq(',extras_billing,transport_billing').then(async (r) => { const res = r.error ? await cq('') : r; setClients((res.data ?? []) as unknown as Client[]); }); // 074: archived ones stay in the list only for events that already use them
     allStaff().then((s) => setStaff(s.filter((x) => x.active)));
     supabase.from('event_types').select('name,main,sort').order('sort').then(({ data }) => setTypes((data ?? []) as { name: string; main: boolean }[]));
@@ -245,7 +246,7 @@ export function EventForm() {
       setDate(e.event_date); setTitle(e.title === 'Details to come' ? '' : e.title); setVenueId(e.venue_id); setAddress(e.address ?? '');
       setPendingDetails(!!(e as unknown as { details_pending?: boolean }).details_pending); setWasPending(!!(e as unknown as { details_pending?: boolean }).details_pending);
       { const x = e as unknown as { tentative?: boolean; start_tbc?: boolean }; setTentative(!!x.tentative); setStartTbc(!!x.start_tbc); setWasTbc(!!x.start_tbc); setLinks(asLinks((e as unknown as { links?: unknown }).links)); }
-      setClientId(e.event_private?.client_id ?? ''); setRateSet(e.event_private?.rate_set ?? null);
+      setClientId(e.event_private?.client_id ?? ''); setRateSet(e.event_private?.rate_set ?? null); setCatererId((e as unknown as { caterer_id?: string | null }).caterer_id ?? '');
       setTr({ on: !!e.transport, travel: e.travel_min ?? 60, gas: String(e.gas_per_car ?? 20), billing: e.transport_billing ?? 'client', rides: e.rides ?? !!e.transport });
       setExtras(e.extras != null ? String(e.extras) : ''); setExtrasBill(e.extras_billing ?? 'gr');
       setGuests(e.guests ? String(e.guests) : ''); setGuestsMax(e.guests_max ? String(e.guests_max) : ''); setGFinal(!!e.guests_final); setEventType(e.event_type ?? ''); setPayMethod(e.event_private?.pay_method ?? 'invoice');
@@ -318,8 +319,16 @@ export function EventForm() {
     if (!loaded) return;
     const was = prevClient.current; prevClient.current = clientId;
     if (was === undefined && !isNew) return; // first load of a saved event
-    if (was !== clientId && client) applyClientUni(client);
+    if (was !== clientId && client?.uniform_special) applyClientUni(client); // push 95 · only clients with their own rule set the uniform
   }, [clientId, loaded]); // eslint-disable-line react-hooks/exhaustive-deps
+  const caterer = clients.find((c) => c.id === catererId) ?? null;
+  const prevCat = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!loaded) return;
+    const was = prevCat.current; prevCat.current = catererId;
+    if (was === undefined && !isNew) return;
+    if (was !== catererId && caterer && !client?.uniform_special) applyClientUni(caterer);
+  }, [catererId, loaded]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!isNew || !client) return;
     if (client.extras_billing) setExtrasBill(client.extras_billing);
@@ -330,13 +339,15 @@ export function EventForm() {
     if (!c?.uniform_floor && !c?.uniform_bar) return false;
     if (c.uniform_floor) setUFloor(c.uniform_floor); if (c.uniform_bar) setUBar(c.uniform_bar);
     setUFloorW(c.uniform_floor_w ?? c.uniform_floor ?? uFloorW); setUBarW(c.uniform_bar_w ?? c.uniform_bar ?? 'dress');
-    setItemsMap(c.uniform_items ?? {}); setUniFrom(c.name); return true;
+    setItemsMap(c.uniform_items ?? {}); setUniFrom(c.caterer_label || c.name); return true;
   };
   const pickVenue = (v: Venue) => {
     setVenueId(v.id); setTitle(v.name); setAddress(v.address ?? '');
     if (v.usual_client_id) setClientId(v.usual_client_id);
-    const c = clients.find((x) => x.id === (v.usual_client_id ?? clientId));
-    if (!applyClientUni(c)) {
+    const cat = catererId || v.usual_caterer_id || ''; if (!catererId && v.usual_caterer_id) setCatererId(v.usual_caterer_id);
+    // push 95 · client with its own rule (Power Corp) → caterer (Food by) → venue
+    const sp = clients.find((x) => x.id === (v.usual_client_id ?? clientId) && x.uniform_special);
+    if (!applyClientUni(sp) && !applyClientUni(clients.find((x) => x.id === cat))) {
       if (v.uniform_floor) setUFloor(v.uniform_floor); if (v.uniform_bar) setUBar(v.uniform_bar);
       setUFloorW(v.uniform_floor_w ?? v.uniform_floor ?? uFloorW); setUBarW(v.uniform_bar_w ?? 'dress');
       setItemsMap(v.uniform_items ?? {}); setUniFrom(null);
@@ -447,7 +458,8 @@ export function EventForm() {
       const vUp = { ...(venue && !venue.address && address ? { address } : {}), ...(venue && !venue.usual_client_id && cId ? { usual_client_id: cId } : {}) }; // Nov 11 · the venue's uniform is no longer changed from here
       if (Object.keys(vUp).length) await supabase.from('venues').update(vUp).eq('id', vId);
     }
-    if (uniToClient && cId && !priv) await supabase.from('clients').update({ uniform_floor: uFloor, uniform_bar: uBar, uniform_floor_w: uFloorW, uniform_bar_w: uBarW, uniform_items: lineItems() }).eq('id', cId); // Nov 11 · only when ticked
+    const uniTarget = client?.uniform_special ? cId : catererId || null; // push 95
+    if (uniToClient && uniTarget && !priv) await supabase.from('clients').update({ uniform_floor: uFloor, uniform_bar: uBar, uniform_floor_w: uFloorW, uniform_bar_w: uBarW, uniform_items: lineItems() }).eq('id', uniTarget); // Nov 11 · only when ticked
     if (linksVenue && vId && links.length) { // 075 · also on the venue: add the ones it doesn't have
       const cur = asLinks((await supabase.from('venues').select('links').eq('id', vId).maybeSingle()).data?.links);
       const add = links.filter((l) => !cur.some((c) => c.url === l.url));
@@ -466,6 +478,7 @@ export function EventForm() {
         event_date: forDate, title: title.trim() || (pendingDetails ? 'Details to come' : ''), venue_id: vId, details_pending: pendingDetails, tentative, start_tbc: ls.some((l) => l.tbc) && !pendingDetails, links, address: (address + (unit.trim() ? `, ${unit.trim()}` : '')) || null, department: dept,
         start_time: start, end_time: endT, ends_label: ends, staff_needed: ls.reduce((n, l) => n + l.count, 0),
         manager_id: lead ? keep(lead)[0] ?? null : null, description: note || null, notes: staffNote || null,
+        caterer_id: catererId || null, // push 95 · Food by (same for floor + bar)
         uniform_floor: uFloor, uniform_bar: uBar, uniform_floor_w: uFloorW, uniform_bar_w: uBarW, uniform_items: lineItems(), drive_folder_url: folder.trim() || null, staffing: ls.map(({ dept: d, code, start: s, end, count, tbc, hold }) => ({ dept: d, code, start: s, end: end || null, count, ...(tbc ? { tbc: true } : {}), ...(hold ? { hold } : {}) })), guests: guests ? Number(guests) : null, guests_max: !gFinal && guestsMax && Number(guestsMax) > Number(guests || 0) ? Number(guestsMax) : null, guests_final: gFinal && !!guests, event_type: eventType || null, extras: extras === '' ? null : Number(extras), extras_billing: 'client', // push 61 · extras always on the invoice for now
         transport: trOn, travel_min: trOn ? tr.travel : null, paid_travel_min: trOn ? paidTravel : null, gas_per_car: trOn ? Number(tr.gas) || 0 : null, transport_billing: trOn ? tr.billing : null, rides: tr.rides && (trOn || carpool),
       };
@@ -597,6 +610,11 @@ export function EventForm() {
           {tentative && <small className="muted">Staff see ⏳ To be confirmed and “Keep the date for G&amp;R”. You answer It’s confirmed / Not happening on the event page.</small>}</div>
         <div className="ef-g"><div className="ef-gh">THE EVENT <span>only you see the client</span></div>
           <label className="ef-f" style={{ maxWidth: 220 }}><span>DATE</span><input type="date" required value={date} onChange={(e) => setDate(e.target.value)} /></label>
+          <label className="ef-f" style={{ maxWidth: 320 }}><span>🍽 FOOD BY · staff see it (floor + bar)</span>
+            <select value={catererId} onChange={(e) => setCatererId(e.target.value)}>
+              <option value="">— not set</option>
+              {clients.filter((c) => c.is_caterer && (!(c as Client & { archived_at?: string | null }).archived_at || c.id === catererId)).map((c) => <option key={c.id} value={c.id}>{c.caterer_label || c.name}</option>)}
+            </select><small className="muted">The caterer’s usual uniform fills in (Venues &amp; clients → Caterer).</small></label>
           <div className="ef-row3">
             <label className="ef-f"><span>CLIENT · only you</span>
             {newClient !== null ? <div className="row"><input autoFocus value={newClient} onChange={(e) => setNewClient(e.target.value)} placeholder="New client name" /><button type="button" className="abtn sm" onClick={() => setNewClient(null)}>×</button></div>
@@ -678,8 +696,8 @@ export function EventForm() {
           <div className="muted sm" style={{ paddingBottom: 6 }}>Showing <b>{mode === 'both' ? 'Floor + Bar' : mode === 'bar' ? 'Bar' : 'Floor'}</b> · from the Staffing toggle above{uniFrom ? ` · filled from ${uniFrom}’s usual` : venue || privateId ? ' · filled from the ' + (privateId ? 'client card' : 'venue') : ''}</div>
           {showFloor && <UniDept label="Floor" sub="MD · waiters · busboys" bar={false} men={uFloor} women={uFloorW} setMen={setUFloor} setWomen={setUFloorW} items={items} setItems={setItems} />}
           {showBar && <UniDept label="Bar" sub="BM · bartenders · barbacks" bar men={uBar} women={uBarW} setMen={setUBar} setWomen={setUBarW} items={items} setItems={setItems} />}
-          {(client || privateId) && <label className="row" style={{ gap: 8, alignItems: 'center', margin: '6px 0' }}><input type="checkbox" checked={uniToClient} onChange={(e) => setUniToClient(e.target.checked)} />
-            <span>Make this <b>{client?.name ?? 'the client'}</b>’s usual uniform <span className="muted sm">(off = only this event)</span></span></label>}
+          {((client?.uniform_special ? client : caterer) || privateId) && <label className="row" style={{ gap: 8, alignItems: 'center', margin: '6px 0' }}><input type="checkbox" checked={uniToClient} onChange={(e) => setUniToClient(e.target.checked)} />
+            <span>Make this <b>{client?.uniform_special ? client.name : caterer ? (caterer.caterer_label || caterer.name) : client?.name ?? 'the client'}</b>’s usual uniform <span className="muted sm">(off = only this event)</span></span></label>}
           <small className="muted"><b className="okc">Green ✓</b> = they wear it · tap to switch off (crossed out) · tap again to switch on. <b style={{ color: '#8A6A12' }}>Gold</b> = something you added for this event · × removes it. Staff see exactly the pieces left on for their line.</small>
         </div>
         <button type="button" className="abtn sm" style={{ marginTop: 8 }} onClick={() => setUniEdit(false)}>Done</button></>}

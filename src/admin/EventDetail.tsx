@@ -52,6 +52,8 @@ export function EventDetail() {
     })();
   }, [id, tick]);
   const load = () => setTick((t) => t + 1);
+  const [food, setFood] = useState<string | null>(null); // push 95 · Food by
+  useEffect(() => { if (!id) return; supabase.from('events').select('caterer_name').eq('id', id).maybeSingle().then(({ data, error }) => setFood(error ? null : ((data as { caterer_name?: string | null } | null)?.caterer_name ?? null))); }, [id, tick]);
 
   if (!evs) return <div className="muted">Loading…</div>;
   if (!evs.length) return <div className="adm-card">This event doesn't exist anymore. <Link to="/admin/week">Back to the week</Link></div>;
@@ -111,6 +113,7 @@ export function EventDetail() {
           <div className="ed2-facts">
             <F l="Date" v={dLabel(e.event_date, { weekday: 'long', month: 'long', day: 'numeric' })} />
             <F l="Venue" v={x?.venue?.name ?? e.title} />
+            {food && <F l="🍽 Food by" v={food} />}
             <F l={<>Client <i className="only">only you</i></>} v={p?.client ?? '—'} />
             <F l="Address" v={e.address ?? x?.venue?.address ?? '—'} />
             <F l="Event type" v={e.event_type ?? '—'} />

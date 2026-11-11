@@ -143,11 +143,12 @@ export const roleName = (code: string | null) => ROLES.find((r) => r.code === co
 export const roleOfShift = (code: string | null) => (code && /^\d+$/.test(code) ? 'W' : code ?? 'W');
 export type Venue = { id: string; name: string; address: string | null; usual_client_id: string | null; staff_notes?: string | null; always_offer_rides?: boolean;
   /** push 32 (migration 038) */ venue_notes?: string | null; photos?: string[] | null; street?: string | null; unit?: string | null; city?: string | null; province?: string | null; postal_code?: string | null;
-  uniform_floor: string | null; uniform_bar: string | null; uniform_floor_w?: string | null; uniform_bar_w?: string | null; uniform_items?: import('../components/Uniform').UniItemsMap | null };
+  uniform_floor: string | null; uniform_bar: string | null; uniform_floor_w?: string | null; uniform_bar_w?: string | null; uniform_items?: import('../components/Uniform').UniItemsMap | null; usual_caterer_id?: string | null };
 export type Client = { id: string; name: string; rate_sets: { key: string; label: string; rates: Record<string, number> }[]; kind?: 'private_home' | 'roaming' | null; address?: string | null;
   uniform_floor?: string | null; uniform_bar?: string | null; uniform_floor_w?: string | null; uniform_bar_w?: string | null; uniform_items?: import('../components/Uniform').UniItemsMap | null; drive_folder_default?: boolean;
   /** push 32 (migration 038 adds admin_fee_pct, transport_billing) */
-  qb_customer?: string | null; extras_billing?: 'gr' | 'client'; transport_billing?: 'client' | 'gr'; admin_fee_pct?: number | null };
+  qb_customer?: string | null; extras_billing?: 'gr' | 'client'; transport_billing?: 'client' | 'gr'; admin_fee_pct?: number | null;
+  /** push 95 (114) · Food by */ is_caterer?: boolean; caterer_label?: string | null; uniform_special?: boolean };
 export const UNIFORMS: [string, string][] = [['white_shirt', 'White dress shirt'], ['black_shirt', 'Black dress shirt'], ['dress', 'Black cocktail dress'], ['black_tshirt', 'Black T-shirt']];
 /** push 64 · day events need an end too (brunch, lunch): shown to staff as an estimate. */
 export const ENDS: [string, string | null][] = [['~ 1 PM', '13:00'], ['~ 2 PM', '14:00'], ['~ 3 PM', '15:00'], ['~ 4 PM', '16:00'], ['~ 5 PM', '17:00'], ['~ 6 PM', '18:00'], ['~ 7 PM', '19:00'], ['~ 8 PM', '20:00'], ['~ 9 PM', '21:00'], ['~ 10 PM', '22:00'], ['~ 11 PM', '23:00'], ['~ midnight', '00:00'], ['~ 1 AM', '01:00'], ['~ 2 AM', '02:00'], ['late', null]];

@@ -22,8 +22,8 @@ type V = Venue & { staff_notes?: string | null; venue_notes?: string | null; pho
 type C = Client & { qb_customer?: string | null; extras_billing?: 'gr' | 'client'; transport_billing?: 'client' | 'gr'; admin_fee_pct?: number | null; archived_at?: string | null };
 type Count = { n: number; last: string | null; next: string | null; bar: boolean; floor: boolean };
 
-const V_COLS = 'id,name,address,street,unit,city,province,postal_code,area,usual_client_id,staff_notes,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,uniform_items,always_offer_rides,no_outside_food,pin_lat,pin_lng,pin_label,archived_at,links';
-const C_COLS = 'id,name,qb_customer,rate_sets,kind,address,area,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,uniform_items,drive_folder_default,extras_billing,archived_at';
+const V_COLS = 'id,name,address,usual_caterer_id,street,unit,city,province,postal_code,area,usual_client_id,staff_notes,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,uniform_items,always_offer_rides,no_outside_food,pin_lat,pin_lng,pin_label,archived_at,links';
+const C_COLS = 'id,name,qb_customer,rate_sets,kind,address,area,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,uniform_items,drive_folder_default,extras_billing,archived_at,is_caterer,caterer_label,uniform_special';
 /** 038 columns; read in a second pass so the page works before the migration is applied. */
 const V_038 = ',venue_notes,photos'; const C_038 = ',admin_fee_pct,transport_billing';
 
@@ -201,7 +201,7 @@ const uniSummary = (u: Uni) => `Floor · men ${uniName(u.floor_m)} · women ${un
 
 // ───────── venue card ─────────
 function VenueCard({ v, clients, count, has038, all, onSaved, onGone, onClient }: { v: V | null; clients: C[]; count?: Count; has038: boolean; all: V[]; onSaved: (id: string) => void; onGone: () => void; onClient: (id: string) => void }) {
-  const [name, setName] = useState(v?.name ?? ''); const [clientId, setClientId] = useState(v?.usual_client_id ?? '');
+  const [name, setName] = useState(v?.name ?? ''); const [clientId, setClientId] = useState(v?.usual_client_id ?? ''); const [catId, setCatId] = useState(v?.usual_caterer_id ?? ''); // push 95
   const [address, setAddress] = useState(v?.address ?? ''); const [parts, setParts] = useState<AddressParts | null>(null);
   const [parking, setParking] = useState(v?.staff_notes ?? ''); const [notes, setNotes] = useState(v?.venue_notes ?? '');
   const [pin, setPin] = useState<Pin | null>(() => { const x = v as unknown as { pin_lat?: number | null; pin_lng?: number | null; pin_label?: string | null } | null; return x?.pin_lat != null && x?.pin_lng != null ? { lat: x.pin_lat, lng: x.pin_lng, label: x.pin_label ?? '' } : null; });
@@ -216,7 +216,7 @@ function VenueCard({ v, clients, count, has038, all, onSaved, onGone, onClient }
     if (!name.trim()) return setErr('Give the venue a name (what staff see).');
     setBusy(true); setErr('');
     const row: Record<string, unknown> = {
-      name: name.trim(), usual_client_id: clientId || null, address: address.trim() || null, staff_notes: parking.trim() || null, always_offer_rides: rides, no_outside_food: noFood, ...uniRow(u), area: area || (parts ? areaFromPostal(parts.postal_code) : null) || null,
+      name: name.trim(), usual_client_id: clientId || null, usual_caterer_id: catId || null, address: address.trim() || null, staff_notes: parking.trim() || null, always_offer_rides: rides, no_outside_food: noFood, ...uniRow(u), area: area || (parts ? areaFromPostal(parts.postal_code) : null) || null,
       ...(parts ? { street: parts.street, unit: parts.unit || null, city: parts.city, province: parts.province, postal_code: parts.postal_code } : {}),
       ...(has038 ? { venue_notes: notes.trim() || null } : {}),
       pin_lat: pin?.lat ?? null, pin_lng: pin?.lng ?? null, pin_label: pin?.label?.trim() || null, links,
@@ -241,6 +241,11 @@ function VenueCard({ v, clients, count, has038, all, onSaved, onGone, onClient }
                   <option value="">—</option>
                   {clients.filter((c) => c.kind !== 'private_home').map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select><small className="muted">fills the client on New event</small></label>
+              <label className="ef-f"><span>🍽 USUAL CATERER</span>
+                <select value={catId} onChange={(e) => setCatId(e.target.value)}>
+                  <option value="">—</option>
+                  {clients.filter((c) => c.is_caterer).map((c) => <option key={c.id} value={c.id}>{c.caterer_label || c.name}</option>)}
+                </select><small className="muted">fills “Food by” + its uniform on New event</small></label>
             </div>
             <div className="ef-f"><span>ADDRESS</span><AddressInput value={address} onChange={(x) => { setAddress(x); setParts(null); }} onPick={setParts} placeholder="Start typing the address…" />
               <small className="muted">Google autocomplete once the Maps key is set · plain text until then{!address.trim() && <b className="accent"> · address missing</b>}</small></div>
@@ -414,7 +419,8 @@ function ClientCard({ c, home, venues, all, count, has038, onSaved, onGone }: { 
   const [address, setAddress] = useState(c?.address ?? ''); const [u, setU] = useState<Uni>(() => uniOf(c));
   const [area, setArea] = useState((c as unknown as { area?: string | null } | null)?.area ?? ''); // push 63
   const [busy, setBusy] = useState(false); const [err, setErr] = useState(''); const [saved, setSaved] = useState<string | null>(null);
-  const isHome = kind === 'private_home';
+  const [cat, setCat] = useState(!!c?.is_caterer); const [catLabel, setCatLabel] = useState(c?.caterer_label ?? ''); const [special, setSpecial] = useState(!!c?.uniform_special); // push 95
+  const isHome = kind === 'private_home'; const ownUni = isHome || cat || special;
   const check = qbCheck(name, qb);
   const usedBy = c ? venues.filter((v) => v.usual_client_id === c.id) : [];
   const roles = Array.from(new Set(rates.flatMap((r) => Object.keys(r.rates ?? {})))); const roleCols = roles.length ? roles : ['BM', 'BT', 'BB'];
@@ -427,7 +433,8 @@ function ClientCard({ c, home, venues, all, count, has038, onSaved, onGone }: { 
     const row: Record<string, unknown> = {
       name: name.trim(), kind: kind || null, qb_customer: qb.trim() || null, drive_folder_default: drive, extras_billing: extras, rate_sets: rates,
       ...(has038 ? { admin_fee_pct: pct, transport_billing: transport } : {}),
-      ...(isHome ? { address: address.trim() || null, ...uniRow(u), area: area || null } : {}),
+      ...(isHome ? { address: address.trim() || null, area: area || null } : {}), ...(ownUni ? uniRow(u) : {}),
+      is_caterer: cat, caterer_label: cat ? catLabel.trim() || null : null, uniform_special: special, // push 95
     };
     const r = c ? await supabase.from('clients').update(row).eq('id', c.id).select('id').single() : await supabase.from('clients').insert(row).select('id').single();
     setBusy(false);
@@ -447,6 +454,9 @@ function ClientCard({ c, home, venues, all, count, has038, onSaved, onGone }: { 
             <div className="ef-f"><span>KIND</span>
               <div className="seg3">{([['', 'Client'], ['private_home', 'Private home'], ['roaming', 'Changes each time']] as const).map(([k, l]) => <button type="button" key={k} className={kind === k ? 'on' : ''} onClick={() => setKind(k)}>{l}</button>)}</div></div>
             {!isHome && usedBy.length > 0 && <small className="muted">Usual client of: {usedBy.map((v) => v.name).join(', ')}</small>}
+            {!isHome && <label className="row" style={{ gap: 8, alignItems: 'center' }}><input type="checkbox" checked={cat} onChange={(e) => setCat(e.target.checked)} /><span>🍽 <b>Caterer</b> · does the food (staff see “Food by …”)</span></label>}
+            {cat && <label className="ef-f" style={{ maxWidth: 320 }}><span>NAME STAFF SEE</span><input value={catLabel} onChange={(e) => setCatLabel(e.target.value)} placeholder={name || 'e.g. Beatrice'} /></label>}
+            {!isHome && <label className="row" style={{ gap: 8, alignItems: 'center' }}><input type="checkbox" checked={special} onChange={(e) => setSpecial(e.target.checked)} /><span><b>Own uniform rule</b> · wins over the caterer (e.g. Power Corp)</span></label>}
           </Sec>
           <Sec title="BILLING" sub="pre-filled on New event">
             <div className="vc-2">
@@ -478,11 +488,11 @@ function ClientCard({ c, home, venues, all, count, has038, onSaved, onGone }: { 
               {!address.trim() && <small className="accent strong">address missing</small>}
               <label className="ef-f" style={{ maxWidth: 320, marginTop: 8 }}><span>AREA</span><select value={area} onChange={(e) => setArea(e.target.value)}><option value="">— not set (no filter)</option>{AREAS.map((a) => <option key={a} value={a}>{a}</option>)}</select></label>
             </Sec>
-            <Sec title="USUAL UNIFORMS" sub="pre-filled on New event"><Uniforms u={u} set={setU} /></Sec>
             {c && <Sec title="BAR COUNT" sub="bottles for events with this client and no venue"><BarList venueId={null} clientId={c.id} /></Sec>}
           </>}
-          {!isHome && <small className="muted" style={{ padding: '0 4px' }}>Private homes use this same card, plus the address and uniforms (they live on the client).</small>}
-          {isHome && <small className="muted" style={{ padding: '0 4px' }}>{uniSummary(u)}</small>}
+          {ownUni && <Sec title="USUAL UNIFORMS" sub={isHome ? 'pre-filled on New event' : cat ? 'fills events this caterer does the food for' : 'wins over the caterer'}><Uniforms u={u} set={setU} /></Sec>}
+          {!ownUni && <small className="muted" style={{ padding: '0 4px' }}>Caterers, clients with their own uniform rule and private homes get a usual uniform here. Billing clients don’t set the uniform.</small>}
+          {ownUni && <small className="muted" style={{ padding: '0 4px' }}>{uniSummary(u)}</small>}
           {c && <Remove kind={home ? 'home' : 'client'} it={c} all={all} onSaved={onSaved} onGone={onGone} />}
         </div>
       </div>
