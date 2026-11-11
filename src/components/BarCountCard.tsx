@@ -23,10 +23,10 @@ export function BarCountCard({ eventId, preview = false }: { eventId: string; pr
   );
 }
 
-/** Push 83 (board BarCountHomeV1) · Home next-shift card: 📁 Event folder + 🍸 Bar count side by side (bar events, from the morning of the event). */
-export function HomeFolderBar({ eventId, isBar, today, folder, preview = false }: { eventId: string; isBar: boolean; today: boolean; folder: string | null; preview?: boolean }) {
-  const m = useBarMine(eventId, preview || !isBar || !today);
-  const bar = isBar && today && m;
+/** Push 83 (board BarCountHomeV1) · Home next-shift card: 📁 Event folder + 🍸 Bar count side by side. Push 87: on any bar event that is the next shift (not only the same day), also in View as. */
+export function HomeFolderBar({ eventId, isBar, folder }: { eventId: string; isBar: boolean; today?: boolean; folder: string | null; preview?: boolean }) {
+  const m = useBarMine(eventId, !isBar);
+  const bar = isBar && m;
   if (!folder && !bar) return null;
   return (
     <div className="home-fb">
