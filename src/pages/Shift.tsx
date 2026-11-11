@@ -131,7 +131,7 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team, past }
   const pieceTile: Record<string, Piece> = {
     [PIECE.tie]: { key: 'tie', icon: (z) => <TieIcon size={z} />, name: 'Black tie' },
     [PIECE.pants]: { key: 'pants', icon: (z) => <PantsIcon size={z} />, name: 'Black dress pants', no: 'No jeans' },
-    [PIECE.shoes]: { key: 'shoes', icon: shoes, name: 'Black dress shoes', no: 'No running shoes' },
+    [PIECE.shoes]: { key: 'shoes', icon: shoes, name: who === 'women' ? 'Black flats' : 'Black dress shoes', no: 'No running shoes' }, // Nov 11 · women: black flats
     [PIECE.apron]: { key: 'apron', icon: (z) => <ApronIcon size={z} />, name: 'Black apron' },
     [PIECE.key]: { key: 'key', icon: (z) => <WineKeyIcon size={z} />, name: 'Wine key' },
   };
