@@ -45,24 +45,19 @@ export default async function handler(req, res) {
       return res.json({ vendors: rows, payroll, expenses });
     }
 
-    // push 89 · bar BEO, read twice per event: GET ?beo=1 → only the events due now:
-    //   phase 'initial' = 2 days before (not checked yet) · phase 'final' = the start is in the next 90 min (not checked yet)
+    // push 92 · bar BEO, read ONCE per event: 8 AM the morning of the event (Ronnie, Nov 11). After that the bar manager changes quantities in the app.
+    //   GET ?beo=1 → today's bar events not read yet, from 8 AM Montreal time (phase 'initial')
     if (req.method === 'GET' && req.query.beo) {
       const tz = 'America/Toronto'; const today = new Date().toLocaleDateString('en-CA', { timeZone: tz });
-      const in2 = new Date(Date.now() + 2 * 864e5).toLocaleDateString('en-CA', { timeZone: tz });
-      const evs = await get(`events?department=eq.bar&event_date=gte.${today}&event_date=lte.${in2}&select=id,event_date,title,start_time,drive_folder_url,venues(name),bar_counts(beo_file,beo_modified,beo_read_at,beo_initial_at,beo_final_at)&order=event_date`);
+      const hour = Number(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hourCycle: 'h23' }).format(new Date()));
+      const evs = hour < 8 ? [] : await get(`events?department=eq.bar&event_date=eq.${today}&select=id,event_date,title,start_time,drive_folder_url,venues(name),bar_counts(beo_file,beo_modified,beo_read_at,beo_initial_at,beo_final_at)&order=start_time`);
       const ids = evs.map((e) => e.id).join(',') || '00000000-0000-0000-0000-000000000000';
       const started = new Set((await get(`bar_moves?step=eq.start&undone_at=is.null&event_id=in.(${ids})&select=event_id`)).map((m) => m.event_id));
-      const off = (d) => { const p = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'shortOffset' }).formatToParts(new Date(d + 'T12:00:00Z')).find((x) => x.type === 'timeZoneName')?.value ?? 'GMT-5';
-        const m = p.match(/GMT([+-]\d+)/); const h = m ? Number(m[1]) : -5; return `${h < 0 ? '-' : '+'}${String(Math.abs(h)).padStart(2, '0')}:00`; };
       const out = [];
       for (const e of evs) {
         const c = (Array.isArray(e.bar_counts) ? e.bar_counts[0] : e.bar_counts) ?? {};
-        const startMs = e.start_time ? Date.parse(`${e.event_date}T${e.start_time.slice(0, 5)}:00${off(e.event_date)}`) : null;
-        const mins = startMs == null ? null : (startMs - Date.now()) / 6e4;
-        const phase = mins != null && mins > 0 && mins <= 90 && !c.beo_final_at ? 'final' : !c.beo_initial_at && !c.beo_final_at ? 'initial' : null;
-        if (!phase) continue;
-        out.push({ id: e.id, phase, date: e.event_date, start: e.start_time ? e.start_time.slice(0, 5) : null, title: e.title, venue: e.venues?.name ?? null, folder: e.drive_folder_url,
+        if (c.beo_initial_at || c.beo_read_at) continue; // already read (or preloaded by hand)
+        out.push({ id: e.id, phase: 'initial', date: e.event_date, start: e.start_time ? e.start_time.slice(0, 5) : null, title: e.title, venue: e.venues?.name ?? null, folder: e.drive_folder_url,
           started: started.has(e.id), beo_file: c.beo_file ?? null, beo_modified: c.beo_modified ?? null });
       }
       // the G&R bottle list, so the BEO bottles use the same names (no prices)

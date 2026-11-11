@@ -19,7 +19,8 @@ export function BarCount() {
   const [draft, setDraft] = useState<Record<string, number>>({}); const [review, setReview] = useState(false);
   const [sup, setSup] = useState<BSupply[]>([]); const [busy, setBusy] = useState(false); const [msg, setMsg] = useState(''); const [err, setErr] = useState('');
   const [itemEd, setItemEd] = useState<{ id: string | null; kind: BKind; name: string; size: string; other?: boolean } | null>(null);
-  const [beo, setBeo] = useState<{ name: string | null; read_at: string; qty: Record<string, number>; changes?: { name: string; was: number | null; now: number | null }[] } | null>(null); // push 89
+  const [beo, setBeo] = useState<{ name: string | null; read_at: string | null; file?: string | null; qty: Record<string, number>; mine?: string[]; history?: { at: string; by: string | null; item: string; was: number | null; now: number | null }[] | null; changes?: { name: string; was: number | null; now: number | null }[] } | null>(null); // push 89 · 92
+  const [plan, setPlan] = useState<{ id: string; name: string; v: string } | null>(null); // push 92 · change tonight's quantity
   const [ct, setCt] = useState(0); const cat = useCatalog(eventId!, ct); const [picking, setPicking] = useState(false); // push 85
   const [sw, setSw] = useState<string | null>(null); const x0 = useRef<{ id: string; x: number; y: number } | null>(null); const [drag, setDrag] = useState<{ id: string; dx: number } | null>(null); // push 88 · swipe to remove
   const [hand, setHand] = useState(false); const [undo, setUndo] = useState<{ id: string; reason: string } | null>(null);
@@ -57,6 +58,9 @@ export function BarCount() {
     setBusy(false); if (error) setErr(error.message); else { setItemEd(null); load(true); setCt((x) => x + 1); } };
   const unpick = async (id: string) => { setBusy(true); setErr(''); const { error } = await supabase.rpc('bar_unpick', { p_event: eventId, p_item: id }); setBusy(false);
     setSw(null); if (error) setErr(error.message); else { setItemEd(null); setDraft((dr) => { const n = { ...dr }; delete n[id]; return n; }); load(true); setCt((x) => x + 1); } };
+  const savePlan = async () => { if (!plan) return; setBusy(true); setErr('');
+    const { error } = await supabase.rpc('bar_plan_set', { p_event: eventId, p_item: plan.id, p_qty: plan.v.trim() === '' ? null : Number(plan.v) });
+    setBusy(false); if (error) setErr(error.message); else { setPlan(null); load(true); } };
   const doUndo = async () => { if (!undo) return; setBusy(true); const { error } = await supabase.rpc('bar_move_undo', { p_move: undo.id, p_reason: undo.reason }); setBusy(false); if (error) setErr(error.message); else { setUndo(null); load(true); } };
   const submit = async () => { setBusy(true); const { error } = await supabase.rpc('bar_count_submit', { p_event: eventId, p_supplies: sup }); setBusy(false); if (error) setErr(error.message); else { setMsg('✓ Count submitted. You can still add or fix moves; they’re logged.'); load(true); } };
   const handTo = async (sid: string | null) => { setBusy(true); const { error } = await supabase.rpc('bar_count_hand', { p_event: eventId, p_staff: sid }); setBusy(false); setHand(false); if (error) setErr(error.message); else load(true); };
@@ -80,7 +84,7 @@ export function BarCount() {
       {mode !== 'log' && !(mode === 'start' && started) && cat && cat.list.length > 0 && <BarSearchAdd eventId={eventId!} list={cat.list} have={new Set(cat.list.filter((x) => x.on).map((x) => x.id))}
         onAdded={() => { load(true); setCt((x) => x + 1); }} onAddNew={(name) => setItemEd({ id: null, kind: 'spirit', name, size: '750 ml' })} />}
       {beo?.changes?.length && started ? <div className="bc-note warn">⚠ <b>BEO changed after the start count:</b> {beo.changes.map((x) => `${x.name} ${x.was == null ? 'new' : q(Number(x.was))} → ${x.now == null ? '?' : q(Number(x.now))}${x.was != null && x.now != null && x.now > x.was ? ` (+${q(x.now - x.was)})` : ''}`).join(' · ')}. Add it with + More out.</div> : null}
-      {beo && mode !== 'log' && <div className="bc-note">📄 From the bar BEO{beo.name ? ` · ${beo.name}` : ''} · read {new Date(beo.read_at).toLocaleString('en-CA', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' })}</div>}
+      {beo?.file && mode !== 'log' && <a className="abtn sm bc-beobtn" href={`https://drive.google.com/file/d/${beo.file}/view`} target="_blank" rel="noreferrer">📄 Bar BEO</a>}
       {!started && d.picked && mode === 'start' && <button className="lnk" style={{ alignSelf: 'flex-start' }} onClick={() => setPicking(true)}>Change tonight’s bottles</button>}
       {mode === 'start' && started ? <div className="bc-note ok">✓ Start count confirmed {tm(started.at)} by {started.by?.split(' ')[0]}. Use + More out for anything else.</div> : mode !== 'log' && <>
         {!bottles.length && <p className="muted">No list for this venue yet. Add the bottles below: they stay on the list for next time.</p>}
@@ -97,7 +101,8 @@ export function BarCount() {
                   else if (dx > 40 && sw === i.id) { x0.current = null; setSw(null); } }}
                 onTouchEnd={() => { x0.current = null; setDrag(null); }} onTouchCancel={() => { x0.current = null; setDrag(null); }}>
                 {sw === i.id && <span className="bc-del"><button className="lnk" onClick={() => setSw(null)}>Keep</button><button className="bc-rm" disabled={busy} onClick={() => unpick(i.id)}>Remove</button></span>}
-                <span className="grow"><b>{i.name}</b>{beo?.qty[i.id] != null && <i className="bc-beo">BEO · {q(Number(beo.qty[i.id]))}</i>}<small>{[i.size, t ? `out ${q(t.out)}` : null, t?.back ? `back ${q(t.back)}` : null, t ? `used ${q(usedOf(t))}` : null].filter(Boolean).join(' · ')} · <button className="lnk" onClick={() => setItemEd({ id: i.id, kind: i.kind, name: i.name, size: i.size ?? '' })}>✎</button></small></span>
+                <span className="grow"><b>{i.name}</b>{beo?.qty[i.id] != null ? <button type="button" className={'bc-beo' + (beo.mine?.includes(i.id) ? ' mine' : '')} onClick={() => setPlan({ id: i.id, name: nmOf(i), v: String(beo.qty[i.id]) })}>{beo.mine?.includes(i.id) ? 'Tonight' : 'BEO'} · {q(Number(beo.qty[i.id]))} ✎</button>
+                  : <button type="button" className="bc-beo add" onClick={() => setPlan({ id: i.id, name: nmOf(i), v: '' })}>+ qty</button>}<small>{[i.size, t ? `out ${q(t.out)}` : null, t?.back ? `back ${q(t.back)}` : null, t ? `used ${q(usedOf(t))}` : null].filter(Boolean).join(' · ')} · <button className="lnk" onClick={() => setItemEd({ id: i.id, kind: i.kind, name: i.name, size: i.size ?? '' })}>✎</button></small></span>
                 <button className="bc-st" aria-label="less" onClick={() => bump(i, -1)}>−</button><b className={'bc-v' + (dv ? ' hl' : '')}>{dv ? (mode === 'more' ? '+' : '') + q(dv) : '0'}</b><button className="bc-st dark" aria-label="more" disabled={mode === 'back' && room(i.id) <= dv} onClick={() => bump(i, 1)}>+</button>
               </div>); })}
           </section>))}
@@ -114,6 +119,8 @@ export function BarCount() {
         {!d.moves.length && <p className="muted sm">Nothing yet.</p>}
         {d.moves.map((m) => <div key={m.id} className={'bc-log' + (m.undone_at ? ' undone' : '')}><b>{tm(m.at)}</b><span className="grow"><b>{m.by?.split(' ')[0] ?? '—'}</b> {moveText(m, d.items)}{m.undone_at && <em> · undone by {m.undone_by?.split(' ')[0]} (“{m.undo_reason}”)</em>}</span>
           {!m.undone_at && m.step !== 'item' && <button className="lnk" onClick={() => setUndo({ id: m.id, reason: '' })}>Undo</button>}</div>)}
+        {beo?.history && beo.history.length > 0 && <><small className="gt-kick" style={{ marginTop: 10 }}>QUANTITY CHANGES · ADMIN ONLY</small>
+          {beo.history.map((h, k) => <div key={k} className="bc-log"><b>{tm(h.at)}</b><span className="grow"><b>{h.by?.split(' ')[0] ?? '—'}</b> {h.item} {h.was == null ? '—' : q(Number(h.was))} → {h.now == null ? 'cleared' : q(Number(h.now))}</span></div>)}</>}
         {undo && <div className="bc-add"><input autoFocus value={undo.reason} onChange={(e) => setUndo({ ...undo, reason: e.target.value })} placeholder="Why? e.g. pressed twice" /><button className="abtn sm dark" disabled={busy || !undo.reason.trim()} onClick={doUndo}>Undo it</button><button className="abtn sm" onClick={() => setUndo(null)}>Cancel</button></div>}
       </section>}
       <div className="bc-foot">
@@ -132,6 +139,17 @@ export function BarCount() {
           {mode === 'more' && pending.some(([id, v]) => { const i = d.items.find((x) => x.id === id)!; return i.kind === 'spirit' ? v >= 4 : v >= 24; }) && <div className="br-flag amber">⚠ That’s a lot at once. Check it’s not a double tap.</div>}
           <p className="muted sm">Saved with your name and the time. It can be undone later (with a reason).</p>
           <div className="bc-2"><button className="big-btn" onClick={() => setReview(false)}>Fix it</button><button className="big-btn dark" disabled={busy} onClick={confirm}>{busy ? '…' : '✓ Confirm'}</button></div>
+        </div></>}
+      {plan && <><div className="scrim" onClick={() => setPlan(null)} />
+        <div className="sheet swipe" role="dialog" aria-label="Quantity">
+          <button className="sheet-x" aria-label="Close" onClick={() => setPlan(null)}>✕</button>
+          <div className="serif" style={{ fontSize: 24, paddingRight: 44 }}>Tonight · {plan.name}</div>
+          <p className="muted sm">How many for tonight? Check it against what’s in inventory. Ronnie sees every change.</p>
+          <div className="bc-row"><button className="bc-st" aria-label="less" onClick={() => setPlan({ ...plan, v: String(Math.max(0, (Number(plan.v) || 0) - 1)) })}>−</button>
+            <input className="bc-qty" inputMode="decimal" value={plan.v} onChange={(e) => setPlan({ ...plan, v: e.target.value.replace(/[^\d.]/g, '') })} placeholder="—" />
+            <button className="bc-st dark" aria-label="more" onClick={() => setPlan({ ...plan, v: String((Number(plan.v) || 0) + 1) })}>+</button></div>
+          <button className="btn-ink" disabled={busy} onClick={savePlan}>{busy ? '…' : 'Save'}</button>
+          {plan.v !== '' && <button className="lnk" disabled={busy} onClick={() => setPlan({ ...plan, v: '' })}>Clear the quantity</button>}
         </div></>}
       {itemEd && <><div className="scrim" onClick={() => setItemEd(null)} />
         <div className="sheet swipe" role="dialog" aria-label="Bottle">
