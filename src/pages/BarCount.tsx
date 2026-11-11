@@ -34,6 +34,12 @@ export function BarCount() {
     if (!keepMode) setMode(x.moves.some((m) => m.step === 'start' && !m.undone_at) ? 'more' : 'start');
   };
   useEffect(() => { load(); }, [eventId]); // eslint-disable-line react-hooks/exhaustive-deps
+  // push 93 · Start count opens with tonight's quantities filled in (BEO, or what the bar manager changed); he fixes what's off, then reviews
+  const pre = useRef(false);
+  useEffect(() => { if (pre.current || !d || !beo?.qty || mode !== 'start' || d.moves.some((m) => m.step === 'start' && !m.undone_at)) return;
+    const ids = new Set(d.items.filter((i) => i.kind !== 'supply').map((i) => i.id));
+    const f = Object.fromEntries(Object.entries(beo.qty).filter(([id, v]) => ids.has(id) && Number(v) > 0).map(([id, v]) => [id, Number(v)]));
+    if (Object.keys(f).length) { pre.current = true; setDraft((dr) => ({ ...f, ...dr })); } }, [d, beo, mode]);
   const tot = useMemo(() => totals(d?.moves ?? []), [d]);
   const bottles = (d?.items ?? []).filter((i) => i.kind !== 'supply');
   const groups = KINDS.map((k) => ({ k, ls: bottles.filter((i) => i.kind === k) })).filter((g) => g.ls.length);
@@ -64,7 +70,7 @@ export function BarCount() {
   const doUndo = async () => { if (!undo) return; setBusy(true); const { error } = await supabase.rpc('bar_move_undo', { p_move: undo.id, p_reason: undo.reason }); setBusy(false); if (error) setErr(error.message); else { setUndo(null); load(true); } };
   const submit = async () => { setBusy(true); const { error } = await supabase.rpc('bar_count_submit', { p_event: eventId, p_supplies: sup }); setBusy(false); if (error) setErr(error.message); else { setMsg('✓ Count submitted. You can still add or fix moves; they’re logged.'); load(true); } };
   const handTo = async (sid: string | null) => { setBusy(true); const { error } = await supabase.rpc('bar_count_hand', { p_event: eventId, p_staff: sid }); setBusy(false); setHand(false); if (error) setErr(error.message); else load(true); };
-  const hint = mode === 'start' ? 'Count everything going out to the bar, then review and confirm.' : mode === 'more' ? 'Tap + on what you’re taking out (full bottles). Nothing is saved until you confirm.' : mode === 'back' ? 'Tap + on everything coming back (open wine can’t come back; spirits in quarters), then review. Bottles can come back more than once.' : 'Every move, with who and when. Undo needs a reason.';
+  const hint = mode === 'start' ? (beo?.qty && Object.keys(beo.qty).length ? 'Filled in from tonight’s quantities. Fix anything that’s off with − / +, then review and confirm.' : 'Count everything going out to the bar, then review and confirm.') : mode === 'more' ? 'Tap + on what you’re taking out (full bottles). Nothing is saved until you confirm.' : mode === 'back' ? 'Tap + on everything coming back (open wine can’t come back; spirits in quarters), then review. Bottles can come back more than once.' : 'Every move, with who and when. Undo needs a reason.';
   return (
     <div className="page bc">
       <Link to="/" className="back-link">‹ Back</Link>
