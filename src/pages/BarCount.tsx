@@ -19,7 +19,7 @@ export function BarCount() {
   const [draft, setDraft] = useState<Record<string, number>>({}); const [review, setReview] = useState(false);
   const [sup, setSup] = useState<BSupply[]>([]); const [busy, setBusy] = useState(false); const [msg, setMsg] = useState(''); const [err, setErr] = useState('');
   const [itemEd, setItemEd] = useState<{ id: string | null; kind: BKind; name: string; size: string; other?: boolean } | null>(null);
-  const [beo, setBeo] = useState<{ name: string | null; read_at: string; qty: Record<string, number> } | null>(null); // push 89
+  const [beo, setBeo] = useState<{ name: string | null; read_at: string; qty: Record<string, number>; changes?: { name: string; was: number | null; now: number | null }[] } | null>(null); // push 89
   const [ct, setCt] = useState(0); const cat = useCatalog(eventId!, ct); const [picking, setPicking] = useState(false); // push 85
   const [sw, setSw] = useState<string | null>(null); const x0 = useRef<{ id: string; x: number; y: number } | null>(null); const [drag, setDrag] = useState<{ id: string; dx: number } | null>(null); // push 88 · swipe to remove
   const [hand, setHand] = useState(false); const [undo, setUndo] = useState<{ id: string; reason: string } | null>(null);
@@ -79,6 +79,7 @@ export function BarCount() {
       ) : <>
       {mode !== 'log' && !(mode === 'start' && started) && cat && cat.list.length > 0 && <BarSearchAdd eventId={eventId!} list={cat.list} have={new Set(cat.list.filter((x) => x.on).map((x) => x.id))}
         onAdded={() => { load(true); setCt((x) => x + 1); }} onAddNew={(name) => setItemEd({ id: null, kind: 'spirit', name, size: '750 ml' })} />}
+      {beo?.changes?.length && started ? <div className="bc-note warn">⚠ <b>BEO changed after the start count:</b> {beo.changes.map((x) => `${x.name} ${x.was == null ? 'new' : q(Number(x.was))} → ${x.now == null ? '?' : q(Number(x.now))}${x.was != null && x.now != null && x.now > x.was ? ` (+${q(x.now - x.was)})` : ''}`).join(' · ')}. Add it with + More out.</div> : null}
       {beo && mode !== 'log' && <div className="bc-note">📄 From the bar BEO{beo.name ? ` · ${beo.name}` : ''} · read {new Date(beo.read_at).toLocaleString('en-CA', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' })}</div>}
       {!started && d.picked && mode === 'start' && <button className="lnk" style={{ alignSelf: 'flex-start' }} onClick={() => setPicking(true)}>Change tonight’s bottles</button>}
       {mode === 'start' && started ? <div className="bc-note ok">✓ Start count confirmed {tm(started.at)} by {started.by?.split(' ')[0]}. Use + More out for anything else.</div> : mode !== 'log' && <>

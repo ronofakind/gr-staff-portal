@@ -45,15 +45,27 @@ export default async function handler(req, res) {
       return res.json({ vendors: rows, payroll, expenses });
     }
 
-    // push 89 · bar BEO: GET ?beo=1 → bar events in the next 14 days with a Drive folder (+ what was read last time)
+    // push 89 · bar BEO, read twice per event: GET ?beo=1 → only the events due now:
+    //   phase 'initial' = 2 days before (not checked yet) · phase 'final' = the start is in the next 90 min (not checked yet)
     if (req.method === 'GET' && req.query.beo) {
-      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' });
-      const to = new Date(Date.now() + 14 * 864e5).toLocaleDateString('en-CA', { timeZone: 'America/Toronto' });
-      const evs = await get(`events?department=eq.bar&event_date=gte.${today}&event_date=lte.${to}&drive_folder_url=not.is.null&select=id,event_date,title,drive_folder_url,venues(name),bar_counts(beo_file,beo_modified,beo_read_at)&order=event_date`);
-      const started = new Set((await get(`bar_moves?step=eq.start&undone_at=is.null&event_id=in.(${evs.map((e) => e.id).join(',') || '00000000-0000-0000-0000-000000000000'})&select=event_id`)).map((m) => m.event_id));
-      return res.json({ events: evs.map((e) => { const c = Array.isArray(e.bar_counts) ? e.bar_counts[0] : e.bar_counts;
-        return { id: e.id, date: e.event_date, title: e.title, venue: e.venues?.name ?? null, folder: e.drive_folder_url, started: started.has(e.id),
-          beo_file: c?.beo_file ?? null, beo_modified: c?.beo_modified ?? null, beo_read_at: c?.beo_read_at ?? null }; }) });
+      const tz = 'America/Toronto'; const today = new Date().toLocaleDateString('en-CA', { timeZone: tz });
+      const in2 = new Date(Date.now() + 2 * 864e5).toLocaleDateString('en-CA', { timeZone: tz });
+      const evs = await get(`events?department=eq.bar&event_date=gte.${today}&event_date=lte.${in2}&drive_folder_url=not.is.null&select=id,event_date,title,start_time,drive_folder_url,venues(name),bar_counts(beo_file,beo_modified,beo_read_at,beo_initial_at,beo_final_at)&order=event_date`);
+      const ids = evs.map((e) => e.id).join(',') || '00000000-0000-0000-0000-000000000000';
+      const started = new Set((await get(`bar_moves?step=eq.start&undone_at=is.null&event_id=in.(${ids})&select=event_id`)).map((m) => m.event_id));
+      const off = (d) => { const p = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'shortOffset' }).formatToParts(new Date(d + 'T12:00:00Z')).find((x) => x.type === 'timeZoneName')?.value ?? 'GMT-5';
+        const m = p.match(/GMT([+-]\d+)/); const h = m ? Number(m[1]) : -5; return `${h < 0 ? '-' : '+'}${String(Math.abs(h)).padStart(2, '0')}:00`; };
+      const out = [];
+      for (const e of evs) {
+        const c = (Array.isArray(e.bar_counts) ? e.bar_counts[0] : e.bar_counts) ?? {};
+        const startMs = e.start_time ? Date.parse(`${e.event_date}T${e.start_time.slice(0, 5)}:00${off(e.event_date)}`) : null;
+        const mins = startMs == null ? null : (startMs - Date.now()) / 6e4;
+        const phase = mins != null && mins > 0 && mins <= 90 && !c.beo_final_at ? 'final' : !c.beo_initial_at && !c.beo_final_at ? 'initial' : null;
+        if (!phase) continue;
+        out.push({ id: e.id, phase, date: e.event_date, start: e.start_time ? e.start_time.slice(0, 5) : null, title: e.title, venue: e.venues?.name ?? null, folder: e.drive_folder_url,
+          started: started.has(e.id), beo_file: c.beo_file ?? null, beo_modified: c.beo_modified ?? null });
+      }
+      return res.json({ events: out });
     }
 
     // push 80 · meeting notes Ronnie sent to an event ("Add to the event"): GET ?notes=1
@@ -198,7 +210,9 @@ export default async function handler(req, res) {
       let beo = 0;
       if (Array.isArray(body.beo)) {
         for (const v of body.beo.slice(0, 20)) {
-          if (!/^[0-9a-f-]{36}$/i.test(v?.event_id || '') || !Array.isArray(v.items)) continue;
+          if (!/^[0-9a-f-]{36}$/i.test(v?.event_id || '')) continue;
+          if (['initial', 'final'].includes(v.phase)) await fetch(`${URL_}/rest/v1/rpc/bar_beo_checked`, { method: 'POST', headers: H(), body: JSON.stringify({ p_event: v.event_id, p_phase: v.phase }) });
+          if (!Array.isArray(v.items) || !v.items.length) { beo++; continue; } // no BAR BEO in the folder (or unchanged): only stamped
           const items = v.items.slice(0, 150).map((i) => ({ name: s(i?.name, 120), size: s(i?.size, 30), kind: s(i?.kind, 10), qty: i?.qty == null || isNaN(Number(i.qty)) ? null : Number(i.qty) }));
           const r = await fetch(`${URL_}/rest/v1/rpc/bar_beo_apply`, { method: 'POST', headers: H(), body: JSON.stringify({ p_event: v.event_id, p_file: s(v.file_id, 120), p_name: s(v.name, 200), p_modified: s(v.modified, 60), p_items: items }) });
           if (r.ok) beo++;

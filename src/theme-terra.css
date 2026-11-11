@@ -1203,4 +1203,5 @@ html[data-theme="terra"] { --teams: #5B5FC7; --teams-bg: #EEEFFB; --teams-ink: #
 :where(html[data-theme="terra"]) .lnk.red { color: #A95435; }
 :where(html[data-theme="terra"]) .bc-del { background: #FBFAF6; }
 :where(html[data-theme="terra"]) .bc-rm { background: #A95435; color: #FBFAF6; }
+:where(html[data-theme="terra"]) .bc-note.warn { background: #F9EBE6; color: #9B4D31; }
 html[data-theme="terra"] body { background: #EEF0E8; color: #2A2A24; }

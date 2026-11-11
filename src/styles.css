@@ -4238,3 +4238,4 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; }
 .bc-rm { height: 38px; padding: 0 16px; border: 0; border-radius: 10px; background: #B0452E; color: #fff; font: 700 13.5px Inter, system-ui, sans-serif; }
 .bc-sw { touch-action: pan-y; } /* push 88b · horizontal swipe stays with the row */
 .bc-beo { font-style: normal; font-size: 10.5px; font-weight: 800; color: #8A6D1E; margin-left: 6px; } /* push 89 */
+.bc-note.warn { background: #FBE9E4; color: #8A2E1A; }
