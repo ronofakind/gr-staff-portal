@@ -4209,3 +4209,9 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; }
 /* push 83 · Home: Event folder + Bar count side by side (board BarCountHomeV1) */
 .home-fb { display: flex; gap: 8px; margin-top: 8px; } .home-fb .home-folder { flex: 1; margin-top: 0; gap: 5px; min-width: 0; white-space: nowrap; }
 .home-fb .gold { color: #C9A227; } .home-fb .ok { color: #8FD3B0; }
+/* push 84 · Add a bottle: pills (not the round gala seats) + clear active tab on the count screen */
+.bc-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.bc-pills button { padding: 9px 13px; border-radius: 20px; border: 0; background: #fff; box-shadow: inset 0 0 0 1px #E4DCD1; font: 700 13px Inter, system-ui, sans-serif; color: var(--ink, #1A1714); white-space: nowrap; cursor: pointer; }
+.bc-pills button.on { background: var(--ink, #1A1714); color: #fff; box-shadow: none; }
+.bc-tabs button.on { background: var(--ink, #1A1714); color: #fff; }
+.bc-tabs button:disabled { opacity: 1; color: #B9AFA3; }

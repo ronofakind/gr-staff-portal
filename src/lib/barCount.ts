@@ -9,6 +9,11 @@ export const LEVELS = ['Full', '¾', '½', '¼', 'Out'];
 export const KIND_LABEL: Record<string, string> = { spirit: 'Spirits · in quarters', wine: 'Wine · by the bottle', bubbles: 'Champagne · prosecco · by the bottle', beer: 'Beer · by the unit', other: 'Other · by the unit' };
 export const KINDS: Exclude<BKind, 'supply'>[] = ['spirit', 'wine', 'bubbles', 'beer', 'other'];
 export const SIZES = ['750 ml', '1.14 L', 'Magnum 1.5 L', '341 ml', '355 ml can', '473 ml can'];
+/** push 84 · sizes follow the type (+ sizes typed under Other… come back from the G&R list) */
+export const KIND_SIZES: Record<string, string[]> = { spirit: ['750 ml', '1.14 L', '1.75 L'], wine: ['750 ml', 'Magnum 1.5 L'], bubbles: ['750 ml', 'Magnum 1.5 L'], beer: ['341 ml', '355 ml can', '473 ml can'], other: [] };
+export const KIND_SHORT: Record<string, string> = { spirit: 'Spirits', wine: 'Wine', bubbles: 'Bubbles', beer: 'Beer', other: 'Other' };
+export const KIND_HOW: Record<string, string> = { spirit: 'Counted in quarters (¼ ½ ¾ full).', wine: 'Counted by the bottle.', bubbles: 'Champagne · prosecco · counted by the bottle.', beer: 'Counted by the unit.', other: 'Counted by the unit.' };
+export const sizesFor = (k: string, extra?: Record<string, string[]>) => [...new Set([...(KIND_SIZES[k] ?? []), ...((extra?.[k] ?? []).filter(Boolean))])];
 export const stepOf = (k: BKind) => (k === 'spirit' ? 0.25 : 1);
 /** out = start + more (+ fixes) · back = everything brought back · used = out − back */
 export function totals(moves: BMove[]) {

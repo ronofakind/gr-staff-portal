@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { KINDS, KIND_LABEL, LEVELS, SIZES, q, stepOf, totals, usedOf, moveText, type BItem, type BKind, type BMove, type BSupply } from '../lib/barCount';
+import { KINDS, KIND_LABEL, KIND_SHORT, KIND_HOW, sizesFor, LEVELS, q, stepOf, totals, usedOf, moveText, type BItem, type BKind, type BMove, type BSupply } from '../lib/barCount';
 
 /* Push 69 · Bar count (boards BarCountV2 + V3). Nothing is saved by a tap: Start, More out and Bring back are each
    reviewed and confirmed, then logged (who, when). Undo needs a reason. The list (names, sizes) changes for next time too. */
-type Data = { event: { id: string; title: string; date: string; supplies: boolean }; items: BItem[]; moves: BMove[];
+type Data = { event: { id: string; title: string; date: string; supplies: boolean }; items: BItem[]; moves: BMove[]; picked?: boolean; sizes?: Record<string, string[]>;
   count: { supplies: BSupply[]; handed_to: string | null; handed_to_name: string | null; handed_by_name: string | null; submitted_at: string | null; submitted_by_name: string | null } | null;
   team: { id: string; name: string; role: string | null }[] };
 type Mode = 'start' | 'more' | 'back' | 'log';
@@ -17,7 +17,7 @@ export function BarCount() {
   const [d, setD] = useState<Data | null | undefined>(undefined); const [mode, setMode] = useState<Mode>('start');
   const [draft, setDraft] = useState<Record<string, number>>({}); const [review, setReview] = useState(false);
   const [sup, setSup] = useState<BSupply[]>([]); const [busy, setBusy] = useState(false); const [msg, setMsg] = useState(''); const [err, setErr] = useState('');
-  const [itemEd, setItemEd] = useState<{ id: string | null; kind: BKind; name: string; size: string } | null>(null);
+  const [itemEd, setItemEd] = useState<{ id: string | null; kind: BKind; name: string; size: string; other?: boolean } | null>(null);
   const [hand, setHand] = useState(false); const [undo, setUndo] = useState<{ id: string; reason: string } | null>(null);
   const load = async (keepMode = false) => {
     const { data, error } = await supabase.rpc('bar_count_get', { p_event: eventId });
@@ -110,12 +110,17 @@ export function BarCount() {
         <div className="sheet swipe" role="dialog" aria-label="Bottle">
           <button className="sheet-x" aria-label="Close" onClick={() => setItemEd(null)}>✕</button>
           <div className="serif" style={{ fontSize: 24, paddingRight: 44 }}>{itemEd.id ? `Edit · ${itemEd.name}` : 'Add a bottle'}</div>
+          {/* push 84 (board BarCountAddV1) · type first as pills, sizes follow the type, Other… opens the size box */}
+          <div className="gt-f"><span>WHAT IS IT</span><div className="bc-pills">{KINDS.map((k) => <button key={k} type="button" className={itemEd.kind === k ? 'on' : ''}
+            onClick={() => { const ls = sizesFor(k, d.sizes); setItemEd({ ...itemEd, kind: k, size: ls.includes(itemEd.size) ? itemEd.size : ls[0] ?? '', other: !ls.length }); }}>{KIND_SHORT[k]}</button>)}</div>
+            <small className="muted">{KIND_HOW[itemEd.kind]}</small></div>
           <label className="gt-f"><span>NAME</span><input value={itemEd.name} onChange={(e) => setItemEd({ ...itemEd, name: e.target.value })} placeholder="e.g. Grey Goose" /></label>
-          <div className="gt-f"><span>SIZE</span><div className="row wrap" style={{ gap: 6 }}>{SIZES.map((s) => <button key={s} className={'gt-seat' + (itemEd.size === s ? ' on' : '')} onClick={() => setItemEd({ ...itemEd, size: s })}>{s}</button>)}</div>
-            <input value={itemEd.size} onChange={(e) => setItemEd({ ...itemEd, size: e.target.value })} placeholder="other size" /></div>
-          <div className="gt-f"><span>TYPE</span><select value={itemEd.kind} onChange={(e) => setItemEd({ ...itemEd, kind: e.target.value as BKind })}>{KINDS.map((k) => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}</select></div>
-          <p className="muted sm">This also changes the list for next time. Ronnie sees it in the log.</p>
-          <button className="btn-ink" disabled={busy || !itemEd.name.trim()} onClick={saveItem}>{itemEd.id ? 'Save' : 'Add'}</button>
+          {(() => { const ls = sizesFor(itemEd.kind, d.sizes); const other = itemEd.other || (!!itemEd.size && !ls.includes(itemEd.size)); return (
+            <div className="gt-f"><span>SIZE</span><div className="bc-pills">{ls.map((x) => <button key={x} type="button" className={!other && itemEd.size === x ? 'on' : ''} onClick={() => setItemEd({ ...itemEd, size: x, other: false })}>{x}</button>)}
+              <button type="button" className={other ? 'on' : ''} onClick={() => setItemEd({ ...itemEd, other: true, size: ls.includes(itemEd.size) ? '' : itemEd.size })}>Other…</button></div>
+              {other && <input autoFocus value={itemEd.size} onChange={(e) => setItemEd({ ...itemEd, size: e.target.value })} placeholder="e.g. 375 ml" />}</div>); })()}
+          <p className="muted sm">Also on the list next time. Ronnie sees it in the log.</p>
+          <button className="btn-ink" disabled={busy || !itemEd.name.trim()} onClick={saveItem}>{busy ? '…' : itemEd.id ? 'Save' : `Add ${itemEd.name.trim() || 'the bottle'}${itemEd.size.trim() ? ' · ' + itemEd.size.trim() : ''}`}</button>
           {itemEd.id && <button className="lnk" onClick={() => setItemEd({ ...itemEd, id: null, size: '' })}>+ Same bottle, another size</button>}
         </div></>}
     </div>
