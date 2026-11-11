@@ -69,10 +69,8 @@ export function ShoesIcon({ size = 44, who = 'both' }: { size?: number; who?: 'm
 }
 export function ApronIcon({ size = 44 }: { size?: number }) { return pic('/uniform/apron.png', size); }
 
-/** Nov 11 · hair tied back (back of the head, ponytail) */
-export function HairIcon({ size = 44 }: { size?: number }) {
-  return <svg width={size} height={size} viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="19" r="12.5" fill="#1A1714" /><path d="M24 29c-3 0-4.5 2-4.5 5 0 5 2 9 4.5 12 2.5-3 4.5-7 4.5-12 0-3-1.5-5-4.5-5z" fill="#1A1714" /><rect x="20.5" y="29.5" width="7" height="3.6" rx="1.6" fill="#C9A227" /><path d="M18 12c3-2 9-2 12 0" stroke="#4A433C" strokeWidth="1.2" fill="none" strokeLinecap="round" /><path d="M16 17c4-3 12-3 16 0" stroke="#4A433C" strokeWidth="1.2" fill="none" strokeLinecap="round" /></svg>;
-}
+/** Nov 11 · hair tied back (Ronnie's icon) */
+export function HairIcon({ size = 44 }: { size?: number }) { return pic('/uniform/hair.png', size); }
 export function TieIcon({ size = 44 }: { size?: number }) { return pic('/uniform/tie.png', size); }
 export function WineKeyIcon({ size = 44 }: { size?: number }) { return pic('/uniform/winekey.png', size); }
 /** Bar positions: bar manager, barback, bartender. */
