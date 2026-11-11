@@ -11,10 +11,13 @@ applyTheme(currentTheme()); // push 78 · before first paint, no flash
 import { registerSW } from 'virtual:pwa-register';
 
 // New version deployed → swap it in and reload right away; check again whenever the app comes back to the front.
-const update = registerSW({ immediate: true, onNeedRefresh() { update(true); } });
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') navigator.serviceWorker?.getRegistration().then((r) => r?.update());
-});
+// Not inside the App Store / Google Play app (it opens the live site directly, no service worker there).
+if (!(window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()) {
+  const update = registerSW({ immediate: true, onNeedRefresh() { update(true); } });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') navigator.serviceWorker?.getRegistration().then((r) => r?.update());
+  });
+}
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode><App /></React.StrictMode>
