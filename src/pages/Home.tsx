@@ -37,6 +37,7 @@ import { NeedChange, CancelSheet, ChangeSheet, LateSheet, LateBlock, ChangeCard,
 import { Brand } from '../components/Brand';
 import { CantMakeIt } from '../components/ShiftNotes';
 import { FirstCut } from '../components/FirstCut';
+import { NeedsBar } from '../components/NeedsAnswer';
 
 type MgrLate = { id: string; shift_id: string; event_id: string; name: string; eta: string; reason: string | null; note?: string | null };
 type Gone = { id: string; title: string; date: string; late: boolean };
@@ -228,8 +229,9 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
 
       {!preview && <PastStrips me={me} />}
 
-      {/* Nov 5 · every "Your shift changed" box sits at the top of Home until Got it (mapping StaffChangesV1) */}
-      {shifts.filter((s) => changed(s)).map((s) => <ChangedBox key={'chg' + s.id} prev={changed(s)!} s={s} role={role(s)} calOn={!!cal?.added_at} onSeen={() => changeSeen(s)} standalone />)}{/* push 51 · Rate n new staff / Send hours (events managed in the last 7 days) */}
+      {me.role !== 'admin' && <NeedsBar me={me} preview={preview} />}{/* push 90 · one call to action → Messages → Needs your answer */}
+
+      {/* push 90 · shift changed / new shift / removed / asks / confirm / dates moved to Messages → Needs your answer (NeedsBar above) */}
 
       {comgrNotes.map((s) => (
         <div key={'cm' + s.events.id} className="comgr-note" role="status">
@@ -240,7 +242,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
 
       {mtgToday.map((m) => <MeetingCard key={m.id} m={m} to={mtgTo(m.id)} preview={preview} onAnswered={(a) => mtgAnswered(m.id, a)} />)}
 
-      {alerts.filter((a) => !MEETING_ON_CARD.includes(a.kind)).map((a) => (
+      {alerts.filter((a) => a.kind.startsWith('meeting') && !MEETING_ON_CARD.includes(a.kind)).map((a) => (
         <div key={a.id} className={'alert-card' + (a.kind.startsWith('meeting') ? ' mtg-alert' : '')}>
           <div className="grow"><small>{a.kind === 'meeting_cancelled' ? 'MEETING' : a.kind === 'meeting_changed' ? 'MEETING CHANGED' : a.kind === 'removed' ? 'SCHEDULE CHANGE' : a.kind === 'booked' ? 'NEW SHIFT' : 'SHIFT CHANGED'}</small><b>{a.title}</b>{a.body && <span>{a.body}</span>}</div>
           <button className="pill-red" onClick={() => gotIt(a.id)}>Got it</button>
@@ -267,7 +269,6 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
       })()}
 
       {!hbLocked && <NightOffCards preview={preview} onDone={load} />}{/* push 66 */}
-      {!hbLocked && asks.map((a) => <AskCard key={a.ask_id} a={a} home preview={preview} onAnswered={(st) => { if (st !== 'gone') load(); setTimeout(reloadAsks, st === 'gone' ? 4000 : 2500); }} />)}
 
       {gone.filter((g) => !okd.includes(g.id)).map((g) => <CancelledCard key={g.id} title={g.title} date={g.date} late={g.late} onOk={() => okGone(g.id)} />)}
 
@@ -306,18 +307,6 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
         </SwipeSheet>
       </>}
 
-      {pending.map((s) => (
-        <div key={s.id} className="todo">
-          <div className="grow">
-            <b>{pending.length > 1 ? 'Shift needs your answer' : '1 shift needs your answer'}</b>
-            <span>{dayBadge(s.events.event_date, lang).dow} {dayBadge(s.events.event_date, lang).day} · {s.events.title} · {s.time_tbc ? (s.start_label ? `${startWord(s.start_label).toLowerCase()} · exact time coming` : 'time TBC') : time(s.planned_start, lang)} · {role(s)}</span>
-          </div>
-          <div className="row">
-            <button className="pill-line" onClick={() => respond(s.id, 'declined')}>Can't</button>
-            <button className="pill-red" onClick={() => respond(s.id, 'confirmed')}>Confirm</button>
-          </div>
-        </div>
-      ))}
 
       {doneToday.map((s) => {
         const team = teams[s.events.id];
@@ -543,25 +532,6 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
               <span className="row-wear"><UniformIcon kind={uniformFor(mini)} size={30} /></span>
             </Link>
           ); })()}
-          {dueMaybes.length > 0 && (() => {
-            const months = [...new Set(dueMaybes.map((d) => new Date(d.for_date + 'T12:00:00').toLocaleDateString('en-US', { month: 'long' })))];
-            const by = dueMaybes.map((d) => d.answer_by).filter(Boolean).sort()[0];
-            const n = dueMaybes.length;
-            return (
-              <section className="md-remind">
-                <small>TODAY · {dayLabel(today).toUpperCase()}</small>
-                <div className="serif">Do you know your {months.length === 1 ? months[0] + ' ' : ''}schedule yet?</div>
-                <span>{n} date{n > 1 ? 's are' : ' is'} waiting on you{by ? ` · answer by ${dayLabel(new Date(by).toLocaleDateString('en-CA', { timeZone: 'America/Toronto' }))}` : ''}</span>
-                <Link to={myDatesTo('answer')} className="md-remind-go">Answer my {n === 1 ? 'date' : `${n} dates`} ›</Link>
-                <button className="link-btn" onClick={() => setNotSure(true)}>Still not sure</button>
-              </section>
-            );
-          })()}
-          {waitingAsks > 0 && (
-            <Link to={myDatesTo('answer')} className="dates-pill">
-              <CalIcon /><b className="grow">{waitingAsks} date{waitingAsks > 1 ? 's' : ''} to answer</b><span className="dp-go">Answer ›</span>
-            </Link>
-          )}
           {(list.length > 0 || mtgComing.length > 0) && (
             <>
               <div className="sec-head"><span className="serif">Coming up</span><Link to={myDatesTo('booked')}>All my dates ›</Link></div>

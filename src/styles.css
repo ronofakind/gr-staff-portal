@@ -4239,3 +4239,37 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; }
 .bc-sw { touch-action: pan-y; } /* push 88b · horizontal swipe stays with the row */
 .bc-beo { font-style: normal; font-size: 10.5px; font-weight: 800; color: #8A6D1E; margin-left: 6px; } /* push 89 */
 .bc-note.warn { background: #FBE9E4; color: #8A2E1A; }
+/* push 90 · one card for every shift notice (boards NotificationsMapV1 + NotifCardsMessagesV1) */
+.nc { --nc: #8A6D1E; background: #fff; border-radius: 18px; overflow: hidden; box-shadow: inset 0 4px 0 var(--nc); padding: 14px 14px 12px; display: flex; flex-direction: column; gap: 6px; text-align: left; }
+.nc-ask { --nc: #3F6E8C; } .nc-confirm, .nc-new { --nc: #2E7D57; } .nc-changed { --nc: #A07A12; } .nc-removed { --nc: #B0452E; } .nc-dates { --nc: #6B4E8C; }
+.nc-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.nc-k { font-size: 10.5px; font-weight: 800; letter-spacing: .12em; color: var(--nc); }
+.nc-tag { font-size: 11px; color: var(--muted, #7A7168); }
+.nc-t { font-size: 16px; line-height: 1.25; color: var(--ink, #1A1714); }
+.nc-l { font-size: 13px; color: #4A433C; }
+.nc-chg { background: #FBF6EA; border-radius: 10px; padding: 7px 10px; font-size: 13px; }
+.nc-chg span { color: var(--muted, #7A7168); } .nc-chg s { color: var(--muted, #7A7168); }
+.nc-why { background: #FBEDE9; border-radius: 10px; padding: 7px 10px; font-size: 13px; }
+.nc-btns { display: flex; gap: 8px; margin-top: 4px; }
+.nc-btns button { flex: 1; height: 42px; border: 0; border-radius: 12px; background: #F3EEE7; color: var(--ink, #1A1714); font: 800 13.5px Inter, system-ui, sans-serif; cursor: pointer; }
+.nc-btns button.nc-main { background: var(--ink, #1A1714); color: #fff; }
+.nc-btns button:disabled { opacity: .6; }
+/* the existing ask card wears the same frame */
+.nc-wrap.ask .sn { background: #fff; border: 0; border-radius: 18px; box-shadow: inset 0 4px 0 #3F6E8C; padding-top: 16px; }
+.nc-wrap.ask .sn-k { color: #3F6E8C; }
+.nc-wrap.ask .sn-yes { background: var(--ink, #1A1714); color: #fff; }
+/* Messages · Needs your answer */
+.needs { background: var(--ink, #1A1714); border-radius: 20px; padding: 12px; display: flex; flex-direction: column; gap: 10px; scroll-margin-top: 12px; }
+.needs-h { display: flex; justify-content: space-between; align-items: center; color: #fff; padding: 2px 4px 0; }
+.needs-h b { font-size: 16px; } .needs-h i { font-style: normal; background: #B0452E; color: #fff; border-radius: 12px; font-size: 12px; font-weight: 800; padding: 2px 9px; }
+.needs-f { color: #CFC5B8; text-align: center; font-size: 11.5px; }
+/* Home · one call to action */
+.needs-bar { display: flex; align-items: center; gap: 12px; background: #B0452E; color: #fff; border-radius: 18px; padding: 14px 16px; text-decoration: none; box-shadow: 0 6px 18px rgba(176,69,46,.25); }
+.needs-bar b { font-size: 16px; display: block; } .needs-bar small { font-size: 12.5px; opacity: .9; display: block; margin-top: 2px; }
+.needs-bar .nb-ic { font-size: 24px; } .needs-bar .nb-go { font-size: 22px; }
+/* Messages · Updates by shift */
+.msg-grp { border-top: 1px solid #EEE7DD; } .msg-grp:first-child { border-top: 0; }
+.msg-grp-h { display: flex; gap: 10px; width: 100%; padding: 11px 14px; border: 0; background: none; text-align: left; font: inherit; color: inherit; cursor: pointer; align-items: flex-start; }
+.msg-grp-h .grow { display: flex; flex-direction: column; gap: 2px; min-width: 0; } .msg-grp-h .grow > span { font-size: 12.5px; color: #4A433C; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.msg-grp-h small { color: var(--muted, #7A7168); white-space: nowrap; }
+.msg-dot.in { display: inline-block; position: static; margin-right: 6px; vertical-align: middle; }

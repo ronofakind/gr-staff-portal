@@ -14,6 +14,7 @@ import {
 } from '../lib/messages';
 import { meetingMorningCheck } from '../lib/meetings';
 import { myTeamChats, teamPreview, teamWhen, type MyTeamChat } from '../lib/teamChat';
+import { NeedsAnswer } from '../components/NeedsAnswer';
 
 /* Push 36 · staff Messages tab: Ronnie pinned on top, tonight's manager thread, Updates (announcements, shift notices, rides, hours answers). */
 
@@ -44,13 +45,13 @@ export function Messages({ me }: { me: Staff }) {
 
 /* ───────── list ───────── */
 type MgrRow = { event_id: string; title: string; date: string; manager: string; photo: string | null; conv: Conv | null; last: { at: string; text: string } | null; unread: boolean; closed: boolean };
-type Upd = { key: string; at: string; icon: string; title: string; sub: string; unread: boolean; from: 'ronnie' | 'shift' | 'other'; open: () => void };
+type Upd = { key: string; at: string; icon: string; title: string; sub: string; unread: boolean; from: 'ronnie' | 'shift' | 'other'; open: () => void; ev?: { id: string; date: string; title: string } | null };
 type AlertRow = { id: string; kind: string; title: string; body: string | null; event_id: string | null; meeting_id?: string | null; created_at: string; seen_at: string | null };
 type ReadRow = { opened_at: string | null; ack_at: string | null; announcements: Ann & { sender: { full_name: string; role?: string } | null } };
 
 function Inbox({ me }: { me: Staff }) {
   const nav = useNavigate(); const today = todayIso();
-  const [filter, setFilter] = useState<'all' | 'ronnie' | 'shifts'>('all');
+  const [openEv, setOpenEv] = useState<string | null>(null); const [showOld, setShowOld] = useState(false); // push 90
   const [ron, setRon] = useState<{ conv: Conv | null; last: Msg | null } | null>(null);
   const [mgr, setMgr] = useState<MgrRow[]>([]);
   const [teams, setTeams] = useState<MyTeamChat[]>([]); // push 41 · team chats open (or read-only) for my event
@@ -65,7 +66,7 @@ function Inbox({ me }: { me: Staff }) {
       // Ronnie
       const { data: rc } = await supabase.from('conversations').select(CONV_COLS).eq('staff_id', me.id).eq('kind', 'ronnie').maybeSingle();
       let rLast: Msg | null = null;
-      if (rc) { const { data } = await supabase.from('messages').select(MSG_COLS).eq('conversation_id', (rc as Conv).id).order('created_at', { ascending: false }).limit(1); rLast = ((data ?? []) as Msg[])[0] ?? null; }
+      if (rc) { const { data } = await supabase.from('messages').select(MSG_COLS).eq('conversation_id', (rc as Conv).id).neq('kind', 'system').order('created_at', { ascending: false }).limit(1); rLast = ((data ?? []) as Msg[])[0] ?? null; }
       setRon({ conv: (rc as Conv | null) ?? null, last: rLast });
       myTeamChats().then(setTeams);
 
@@ -120,13 +121,16 @@ function Inbox({ me }: { me: Staff }) {
       const rideRows = (rides ?? []) as unknown as { id: string; event_id: string; kind: string; sent_at: string; seen_at: string | null; events: { title: string; event_date: string } | null }[];
       const allEv = [...new Set([...evIds, ...rideRows.map((r) => r.event_id)])];
       const shiftOf: Record<string, string> = {};
+      const evInfo: Record<string, { id: string; date: string; title: string }> = {}; // push 90 · Updates grouped by shift
+      if (evIds.length) { const { data: evs } = await supabase.from('events').select('id,event_date,title,venues(name)').in('id', evIds);
+        for (const e of (evs ?? []) as unknown as { id: string; event_date: string; title: string; venues: { name: string } | null }[]) evInfo[e.id] = { id: e.id, date: e.event_date, title: e.venues?.name ?? e.title }; }
       if (allEv.length) { const { data: ms } = await supabase.from('shifts').select('id,event_id').eq('staff_id', me.id).in('event_id', allEv); for (const x of (ms ?? []) as { id: string; event_id: string }[]) shiftOf[x.event_id] = x.id; }
       const lbl: Record<string, string> = { booked: 'New shift', moved: 'Shift changed', changed: 'Shift changed', removed: 'Shift removed' };
-      for (const a of alerts.filter((x) => x.kind.startsWith('meeting'))) list.push({ key: 'n' + a.id, at: a.created_at, icon: a.kind === 'meeting_cancelled' ? '✕' : '👥', title: a.title, sub: a.body ?? '', unread: !a.seen_at, from: 'shift',
+      for (const a of alerts.filter((x) => x.kind.startsWith('meeting'))) list.push({ key: 'n' + a.id, at: a.created_at, icon: a.kind === 'meeting_cancelled' ? '✕' : '🎥', title: a.title, sub: a.body ?? '', unread: !a.seen_at, from: 'shift',
         open: () => { if (!a.seen_at) supabase.rpc('alert_seen', { p_id: a.id }).then(() => setTick((t) => t + 1)); if (a.meeting_id) nav(`/meeting/${a.meeting_id}`); } });
-      for (const a of alerts.filter((x) => !x.kind.startsWith('meeting'))) list.push({ key: 'n' + a.id, at: a.created_at, icon: '🗓', title: `${lbl[a.kind] ?? 'Your schedule'} · ${a.title}`, sub: a.body ?? '', unread: !a.seen_at, from: 'shift',
+      for (const a of alerts.filter((x) => !x.kind.startsWith('meeting'))) list.push({ key: 'n' + a.id, at: a.created_at, icon: '🗓', title: `${lbl[a.kind] ?? 'Your schedule'} · ${a.title}`, sub: a.body ?? '', unread: !a.seen_at, from: 'shift', ev: a.event_id ? evInfo[a.event_id] ?? null : null,
         open: () => { setAlert({ ...a, shift: a.event_id ? shiftOf[a.event_id] ?? null : null }); if (!a.seen_at) supabase.rpc('alert_seen', { p_id: a.id }).then(() => setTick((t) => t + 1)); } });
-      for (const r of rideRows) list.push({ key: 'r' + r.id, at: r.sent_at, icon: '🚗', title: `Ride plan${r.events ? ` · ${shortDate(r.events.event_date)}` : ''}`, sub: r.kind === 'driver' ? `You’re driving · ${r.events?.title ?? ''}` : `${r.events?.title ?? ''} · tap to see your car`, unread: !r.seen_at, from: 'shift',
+      for (const r of rideRows) list.push({ key: 'r' + r.id, at: r.sent_at, icon: '🚗', title: `Ride plan${r.events ? ` · ${shortDate(r.events.event_date)}` : ''}`, sub: r.kind === 'driver' ? `You’re driving · ${r.events?.title ?? ''}` : `${r.events?.title ?? ''} · tap to see your car`, unread: !r.seen_at, from: 'shift', ev: r.events ? { id: r.event_id, date: r.events.event_date, title: r.events.title } : null,
         open: () => { const s = shiftOf[r.event_id]; nav(s ? `/shift/${s}` : '/my-dates'); } });
       const { data: hq } = await supabase.from('hours_questions').select('id,status,answer_note,resolved_at,shifts(events(title,event_date))').eq('staff_id', me.id).neq('status', 'open').gte('resolved_at', cut);
       for (const q of (hq ?? []) as unknown as { id: string; status: string; answer_note: string | null; resolved_at: string; shifts: { events: { title: string; event_date: string } | null } | null }[]) {
@@ -138,12 +142,12 @@ function Inbox({ me }: { me: Staff }) {
     })();
   }, [me.id, tick]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const shown = (ups ?? []).filter((u) => filter === 'all' || (filter === 'ronnie' ? u.from === 'ronnie' : u.from === 'shift'));
-  const nRonnie = (ups ?? []).filter((u) => u.from === 'ronnie' && u.unread).length;
   const rUnread = unread(ron?.conv);
   return (
     <main className="page v2 msg-page">
       <PageHead me={me} kicker="Inbox" title="Messages" />
+      <NeedsAnswer me={me} />{/* push 90 */}
+      <div className="msg-sec">CHATS</div>
       <button className={'msg-ron' + (rUnread ? ' unread' : '')} onClick={() => nav('/messages?c=ronnie')}>
         <Avatar name="Ronnie" url={RONNIE_PHOTO} size={48} />
         <span className="grow">
@@ -182,23 +186,37 @@ function Inbox({ me }: { me: Staff }) {
         </section>
       ))}
 
-      <div className="spread" style={{ alignItems: 'center', padding: '6px 4px 0' }}><div className="msg-sec" style={{ padding: 0 }}>UPDATES</div></div>
-      <div className="msg-filters">
-        <button className={filter === 'all' ? 'on' : ''} onClick={() => setFilter('all')}>All</button>
-        <button className={filter === 'ronnie' ? 'on' : ''} onClick={() => setFilter('ronnie')}>From Ronnie{nRonnie ? ` · ${nRonnie}` : ''}</button>
-        <button className={filter === 'shifts' ? 'on' : ''} onClick={() => setFilter('shifts')}>My shifts</button>
-      </div>
-      <section className="msg-ups">
-        {ups === null ? <div className="loading" style={{ minHeight: 120 }} />
-          : !shown.length ? <div className="muted sm" style={{ padding: '14px 6px' }}>Nothing here yet. Updates are kept 90 days.</div>
-          : shown.map((u) => (
-            <button key={u.key} className={'msg-up' + (u.unread ? ' unread' : '')} onClick={u.open}>
-              <span className="msg-ic">{u.icon}</span>
-              <span className="grow"><b>{u.title}</b>{u.sub && <span>{u.sub}</span>}</span>
-              <small>{whenShort(u.at)}</small>
-              {u.unread && <i className="msg-dot" />}
-            </button>))}
-      </section>
+      {/* push 90 · Updates by shift (one row per event, tap = its history) · From Ronnie · Earlier (2 weeks +) */}
+      {(() => {
+        if (ups === null) return <div className="loading" style={{ minHeight: 120 }} />;
+        const cut14 = ago(14); const recent = ups.filter((u) => u.at >= cut14 || u.unread); const older = ups.filter((u) => !(u.at >= cut14 || u.unread));
+        const groups = new Map<string, { ev: NonNullable<Upd['ev']>; items: Upd[] }>(); const loose: Upd[] = [];
+        for (const u of recent) { if (u.ev && u.from === 'shift') { const g = groups.get(u.ev.id) ?? { ev: u.ev, items: [] }; g.items.push(u); groups.set(u.ev.id, g); } else loose.push(u); }
+        const gl = [...groups.values()].sort((x, y) => y.items[0].at.localeCompare(x.items[0].at));
+        const row = (u: Upd) => (
+          <button key={u.key} className={'msg-up' + (u.unread ? ' unread' : '')} onClick={u.open}>
+            <span className="msg-ic">{u.icon}</span>
+            <span className="grow"><b>{u.title}</b>{u.sub && <span>{u.sub}</span>}</span>
+            <small>{whenShort(u.at)}</small>
+            {u.unread && <i className="msg-dot" />}
+          </button>);
+        return <>
+          {gl.length > 0 && <><div className="msg-sec">UPDATES · BY SHIFT</div>
+            <section className="msg-ups">{gl.map((g) => { const isOpen = openEv === g.ev.id; const un = g.items.some((x) => x.unread); return (
+              <div key={g.ev.id} className={'msg-grp' + (un ? ' unread' : '')}>
+                <button className="msg-grp-h" onClick={() => setOpenEv(isOpen ? null : g.ev.id)}>
+                  <span className="grow"><b>{un && <i className="msg-dot in" />}{shortDate(g.ev.date)} · {g.ev.title}</b>
+                    {!isOpen && g.items.slice(0, 2).map((x) => <span key={x.key}>{x.icon} {x.title.replace(/^(New shift|Shift changed|Shift removed|Your schedule) · /, (m0) => m0.split(' · ')[0] + ' · ')}</span>)}</span>
+                  <small>{whenShort(g.items[0].at)} {isOpen ? '▴' : '▾'}</small>
+                </button>
+                {isOpen && g.items.map(row)}
+              </div>); })}</section></>}
+          {loose.length > 0 && <><div className="msg-sec">FROM RONNIE</div><section className="msg-ups">{loose.map(row)}</section></>}
+          {!recent.length && !older.length && <div className="muted sm" style={{ padding: '14px 6px' }}>Nothing here yet. Updates are kept 90 days.</div>}
+          {older.length > 0 && (showOld ? <><div className="msg-sec">EARLIER</div><section className="msg-ups">{older.map(row)}</section></>
+            : <button className="lnk" style={{ alignSelf: 'center' }} onClick={() => setShowOld(true)}>Earlier ({older.length}) ›</button>)}
+        </>;
+      })()}
       <p className="muted sm" style={{ margin: '2px 6px', textAlign: 'center' }}>{teams.length ? 'Team chats are for your event’s team only. No private chats between staff.' : 'Only Ronnie and your manager write here. No chats between staff.'}</p>
 
       {ann && <AnnounceView a={ann.a} acked={ann.acked} onClose={() => { setAnn(null); setTick((t) => t + 1); }} onAck={() => { setAnn(null); setTick((t) => t + 1); }} />}
@@ -274,7 +292,7 @@ function RonnieThread({ me, compose, topicInit, shiftInit }: { me: Staff; compos
   return (
     <main className="page v2 ch-page">
       <ThreadHead name="Ronnie" photo={RONNIE_PHOTO} sub={compose ? (topic ? `${topicLabel(topic)}${shift ? ' · shift attached' : ''}` : ronnieSub()) : ronnieSub()} />
-      <Chat convId={convId} meId={me.id} side="staff" ensureConv={ensureConv} placeholder={compose ? 'Type your message…' : 'Message Ronnie…'} quick={!compose}
+      <Chat hideShiftNotes convId={convId} meId={me.id} side="staff" ensureConv={ensureConv} placeholder={compose ? 'Type your message…' : 'Message Ronnie…'} quick={!compose}
         intro={intro ?? undefined}
         sendArgs={() => (compose ? { topic: topic ?? 'other', shift: topic === 'shift' ? shift?.id ?? null : null } : {})}
         onSent={() => { if (compose) nav('/messages?c=ronnie', { replace: true }); }}

@@ -26,6 +26,8 @@ export type ChatProps = {
   /** shown instead of the messages (Message Ronnie: topic + shift picker) */
   intro?: ReactNode;
   reloadKey?: number;
+  /** push 90 · staff side: shift notices live in Needs your answer / Updates, not in Ronnie's chat */
+  hideShiftNotes?: boolean;
 };
 
 export function Chat(p: ChatProps) {
@@ -45,7 +47,7 @@ export function Chat(p: ChatProps) {
       supabase.from('conversations').select(CONV_COLS).eq('id', id).maybeSingle(),
       supabase.from('messages').select(MSG_COLS).eq('conversation_id', id).gte('created_at', since).order('created_at'),
     ]);
-    const cv = (c.data as Conv | null) ?? null; const list = (m.data ?? []) as Msg[];
+    const cv = (c.data as Conv | null) ?? null; const list = ((m.data ?? []) as Msg[]).filter((x) => !(p.hideShiftNotes && x.kind === 'system' && (x.meta?.card || /^🗓/.test(x.body ?? ''))));
     setConv(cv); p.onConv?.(cv); setMsgs(list);
     const askIds = [...new Set(list.filter((x) => x.meta?.card === 'ask' && typeof x.meta.ask_id === 'string').map((x) => x.meta.ask_id as string))];
     if (askIds.length && cv) supabase.rpc('shift_ask_cards', { p_ids: askIds, p_staff: p.side === 'admin' ? cv.staff_id : null })
