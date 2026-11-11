@@ -108,6 +108,9 @@ export function Payroll() {
     return [...m.values()]; })();
   const total = r2(people.reduce((n, x) => n + x.total, 0));
   const noEnd = people.filter((x) => x.noEnd); const noRate = people.filter((x) => x.noRate);
+  const [sheetErr, setSheetErr] = useState<{ id: string; staff_id: string; kind: string; amount: number; sheet_note: string | null }[]>([]); // push 79e
+  useEffect(() => { const ids = lines.filter((l) => l.source === 'expense' && l.source_id).map((l) => l.source_id!); if (!ids.length) { setSheetErr([]); return; }
+    supabase.from('expenses').select('id,staff_id,kind,amount,sheet_note').in('id', ids).eq('sheet_status', 'error').then(({ data }) => setSheetErr((data ?? []) as typeof sheetErr)); }, [lines]);
   const before = people.map((x) => ({ x, m: missingFor(nh[x.id]).filter((y) => y !== 'handbook') })).filter((y) => y.m.length);
   const step = (n: number) => { setOpen(null); setRbc(false); setP(n < 0 ? periodOf(addDays(p.start, -1)) : periodOf(addDays(p.end, 1))); };
   const run = async (f: () => PromiseLike<{ error: { message: string } | null }>) => { setBusy(true); setErr(''); const { error } = await f(); setBusy(false); if (error) setErr(error.message); else setT((x) => x + 1); };
@@ -151,11 +154,12 @@ export function Payroll() {
         <div className={'k' + (noRate.length ? ' amber' : '')}><small>NO RATE</small><b>{noRate.length}</b></div>
       </div>
 
-      {(noEnd.length > 0 || noRate.length > 0 || before.length > 0) && (
+      {(noEnd.length > 0 || noRate.length > 0 || before.length > 0 || sheetErr.length > 0) && (
         <div className="pay-miss"><b>Before you pay</b>
           {noEnd.map((x) => <span key={'e' + x.id}>{x.name} · {x.noEnd} shift{x.noEnd > 1 ? 's' : ''} with no end time (not counted) · <Link className="lnk" to="/admin/hours">Hours ›</Link></span>)}
           {noRate.map((x) => <span key={'r' + x.id}>{x.name} has no pay rate · <Link className="lnk" to="/admin/rates">Pay rates ›</Link></span>)}
           {before.map(({ x, m }) => <span key={'b' + x.id}>{x.name} worked, but we have {missingText(m)}</span>)}
+          {sheetErr.map((e) => <span key={'s' + e.id}>Expense not on the payroll sheet · {people.find((x) => x.id === e.staff_id)?.name ?? ''} {e.kind} ${Number(e.amount).toFixed(2)} · {e.sheet_note}</span>)}
         </div>)}
 
       {rbc && !locked && (
