@@ -214,9 +214,9 @@ export function Hours({ me }: { me: Staff }) {
 }
 
 /** push 77 · things added to their pay this period (no amounts, except their own approved expenses) + banked hours. */
-const NOTE: Record<string, string> = { tips: 'Tips', uber: 'Uber', gas: 'Gas', parking: 'Parking', correction: 'Hours fix', other: 'Extra', payout: 'Banked hours paid out' };
+const NOTE: Record<string, string> = { hours: 'Hours', tips: 'Tips', uber: 'Uber', gas: 'Gas', parking: 'Parking', correction: 'Hours fix', other: 'Extra', payout: 'Banked hours paid out' };
 function PayNotes({ per }: { per: { start: string; end: string } }) {
-  const [rows, setRows] = useState<{ kind: string; line_date: string | null; period_start: string; amount: number | null; source: string }[]>([]);
+  const [rows, setRows] = useState<{ kind: string; line_date: string | null; period_start: string; amount: number | null; hours?: number | null; source: string }[]>([]);
   const [bank, setBank] = useState(0);
   useEffect(() => { supabase.rpc('my_pay_notes').then(({ data, error }) => setRows(error ? [] : (data ?? []) as typeof rows)); supabase.rpc('my_banked').then(({ data, error }) => setBank(error ? 0 : Number(data ?? 0))); }, []);
   const mine = rows.filter((r) => r.period_start === per.start && r.source !== 'expense'); // expenses show in My expenses
@@ -224,7 +224,7 @@ function PayNotes({ per }: { per: { start: string; end: string } }) {
   const dl = (d: string) => D(d).toLocaleDateString('en-CA', { month: 'short', day: 'numeric' }).replace('.', '');
   return (
     <section className="card stack" style={{ gap: 6 }}>
-      {mine.map((r, i) => <div key={i} className="sm">✓ <b>{NOTE[r.kind] ?? 'Extra'}</b>{r.line_date ? `, ${dl(r.line_date)}` : ''}{r.amount != null ? ` $${Number(r.amount).toFixed(2)}` : ''}{r.source === 'flag_fix' ? ', fixed, added to your pay' : ', added to your pay'}</div>)}
+      {mine.map((r, i) => r.kind === 'hours' ? <div key={i} className="sm">✓ <b>{r.line_date ? dl(r.line_date) : ''} · {fmtH(Number(r.hours ?? 0))} h</b>, added by G&amp;R</div> : <div key={i} className="sm">✓ <b>{NOTE[r.kind] ?? 'Extra'}</b>{r.line_date ? `, ${dl(r.line_date)}` : ''}{r.amount != null ? ` $${Number(r.amount).toFixed(2)}` : ''}{r.source === 'flag_fix' ? ', fixed, added to your pay' : ', added to your pay'}</div>)}
       {bank > 0 && <div className="sm muted">Banked: <b>{fmtH(bank)} h</b></div>}
     </section>
   );

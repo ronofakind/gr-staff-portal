@@ -11,11 +11,11 @@ import { payDayLabel } from '../lib/hours';
 import type { MeetingHours } from '../lib/meetings';
 
 export const KINDS: [string, string, 1 | -1 | 0][] = [
-  ['tips', 'Tips', 1], ['uber', 'Uber', 1], ['gas', 'Gas', 1], ['parking', 'Parking', 1], ['correction', 'Missing hours / Correction', 0], ['other', 'Other', 1],
+  ['hours', 'Hours worked (typed in)', 1], ['tips', 'Tips', 1], ['uber', 'Uber', 1], ['gas', 'Gas', 1], ['parking', 'Parking', 1], ['correction', 'Missing hours / Correction', 0], ['other', 'Other', 1],
   ['paypal', 'PayPal (already paid)', -1], ['cash', 'Paid cash', -1], ['cra', 'Payment to CRA', -1], ['banked', 'Bank hours', -1], ['payout', 'Pay out banked hours', 1],
 ];
 const kindName = (k: string) => KINDS.find((x) => x[0] === k)?.[1] ?? k;
-type Line = { id: string; staff_id: string; period_start: string; kind: string; amount: number; hours: number | null; line_date: string | null; note: string | null; source: string };
+type Line = { id: string; staff_id: string; period_start: string; col_id?: string | null; kind: string; amount: number; hours: number | null; line_date: string | null; note: string | null; source: string };
 type PShift = { id: string; date: string; title: string; hours: number; rate: number | null; pay: number; travel: number; gas: number; paypal: boolean; noEnd: boolean };
 type Person = { id: string; name: string; shifts: PShift[]; mtg: { date: string; title: string; hours: number; pay: number }[]; lines: Line[]; hours: number; base: number; total: number; noRate: boolean; noEnd: number };
 type Period = { locked_at: string | null; closed_at: string | null; rbc_lines: { staff_id: string; name: string; rbc_name: string; amount: number }[] | null; rbc_total: number | null };
@@ -31,6 +31,7 @@ export function Payroll() {
   const [lines, setLines] = useState<Line[]>([]);
   const [bank, setBank] = useState<Record<string, number>>({});
   const [names, setNames] = useState<Record<string, PName>>({});
+  const [cols, setCols] = useState<PCol[]>([]); const [roster, setRoster] = useState<{ id: string; full_name: string }[]>([]); const [added, setAdded] = useState<string[]>([]); // push 79 · grid
   const [extra, setExtra] = useState<Record<string, string>>({});
   const [nh, setNh] = useState<Record<string, NewHire>>({});
   const [per, setPer] = useState<Period | null>(null);
@@ -48,7 +49,7 @@ export function Payroll() {
       loadRates(),
       ids.length ? supabase.from('ride_offers').select('event_id,staff_id').eq('kind', 'driver').in('event_id', ids) : Promise.resolve({ data: [] }),
       supabase.rpc('meeting_hours', { p_from: p.start, p_to: p.end }),
-      supabase.from('pay_lines').select('id,staff_id,period_start,kind,amount,hours,line_date,note,source').eq('period_start', p.start).order('created_at'),
+      supabase.from('pay_lines').select('*').eq('period_start', p.start).order('created_at'),
       supabase.from('pay_lines').select('staff_id,kind,hours').in('kind', ['banked', 'payout']),
       supabase.from('pay_names').select('staff_id,rbc_name,skip'),
       supabase.from('pay_periods').select('locked_at,closed_at,rbc_lines,rbc_total').eq('start_date', p.start).maybeSingle(),
@@ -62,6 +63,9 @@ export function Payroll() {
     setBank(((bk.data ?? []) as { staff_id: string; kind: string; hours: number }[]).reduce<Record<string, number>>((a, x) => { a[x.staff_id] = (a[x.staff_id] ?? 0) + (x.kind === 'banked' ? 1 : -1) * Number(x.hours ?? 0); return a; }, {}));
     setNames(Object.fromEntries(((pn.data ?? []) as PName[]).map((x) => [x.staff_id, x])));
     setPer((pp.data as Period) ?? null); setNh(h);
+    const [pc, ro2] = await Promise.all([supabase.from('pay_columns').select('id,name,ctype,sort').eq('period_start', p.start).order('sort').order('created_at'),
+      supabase.from('staff').select('id,full_name').eq('active', true).is('deleted_at', null).order('full_name')]);
+    setCols(pc.error ? [] : (pc.data ?? []) as PCol[]); setRoster((ro2.data ?? []) as { id: string; full_name: string }[]);
     const sids = ev.flatMap((e) => e.shifts.map((s) => s.id));
     const { data: pd } = sids.length ? await supabase.from('shifts').select('id').in('id', sids).not('paypal_paid_at', 'is', null) : { data: [] };
     setPpd(new Set(((pd ?? []) as { id: string }[]).map((x) => x.id)));
@@ -88,10 +92,11 @@ export function Payroll() {
     }
     for (const g of mh) { const x = get(g.staff_id, g.full_name); const rate = rateOn(rates[g.staff_id], g.meeting_date); const pay = rate == null ? 0 : r2(Number(g.hours) * rate);
       x.mtg.push({ date: g.meeting_date, title: g.title, hours: Number(g.hours), pay }); x.hours += Number(g.hours); x.base += pay; if (rate == null) x.noRate = true; }
-    for (const l of lines) get(l.staff_id, extra[l.staff_id] ?? '?').lines.push(l);
+    for (const l of lines) { const x = get(l.staff_id, extra[l.staff_id] ?? roster.find((r) => r.id === l.staff_id)?.full_name ?? '?'); x.lines.push(l); if (l.kind === 'hours') x.hours += Number(l.hours ?? 0); }
+    for (const id of added) if (!m.has(id)) get(id, roster.find((r) => r.id === id)?.full_name ?? '?');
     for (const x of m.values()) x.total = r2(x.base + x.lines.reduce((n, l) => n + l.amount, 0));
     return [...m.values()].sort((a, b) => a.name.localeCompare(b.name));
-  }, [evs, rates, drivers, mh, lines, extra, ppd]);
+  }, [evs, rates, drivers, mh, lines, extra, ppd, roster, added]);
 
   const cash = (id: string) => nh[id]?.paid_by === 'cash';
   const rbcName = (x: Person) => (names[x.id]?.rbc_name || x.name).toUpperCase().trim();
@@ -160,7 +165,11 @@ export function Payroll() {
           <div className="muted sm">Run it on your computer like before, log in to RBC yourself, review the totals in RBC before approving.</div>
         </section>)}
 
-      <section className="stack">
+      {evs !== null && <Grid p={p} people={people} cols={cols} locked={locked} rates={rates} isCash={(id) => !!names[id]?.skip?.includes('cash') || cash(id)} roster={roster}
+        onAdd={(id) => setAdded((a) => [...a, id])} onOpen={(id) => setOpen(open === id ? null : id)} open={open} onDone={() => setT((n) => n + 1)}
+        detail={(x) => <Detail x={x} locked={locked} period={p.start} bank={bank[x.id] ?? 0} rate={rateOn(rates[x.id], p.end)} pn={names[x.id]} onDone={() => setT((n) => n + 1)} />} />}
+
+      <section className="stack pg-list">
         <div className="sec"><span className="serif">By person</span><span className="muted sm">tap a name for hours, rate and extra lines</span></div>
         <div className="adm-card table-card">
           <table className="atable">
@@ -193,12 +202,14 @@ function Detail({ x, locked, period, bank, rate, pn, onDone }: { x: Person; lock
   const [pp, setPp] = useState<Set<string>>(new Set()); const [nm, setNm] = useState(pn?.rbc_name ?? ''); const [skip, setSkip] = useState(pn?.skip ?? '');
   const [notes, setNotes] = useState(false); const [err, setErr] = useState('');
   const sign = KINDS.find((k) => k[0] === kind)![2];
-  const byHours = kind === 'banked' || kind === 'payout';
-  const amount = byHours ? (rate == null ? NaN : r2(Number(hrs) * rate) * sign) : sign === 0 ? Number(amt) : Math.abs(Number(amt)) * sign;
+  const byHours = kind === 'banked' || kind === 'payout' || kind === 'hours';
+  const dayRate = kind === 'hours' && date ? rate : rate;
+  const amount = byHours ? (dayRate == null ? NaN : r2(Number(hrs) * dayRate) * sign) : sign === 0 ? Number(amt) : Math.abs(Number(amt)) * sign;
   const add = async () => {
     setErr('');
     if (!Number.isFinite(amount) || !amount) { setErr(byHours ? (rate == null ? 'No pay rate for this person.' : 'Type the hours.') : 'Type an amount.'); return; }
     if (kind === 'payout' && Number(hrs) > bank) { setErr(`Only ${bank} h banked.`); return; }
+    if (kind === 'hours' && !date) { setErr('Pick the day they worked.'); return; }
     const { data: me } = await supabase.rpc('me');
     const { error } = await supabase.from('pay_lines').insert({ staff_id: x.id, period_start: period, kind, amount, hours: byHours ? Number(hrs) : null, line_date: date || null, note: note.trim() || null, source: kind === 'paypal' ? 'paypal' : 'manual', created_by: me });
     if (error) { setErr(error.message); return; }
@@ -243,4 +254,131 @@ function Detail({ x, locked, period, bank, rate, pn, onDone }: { x: Person; lock
       {err && <p className="error">{err}</p>}
     </div>
   );
+}
+
+// ── push 79 · Payroll V2: grid like the Staff Payroll sheet (desktop). One column per day, extra columns, two blocks.
+type PCol = { id: string; name: string; ctype: 'add' | 'off' | 'hours'; sort: number };
+const AUTO: Record<string, string> = { paypal: 'PayPal', expense: 'Expenses', tips: 'Tips', uber: 'Uber', gas: 'Gas', parking: 'Parking', correction: 'Correction', other: 'Other', cash: 'Paid cash', cra: 'CRA', banked: 'Banked', payout: 'Banked paid out' };
+const autoKey = (l: Line) => (l.source === 'expense' ? 'expense' : l.kind);
+const fmt = (n: number) => (Math.round(n * 100) / 100).toString();
+
+function Grid({ p, people, cols, locked, rates, isCash, roster, onAdd, onOpen, open, onDone, detail }: {
+  p: { start: string; end: string }; people: Person[]; cols: PCol[]; locked: boolean; rates: Record<string, RateRow[]>; isCash: (id: string) => boolean;
+  roster: { id: string; full_name: string }[]; onAdd: (id: string) => void; onOpen: (id: string) => void; open: string | null; onDone: () => void; detail: (x: Person) => JSX.Element }) {
+  const days: string[] = []; for (let d = p.start; d <= p.end; d = addDays(d, 1)) days.push(d);
+  const autos = Object.keys(AUTO).filter((k) => people.some((x) => x.lines.some((l) => !l.col_id && l.kind !== 'hours' && autoKey(l) === k)));
+  const [day, setDay] = useState<{ x: Person; d: string } | null>(null);
+  const [cell, setCell] = useState<{ pid: string; col: string } | null>(null); const [val, setVal] = useState('');
+  const [newCol, setNewCol] = useState<{ name: string; ctype: PCol['ctype'] } | null>(null); const [err, setErr] = useState(''); const [pick, setPick] = useState('');
+  const me = async () => (await supabase.rpc('me')).data as string;
+
+  const dayCell = (x: Person, d: string) => {
+    const sh = x.shifts.filter((s) => s.date === d); const mt = x.mtg.filter((g) => g.date === d); const man = x.lines.filter((l) => l.kind === 'hours' && l.line_date === d);
+    const h = sh.reduce((n, s) => n + s.hours, 0) + mt.reduce((n, g) => n + g.hours, 0) + man.reduce((n, l) => n + Number(l.hours ?? 0), 0);
+    const cls = sh.some((s) => s.noEnd) ? ' q' : man.length ? ' man' : mt.length && !sh.length ? ' mtg' : '';
+    return <td key={d} className={'pg-d' + cls} onClick={() => !locked && setDay({ x, d })}>{sh.some((s) => s.noEnd) && !h ? '?' : h ? fmt(h) : ''}{man.length ? '✎' : mt.length ? <sup>M</sup> : ''}</td>;
+  };
+  const colVal = (x: Person, c: PCol) => { const ls = x.lines.filter((l) => l.col_id === c.id); return c.ctype === 'hours' ? ls.reduce((n, l) => n + Number(l.hours ?? 0), 0) : ls.reduce((n, l) => n + l.amount, 0); };
+  const saveCell = async (x: Person, c: PCol) => {
+    setErr(''); const ls = x.lines.filter((l) => l.col_id === c.id); const n = Number(val.replace(',', '.').replace('$', ''));
+    const rate = rateOn(rates[x.id], p.end);
+    if (ls.length) { const { error } = await supabase.from('pay_lines').delete().in('id', ls.map((l) => l.id)); if (error) { setErr(error.message); return; } }
+    if (val.trim() && Number.isFinite(n) && n !== 0) {
+      if (c.ctype === 'hours' && rate == null) { setErr('No pay rate for ' + x.name); return; }
+      const row = c.ctype === 'hours' ? { kind: n > 0 ? 'banked' : 'payout', hours: Math.abs(n), amount: -r2(n * rate!) }
+        : { kind: 'other', hours: null, amount: c.ctype === 'off' ? -Math.abs(n) : n };
+      const { error } = await supabase.from('pay_lines').insert({ staff_id: x.id, period_start: p.start, col_id: c.id, note: c.name, source: 'manual', created_by: await me(), ...row });
+      if (error) { setErr(error.message); return; }
+    }
+    setCell(null); onDone();
+  };
+  const addCol = async () => { if (!newCol?.name.trim()) return; const { error } = await supabase.from('pay_columns').insert({ period_start: p.start, name: newCol.name.trim(), ctype: newCol.ctype, sort: cols.length });
+    if (error) setErr(error.message); else { setNewCol(null); onDone(); } };
+  const delCol = async (c: PCol) => { if (!window.confirm(`Remove the column “${c.name}” and its amounts?`)) return; const { error } = await supabase.from('pay_columns').delete().eq('id', c.id); if (error) setErr(error.message); else onDone(); };
+
+  const block = (list: Person[]) => list.map((x) => (
+    <Fragment key={x.id}>
+      <tr className={open === x.id ? 'on' : ''}>
+        <th className="pg-n" onClick={() => onOpen(x.id)}>{x.name.toUpperCase()}{isCash(x.id) ? <span className="ftag">CASH</span> : null}</th>
+        {days.map((d) => dayCell(x, d))}
+        <td className="pg-h">{fmt(x.hours)}</td>
+        <td className="pg-r">{rateOn(rates[x.id], p.end) == null ? '—' : money2(rateOn(rates[x.id], p.end)!)}</td>
+        {cols.map((c) => { const v = colVal(x, c); const ed = cell?.pid === x.id && cell.col === c.id;
+          return <td key={c.id} className={'pg-x' + (v < 0 || c.ctype === 'off' ? ' off' : v > 0 ? ' add' : '')} onClick={() => { if (locked || ed) return; setCell({ pid: x.id, col: c.id }); setVal(v ? String(Math.abs(v)) : ''); }}>
+            {ed ? <input autoFocus className="pg-in" value={val} onChange={(e) => setVal(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') saveCell(x, c); if (e.key === 'Escape') setCell(null); }} onBlur={() => saveCell(x, c)} />
+              : v ? (c.ctype === 'hours' ? `${fmt(v)} h` : (v < 0 ? '−' : '+') + fmt(Math.abs(v))) : ''}</td>; })}
+        {autos.map((k) => { const v = x.lines.filter((l) => !l.col_id && l.kind !== 'hours' && autoKey(l) === k).reduce((n, l) => n + l.amount, 0);
+          return <td key={k} className={'pg-x' + (v < 0 ? ' off' : v > 0 ? ' add' : '')} onClick={() => onOpen(x.id)}>{v ? (v < 0 ? '−' : '+') + fmt(Math.abs(v)) : ''}</td>; })}
+        <td className="pg-t">{x.noRate ? <span className="accent">no rate</span> : money2(x.total)}</td>
+      </tr>
+      {open === x.id && <tr className="sub"><td colSpan={days.length + 4 + cols.length + autos.length}>{detail(x)}</td></tr>}
+    </Fragment>));
+  const main = people.filter((x) => !isCash(x.id)); const cashL = people.filter((x) => isCash(x.id));
+  const dayTot = (d: string) => people.reduce((n, x) => n + x.shifts.filter((s) => s.date === d).reduce((a, s) => a + s.hours, 0) + x.mtg.filter((g) => g.date === d).reduce((a, g) => a + g.hours, 0)
+    + x.lines.filter((l) => l.kind === 'hours' && l.line_date === d).reduce((a, l) => a + Number(l.hours ?? 0), 0), 0);
+  const W = days.length + 4 + cols.length + autos.length;
+  const notIn = roster.filter((r) => !people.some((x) => x.id === r.id));
+  return (
+    <section className="stack pg-wrap">
+      <div className="sec"><span className="serif">Hours per day</span><span className="muted sm">like the payroll sheet · tap a day to type hours · tap a name for the detail</span></div>
+      <div className="pg-legend sm"><span><b className="pg-k">7</b> app hours</span><span><b className="pg-k man">6✎</b> typed by you</span><span><b className="pg-k mtg">2<sup>M</sup></b> meeting</span><span><b className="pg-k q">?</b> no end time</span></div>
+      <div className="adm-card pg-card">
+        <table className="pg">
+          <thead><tr><th className="pg-n">NAME</th>
+            {days.map((d) => <th key={d} className="pg-dh">{new Date(d + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'narrow' })}<br />{+d.slice(8)}</th>)}
+            <th>HOURS</th><th>RATE</th>
+            {cols.map((c) => <th key={c.id} className={'pg-xh ' + c.ctype} title={c.ctype === 'add' ? 'Adds to pay' : c.ctype === 'off' ? 'Comes off' : 'Hours banked'}>{c.name}{!locked && <button className="pg-xdel" aria-label="Remove column" onClick={() => delCol(c)}>×</button>}</th>)}
+            {autos.map((k) => <th key={k} className="pg-xh auto">{AUTO[k]}</th>)}
+            <th className="pg-t">{!locked && <button className="pg-addc" onClick={() => setNewCol({ name: '', ctype: 'add' })}>+ Column</button>}<br />TOTAL PAY</th></tr></thead>
+          <tbody>
+            <tr className="pg-sec"><td colSpan={W}>STAFF ON FLOOR · RBC FILE</td></tr>
+            {block(main)}
+            {cashL.length > 0 && <tr className="pg-sec"><td colSpan={W}>SPECIAL STAFF ON FLOOR · PAID CASH · NOT IN THE RBC FILE</td></tr>}
+            {block(cashL)}
+            <tr className="pg-tot"><th className="pg-n">TOTAL HOURS</th>{days.map((d) => <td key={d}>{fmt(dayTot(d)) === '0' ? '' : fmt(dayTot(d))}</td>)}
+              <td className="pg-h">{fmt(people.reduce((n, x) => n + x.hours, 0))}</td><td colSpan={1 + cols.length + autos.length} /><td className="pg-t">{money2(people.reduce((n, x) => n + x.total, 0))}</td></tr>
+          </tbody>
+        </table>
+      </div>
+      {!locked && <div className="row wrap sm" style={{ gap: 8 }}><span className="muted">Someone not on the list (e.g. a cook):</span>
+        <select value={pick} onChange={(e) => setPick(e.target.value)}><option value="">Pick a person…</option>{notIn.map((r) => <option key={r.id} value={r.id}>{r.full_name}</option>)}</select>
+        {pick && <button className="abtn sm dark" onClick={() => { onAdd(pick); setPick(''); }}>Add to this period</button>}</div>}
+      {err && <p className="error">{err}</p>}
+      {newCol && <div className="pg-pop">
+        <b>+ Column · {dLabel(p.start, { month: 'short', day: 'numeric' })} – {dLabel(p.end, { month: 'short', day: 'numeric' })}</b>
+        <input autoFocus placeholder="Name, e.g. Tip Oct 23rd" value={newCol.name} onChange={(e) => setNewCol({ ...newCol, name: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && addCol()} />
+        <div className="row wrap" style={{ gap: 6 }}>{([['add', 'Adds to pay'], ['off', 'Comes off'], ['hours', 'Hours (banked)']] as [PCol['ctype'], string][]).map(([k, n]) =>
+          <button key={k} className={'abtn sm' + (newCol.ctype === k ? ' dark' : '')} onClick={() => setNewCol({ ...newCol, ctype: k })}>{n}</button>)}</div>
+        <div className="row" style={{ gap: 8 }}><button className="abtn sm dark" onClick={addCol}>Add column</button><button className="lnk sm" onClick={() => setNewCol(null)}>Cancel</button></div>
+        <small className="muted">Then type amounts in its cells. Staff never see column names or notes.</small></div>}
+      {day && <DayPop key={day.x.id + day.d} x={day.x} d={day.d} period={p.start} rate={rateOn(rates[day.x.id], day.d)} onClose={() => setDay(null)} onDone={() => { setDay(null); onDone(); }} />}
+    </section>);
+}
+
+function DayPop({ x, d, period, rate, onClose, onDone }: { x: Person; d: string; period: string; rate: number | null; onClose: () => void; onDone: () => void }) {
+  const sh = x.shifts.filter((s) => s.date === d); const mt = x.mtg.filter((g) => g.date === d); const man = x.lines.find((l) => l.kind === 'hours' && l.line_date === d);
+  const [h, setH] = useState(man?.hours ? String(man.hours) : ''); const [note, setNote] = useState(man?.note ?? ''); const [err, setErr] = useState('');
+  const save = async () => {
+    setErr(''); const n = Number(h.replace(',', '.'));
+    if (man) { const { error } = await supabase.from('pay_lines').delete().eq('id', man.id); if (error) { setErr(error.message); return; } }
+    if (h.trim() && n > 0) {
+      if (rate == null) { setErr(`${x.name} has no pay rate.`); return; }
+      const { data: me } = await supabase.rpc('me');
+      const { error } = await supabase.from('pay_lines').insert({ staff_id: x.id, period_start: period, kind: 'hours', hours: n, amount: r2(n * rate), line_date: d, note: note.trim() || null, source: 'manual', created_by: me });
+      if (error) { setErr(error.message); return; }
+    }
+    onDone();
+  };
+  return (
+    <div className="pg-pop">
+      <div className="spread"><b>{x.name} · {dLabel(d)}</b><button className="lnk sm" onClick={onClose}>✕</button></div>
+      {sh.map((s) => <div key={s.id} className="sm">{s.title} · {s.noEnd ? <span className="accent">no end time</span> : <b>{s.hours} h</b>} <Link className="lnk" to="/admin/hours">Change the times ›</Link></div>)}
+      {mt.map((g, i) => <div key={i} className="sm muted">Meeting · {g.title} · {g.hours} h</div>)}
+      <span className="muted sm">{sh.length ? '+ Add hours (typed in, on top of the app hours)' : 'Type the hours'}{rate != null ? ` · × ${money2(rate)}` : ' · no pay rate!'}</span>
+      <div className="row" style={{ gap: 6 }}><input autoFocus inputMode="decimal" style={{ width: 80 }} placeholder="Hours" value={h} onChange={(e) => setH(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && save()} />
+        <input className="grow" placeholder="Note (only you see it)" value={note} onChange={(e) => setNote(e.target.value)} /></div>
+      <div className="row" style={{ gap: 8 }}><button className="abtn sm dark" onClick={save}>Save</button>{man && <button className="abtn sm" onClick={() => { setH(''); setTimeout(save); }}>Remove</button>}</div>
+      <small className="muted">Staff see “{dLabel(d)} · hours” in their Hours tab, never the note.</small>
+      {err && <p className="error">{err}</p>}
+    </div>);
 }

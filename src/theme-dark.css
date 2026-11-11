@@ -1983,6 +1983,34 @@ html[data-theme="dark"] { --teams: #8487CC; --teams-bg: #1F2137; --teams-ink: #8
 :where(html[data-theme="dark"]) .exp-allow { border: 1.5px solid #49433B; background: #1F1D1A; color: #E1DEDB; }
 :where(html[data-theme="dark"]) .exp-allow.on { background: #24332C; border-color: #3C7C5E; color: #8CC5AA; }
 :where(html[data-theme="dark"]) .exp-rc img { box-shadow: 0 0 0 1px #302C26; }
+:where(html[data-theme="dark"]) .pg th, :where(html[data-theme="dark"]) .pg td { border-left: 1px solid #4B4439; border-top: 1px solid #4B4439; }
+:where(html[data-theme="dark"]) .pg thead th { color: #988F86; background: #322D24; }
+:where(html[data-theme="dark"]) .pg .pg-n { background: #1F1D1A; }
+:where(html[data-theme="dark"]) .pg thead .pg-n { background: #322D24; }
+:where(html[data-theme="dark"]) .pg .pg-d:hover, :where(html[data-theme="dark"]) .pg .pg-x:hover { background: #37301F; }
+:where(html[data-theme="dark"]) .pg .pg-d.man { background: #3F3418; color: #E3C46E; }
+:where(html[data-theme="dark"]) .pg .pg-d.mtg { background: #242932; color: #909EC1; }
+:where(html[data-theme="dark"]) .pg .pg-d.q { background: #3A221D; color: #D38C7D; }
+:where(html[data-theme="dark"]) .pg .pg-h { border-left: 2px solid #E1DEDB; }
+:where(html[data-theme="dark"]) .pg .pg-r { color: #988F86; }
+:where(html[data-theme="dark"]) .pg .pg-x.add { color: #86CAAA; }
+:where(html[data-theme="dark"]) .pg .pg-x.off { color: #D38C7D; }
+:where(html[data-theme="dark"]) .pg .pg-xh.add { color: #86CAAA; }
+:where(html[data-theme="dark"]) .pg .pg-xh.off { color: #D38C7D; }
+:where(html[data-theme="dark"]) .pg .pg-xh.hours { color: #E3C46E; }
+:where(html[data-theme="dark"]) .pg-xdel { color: #9B9289; }
+:where(html[data-theme="dark"]) .pg-addc { border: 1.5px dashed #C19E2F; background: #1F1D1A; color: #E3C46E; }
+:where(html[data-theme="dark"]) .pg .pg-sec td { color: #988F86; background: #322D25; }
+:where(html[data-theme="dark"]) .pg .pg-tot td, :where(html[data-theme="dark"]) .pg .pg-tot th { border-top: 2px solid #E1DEDB; background: #322D24; }
+:where(html[data-theme="dark"]) .pg tr.on .pg-n { box-shadow: inset 3px 0 0 #C19E2F; }
+:where(html[data-theme="dark"]) .pg-in { border: 1.5px solid #C19E2F; }
+:where(html[data-theme="dark"]) .pg-legend { color: #BDB7B2; }
+:where(html[data-theme="dark"]) .pg-k { background: #1F1D1A; box-shadow: 0 0 0 1px #302C26; }
+:where(html[data-theme="dark"]) .pg-k.man { background: #3F3418; color: #E3C46E; }
+:where(html[data-theme="dark"]) .pg-k.mtg { background: #242932; color: #909EC1; }
+:where(html[data-theme="dark"]) .pg-k.q { background: #3A221D; color: #D38C7D; }
+:where(html[data-theme="dark"]) .pg-pop { background: #1F1D1A; box-shadow: 0 12px 34px rgba(0,0,0,0.45), 0 0 0 1px #302C26; }
+:where(html[data-theme="dark"]) .pg-pop input { border: 1.5px solid #4A443B; }
 html[data-theme="dark"] { color-scheme: dark; }
 html[data-theme="dark"] body { background: #121110; color: #F1ECE4; }
 html[data-theme="dark"] img[src$="logo-mark.png"]:not(.adm-side img):not(.side-logo), html[data-theme="dark"] img[src$="logo-full.png"] { filter: invert(1) hue-rotate(180deg); mix-blend-mode: normal !important; }

@@ -1,4 +1,4 @@
--- 104 · Staff add their own expenses (Nov 10, 2026 · push 79). Safe to run twice.
+-- 104 · Staff add their own expenses + Payroll V2 grid (Nov 10, 2026 · push 79). Safe to run twice.
 -- Only people Ronnie switches on (always, or one shift for 2 days) · receipt photo (private) · Ronnie approves → pay line.
 
 alter table public.staff  add column if not exists can_expense   boolean not null default false; -- "Can add expenses" (always on)
@@ -93,6 +93,35 @@ grant execute on function public.my_expense_access() to authenticated;
 grant execute on function public.add_expense(text, numeric, uuid, date, text, text) to authenticated;
 grant execute on function public.admin_decide_expense(uuid, boolean, text) to authenticated;
 
+-- Payroll V2 (grid like the sheet): manual hours per day + columns Ronnie adds by hand, per pay period.
+create table if not exists public.pay_columns (
+  id           uuid primary key default gen_random_uuid(),
+  period_start date not null,
+  name         text not null,
+  ctype        text not null check (ctype in ('add','off','hours')),   -- adds to pay · comes off · hours (banked)
+  sort         int not null default 0,
+  created_at   timestamptz not null default now()
+);
+alter table public.pay_columns enable row level security;
+drop policy if exists admin_all on public.pay_columns;
+create policy admin_all on public.pay_columns for all using (is_admin()) with check (is_admin());
+alter table public.pay_lines add column if not exists col_id uuid references public.pay_columns(id) on delete cascade;
+alter table public.pay_lines drop constraint if exists pay_lines_kind_check;
+alter table public.pay_lines add constraint pay_lines_kind_check check (kind in ('tips','uber','gas','parking','correction','other','hours',
+                                                                                 'paypal','cash','cra','banked','payout'));
+-- Staff: manual hours show as day + hours (never the note); expenses show their own amount.
+drop function if exists public.my_pay_notes();
+create or replace function public.my_pay_notes() returns table(kind text, line_date date, period_start date, amount numeric, hours numeric, source text)
+language sql stable security definer set search_path = public as
+$$ select l.kind, l.line_date, l.period_start, case when l.source = 'expense' then l.amount end, case when l.kind = 'hours' then l.hours end, l.source
+     from pay_lines l
+    where l.staff_id = me() and l.kind in ('tips','uber','gas','parking','correction','other','payout','hours') and l.amount > 0
+      and l.period_start >= (current_date - 120)
+    order by coalesce(l.line_date, l.period_start) desc $$;
+revoke all on function public.my_pay_notes() from public, anon;
+grant execute on function public.my_pay_notes() to authenticated;
+
 select 'RESULT ' || (select count(*) from information_schema.columns where (table_name = 'staff' and column_name = 'can_expense') or (table_name = 'shifts' and column_name = 'expense_until')) || ' of 2 columns · '
   || (select count(*) from information_schema.tables where table_name = 'expenses') || ' table · '
-  || (select count(*) from storage.buckets where id = 'receipts') || ' bucket';
+  || (select count(*) from storage.buckets where id = 'receipts') || ' bucket · '
+  || (select count(*) from information_schema.tables where table_name = 'pay_columns') || ' pay_columns';
