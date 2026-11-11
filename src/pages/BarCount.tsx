@@ -20,6 +20,7 @@ export function BarCount() {
   const [sup, setSup] = useState<BSupply[]>([]); const [busy, setBusy] = useState(false); const [msg, setMsg] = useState(''); const [err, setErr] = useState('');
   const [itemEd, setItemEd] = useState<{ id: string | null; kind: BKind; name: string; size: string; other?: boolean } | null>(null);
   const [ct, setCt] = useState(0); const cat = useCatalog(eventId!, ct); const [picking, setPicking] = useState(false); // push 85
+  const [sw, setSw] = useState<string | null>(null); const [x0, setX0] = useState<{ id: string; x: number; y: number } | null>(null); // push 88 · swipe to remove
   const [hand, setHand] = useState(false); const [undo, setUndo] = useState<{ id: string; reason: string } | null>(null);
   const load = async (keepMode = false) => {
     const { data, error } = await supabase.rpc('bar_count_get', { p_event: eventId });
@@ -52,6 +53,8 @@ export function BarCount() {
   const saveItem = async () => { if (!itemEd) return; setBusy(true); setErr('');
     const { error } = await supabase.rpc('bar_item_save', { p_event: eventId, p_item: itemEd.id, p_kind: itemEd.kind, p_name: itemEd.name, p_size: itemEd.size });
     setBusy(false); if (error) setErr(error.message); else { setItemEd(null); load(true); setCt((x) => x + 1); } };
+  const unpick = async (id: string) => { setBusy(true); setErr(''); const { error } = await supabase.rpc('bar_unpick', { p_event: eventId, p_item: id }); setBusy(false);
+    setSw(null); if (error) setErr(error.message); else { setItemEd(null); setDraft((dr) => { const n = { ...dr }; delete n[id]; return n; }); load(true); setCt((x) => x + 1); } };
   const doUndo = async () => { if (!undo) return; setBusy(true); const { error } = await supabase.rpc('bar_move_undo', { p_move: undo.id, p_reason: undo.reason }); setBusy(false); if (error) setErr(error.message); else { setUndo(null); load(true); } };
   const submit = async () => { setBusy(true); const { error } = await supabase.rpc('bar_count_submit', { p_event: eventId, p_supplies: sup }); setBusy(false); if (error) setErr(error.message); else { setMsg('✓ Count submitted. You can still add or fix moves; they’re logged.'); load(true); } };
   const handTo = async (sid: string | null) => { setBusy(true); const { error } = await supabase.rpc('bar_count_hand', { p_event: eventId, p_staff: sid }); setBusy(false); setHand(false); if (error) setErr(error.message); else load(true); };
@@ -80,11 +83,16 @@ export function BarCount() {
         {groups.map((g) => (
           <section key={g.k} className="bc-group"><small className="gt-kick">{KIND_LABEL[g.k]?.toUpperCase()}</small>
             {g.ls.map((i) => { const t = tot[i.id]; const dv = draft[i.id] ?? 0; return (
-              <div key={i.id} className="bc-row">
+              <div key={i.id} className={'bc-row bc-sw' + (sw === i.id ? ' open' : '')}
+                onTouchStart={(e) => setX0({ id: i.id, x: e.touches[0].clientX, y: e.touches[0].clientY })}
+                onTouchEnd={(e) => { if (!x0 || x0.id !== i.id) return; const dx = e.changedTouches[0].clientX - x0.x, dy = Math.abs(e.changedTouches[0].clientY - x0.y); setX0(null);
+                  if (dy < 30 && dx < -50) setSw(i.id); else if (dy < 30 && dx > 40 && sw === i.id) setSw(null); }}>
+                {sw === i.id && <span className="bc-del"><button className="lnk" onClick={() => setSw(null)}>Keep</button><button className="bc-rm" disabled={busy} onClick={() => unpick(i.id)}>Remove</button></span>}
                 <span className="grow"><b>{i.name}</b><small>{[i.size, t ? `out ${q(t.out)}` : null, t?.back ? `back ${q(t.back)}` : null, t ? `used ${q(usedOf(t))}` : null].filter(Boolean).join(' · ')} · <button className="lnk" onClick={() => setItemEd({ id: i.id, kind: i.kind, name: i.name, size: i.size ?? '' })}>✎</button></small></span>
                 <button className="bc-st" aria-label="less" onClick={() => bump(i, -1)}>−</button><b className={'bc-v' + (dv ? ' hl' : '')}>{dv ? (mode === 'more' ? '+' : '') + q(dv) : '0'}</b><button className="bc-st dark" aria-label="more" disabled={mode === 'back' && room(i.id) <= dv} onClick={() => bump(i, 1)}>+</button>
               </div>); })}
           </section>))}
+        {bottles.length > 0 && <small className="muted">Swipe a bottle left to take it off tonight’s list.</small>}
         <button className="lnk" onClick={() => setItemEd({ id: null, kind: 'spirit', name: '', size: '750 ml' })}>+ Add a bottle (or the same bottle in another size)</button>
         {mode === 'back' && sup.length > 0 && <section className="bc-group"><small className="gt-kick">SUPPLIES · LEVEL AT THE END</small>
           {sup.map((s) => <div key={s.item_id} className="bc-row"><b className="grow">{s.name}</b><span className="bc-lv">{LEVELS.map((lv) => <button key={lv} className={(s.level === lv ? 'on' : '') + (lv === 'Out' ? ' out' : '')} onClick={() => setSup(sup.map((x) => (x.item_id === s.item_id ? { ...x, level: lv } : x)))}>{lv}</button>)}</span></div>)}
@@ -135,6 +143,7 @@ export function BarCount() {
           <p className="muted sm">Also on the list next time. Ronnie sees it in the log.</p>
           <button className="btn-ink" disabled={busy || !itemEd.name.trim()} onClick={saveItem}>{busy ? '…' : itemEd.id ? 'Save' : `Add ${itemEd.name.trim() || 'the bottle'}${itemEd.size.trim() ? ' · ' + itemEd.size.trim() : ''}`}</button>
           {itemEd.id && <button className="lnk" onClick={() => setItemEd({ ...itemEd, id: null, size: '' })}>+ Same bottle, another size</button>}
+          {itemEd.id && <button className="lnk red" disabled={busy} onClick={() => unpick(itemEd.id!)}>Remove from tonight</button>}
         </div></>}
     </div>
   );

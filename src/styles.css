@@ -4232,3 +4232,7 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; }
 .bt-t td { padding: 9px 12px; border-top: 1px solid #EEE7DD; } .bt-t tr.new td { background: #FFF6DA; }
 .bt-new { display: inline-block; margin-left: 8px; font-style: normal; font-size: 10px; font-weight: 800; color: #8A6D1E; }
 .bt-act { white-space: nowrap; text-align: right; font-weight: 700; } .lnk.red { color: #B0452E; }
+/* push 88 · swipe a bottle left → Remove from tonight */
+.bc-sw { position: relative; transition: transform .15s; } .bc-sw.open > :not(.bc-del) { opacity: .35; }
+.bc-del { position: absolute; right: 0; top: 50%; transform: translateY(-50%); display: flex; gap: 10px; align-items: center; z-index: 2; background: #fff; padding-left: 10px; }
+.bc-rm { height: 38px; padding: 0 16px; border: 0; border-radius: 10px; background: #B0452E; color: #fff; font: 700 13.5px Inter, system-ui, sans-serif; }

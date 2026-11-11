@@ -39,7 +39,7 @@ export function q(n: number) {
 const tm = (iso: string) => new Date(iso).toLocaleString('en-CA', { hour: 'numeric', minute: '2-digit', month: 'short', day: 'numeric', timeZone: 'America/Toronto' });
 export function moveText(m: BMove, items: BItem[]) {
   const nm = (id: string) => { const i = items.find((x) => x.id === id); return i ? `${i.name}${i.size ? ' ' + i.size : ''}` : 'a bottle'; };
-  if (m.step === 'item') return m.items.map((i) => (i.from ? `changed ${i.from} → ${i.to}` : `added ${i.to}`)).join(', ');
+  if (m.step === 'item') return m.items.map((i) => ((i as { removed?: boolean }).removed ? `removed ${i.from} from tonight` : i.from ? `changed ${i.from} → ${i.to}` : `added ${i.to}`)).join(', ');
   const list = m.items.map((i) => (m.step === 'fix' ? `${nm(i.item_id)} ${i.out ? `out ${i.out > 0 ? '+' : ''}${q(Math.abs(i.out))}` : ''}${i.back ? ` back ${q(i.back)}` : ''}` : `${nm(i.item_id)} ${m.step === 'back' ? '' : '+'}${q(Number(i.qty) || 0)}`)).join(', ');
   return m.step === 'start' ? `start count · ${list}` : m.step === 'more' ? `took out ${list}` : m.step === 'back' ? `brought back ${list}` : `fixed ${list}`;
 }
