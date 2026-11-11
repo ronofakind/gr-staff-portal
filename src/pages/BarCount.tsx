@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { TonightsBottles, BarSearchAdd, useCatalog, catMatch } from '../components/BarPick';
 import { KINDS, KIND_LABEL, KIND_SHORT, KIND_HOW, sizesFor, LEVELS, q, stepOf, totals, usedOf, moveText, type BItem, type BKind, type BMove, type BSupply } from '../lib/barCount';
 
 /* Push 69 · Bar count (boards BarCountV2 + V3). Nothing is saved by a tap: Start, More out and Bring back are each
@@ -18,6 +19,7 @@ export function BarCount() {
   const [draft, setDraft] = useState<Record<string, number>>({}); const [review, setReview] = useState(false);
   const [sup, setSup] = useState<BSupply[]>([]); const [busy, setBusy] = useState(false); const [msg, setMsg] = useState(''); const [err, setErr] = useState('');
   const [itemEd, setItemEd] = useState<{ id: string | null; kind: BKind; name: string; size: string; other?: boolean } | null>(null);
+  const [ct, setCt] = useState(0); const cat = useCatalog(eventId!, ct); const [picking, setPicking] = useState(false); // push 85
   const [hand, setHand] = useState(false); const [undo, setUndo] = useState<{ id: string; reason: string } | null>(null);
   const load = async (keepMode = false) => {
     const { data, error } = await supabase.rpc('bar_count_get', { p_event: eventId });
@@ -49,7 +51,7 @@ export function BarCount() {
   };
   const saveItem = async () => { if (!itemEd) return; setBusy(true); setErr('');
     const { error } = await supabase.rpc('bar_item_save', { p_event: eventId, p_item: itemEd.id, p_kind: itemEd.kind, p_name: itemEd.name, p_size: itemEd.size });
-    setBusy(false); if (error) setErr(error.message); else { setItemEd(null); load(true); } };
+    setBusy(false); if (error) setErr(error.message); else { setItemEd(null); load(true); setCt((x) => x + 1); } };
   const doUndo = async () => { if (!undo) return; setBusy(true); const { error } = await supabase.rpc('bar_move_undo', { p_move: undo.id, p_reason: undo.reason }); setBusy(false); if (error) setErr(error.message); else { setUndo(null); load(true); } };
   const submit = async () => { setBusy(true); const { error } = await supabase.rpc('bar_count_submit', { p_event: eventId, p_supplies: sup }); setBusy(false); if (error) setErr(error.message); else { setMsg('✓ Count submitted. You can still add or fix moves; they’re logged.'); load(true); } };
   const handTo = async (sid: string | null) => { setBusy(true); const { error } = await supabase.rpc('bar_count_hand', { p_event: eventId, p_staff: sid }); setBusy(false); setHand(false); if (error) setErr(error.message); else load(true); };
@@ -66,6 +68,13 @@ export function BarCount() {
           <button key={k} role="tab" aria-selected={mode === k} className={mode === k ? 'on' : ''} disabled={(k === 'more' || k === 'back') && !started} onClick={() => switchMode(k)}>{l}</button>)}
       </div>
       <p className="muted sm" style={{ margin: '6px 0' }}>{hint}</p>
+      {!started && mode !== 'log' && cat && cat.list.length > 0 && (!d.picked || picking) ? (
+        <TonightsBottles eventId={eventId!} list={cat.list} onAddNew={() => setItemEd({ id: null, kind: 'spirit', name: '', size: '750 ml' })}
+          onCancel={d.picked ? () => setPicking(false) : undefined} onDone={() => { setPicking(false); load(true); setCt((x) => x + 1); }} />
+      ) : <>
+      {mode !== 'log' && !(mode === 'start' && started) && cat && cat.list.length > 0 && <BarSearchAdd eventId={eventId!} list={cat.list} have={new Set(cat.list.filter((x) => x.on).map((x) => x.id))}
+        onAdded={() => { load(true); setCt((x) => x + 1); }} onAddNew={(name) => setItemEd({ id: null, kind: 'spirit', name, size: '750 ml' })} />}
+      {!started && d.picked && mode === 'start' && <button className="lnk" style={{ alignSelf: 'flex-start' }} onClick={() => setPicking(true)}>Change tonight’s bottles</button>}
       {mode === 'start' && started ? <div className="bc-note ok">✓ Start count confirmed {tm(started.at)} by {started.by?.split(' ')[0]}. Use + More out for anything else.</div> : mode !== 'log' && <>
         {!bottles.length && <p className="muted">No list for this venue yet. Add the bottles below: they stay on the list for next time.</p>}
         {groups.map((g) => (
@@ -82,6 +91,7 @@ export function BarCount() {
         </section>}
         <button className="big-btn dark" disabled={!pending.length} onClick={() => setReview(true)}>{mode === 'start' ? 'Review the start count' : mode === 'more' ? `Review · taking out ${pending.length}` : `Review · coming back ${pending.length}`}</button>
         {mode === 'back' && <button className="big-btn" disabled={busy} onClick={submit}>{c?.submitted_at ? 'Save supplies' : 'Submit the count'}</button>}
+      </>}
       </>}
       {mode === 'log' && <section className="bc-group">
         {!d.moves.length && <p className="muted sm">Nothing yet.</p>}
@@ -115,6 +125,9 @@ export function BarCount() {
             onClick={() => { const ls = sizesFor(k, d.sizes); setItemEd({ ...itemEd, kind: k, size: ls.includes(itemEd.size) ? itemEd.size : ls[0] ?? '', other: !ls.length }); }}>{KIND_SHORT[k]}</button>)}</div>
             <small className="muted">{KIND_HOW[itemEd.kind]}</small></div>
           <label className="gt-f"><span>NAME</span><input value={itemEd.name} onChange={(e) => setItemEd({ ...itemEd, name: e.target.value })} placeholder="e.g. Grey Goose" /></label>
+          {!itemEd.id && cat && itemEd.name.trim().length >= 2 && (() => { const hs = catMatch(cat.list, itemEd.name).filter((x) => x.name !== itemEd.name || x.size !== itemEd.size).slice(0, 4); return hs.length > 0 && (
+            <div className="bp-names">{hs.map((x) => <div key={x.id} className="bp-s"><span className="grow"><b>{x.name}</b> <small>{x.size}</small></span>
+              <button className="lnk" onClick={() => setItemEd({ ...itemEd, kind: x.kind as BKind, name: x.name, size: x.size ?? '', other: false })}>Use</button></div>)}</div>); })()}
           {(() => { const ls = sizesFor(itemEd.kind, d.sizes); const other = itemEd.other || (!!itemEd.size && !ls.includes(itemEd.size)); return (
             <div className="gt-f"><span>SIZE</span><div className="bc-pills">{ls.map((x) => <button key={x} type="button" className={!other && itemEd.size === x ? 'on' : ''} onClick={() => setItemEd({ ...itemEd, size: x, other: false })}>{x}</button>)}
               <button type="button" className={other ? 'on' : ''} onClick={() => setItemEd({ ...itemEd, other: true, size: ls.includes(itemEd.size) ? '' : itemEd.size })}>Other…</button></div>

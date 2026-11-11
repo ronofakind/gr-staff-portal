@@ -1,3 +1,4 @@
+import { Bottles } from './admin/Bottles';
 import { loadTheme } from './lib/theme';
 import { ConnectClaude } from './pages/ConnectClaude';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
@@ -153,6 +154,7 @@ export function App() {
             <Route path="ranking" element={<TiersRanking tab="ranking" />} />
             <Route path="extras/:id" element={<Extras />} />
             <Route path="venues" element={<Venues />} />
+            <Route path="bottles" element={<Bottles />} />
             <Route path="settings" element={<Settings />} />
             <Route path="meetings" element={<Meetings />} />
             <Route path="meeting/new" element={<MeetingForm />} />

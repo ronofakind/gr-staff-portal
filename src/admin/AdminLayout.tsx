@@ -30,7 +30,7 @@ export const NAV_GROUPS: { title: string; items: [string, string, keyof typeof I
   { title: 'PAY', items: [['/admin/hours', 'Hours', 'hours'], ['/admin/payroll', 'Payroll', 'hours']] },
   { title: 'TALK', items: [['/admin/messages', 'Messages', 'msg'], ['/admin/meetings', 'Meetings', 'meet'], ['/admin/incidents', 'Incidents', 'alert']] },
 ];
-const SETUP: [string, string, keyof typeof ICONS][] = [['/admin/venues', 'Venues & clients', 'venue'], ['/admin/settings', 'Settings', 'gear'], ['/me', 'My shifts', 'today']];
+const SETUP: [string, string, keyof typeof ICONS][] = [['/admin/venues', 'Venues & clients', 'venue'], ['/admin/bottles', 'Bar bottle list', 'venue'], ['/admin/settings', 'Settings', 'gear'], ['/me', 'My shifts', 'today']];
 export const NAV = [...NAV_GROUPS.flatMap((g) => g.items), ...SETUP.filter(([to]) => to !== '/me')];
 /** One nav line stands for several pages: Calendar = Week + Day, Tiers & ranking = Tiers + Ranking. */
 const ALSO: Record<string, string[]> = { '/admin/calendar': ['/admin/week', '/admin/day', '/admin/month'], '/admin/week': ['/admin/day', '/admin/calendar', '/admin/month'], '/admin/tiers': ['/admin/ranking'] };
@@ -79,7 +79,7 @@ export function More() {
   const needsReply = useInboxCount();
   const items: [string, string, keyof typeof ICONS][] = [
     ['/admin/bookings', 'Bookings', 'book'], ['/admin/day', 'Day view', 'day'], ['/admin/hours', 'Hours & pay period', 'hours'], ['/admin/payroll', 'Payroll', 'hours'], ['/admin/reliability', 'Reliability', 'flag'], ['/admin/debriefs', 'Debriefs & ratings', 'msg'], ['/admin/rates', 'Pay rates', 'hours'], ['/admin/hiring', 'Hiring', 'staff'], ['/admin/incidents', 'Incidents', 'alert'], ['/admin/messages', 'Messages', 'msg'],
-    ['/admin/meetings', 'Meetings', 'meet'], ['/admin/tiers', 'Tiers', 'tiers'], ['/admin/ranking', 'Ranking · score', 'rank'], ['/admin/venues', 'Venues & clients', 'venue'], ['/admin/settings', 'Settings', 'gear'], ['/me', 'My shifts', 'today'],
+    ['/admin/meetings', 'Meetings', 'meet'], ['/admin/tiers', 'Tiers', 'tiers'], ['/admin/ranking', 'Ranking · score', 'rank'], ['/admin/venues', 'Venues & clients', 'venue'], ['/admin/bottles', 'Bar bottle list', 'venue'], ['/admin/settings', 'Settings', 'gear'], ['/me', 'My shifts', 'today'],
   ];
   return (
     <div className="stack-lg">
