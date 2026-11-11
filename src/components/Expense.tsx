@@ -69,7 +69,7 @@ export function ExpenseSheet({ me, fixedShift, always, fr = false, onClose, onSe
         <label className="exp-f"><span className="sm muted">{fr ? 'Montant' : 'Amount'}</span><input inputMode="decimal" placeholder="$0.00" value={amt} onChange={(e) => setAmt(e.target.value)} /></label>
         <input className="exp-note" placeholder={fr ? 'Note (optionnel)' : 'Note (optional)'} value={note} onChange={(e) => setNote(e.target.value)} />
         {err && <p className="error">{err}</p>}
-        <button className="btn primary" disabled={busy} onClick={send}>{busy ? '…' : fr ? 'Envoyer à Ronnie' : 'Send to Ronnie'}</button>
+        <button className="btn primary" disabled={busy} onClick={send}>{busy ? '…' : fr ? 'Envoyer' : 'Send'}</button>
       </div>
     </>);
 }
