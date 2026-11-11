@@ -65,7 +65,9 @@ export default async function handler(req, res) {
         out.push({ id: e.id, phase, date: e.event_date, start: e.start_time ? e.start_time.slice(0, 5) : null, title: e.title, venue: e.venues?.name ?? null, folder: e.drive_folder_url,
           started: started.has(e.id), beo_file: c.beo_file ?? null, beo_modified: c.beo_modified ?? null });
       }
-      return res.json({ events: out });
+      // the G&R bottle list, so the BEO bottles use the same names (no prices)
+      const catalog = out.length ? (await get('bar_catalog?archived_at=is.null&select=name,size,kind&order=kind,name')) : [];
+      return res.json({ events: out, catalog });
     }
 
     // push 80 · meeting notes Ronnie sent to an event ("Add to the event"): GET ?notes=1
