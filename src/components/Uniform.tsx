@@ -14,7 +14,7 @@ export function uniformFor(s: { uniform?: string | null; position_code: string |
   const bar = /^(BM|BT|BB)$/.test(s.position_code ?? '') || /^bar\b/i.test(s.position_detail ?? '');
   const w = s.me?.sex === 'f'; // women see the women's line; men and not-set see the men's line
   const ev = s.events;
-  return (s.uniform || (bar ? (w && ev.uniform_bar_w) || ev.uniform_bar : (w && ev.uniform_floor_w) || ev.uniform_floor) || (bar ? 'black_shirt' : 'white_shirt')) as UniformKind;
+  return (s.uniform || (bar ? (w && ev.uniform_bar_w) || ev.uniform_bar : (w && ev.uniform_floor_w) || ev.uniform_floor) || 'black_shirt') as UniformKind; // Nov 10 · no uniform saved = black (the usual)
 }
 /** Label for any uniform value, including "custom:<text>". */
 export const uniformLabel = (k: string) => (k.startsWith('custom:') ? k.slice(7) || 'See notes' : UNIFORM_LABEL[k as UniformKind] ?? k);

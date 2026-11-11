@@ -160,8 +160,8 @@ export function EventForm() {
   const [clientId, setClientId] = useState<string>(''); const [newClient, setNewClient] = useState<string | null>(null);
   const [address, setAddress] = useState(''); const [ends, setEnds] = useState('~ midnight');
   const [parts, setParts] = useState<AddressParts | null>(null);
-  const [uFloor, setUFloor] = useState('white_shirt'); const [uBar, setUBar] = useState('black_shirt');
-  const [uFloorW, setUFloorW] = useState('white_shirt'); const [uBarW, setUBarW] = useState('dress');
+  const [uFloor, setUFloor] = useState('black_shirt'); const [uBar, setUBar] = useState('black_shirt'); // Nov 10 · black is the usual
+  const [uFloorW, setUFloorW] = useState('black_shirt'); const [uBarW, setUBarW] = useState('dress');
   const [unit, setUnit] = useState(''); const [folder, setFolder] = useState(''); const [showFolder, setShowFolder] = useState(false);
   const [note, setNote] = useState(''); const [staffNote, setStaffNote] = useState(''); const [showStaffNote, setShowStaffNote] = useState(false);
   const [rateSet, setRateSet] = useState<string | null>(null);
@@ -250,8 +250,12 @@ export function EventForm() {
       setGuests(e.guests ? String(e.guests) : ''); setGuestsMax(e.guests_max ? String(e.guests_max) : ''); setGFinal(!!e.guests_final); setEventType(e.event_type ?? ''); setPayMethod(e.event_private?.pay_method ?? 'invoice');
       if (e.event_private?.qb_doc_type) setQbType(e.event_private.qb_doc_type); setQbNum(e.event_private?.qb_doc_number ?? ''); setDriveOn(e.drive_folder_url ? false : null);
       setEnds(e.ends_label ?? (ENDS.find(([, t]) => t && e.end_time?.startsWith(t))?.[0] ?? '~ midnight'));
-      setUFloor(e.uniform_floor ?? 'white_shirt'); setUBar(e.uniform_bar ?? 'black_shirt');
-      setUFloorW(e.uniform_floor_w ?? e.uniform_floor ?? 'white_shirt'); setUBarW(e.uniform_bar_w ?? 'dress');
+      { // Nov 10 · an event with no uniform saved uses its venue's uniform (never a hidden white default that gets saved)
+        const { data: vd } = e.venue_id ? await supabase.from('venues').select('uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w').eq('id', e.venue_id).maybeSingle() : { data: null };
+        const v = (vd ?? {}) as { uniform_floor?: string | null; uniform_bar?: string | null; uniform_floor_w?: string | null; uniform_bar_w?: string | null };
+        const fl = e.uniform_floor ?? v.uniform_floor ?? 'black_shirt';
+        setUFloor(fl); setUBar(e.uniform_bar ?? v.uniform_bar ?? 'black_shirt');
+        setUFloorW(e.uniform_floor_w ?? v.uniform_floor_w ?? fl); setUBarW(e.uniform_bar_w ?? v.uniform_bar_w ?? 'dress'); }
       setFolder(e.drive_folder_url ?? ''); setShowFolder(!!e.drive_folder_url); setItemsMap((e.uniform_items ?? {}) as UniItemsMap);
       setNote(e.description ?? ''); setStaffNote(e.notes ?? ''); setShowStaffNote(!!e.notes);
       const ordered = [...evs].sort((a) => (a.department === 'floor' ? -1 : 1));

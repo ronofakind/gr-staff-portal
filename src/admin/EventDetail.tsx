@@ -230,7 +230,7 @@ function uniformRows(evs: AEvent[], map: UniItemsMap | null) {
   const f = evs.find((v) => v.department === 'floor'); const b = evs.find((v) => v.department === 'bar');
   const rows: { key: UniLineKey; label: string; tiles: Tile[] }[] = [];
   const add = (key: UniLineKey, label: string, kind: string, bar: boolean, women: boolean) => rows.push({ key, label, tiles: tilesFor(kind, bar, women, map?.[key] ?? defaultItems(kind, bar)) });
-  if (f) { add('floor_m', 'FLOOR · MEN', f.uniform_floor ?? 'white_shirt', false, false); add('floor_w', 'FLOOR · WOMEN', f.uniform_floor_w ?? f.uniform_floor ?? 'white_shirt', false, true); }
+  if (f) { add('floor_m', 'FLOOR · MEN', f.uniform_floor ?? 'black_shirt', false, false); add('floor_w', 'FLOOR · WOMEN', f.uniform_floor_w ?? f.uniform_floor ?? 'black_shirt', false, true); }
   if (b) { add('bar_m', 'BAR · MEN', b.uniform_bar ?? 'black_shirt', true, false); add('bar_w', 'BAR · WOMEN', b.uniform_bar_w ?? 'dress', true, true); }
   return rows;
 }

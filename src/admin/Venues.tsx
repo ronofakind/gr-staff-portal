@@ -43,7 +43,7 @@ export function qbCheck(name: string, qb: string | null | undefined): { state: '
 /** "550 Avenue Richmond, Montréal, QC H3J 1V3" → "550 Av. Richmond" · keeps a suburb ("…, Mont-Royal"). */
 const shortAddr = (a: string | null | undefined) => { const p = (a ?? '').split(',').map((x) => x.trim()); return [p[0], p[1] && !/montr[ée]al|\bQC\b|\d/i.test(p[1]) ? p[1] : ''].filter(Boolean).join(', ').replace(/\bAvenue\b/, 'Av.'); };
 const lastLabel = (c?: Count) => !c?.n ? 'no events yet' : `${c.n} event${c.n === 1 ? '' : 's'}`;
-const UNI_DEF = { floor_m: 'white_shirt', floor_w: 'white_shirt', bar_m: 'black_shirt', bar_w: 'dress' };
+const UNI_DEF = { floor_m: 'black_shirt', floor_w: 'black_shirt', bar_m: 'black_shirt', bar_w: 'dress' };
 
 export function Venues() {
   useSettings();
