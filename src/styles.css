@@ -4283,3 +4283,8 @@ button.bc-beo.add { background: transparent; border-style: dashed; color: var(--
 .agenda-row .row-st { width: 72px; flex: 0 0 72px; display: flex; align-items: center; justify-content: center; }
 .agenda-row .row-st .tag-soon { white-space: normal; height: auto; padding: 4px 8px; text-align: center; line-height: 1.15; font-size: 10.5px; }
 .agenda-row .row-st .tag-ask { padding: 0 9px; }
+
+/* Nov 11 · admin Messages: the shift tag opens the event */
+a.ch-shift-link { text-decoration: none; color: inherit; cursor: pointer; display: inline-flex; width: fit-content; }
+a.ch-shift-link:hover { box-shadow: inset 0 0 0 1.5px currentColor; }
+a.ch-sub-link { display: block; text-decoration: none; } a.ch-sub-link:hover { text-decoration: underline; }

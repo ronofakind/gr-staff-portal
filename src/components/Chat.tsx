@@ -141,7 +141,9 @@ function MsgView({ m, mine, side, label, urls, seen, menu, onMenu, onEdit, onDel
   return (
     <div className={'ch-row' + (mine ? ' mine' : '')}>
       {label && <div className="ch-from">{label}</div>}
-      {m.meta?.shift && !m.deleted_at && <div className="ch-shift">🗓 {shiftLine(m.meta.shift)}</div>}
+      {m.meta?.shift && !m.deleted_at && (side === 'admin' && m.meta.shift.event_id
+        ? <Link className="ch-shift ch-shift-link" to={`/admin/event/${m.meta.shift.event_id}`} title="Open the event">🗓 {shiftLine(m.meta.shift)} ›</Link>
+        : <div className="ch-shift">🗓 {shiftLine(m.meta.shift)}</div>)}
       {m.meta?.re && !m.deleted_at && <div className="ch-re">Re: {m.meta.re}</div>}
       {m.deleted_at ? <div className="ch-del">Message deleted</div> : (
         <div className={'ch-b' + (mine ? ' mine' : '')} {...press}>

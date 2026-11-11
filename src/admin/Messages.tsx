@@ -183,7 +183,7 @@ function AdminConversation({ id, row, onBack, onUnread, onDone, toast }: { id: s
       <div className="ib-chead">
         <button className="sq" aria-label="Back" onClick={onBack}>‹</button>
         <Avatar name={name} url={who?.photo_url ?? row?.staff_photo} size={40} />
-        <div className="grow" style={{ minWidth: 0 }}><b>{name}{conv?.kind === 'manager' ? ` → ${first(mgrName)}` : ''}</b><small className="muted">{sub}</small></div>
+        <div className="grow" style={{ minWidth: 0 }}><b>{name}{conv?.kind === 'manager' ? ` → ${first(mgrName)}` : ''}</b>{lastShift?.event_id ? <Link className="muted sm ch-sub-link" to={`/admin/event/${lastShift.event_id}`}>{sub} ›</Link> : <small className="muted">{sub}</small>}</div>
         {/* Nov 6 · read it, nothing to answer → one visible click */}
         {conv && conv.status !== 'done' && <button className="abtn sm ok" onClick={() => { onDone({ id: conv.id }, true); setTick((t) => t + 1); }}>✓ No reply needed</button>}
         {tel && <a className="abtn sm" href={`tel:${tel}`}>Call</a>}
@@ -198,7 +198,9 @@ function AdminConversation({ id, row, onBack, onUnread, onDone, toast }: { id: s
         </div>
       </div>
       {rem !== null && conv && <RemindForm staffId={conv.staff_id} staffName={name} preset={rem} convId={conv.id} onClose={() => setRem(null)} />}
-      {lastShift && conv?.kind === 'ronnie' && <div className="ch-shift" style={{ alignSelf: 'flex-start' }}>🗓 {shortDate(lastShift.date).toUpperCase()} · {lastShift.title.toUpperCase()}</div>}
+      {lastShift && conv?.kind === 'ronnie' && (lastShift.event_id
+        ? <Link className="ch-shift ch-shift-link" style={{ alignSelf: 'flex-start' }} to={`/admin/event/${lastShift.event_id}`} title="Open the event">🗓 {shortDate(lastShift.date).toUpperCase()} · {lastShift.title.toUpperCase()} ›</Link>
+        : <div className="ch-shift" style={{ alignSelf: 'flex-start' }}>🗓 {shortDate(lastShift.date).toUpperCase()} · {lastShift.title.toUpperCase()}</div>)}
       <div className="adm-card ib-chat">
         {meId ? <Chat convId={id} meId={meId} side="admin" managerName={mgrName} onConv={setConv} reloadKey={tick} placeholder={`Reply to ${first(name)}…`} /> : <div className="loading" style={{ minHeight: 200 }} />}
       </div>
