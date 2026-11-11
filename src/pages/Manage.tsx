@@ -1,6 +1,5 @@
 import { isBarPos } from '../components/Uniform';
 import { QuarterTime } from '../components/QuarterTime';
-import { BarCountCard } from '../components/BarCountCard';
 import { WheelTime, roundQ } from '../components/WheelTime';
 import { useEffect, useRef, useState } from 'react';
 import { SwipeSheet } from '../components/SwipeSheet';
@@ -491,7 +490,6 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
         {/* push 36e · Messages: 📣 Message my team, what he sent (Seen n of N), replies (REPLY / ✓ DONE) */}
         <MgrMessagesEntry eventId={ev.id} />
         <MgrCars eventId={ev.id} />{/* push 68 · carpools: a late car = a late group */}
-        {ev.department === 'bar' && <BarCountCard eventId={ev.id} />}{/* push 69 */}
       </div>
 
       {banner.map((r) => { const n = lateOf(r)!; const tel = r.staff?.phone?.replace(/[^\d+]/g, ''); return (

@@ -1,11 +1,18 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { q } from '../lib/barCount';
+
+type Mine = { submitted_at: string | null; started: boolean; handed_to_me: boolean; out?: number };
+function useBarMine(eventId: string, off = false) {
+  const [m, setM] = useState<Mine | null>(null);
+  useEffect(() => { if (off) return; supabase.rpc('bar_count_mine', { p_event: eventId }).then(({ data, error }) => { if (!error) setM(data as Mine | null); }); }, [eventId, off]);
+  return m;
+}
 
 /** Push 69 · on the shift page of the bar manager / MD (or whoever it was handed to): open the bar count. */
 export function BarCountCard({ eventId, preview = false }: { eventId: string; preview?: boolean }) {
-  const [m, setM] = useState<{ submitted_at: string | null; started: boolean; handed_to_me: boolean } | null>(null);
-  useEffect(() => { if (preview) return; supabase.rpc('bar_count_mine', { p_event: eventId }).then(({ data, error }) => { if (!error) setM(data as typeof m); }); }, [eventId, preview]);
+  const m = useBarMine(eventId, preview);
   if (!m) return null;
   return (
     <Link to={`/bar/${eventId}`} className="bc-card">
@@ -14,4 +21,17 @@ export function BarCountCard({ eventId, preview = false }: { eventId: string; pr
       <span aria-hidden="true">›</span>
     </Link>
   );
+}
+
+/** Push 83 (board BarCountHomeV1) · Home next-shift card: 📁 Event folder + 🍸 Bar count side by side (bar events, from the morning of the event). */
+export function HomeFolderBar({ eventId, isBar, today, folder, preview = false }: { eventId: string; isBar: boolean; today: boolean; folder: string | null; preview?: boolean }) {
+  const m = useBarMine(eventId, preview || !isBar || !today);
+  const bar = isBar && today && m;
+  if (!folder && !bar) return null;
+  return (
+    <div className="home-fb">
+      {folder && <a className="home-folder" href={folder} target="_blank" rel="noreferrer">📁 Event folder</a>}
+      {bar && <Link className="home-folder" to={`/bar/${eventId}`}>{m.submitted_at ? <span className="ok">✓ Bar count sent</span>
+        : <>🍸 Bar count{m.started && m.out ? <span className="gold">· {q(m.out)} out</span> : null}</>}</Link>}
+    </div>);
 }

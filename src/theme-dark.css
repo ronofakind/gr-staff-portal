@@ -2044,6 +2044,8 @@ html[data-theme="dark"] { --teams: #8487CC; --teams-bg: #1F2137; --teams-ink: #8
 :where(html[data-theme="dark"]) .pf-refer-s { color: #A39B93; }
 :where(html[data-theme="dark"]) .pf-share { background: #C19E2F; color: #E1DEDB; }
 :where(html[data-theme="dark"]) .pf-copy { border: 1px solid #BDB7B2; color: #F5F2ED; }
+:where(html[data-theme="dark"]) .home-fb .gold { color: #DAC277; }
+:where(html[data-theme="dark"]) .home-fb .ok { color: #94CEB0; }
 html[data-theme="dark"] { color-scheme: dark; }
 html[data-theme="dark"] body { background: #121110; color: #F1ECE4; }
 html[data-theme="dark"] img[src$="logo-mark.png"]:not(.adm-side img):not(.side-logo), html[data-theme="dark"] img[src$="logo-full.png"] { filter: invert(1) hue-rotate(180deg); mix-blend-mode: normal !important; }

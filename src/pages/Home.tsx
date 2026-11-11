@@ -10,6 +10,7 @@ import { LineIcon } from '../components/LineIcon';
 import { time, longDate, dayBadge, minus, mapsUrl } from '../lib/format';
 import { ProfileButton } from '../components/ProfileMenu';
 import { TabBar } from '../components/TabBar';
+import { HomeFolderBar } from '../components/BarCountCard';
 import { useMyDates, toAnswer, latestKnows, dayLabel } from '../lib/myDates';
 import { KnowsSheet } from './MyDates';
 import { ConfirmThanks, CalIcon } from '../components/ConfirmThanks';
@@ -451,7 +452,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
                   : addr || next.events.venues?.pin_lat != null ? <a className="dir-btn" href={next.events.venues?.pin_lat != null && next.events.venues.pin_lng != null ? pinDirections({ lat: next.events.venues.pin_lat, lng: next.events.venues.pin_lng }) : mapsUrl(addr!)} target="_blank" rel="noreferrer">Directions</a>
                   : <span className="dir-btn" aria-disabled>Directions</span>}
               </div>
-              {isLead(next) && next.events.drive_folder_url && <a className="home-folder" href={next.events.drive_folder_url} target="_blank" rel="noreferrer">📁 Event Folder</a>}
+              <HomeFolderBar eventId={next.events.id} isBar={next.events.department === 'bar'} today={next.events.event_date === today} folder={isLead(next) ? next.events.drive_folder_url ?? null : null} preview={preview} />{/* push 83 */}
               <HomeLink s={next} />
               {needChange}
             </section>
@@ -516,7 +517,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
                 : addr || next.events.venues?.pin_lat != null ? <a className="dir-btn" href={next.events.venues?.pin_lat != null && next.events.venues.pin_lng != null ? pinDirections({ lat: next.events.venues.pin_lat, lng: next.events.venues.pin_lng }) : mapsUrl(addr!)} target="_blank" rel="noreferrer">Directions</a>
                 : <span className="dir-btn" aria-disabled>Directions</span>}
             </div>
-            {isLead(next) && next.events.drive_folder_url && <a className="home-folder" href={next.events.drive_folder_url} target="_blank" rel="noreferrer">📁 Event Folder</a>}
+            <HomeFolderBar eventId={next.events.id} isBar={next.events.department === 'bar'} today={next.events.event_date === today} folder={isLead(next) ? next.events.drive_folder_url ?? null : null} preview={preview} />{/* push 83 */}
               <HomeLink s={next} />
             {!started && !managesIt && !isLead(next) && next.events.event_date === today && !next.events.tentative && <FirstCut compact shiftId={next.id} at={next.cut_first_at} start={next.planned_start} mgr={mgrName} preview={preview} />}{/* push 64 */}
             {needChange}

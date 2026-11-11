@@ -4206,3 +4206,6 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; }
 .pf-refer-b { display: flex; gap: 8px; }
 .pf-share { flex: 1; height: 42px; border-radius: 12px; border: 0; background: #C9A227; color: #1A1714; font: 800 14px Inter, system-ui, sans-serif; cursor: pointer; }
 .pf-copy { height: 42px; padding: 0 16px; border-radius: 12px; border: 1px solid #4A433C; background: none; color: #F6F2EC; font: 700 14px Inter, system-ui, sans-serif; cursor: pointer; }
+/* push 83 · Home: Event folder + Bar count side by side (board BarCountHomeV1) */
+.home-fb { display: flex; gap: 8px; margin-top: 8px; } .home-fb .home-folder { flex: 1; margin-top: 0; gap: 5px; min-width: 0; white-space: nowrap; }
+.home-fb .gold { color: #C9A227; } .home-fb .ok { color: #8FD3B0; }
