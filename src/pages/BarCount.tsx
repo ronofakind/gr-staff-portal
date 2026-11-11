@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { TonightsBottles, BarSearchAdd, useCatalog, catMatch } from '../components/BarPick';
@@ -20,7 +20,7 @@ export function BarCount() {
   const [sup, setSup] = useState<BSupply[]>([]); const [busy, setBusy] = useState(false); const [msg, setMsg] = useState(''); const [err, setErr] = useState('');
   const [itemEd, setItemEd] = useState<{ id: string | null; kind: BKind; name: string; size: string; other?: boolean } | null>(null);
   const [ct, setCt] = useState(0); const cat = useCatalog(eventId!, ct); const [picking, setPicking] = useState(false); // push 85
-  const [sw, setSw] = useState<string | null>(null); const [x0, setX0] = useState<{ id: string; x: number; y: number } | null>(null); // push 88 · swipe to remove
+  const [sw, setSw] = useState<string | null>(null); const x0 = useRef<{ id: string; x: number; y: number } | null>(null); const [drag, setDrag] = useState<{ id: string; dx: number } | null>(null); // push 88 · swipe to remove
   const [hand, setHand] = useState(false); const [undo, setUndo] = useState<{ id: string; reason: string } | null>(null);
   const load = async (keepMode = false) => {
     const { data, error } = await supabase.rpc('bar_count_get', { p_event: eventId });
@@ -84,9 +84,14 @@ export function BarCount() {
           <section key={g.k} className="bc-group"><small className="gt-kick">{KIND_LABEL[g.k]?.toUpperCase()}</small>
             {g.ls.map((i) => { const t = tot[i.id]; const dv = draft[i.id] ?? 0; return (
               <div key={i.id} className={'bc-row bc-sw' + (sw === i.id ? ' open' : '')}
-                onTouchStart={(e) => setX0({ id: i.id, x: e.touches[0].clientX, y: e.touches[0].clientY })}
-                onTouchEnd={(e) => { if (!x0 || x0.id !== i.id) return; const dx = e.changedTouches[0].clientX - x0.x, dy = Math.abs(e.changedTouches[0].clientY - x0.y); setX0(null);
-                  if (dy < 30 && dx < -50) setSw(i.id); else if (dy < 30 && dx > 40 && sw === i.id) setSw(null); }}>
+                style={drag?.id === i.id ? { transform: `translateX(${drag.dx}px)` } : undefined}
+                onTouchStart={(e) => { x0.current = { id: i.id, x: e.touches[0].clientX, y: e.touches[0].clientY }; }}
+                onTouchMove={(e) => { const o = x0.current; if (!o || o.id !== i.id) return; const dx = e.touches[0].clientX - o.x, dy = Math.abs(e.touches[0].clientY - o.y);
+                  if (dy > 24 && Math.abs(dx) < dy) { x0.current = null; setDrag(null); return; }
+                  if (dx < -8) setDrag({ id: i.id, dx: Math.max(dx, -90) });
+                  if (dx < -60) { x0.current = null; setDrag(null); setSw(i.id); }
+                  else if (dx > 40 && sw === i.id) { x0.current = null; setSw(null); } }}
+                onTouchEnd={() => { x0.current = null; setDrag(null); }} onTouchCancel={() => { x0.current = null; setDrag(null); }}>
                 {sw === i.id && <span className="bc-del"><button className="lnk" onClick={() => setSw(null)}>Keep</button><button className="bc-rm" disabled={busy} onClick={() => unpick(i.id)}>Remove</button></span>}
                 <span className="grow"><b>{i.name}</b><small>{[i.size, t ? `out ${q(t.out)}` : null, t?.back ? `back ${q(t.back)}` : null, t ? `used ${q(usedOf(t))}` : null].filter(Boolean).join(' · ')} · <button className="lnk" onClick={() => setItemEd({ id: i.id, kind: i.kind, name: i.name, size: i.size ?? '' })}>✎</button></small></span>
                 <button className="bc-st" aria-label="less" onClick={() => bump(i, -1)}>−</button><b className={'bc-v' + (dv ? ' hl' : '')}>{dv ? (mode === 'more' ? '+' : '') + q(dv) : '0'}</b><button className="bc-st dark" aria-label="more" disabled={mode === 'back' && room(i.id) <= dv} onClick={() => bump(i, 1)}>+</button>

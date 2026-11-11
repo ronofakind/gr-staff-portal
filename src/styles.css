@@ -4236,3 +4236,4 @@ input[type="date"]::-webkit-date-and-time-value { text-align: left; }
 .bc-sw { position: relative; transition: transform .15s; } .bc-sw.open > :not(.bc-del) { opacity: .35; }
 .bc-del { position: absolute; right: 0; top: 50%; transform: translateY(-50%); display: flex; gap: 10px; align-items: center; z-index: 2; background: #fff; padding-left: 10px; }
 .bc-rm { height: 38px; padding: 0 16px; border: 0; border-radius: 10px; background: #B0452E; color: #fff; font: 700 13.5px Inter, system-ui, sans-serif; }
+.bc-sw { touch-action: pan-y; } /* push 88b · horizontal swipe stays with the row */
