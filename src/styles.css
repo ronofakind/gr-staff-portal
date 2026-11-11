@@ -4315,17 +4315,30 @@ a.ch-name-link { display: block; text-decoration: none; color: inherit; } a.ch-n
 .dp-p { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); font-size: 13px; }
 .dp-go { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
 .dp-open { color: var(--accent); font-weight: 700; font-size: 12.5px; padding-top: 4px; }
-/* Nov 11 · Coming up v2: the event name gets its own full line (wraps, no "…"); role · shirt · time underneath; status is a dot */
-.agenda-row.cu2 { align-items: center; gap: 14px; padding: 0 16px; min-height: 0; }
-.agenda-row.cu2 .d b { font-size: 24px; }
-.agenda-row.cu2 .what { gap: 7px; padding: 17px 0; }
-.agenda-row.cu2 .what b.cu-title { font-size: 17px; font-weight: 650; line-height: 1.25; white-space: normal; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; text-overflow: clip; }
-.agenda-row.cu2 .cu-meta { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; min-width: 0; }
-.agenda-row.cu2 .cu-meta .pos-pill { height: 22px; line-height: 22px; font-size: 11.5px; white-space: nowrap; flex: 0 0 auto; }
-.agenda-row.cu2 .cu-wear { display: inline-flex; width: 26px; height: 26px; border-radius: 8px; background: #F6F2EC; align-items: center; justify-content: center; flex: 0 0 auto; }
-.agenda-row.cu2 .cu-wear img { width: 20px; height: 20px; }
-.agenda-row.cu2 .what .cu-time { font-size: 14px; font-weight: 700; color: var(--ink); white-space: nowrap; }
-.agenda-row.cu2 .what .cu-time.tbc { color: #9A7413; }
-.agenda-row.cu2 .cu-soon { font-size: 11.5px; color: var(--muted); font-weight: 600; }
-.agenda-row.cu2 .cu-st { flex: 0 0 auto; min-width: 12px; display: flex; align-items: center; justify-content: flex-end; }
-.agenda-row.cu2 .cu-ok { width: 30px; height: 30px; border-radius: 15px; background: #E2F0E8; color: var(--ok); display: inline-flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 800; }
+/* Nov 11 · Coming up v6 (board ComingUpV6): 3 big tiles + Show more. Date centered on the left; name + address + status;
+   strip STARTS · ROLE · UNIFORM, each centered. */
+.cmg-list { display: flex; flex-direction: column; gap: 12px; }
+.cmg-tile { display: flex; align-items: center; gap: 14px; padding: 16px; background: #fff; border: 1px solid var(--line); border-radius: 20px; color: inherit; text-decoration: none; }
+.cmg-tile.ask { border: 1.5px solid #E7B9B9; }
+.cmg-tile.tbc-row { border: 1.5px solid #C9A227; }
+.cmg-tile .d { width: 40px; flex: 0 0 40px; display: flex; flex-direction: column; align-items: center; }
+.cmg-tile .d small { font-size: 10px; letter-spacing: .12em; font-weight: 700; color: var(--soft); }
+.cmg-tile .d b { font-family: Fraunces, Georgia, serif; font-weight: 500; font-size: 24px; line-height: 1.1; }
+.cmg-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.cmg-head { display: flex; gap: 10px; align-items: flex-start; }
+.cmg-name { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.cmg-name > b { font-size: 18px; font-weight: 650; line-height: 1.25; }
+.cmg-addr { font-size: 12.5px; color: var(--muted); line-height: 1.3; }
+.cmg-st { flex: 0 0 auto; }
+.cmg-ok { height: 30px; padding: 0 12px; border-radius: 15px; background: #E2F0E8; color: var(--ok); display: inline-flex; align-items: center; font-size: 12.5px; font-weight: 800; white-space: nowrap; }
+.cmg-ask { height: 30px; padding: 0 14px; border-radius: 15px; background: #9B2226; color: #fff; display: inline-flex; align-items: center; font-size: 12.5px; font-weight: 700; }
+.cmg-soon { display: inline-flex; padding: 5px 10px; border-radius: 12px; background: #F3EEE7; color: var(--muted); font-size: 11.5px; font-weight: 700; white-space: nowrap; }
+.cmg-strip { display: flex; gap: 8px; background: #F8F5F0; border-radius: 14px; padding: 10px 8px; }
+.cmg-strip > div { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px; }
+.cmg-strip small { font-size: 10px; letter-spacing: .12em; font-weight: 800; color: var(--soft); text-transform: uppercase; }
+.cmg-strip b { font-size: 14px; font-weight: 700; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.cmg-strip b.tbc { color: #9A7413; }
+.cmg-wear { display: flex; justify-content: center; }
+.cmg-mtg { padding: 14px 16px; box-shadow: inset 4px 0 0 #6B64D8; }
+.cmg-mline { font-size: 13px; color: var(--muted); } .cmg-mline b { color: var(--ink); } .cmg-mline span { color: #6B64D8; font-weight: 700; }
+.cmg-more { height: 46px; border-radius: 23px; border: 1.5px solid #D9CFC3; background: transparent; font: inherit; font-size: 14px; font-weight: 700; color: var(--ink); cursor: pointer; }

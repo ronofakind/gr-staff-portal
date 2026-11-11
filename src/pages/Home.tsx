@@ -63,6 +63,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
   const lang = useLang(); const nav = useNavigate(); useSettings();
   const [shifts, setShifts] = useState<ShiftRow[] | null>(null);
   const [teams, setTeams] = useState<Record<string, Mate[]>>({});
+  const [moreOpen, setMoreOpen] = useState(false); // Nov 11 · Coming up: 3 tiles, the rest behind Show more
   const [gNotes, setGNotes] = useState<Record<string, ShiftNote>>({}); // Nov 6 · note from G&R on a shift (068)
   const [qs, setQs] = useState<Record<string, Q['status']>>({});
   const [askQ, setAskQ] = useState<ShiftRow | null>(null);
@@ -535,39 +536,42 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
           {(list.length > 0 || mtgComing.length > 0) && (
             <>
               <div className="sec-head"><span className="serif">Coming up</span><Link to={myDatesTo('booked')}>All my dates ›</Link></div>
-              <section className="agenda">
+              <section className="cmg-list">
                 {/* Nov 5 · shifts and meetings in date order (max 5 shifts; meetings up to the last shift shown) */}
                 {(() => {
                   const rs = (s: ShiftRow) => {
                   const b = dayBadge(s.events.event_date, lang);
                   const pend = !!s.events.details_pending;
+                  const waiting = soon(s) || (s.status !== 'confirmed' && notFinal(s)); const needs = !waiting && s.status !== 'confirmed';
+                  const addr = (s.events.venues?.address || s.events.address || '').split(',').slice(0, 2).join(',').trim();
                   return (
-                    <Link key={s.id} to={`${base}/shift/${s.id}`} className={'agenda-row cu2' + (s.events.tentative ? ' tbc-row' : '')}>
-                      <div className="d" style={{ width: 40, alignItems: 'center' }}><small>{b.dow}</small><b>{b.day}</b></div>
-                      <div className="what">
-                        <b className={'cu-title' + (pend ? ' muted' : '')}>{pend ? 'Venue TBC' : s.events.title}{gNotes[s.id] && !gNotes[s.id].seen_at ? ' 📌' : ''}</b>
-                        {s.events.tentative && <small className="tbc-tag">⏳ TO BE CONFIRMED</small>}
-                        <span className="cu-meta"><span className={'pos-pill' + (isLead(s) ? ' lead' : '')}>{pos(s)}</span>
-                          <span className="cu-wear" title={uniformLabel(uniformFor(s))}><UniformIcon kind={uniformFor(s)} size={20} /></span>
-                          {pend || s.time_tbc ? <span className="cu-time tbc">Time TBC</span> : <span className="cu-time">{time(s.planned_start, lang)}</span>}</span>
-                        {(soon(s) || (s.status !== 'confirmed' && notFinal(s))) && <small className="cu-soon">Details coming</small>}
+                    <Link key={s.id} to={`${base}/shift/${s.id}`} className={'cmg-tile' + (needs ? ' ask' : '') + (s.events.tentative ? ' tbc-row' : '')}>
+                      <div className="d"><small>{b.dow}</small><b>{b.day}</b></div>
+                      <div className="cmg-body">
+                        <div className="cmg-head"><div className="cmg-name"><b className={pend ? 'muted' : ''}>{pend ? 'Venue TBC' : s.events.title}{gNotes[s.id] && !gNotes[s.id].seen_at ? ' 📌' : ''}</b>
+                          {s.events.tentative && <small className="tbc-tag">⏳ TO BE CONFIRMED</small>}
+                          {!pend && addr && <span className="cmg-addr">{addr}</span>}</div>
+                          <span className="cmg-st">{waiting ? <span className="cmg-soon">Details coming</span> : s.status === 'confirmed' ? <span className="cmg-ok">✓ Confirmed</span> : <span className="cmg-ask">Confirm</span>}</span></div>
+                        <div className="cmg-strip">
+                          <div><small>Starts</small>{pend || s.time_tbc ? <b className="tbc">Time TBC</b> : <b>{time(s.planned_start, lang)}</b>}</div>
+                          <div><small>Role</small><b className={isLead(s) ? 'lead' : ''}>{pos(s)}</b></div>
+                          <div title={uniformLabel(uniformFor(s))}><small>Uniform</small><span className="cmg-wear"><UniformIcon kind={uniformFor(s)} size={26} /></span></div>
+                        </div>
                       </div>
-                      <span className="cu-st">{soon(s) || (s.status !== 'confirmed' && notFinal(s)) ? null : s.status === 'confirmed' ? <span className="cu-ok" aria-label="Confirmed">✓</span> : <span className="tag-ask" style={{ height: 26, fontSize: 11, padding: '0 9px' }}>Confirm</span>}</span>
                     </Link>
                   ); };
                   const rm = (m: (typeof mtgComing)[number]) => { const d = dayOfMtl(m.starts_at); const b = dayBadge(d, lang); const tm = time(m.starts_at, lang); return (
-                  <Link key={'m' + m.id} to={mtgTo(m.id)} className="agenda-row cu2 mtg-row">
-                    <div className="d" style={{ width: 40, alignItems: 'center' }}><small>{b.dow}</small><b>{b.day}</b></div>
-                    <div className="what"><b className="cu-title">{m.title}</b>
-                      <span className="cu-meta"><span className="pos-pill mtg">Meeting</span><span className="cu-time">{tm}</span></span></div>
-                    <span className="cu-st" aria-hidden="true" />
+                  <Link key={'m' + m.id} to={mtgTo(m.id)} className="cmg-tile cmg-mtg">
+                    <div className="d"><small>{b.dow}</small><b>{b.day}</b></div>
+                    <div className="cmg-body"><div className="cmg-name"><b>{m.title}</b><span className="cmg-mline"><b>{tm}</b> · <span>Meeting</span></span></div></div>
                   </Link>); };
-                  const sh = list.slice(0, 5); const cut = list.length > 5 ? sh[sh.length - 1].planned_start : null;
+                  const N = moreOpen ? list.length : 3; const sh = list.slice(0, N); const cut = list.length > N ? sh[sh.length - 1].planned_start : null;
                   const items: { at: string; el: JSX.Element }[] = [
                     ...sh.map((s) => ({ at: s.planned_start, el: rs(s) })),
                     ...mtgComing.filter((m) => !cut || m.starts_at <= cut).map((m) => ({ at: m.starts_at, el: rm(m) })),
                   ];
-                  return items.sort((x, y) => x.at.localeCompare(y.at)).map((x) => x.el);
+                  return <>{items.sort((x, y) => x.at.localeCompare(y.at)).map((x) => x.el)}
+                    {list.length > 3 && <button type="button" className="cmg-more" onClick={() => setMoreOpen((o) => !o)}>{moreOpen ? 'Show less ⌃' : `Show ${list.length - 3} more date${list.length - 3 > 1 ? 's' : ''} ⌄`}</button>}</>;
                 })()}
               </section>
             </>
