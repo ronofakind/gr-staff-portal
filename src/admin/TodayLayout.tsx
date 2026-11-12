@@ -5,7 +5,8 @@ import { supabase } from '../lib/supabase';
  *  so desktop and phone match. Before 080 (or offline) it falls back to this browser only. */
 export type SecKey = 'needs' | 'messages' | 'ai' | 'tonight' | 'debriefs' | 'ratings' | 'late' | 'month' | 'meetings' | 'sheet' | 'pay' | 'hiring';
 export type Mode = 'open' | 'folded' | 'hidden';
-export type Layout = { order: SecKey[]; pinned: SecKey[]; mode: Partial<Record<SecKey, Mode>> };
+export type Col = 'L' | 'R';
+export type Layout = { order: SecKey[]; pinned: SecKey[]; mode: Partial<Record<SecKey, Mode>>; col?: Partial<Record<SecKey, Col>> };
 export const SEC_LABEL: Record<SecKey, string> = {
   needs: 'Needs you', messages: 'Messages', ai: 'AI · to review', tonight: 'Tonight', debriefs: 'Last night · debriefs', ratings: 'New staff ratings',
   late: 'Late 30 min +', month: 'This month', meetings: 'Meetings', sheet: 'Sheet changes', pay: 'Pay period', hiring: 'Hiring',
@@ -29,7 +30,11 @@ function clean(v: unknown): Layout {
   // Nov 11 · Messages is new: pinned right under Needs you the first time (Ronnie can move it after)
   if (Array.isArray(x.pinned) && !hadMsgs && !pinned.includes('messages')) pinned.splice(pinned.includes('needs') ? pinned.indexOf('needs') + 1 : 0, 0, 'messages');
   const mode = { ...DEFAULT_LAYOUT.mode, ...(x.mode && typeof x.mode === 'object' ? x.mode : {}) };
-  return { order, pinned, mode };
+  // Nov 11 · desktop: two free columns. A section without a column gets the side it had in the old 2-across grid.
+  const shown = [...pinned, ...order.filter((k) => !pinned.includes(k))];
+  const col: Partial<Record<SecKey, Col>> = {};
+  shown.forEach((k, i) => { const c = (x.col as Record<string, unknown> | undefined)?.[k]; col[k] = c === 'L' || c === 'R' ? c : i % 2 === 0 ? 'L' : 'R'; });
+  return { order, pinned, mode, col };
 }
 export function useTodayLayout() {
   const [lay, setLay] = useState<Layout>(() => { try { const r = localStorage.getItem(LS); return r ? clean(JSON.parse(r)) : DEFAULT_LAYOUT; } catch { return DEFAULT_LAYOUT; } });
@@ -49,9 +54,16 @@ export function useTodayLayout() {
 }
 
 /** One Today section: title row (caret folds it) + body. Folded = closed until clicked (not saved). */
-export function Section({ k, mode, title, right, children, cls = '' }: { k: SecKey; mode?: Mode; title: ReactNode; right?: ReactNode; children: ReactNode; cls?: string }) {
+export function Section({ k, mode, title, right, children, cls = '', empty }: { k: SecKey; mode?: Mode; title: ReactNode; right?: ReactNode; children: ReactNode; cls?: string; empty?: string | null }) {
   const [open, setOpen] = useState(mode !== 'folded');
   useEffect(() => setOpen(mode !== 'folded'), [mode]);
+  const [peek, setPeek] = useState(false);
+  // Nov 11 · nothing in it (or folded) → one thin line in place; opens back by itself when something comes in
+  if ((empty && !peek) || !open) return (
+    <section className={'t4-sec t4-thin t4-' + k + ' ' + cls}>
+      <button type="button" className="t4-thinb" onClick={() => (empty ? setPeek(true) : setOpen(true))} aria-expanded={false}>
+        <span className="t4-caret" aria-hidden="true">▸</span><span className="serif">{title}</span>{empty && <span className="muted"> · {empty}</span>}<span className="grow" /><span className="muted">›</span></button>
+    </section>);
   return (
     <section className={'t4-sec t4-' + k + ' ' + cls}>
       <div className="sec t4-h">
@@ -82,7 +94,7 @@ export function EditLayout({ lay, onSave, onClose }: { lay: Layout; onSave: (l: 
         <div className="row" style={{ gap: 8, alignItems: 'center' }}><span className="serif" style={{ fontSize: 22 }}>Edit layout</span><span className="grow" />
           <button className="lnk muted" onClick={() => setL(DEFAULT_LAYOUT)}>Reset</button>
           <button className="abtn sm dark" onClick={() => { onSave(l); onClose(); }}>Done</button></div>
-        <div className="muted sm">Drag ⋮⋮ or tap ▲ ▼ to move · 📌 pinned stay on top · same on desktop and phone</div>
+        <div className="muted sm">Drag ⋮⋮ or tap ▲ ▼ to move · 📌 pinned stay on top · L / R = left or right column on the computer (phone: one list, this order)</div>
         {list.map((k) => {
           const m = l.mode[k] ?? 'open'; const pinned = l.pinned.includes(k);
           return (
@@ -91,6 +103,7 @@ export function EditLayout({ lay, onSave, onClose }: { lay: Layout; onSave: (l: 
               <span className="t4-grip" aria-hidden="true">⋮⋮</span>
               <span className="t4-arrows"><button aria-label={'Move ' + SEC_LABEL[k] + ' up'} onClick={() => move(k, -1)}>▲</button><button aria-label={'Move ' + SEC_LABEL[k] + ' down'} onClick={() => move(k, 1)}>▼</button></span>
               <b className="grow">{SEC_LABEL[k]}</b>
+              <span className="t4-seg t4-colseg">{(['L', 'R'] as Col[]).map((c) => <button key={c} className={(l.col?.[k] ?? 'L') === c ? 'on' : ''} onClick={() => setL((x) => ({ ...x, col: { ...x.col, [k]: c } }))} title={c === 'L' ? 'Left column' : 'Right column'}>{c}</button>)}</span>
               <button className={'t4-pin' + (pinned ? ' on' : '')} aria-pressed={pinned} aria-label={'Pin ' + SEC_LABEL[k]} onClick={() => pin(k)}>📌</button>
               <span className="t4-seg">{(['open', 'folded', 'hidden'] as Mode[]).map((x) => <button key={x} className={m === x ? 'on' : ''} onClick={() => setMode(k, x)}>{x === 'open' ? 'Open' : x === 'folded' ? 'Folded' : 'Hidden'}</button>)}</span>
             </div>

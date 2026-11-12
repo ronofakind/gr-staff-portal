@@ -354,6 +354,8 @@ export function Today() {
   const md = (k: SecKey) => lay.mode[k];
 
   const msgN = useInboxToday(tick).open.length;
+  const [wideScreen, setWide] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 1000px)').matches);
+  useEffect(() => { const q = window.matchMedia('(min-width: 1000px)'); const f = () => setWide(q.matches); q.addEventListener('change', f); return () => q.removeEventListener('change', f); }, []);
   const SECS: Record<SecKey, () => JSX.Element> = {
     needs: () => (
       <Section k="needs" mode={md('needs')} title={<>Needs you {needsN > 0 && <b className="accent sm">{needsN}</b>}</>}
@@ -380,21 +382,21 @@ export function Today() {
       </Section>),
     ai: () => <AiPanel bare />,
     tonight: () => (
-      <Section k="tonight" mode={md('tonight')} title="Tonight" right={<Link to={`/admin/day?d=${today}`}>Day view ›</Link>}>
+      <Section k="tonight" mode={md('tonight')} title="Tonight" empty={week && !tonight.length ? 'no events today' : null} right={<Link to={`/admin/day?d=${today}`}>Day view ›</Link>}>
         {week === null && <div className="muted">Loading…</div>}
         {week && !tonight.length && <div className="adm-card muted">No events today.</div>}
         {tonight.length > 0 && <div className="adm-card t4-list">{tonightSorted.map((e) => <Live key={e.id} e={e} q={qBy[e.id] ?? 0} lateBy={lateBy} cutBy={cutBy} compact onDeleted={gone} />)}</div>}
       </Section>),
     debriefs: () => (
-      <Section k="debriefs" mode={md('debriefs')} title={<>Last night · debriefs {deb.rows.length + deb.miss.length > 0 && <b className="accent sm">{deb.rows.length} of {deb.rows.length + deb.miss.length}</b>}</>} right={<Link to="/admin/debriefs">Past debriefs ›</Link>}>
+      <Section k="debriefs" mode={md('debriefs')} empty={deb.rows.length + deb.miss.length === 0 ? 'none from last night' : null} title={<>Last night · debriefs {deb.rows.length + deb.miss.length > 0 && <b className="accent sm">{deb.rows.length} of {deb.rows.length + deb.miss.length}</b>}</>} right={<Link to="/admin/debriefs">Past debriefs ›</Link>}>
         <div className="adm-card t4-card"><RecentDebriefs {...deb} /></div>
       </Section>),
     ratings: () => (
-      <Section k="ratings" mode={md('ratings')} title={<>New staff ratings {nsr.todayRows.length > 0 && <b className="accent sm">{nsr.todayRows.length}</b>}</>} right={<Link to="/admin/debriefs?tab=ratings">Past ratings ›</Link>}>
+      <Section k="ratings" mode={md('ratings')} empty={nsr.todayRows.length === 0 ? 'none today' : null} title={<>New staff ratings {nsr.todayRows.length > 0 && <b className="accent sm">{nsr.todayRows.length}</b>}</>} right={<Link to="/admin/debriefs?tab=ratings">Past ratings ›</Link>}>
         <div className="adm-card t4-card"><RatingsToday {...nsr} /></div>
       </Section>),
     late: () => (
-      <Section k="late" mode={md('late')} title={<>Late 30 min + {late30.length > 0 && <b className="accent sm">{late30.length}</b>}</>} right={<Link to="/admin/reliability">Reliability ›</Link>}>
+      <Section k="late" mode={md('late')} empty={!late30.length ? 'nothing to decide' : null} title={<>Late 30 min + {late30.length > 0 && <b className="accent sm">{late30.length}</b>}</>} right={<Link to="/admin/reliability">Reliability ›</Link>}>
         <div className="adm-card t4-card">
           <div className="muted sm">Last 7 days · more than 30 min · answer each one, it goes away (all of them stay on Reliability)</div>
           {!late30.length && <div className="muted sm" style={{ padding: '8px 0' }}>Nothing to decide.</div>}
@@ -407,7 +409,7 @@ export function Today() {
         <MiniMonth />
       </Section>),
     messages: () => (
-      <Section k="messages" mode={md('messages')} title={<>Messages {msgN > 0 && <b className="accent sm">{msgN}</b>}</>} right={<Link to="/admin/messages">All messages ›</Link>}>
+      <Section k="messages" mode={md('messages')} empty={msgN === 0 ? 'nothing waiting' : null} title={<>Messages {msgN > 0 && <b className="accent sm">{msgN}</b>}</>} right={<Link to="/admin/messages">All messages ›</Link>}>
         <MessagesToday tick={tick} />
       </Section>),
     hiring: () => (
@@ -438,6 +440,12 @@ export function Today() {
       </div>
       {(() => {
         // Nov 8 · Ronnie: Tonight beside Next 7 days. An empty half next to the last pinned tile is filled by the next (half-width) section.
+        // Nov 11 · desktop: two stacks (board TodayColumnsV1). Each column = its sections in order, pinned first; wide ones underneath.
+        if (wideScreen) { const colOf = (k: SecKey) => lay.col?.[k] ?? 'L'; const narrow = sorted.filter((k) => !WIDE.includes(k));
+          return <>
+            <div className="t4-cols">{(['L', 'R'] as const).map((c) => <div key={c} className="t4-col">{narrow.filter((k) => colOf(k) === c).map((k) => <div key={k} className="t4-cell">{SECS[k]()}</div>)}</div>)}</div>
+            {sorted.filter((k) => WIDE.includes(k)).map((k) => <div key={k} className="t4-wide">{SECS[k]()}</div>)}
+          </>; }
         const half = (ks: SecKey[]) => ks.filter((k) => !WIDE.includes(k)).length % 2 === 1 && !WIDE.includes(ks[ks.length - 1]);
         const pull = pinnedShown.length > 0 && half(pinnedShown) && restShown.length > 0 && !WIDE.includes(restShown[0]);
         const top = pull ? [...pinnedShown, restShown[0]] : pinnedShown; const rest = pull ? restShown.slice(1) : restShown;

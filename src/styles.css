@@ -4415,3 +4415,10 @@ a.ch-name-link { display: block; text-decoration: none; color: inherit; } a.ch-n
 .ef-guests { display: flex; gap: 6px; align-items: center; min-width: 0; }
 .ef-guests input { flex: 1 1 0; min-width: 0; width: auto !important; }
 .ef-guests .ef-final { flex: 0 0 auto; white-space: nowrap; height: 40px; padding: 0 14px; }
+/* Nov 11 · Today (desktop): two free stacks + empty sections as one thin line (board TodayColumnsV1) */
+.adm .t4-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 22px; align-items: start; }
+.adm .t4-col { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.adm .t4-col > .t4-cell:has(.t4-thin) + .t4-cell:has(.t4-thin) { margin-top: -8px; }
+.t4-thin .t4-thinb { width: 100%; display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; font: inherit; font-size: 13px; cursor: pointer; text-align: left; }
+.t4-thin .t4-thinb .serif { font-size: 17px; } .t4-thin .t4-thinb:hover { border-color: #CFC4B6; }
+.t4-colseg button { min-width: 28px; }
