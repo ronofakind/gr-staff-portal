@@ -94,31 +94,42 @@ export function DaySheet() {
   // push 114 · anyone can be dragged / removed. Placed (not sent) = silent; already sent = asked first, then the notice waits in About to send.
   const nm0 = (s: Sh) => byId[s.staff_id]?.full_name ?? '…';
   const sentTxt = (s: Sh) => s.status === 'confirmed' ? 'confirmed' : s.notified_at ? 'sent (not confirmed yet)' : 'booked';
-  const okSent = (s: Sh, what: string, notice: string) => s.pool_hold || confirm(`${nm0(s)} is already ${sentTxt(s)}.\n\n${what}\n→ They get "${notice}". It waits in "About to send" until you press Send.\n\nGo ahead?`);
+  // push 115 · how to tell them (Ronnie, Nov 12): 1 send now + alert · 2 send now, no alert · 3 About to send (default) · 4 don't tell them
+  type Tell = 'buzz' | 'soft' | 'later' | 'skip';
+  const [tellQ, setTellQ] = useState<{ who: Sh[]; what: string; notice: string; res: (t: Tell | null) => void } | null>(null);
+  const askTell = (who: Sh[], what: string, notice: string): Promise<Tell | null> => { const sent = who.filter((x) => !x.pool_hold); if (!sent.length) return Promise.resolve('later');
+    return new Promise((res) => setTellQ({ who: sent, what, notice, res: (t) => { setTellQ(null); res(t); } })); };
+  const tell = async (who: Sh[], t: Tell | null) => {
+    const sent = [...new Set(who.filter((x) => !x.pool_hold).map((x) => x.staff_id))]; if (!sent.length || !t || t === 'later') return sent.length ? ' · waiting in About to send' : ' · no notification (not sent yet)';
+    for (const id of sent) { const { error } = await supabase.rpc('admin_send_staff_changes', { p_staff: id, p_events: evs.map((e) => e.id), p_mode: t }); if (error) throw error; }
+    return t === 'skip' ? ' · nobody told (you told them yourself)' : t === 'buzz' ? ' · sent now with a phone alert' : ' · sent now, no alert';
+  };
   const remove = (s: Sh) => run(async () => {
     const ev = evs.find((x) => x.id === s.event_id);
-    if (!okSent(s, `Back to Free = off ${ev?.venues?.name ?? ev?.title ?? 'this event'}.`, 'Shift removed')) return;
+    const how = await askTell([s], `Back to Free = off ${ev?.venues?.name ?? ev?.title ?? 'this event'}.`, 'Shift removed'); if (!how) return;
     if (s.pool_hold && s.locked && !confirm(`${nm0(s)} is locked 🔒. Back to Free anyway?`)) return;
     const { data: row } = await supabase.from('shifts').select('*').eq('id', s.id).single();
     const { error } = await supabase.from('shifts').delete().eq('id', s.id); if (error) throw error;
     if (!s.pool_hold) await supabase.rpc('admin_shift_note', { p_staff: s.staff_id, p_kind: 'removed', p_shift: null, p_alert: null, p_meta: { date, venue: ev?.venues?.name ?? ev?.title, event_id: s.event_id } });
-    setMsg(s.pool_hold ? `${short(nm0(s))} back to Free · no notification (not sent yet).` : `${short(nm0(s))} back to Free · "Shift removed" waiting in About to send.`);
+    setMsg(`${short(nm0(s))} back to Free${await tell([s], how)}.`);
     return { label: `removed ${nm0(s)}`, undo: () => supabase.from('shifts').insert(row as Record<string, unknown>).then() };
   });
   const move = (s: Sh, e: Ev, code: string, start: string | null) => run(async () => {
     const t = start ?? e.start_time?.slice(0, 5) ?? '17:00';
     if (s.event_id === e.id && hm(s.planned_start) === t && (s.position_code ?? '') === code) return;
-    if (!okSent(s, `Move to ${e.venues?.name ?? e.title} · ${roleName(code)} ${ap(t)}.`, 'Your shift changed')) return;
+    const how = await askTell([s], `Move to ${e.venues?.name ?? e.title} · ${roleName(code)} ${ap(t)}.`, 'Your shift changed'); if (!how) return;
     const before = { event_id: s.event_id, position_code: s.position_code, position_detail: s.position_detail ?? null, planned_start: s.planned_start };
     const { error } = await supabase.from('shifts').update({ event_id: e.id, position_code: code, position_detail: roleName(code), planned_start: startIso(date, t) }).eq('id', s.id); if (error) throw error;
-    setMsg(s.pool_hold ? `Moved ${short(nm0(s))} · no notification (not sent yet).` : `Moved ${short(nm0(s))} · "Your shift changed" waiting in About to send.`);
+    setMsg(`Moved ${short(nm0(s))}${await tell([s], how)}.`);
     return { label: `moved ${nm0(s)}`, undo: () => supabase.from('shifts').update(before).eq('id', s.id).then() };
   });
   /** push 110 · person card: one change = one undo step. */
   const patch = (s0: Sh, row: Record<string, unknown>, label: string) => run(async () => {
-    if (['planned_start', 'position_code', 'staff_id', 'event_id'].some((k) => k in row) && !okSent(s0, `Change: ${label}.`, row.staff_id ? 'Shift removed' : 'Your shift changed')) return;
+    const big = ['planned_start', 'position_code', 'staff_id', 'event_id'].some((k) => k in row);
+    const how = big ? await askTell([s0], `Change: ${label}.`, row.staff_id ? 'Shift removed' : 'Your shift changed') : 'later'; if (!how) return;
     const keys = Object.keys(row); const { data: b, error: e0 } = await supabase.from('shifts').select(keys.join(',')).eq('id', s0.id).single(); if (e0) throw e0;
     const { error } = await supabase.from('shifts').update(row).eq('id', s0.id); if (error) throw error;
+    if (big) setMsg(`${label} · ${short(nm0(s0))}${await tell([s0], how)}.`);
     return { label: `${label} · ${byId[s0.staff_id]?.full_name ?? ''}`, undo: () => supabase.from('shifts').update(b as unknown as Record<string, unknown>).eq('id', s0.id).then() };
   });
   const lockAll = () => run(async () => {
@@ -175,14 +186,14 @@ export function DaySheet() {
   /** push 113 · change a line (count / time / add) right on the Day sheet. Saves to the event like the event form. */
   const lineSave = (e: Ev, next: Line[], label: string, moves: { s: Sh; t: string }[] = []) => run(async () => {
     const sent = moves.filter((m) => !m.s.pool_hold);
-    if (sent.length && !confirm(`${sent.length} already sent: ${sent.map((m) => short(byId[m.s.staff_id]?.full_name ?? '…')).join(', ')}.\n\nThey will get "Your shift changed" (${ap(sent[0].t)} instead of ${ap(hm(sent[0].s.planned_start))}).\nIt waits in "About to send" until you press Send.\n\nChange the time?`)) return;
+    const how = sent.length ? await askTell(sent.map((m) => m.s), `${label}: ${ap(hm(sent[0].s.planned_start))} → ${ap(sent[0].t)}.`, 'Your shift changed') : 'later'; if (!how) return;
     const before = { staffing: e.staffing, staff_needed: e.staff_needed, start_time: e.start_time };
     const starts = next.map((l) => l.start).filter(Boolean).sort() as string[];
     const row = { staffing: next, staff_needed: next.reduce((n, l) => n + (l.count || 0), 0), start_time: starts[0] ?? e.start_time };
     const { error } = await supabase.from('events').update(row).eq('id', e.id); if (error) throw error;
     const old = moves.map((m) => ({ id: m.s.id, planned_start: m.s.planned_start }));
     for (const m of moves) { const { error: e2 } = await supabase.from('shifts').update({ planned_start: startIso(date, m.t) }).eq('id', m.s.id); if (e2) throw e2; }
-    if (sent.length) setMsg(`Saved. ${sent.length} change${sent.length > 1 ? 's' : ''} waiting in "About to send": press Send changes when you're ready.`);
+    if (sent.length) setMsg(`Saved${await tell(sent.map((m) => m.s), how)}.`);
     return { label: `${label} · ${e.venues?.name ?? e.title}`, undo: async () => { await supabase.from('events').update(before).eq('id', e.id); for (const o of old) await supabase.from('shifts').update({ planned_start: o.planned_start }).eq('id', o.id); } };
   });
   const setCount = (e: Ev, idx: number, n: number) => {
@@ -317,6 +328,7 @@ export function DaySheet() {
           onReplace={() => run(async () => { const all = await eventsBetween(date, date); const fe = all.find((x) => x.id === c.event_id); const fs = fe?.shifts.find((x) => x.id === c.id);
             if (!fe || !fs) throw new Error('Could not open the replacement list.'); setCard(null); setRepl({ s: fs, e: fe }); })}
           onRemove={() => { setCard(null); remove(c); }} onNote={(t) => patch(c, { booking_note: t.trim() || null }, t.trim() ? 'note' : 'note removed')} />; })()}
+      {tellQ && <TellBox q={tellQ} names={tellQ.who.map((x) => byId[x.staff_id]?.full_name ?? '…')} states={tellQ.who.map((x) => sentTxt(x))} />}
       {repl && <ReplaceSheet shift={repl.s} ev={repl.e} onClose={() => setRepl(null)} onDone={(m) => { setRepl(null); setMsg(m); setTick((t) => t + 1); }} />}
       {pick && <PickSheet date={date} e={pick.e} code={pick.code} start={pick.start} staff={staff} av={av} onDay={onDay} off={off} sortP={sortP} tier={tier}
         onClose={() => setPick(null)} onPick={(id) => { const p = pick; setPick(null); place(id, p.e, p.code, p.start); }} onAsk={() => nav(`/admin/bookings?date=${date}&view=list&ask=1`)} />}
@@ -399,5 +411,25 @@ function PersonCard({ s, e, date, evs, lays, byId, av, onDay, off, sortP, tier, 
           <i className={'ds-t ' + (tier(x.staff_id) ?? '')} /><b className="grow">{byId[x.staff_id]?.full_name ?? '…'}</b><small className={fitT(x) ? 'muted' : 'gold'}>{x.from_time ? `from ${ap(x.from_time)}${fitT(x) ? '' : ' · after the start'}` : 'any time'}</small><span className="ds-putin">Put in</span></button>)}
         <small className="muted">{p?.full_name ?? 'They'} go{p?.full_name ? 'es' : ''} back to Free · {dLabel(date, { weekday: 'short', month: 'short', day: 'numeric' })}</small>
       </>}
+    </div></div>);
+}
+
+/** push 115 · change after they were sent / confirmed → pick how they're told. Default = About to send (as before). */
+function TellBox({ q, names, states }: { q: { what: string; notice: string; res: (t: 'buzz' | 'soft' | 'later' | 'skip' | null) => void }; names: string[]; states: string[] }) {
+  const [t, setT] = useState<'buzz' | 'soft' | 'later' | 'skip'>('later');
+  const opts: ['buzz' | 'soft' | 'later' | 'skip', string, string][] = [
+    ['buzz', 'Send now · phone alert', 'only them, right away (with their other waiting changes)'],
+    ['soft', 'Send now · no alert', 'the card shows in their app, quietly'],
+    ['later', 'Add to “About to send”', 'goes with the others when you press Send'],
+    ['skip', 'Don’t tell them', 'you told them yourself · saved, nothing sent, counts as seen'],
+  ];
+  return (
+    <div className="ds-pick-wrap" onClick={() => q.res(null)}><div className="ds-pick ds-tell" onClick={(ev) => ev.stopPropagation()}>
+      <b className="serif" style={{ fontSize: 18 }}>{names.length === 1 ? names[0] : `${names.length} people`} {names.length === 1 ? `is ${states[0]}` : 'already sent'}</b>
+      {names.length > 1 && <small className="muted">{names.join(', ')}</small>}
+      <span className="sm">{q.what}</span>
+      <small className="kick">THEY GET “{q.notice.toUpperCase()}” · HOW?</small>
+      {opts.map(([k, l, d]) => <button key={k} className={'ds-topt' + (t === k ? ' on' : '')} onClick={() => setT(k)}><i>{t === k ? '●' : '○'}</i><span className="grow"><b>{l}</b><small>{d}</small></span></button>)}
+      <div className="row" style={{ gap: 8, justifyContent: 'flex-end' }}><button className="lnk muted sm" onClick={() => q.res(null)}>Cancel · change nothing</button><button className="abtn dark" onClick={() => q.res(t)}>Save the change</button></div>
     </div></div>);
 }

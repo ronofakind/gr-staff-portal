@@ -2210,6 +2210,8 @@ html[data-theme="dark"] { --teams: #8487CC; --teams-bg: #1F2137; --teams-ink: #8
 :where(html[data-theme="dark"]) .ds-addbtn { color: #827CD4; }
 :where(html[data-theme="dark"]) .ds-add select, :where(html[data-theme="dark"]) .ds-add input { border: 1px solid var(--line, #37332F); }
 :where(html[data-theme="dark"]) .ds-pend { background: #3A321D; border: 1px solid #E6D7AB; }
+:where(html[data-theme="dark"]) .ds-topt { border: 1px solid var(--line, #4B443A); background: #1F1D1A; }
+:where(html[data-theme="dark"]) .ds-topt.on { background: #322D24; }
 html[data-theme="dark"] { color-scheme: dark; }
 html[data-theme="dark"] body { background: #121110; color: #F1ECE4; }
 html[data-theme="dark"] img[src$="logo-mark.png"]:not(.adm-side img):not(.side-logo), html[data-theme="dark"] img[src$="logo-full.png"] { filter: invert(1) hue-rotate(180deg); mix-blend-mode: normal !important; }

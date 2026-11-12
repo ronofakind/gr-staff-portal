@@ -4538,3 +4538,9 @@ a.ch-name-link { display: block; text-decoration: none; color: inherit; } a.ch-n
   .ds-time, .ds-n { padding-top: 6px; }
   .ds-tpop { left: auto; right: 0; }
 }
+/* push 115 · how to tell them */
+.ds-tell { width: min(440px, 100%); gap: 8px; }
+.ds-topt { display: flex; align-items: flex-start; gap: 10px; text-align: left; border: 1px solid var(--line, #E6DED3); background: #fff; border-radius: 10px; padding: 10px 12px; cursor: pointer; font: inherit; }
+.ds-topt.on { border-color: var(--ink); background: #F6F2EC; }
+.ds-topt i { font-style: normal; font-size: 14px; line-height: 1.3; }
+.ds-topt b { display: block; font-size: 13.5px; } .ds-topt small { color: var(--muted); font-size: 12px; }

@@ -1304,4 +1304,5 @@ html[data-theme="terra"] { --teams: #5B5FC7; --teams-bg: #EEEFFB; --teams-ink: #
 :where(html[data-theme="terra"]) .ds-tq button:hover { color: #FBFAF6; }
 :where(html[data-theme="terra"]) .ds-chip { background: #FBFAF6; }
 :where(html[data-theme="terra"]) .ds-add select, :where(html[data-theme="terra"]) .ds-add input { border: 1px solid var(--line, #DEE0D5); }
+:where(html[data-theme="terra"]) .ds-topt { background: #FBFAF6; }
 html[data-theme="terra"] body { background: #EEF0E8; color: #2A2A24; }
