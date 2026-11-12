@@ -4401,3 +4401,9 @@ a.ch-name-link { display: block; text-decoration: none; color: inherit; } a.ch-n
 .sa-legend span { display: inline-flex; align-items: center; gap: 6px; } .sa-legend i { width: 14px; height: 14px; border-radius: 4px; border: 1px solid var(--line); display: inline-block; }
 .sa-open { display: flex; gap: 12px; padding: 9px 0; border-top: 1px solid var(--line); font-size: 13px; } .sa-open > b { width: 110px; flex: 0 0 auto; }
 .sa-open .grow { display: flex; flex-direction: column; } .k-t-yes { color: #1F7A55; } .k-t-maybe { color: #9A7413; } .k-t-asked { color: #9B2226; }
+/* Nov 11 · AI card: pick the event; event form shows the review card */
+.ai-pick.unsure { background: #FBF3E0; border-radius: 8px; padding: 6px 8px; }
+.ai-pickrow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; } .ai-pickrow input[type=date] { height: 30px; border-radius: 8px; border: 1px solid var(--line); padding: 0 6px; font: inherit; font-size: 12.5px; }
+.ef-aichg { display: flex; flex-direction: column; gap: 4px; margin: 8px 0 6px; }
+.ef-aichg > div { display: grid; grid-template-columns: 120px auto 16px auto 1fr; gap: 8px; align-items: baseline; font-size: 13px; }
+.ef-aichg s { color: var(--muted); } .ef-aichg em { font-style: normal; font-size: 12px; color: #9A7413; } .ef-aichg em.ok { color: #14603F; }

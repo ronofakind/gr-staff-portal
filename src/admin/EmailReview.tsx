@@ -9,7 +9,7 @@ import { ap12, ENDS } from './api';
    Staff times change only when the email says so; if guests move and staff don't, a ⚠ line flags it. */
 
 export type ALine = { label: string; old?: string | null; new?: string | null; field?: string; value?: string | null };
-export type AApply = { item: string; event: string | null; who: string | null; changes: { field: string; value: string; label: string }[] };
+export type AApply = { item: string; event: string | null; who: string | null; changes: { field: string; value: string; label: string; old?: string | null }[] };
 export const AI_APPLY_KEY = 'gr-ai-apply';
 
 type Ev = { id: string; event_date: string; title: string; address: string | null; guests: number | null; end_time: string | null; ends_label: string | null;
@@ -60,7 +60,7 @@ export function EmailReview({ item, onClose, onCreate }: { item: { id: string; w
   const flag = gap != null && (gap < 45 || gap > 120);
   const n = diff.filter((d) => on[d.k]).length;
   const apply = () => {
-    const a: AApply = { item: item.id, event: item.event_id, who: item.who, changes: diff.filter((d) => on[d.k]).map((d) => ({ field: d.r.field, value: ['staff_start', 'guests_arrive', 'end'].includes(d.r.field) ? hm(vals[d.k]) ?? vals[d.k] : vals[d.k], label: FIELD_LABEL[d.r.field] ?? d.r.label })) };
+    const a: AApply = { item: item.id, event: item.event_id, who: item.who, changes: diff.filter((d) => on[d.k]).map((d) => ({ field: d.r.field, value: ['staff_start', 'guests_arrive', 'end'].includes(d.r.field) ? hm(vals[d.k]) ?? vals[d.k] : vals[d.k], label: FIELD_LABEL[d.r.field] ?? d.r.label, old: d.now && d.now !== '—' ? String(d.now) : null })) };
     try { sessionStorage.setItem(AI_APPLY_KEY, JSON.stringify(a)); } catch { /* */ }
     nav(isNew ? `/admin/event/new?ai=1${a.changes.find((c) => c.field === 'date') ? '&d=' + a.changes.find((c) => c.field === 'date')!.value : ''}` : `/admin/event/${item.event_id}/edit?ai=1`);
   };

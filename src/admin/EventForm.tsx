@@ -569,7 +569,9 @@ export function EventForm() {
 
   return (
     <form className="stack-lg ef" onSubmit={save}>
-      {aiApply && <div className="ef-aibar">✉ <b>From {aiApply.who ?? 'a client'}’s email:</b> {aiApply.changes.map((c) => c.label).join(' · ')} filled in{aiSkipped.length ? <> · <span>couldn’t fill: {aiSkipped.join(', ')}</span></> : null}. Check and press Save. Staff hear about time changes only from 4 days before.</div>}
+      {aiApply && <div className="ef-aibar">✉ <b>From {aiApply.who ?? 'a client'}’s email · the AI review card</b>
+        <div className="ef-aichg">{aiApply.changes.map((c, k) => <div key={k}><span>{c.label}</span>{c.old ? <s>{c.old}</s> : <i>—</i>}<span>→</span><b>{['staff_start', 'guests_arrive', 'end'].includes(c.field) && /^\d{2}:\d{2}$/.test(c.value) ? ap12(c.value) : c.value}</b>{aiSkipped.includes(c.label) || aiSkipped.some((x) => x.startsWith(c.label)) ? <em>couldn’t fill, do it by hand</em> : <em className="ok">✓ filled in below</em>}</div>)}</div>
+        <small>Check the form matches, then press Save. Nothing is saved until you do. Staff hear about time changes only from 4 days before.</small></div>}
       <div className="toolbar">
         <div><div className="row wrap" style={{ gap: 6 }}>{!isNew && <Link to={`/admin/bookings?date=${date}&view=board&ev=${id}`} className="abtn sm back-btn">‹ Back to Bookings · {dLabel(date, { weekday: 'short', month: 'short', day: 'numeric' })}</Link>}<Link to={isNew ? (date ? `/admin/bookings?date=${date}` : '/admin/week') : `/admin/event/${id}`} className="abtn sm back-btn ghost">{isNew ? '‹ Back' : 'Event details'}</Link></div><h1 className="serif-h">{isNew ? 'New event' : `Edit · ${title}`}</h1></div>
         <div className="row wrap" style={{ position: 'relative' }}>
