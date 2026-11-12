@@ -197,7 +197,7 @@ export function EventForm() {
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false); const [loaded, setLoaded] = useState(isNew);
   // push 67 · a reviewed client email → fill the form once loaded (nothing saved until Save)
   const [aiApply, setAiApply] = useState<AApply | null>(null); const [aiSkipped, setAiSkipped] = useState<string[]>([]);
-  useEffect(() => { setAiApply(null); setAiSkipped([]); }, [id]); // next event of a multi-event review
+  useEffect(() => { setAiApply(null); setAiSkipped([]); if (!isNew) setLoaded(false); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps · next event of a multi-event review
   useEffect(() => {
     if (!loaded || params.get('ai') !== '1' || aiApply) return;
     const a = takeAiApply(isNew ? null : id!); if (!a) return;
