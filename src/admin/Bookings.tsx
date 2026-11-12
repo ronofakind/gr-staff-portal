@@ -977,8 +977,21 @@ function AskMore({ date, dept, events, staff, av, wk, off, conds, links, booked,
   const flags = (s: AStaff) => { const a = av.find((x) => x.staff_id === s.id); const u = wk.find((w) => w.staff_id === s.id && w.dow === dow);
     return [booked.has(s.id) && 'booked that day', off.has(s.id + date) && 'time off', a && (a.status === 'asked' ? 'already asked' : `said ${a.status}`), u?.status === 'no' && `usually says no on ${dLabel(date, { weekday: 'long' })}s`,
       /manual booking only|leaving|do not book/i.test(s.staff_private?.notes ?? '') && 'manual booking only'].filter(Boolean).join(' · '); };
-  const askOne = async (s: AStaff) => {
+  // Nov 11 · their usual week for this weekday (or their answer for this date), in words
+  const wd = dLabel(date, { weekday: 'long' });
+  const usualText = (sid: string) => { const a = av.find((x) => x.staff_id === sid && x.status !== 'asked'); const u = wk.find((w) => w.staff_id === sid && w.dow === dow);
+    if (off.has(sid + date)) return { t: `Time off on ${dLabel(date, { month: 'short', day: 'numeric' })}`, bad: true };
+    if (a) return { t: a.status === 'yes' ? `Said yes for ${dLabel(date, { month: 'short', day: 'numeric' })}${a.from_time ? ` · from ${t12(a.from_time)}` : ' · any time'}${a.until_time ? ` until ${t12(a.until_time)}` : ''}` : `Said ${a.status} for ${dLabel(date, { month: 'short', day: 'numeric' })}`, bad: a.status === 'no', from: a.status === 'yes' ? a.from_time : null };
+    if (!u) return { t: `${wd}s not set yet`, bad: false };
+    if (u.status === 'no') return { t: `Usually not free on ${wd}s`, bad: true };
+    return { t: `Usually free ${wd}s · ${u.from_time ? `from ${t12(u.from_time)}` : 'any time'}${u.until_time ? ` until ${t12(u.until_time)}` : ''}`, bad: false, from: u.from_time }; };
+  const [warn, setWarn] = useState<{ sid: string; msg: string } | null>(null);
+  const askOne = async (s: AStaff, sure = false) => {
     if (practice) return;
+    if (!sure) { const u = usualText(s.id); const st = (shiftOf[s.id] ?? '').split('|')[1];
+      const late = st && u.from && u.from.slice(0, 5) > st.slice(0, 5) ? `The shift starts at ${t12(st)} and ${s.full_name.split(' ')[0]} is usually free from ${t12(u.from)}.` : '';
+      if (u.bad || late) { setWarn({ sid: s.id, msg: late || `${s.full_name.split(' ')[0]}: ${u.t.charAt(0).toLowerCase() + u.t.slice(1)}.` }); return; } }
+    setWarn(null);
     setBusy(true); setMsg('');
     const { data: a, error } = await askRow();
     if (error || !a) { setMsg(error?.message ?? 'Could not save'); setBusy(false); return; }
@@ -1000,8 +1013,8 @@ function AskMore({ date, dept, events, staff, av, wk, off, conds, links, booked,
   const Row = ({ c }: { c: typeof cands[number] }) => (
     <label className="bk-ask">
       <input type="checkbox" checked={pick.has(c.s.id)} onChange={(e) => { const p = new Set(pick); if (e.target.checked) p.add(c.s.id); else p.delete(c.s.id); setPick(p); }} />
-      <span className="grow"><b>{c.s.full_name}</b> <i className={'bk-t t' + (c.s.staff_private?.tier ?? 'x')} /><small> rank {c.s.staff_private?.ranking ?? '—'}</small>{c.linkedBooked && <small className="okc"> · 🔗 partner is on</small>}</span>
-      <span className={c.u ? 'okc sm' : 'muted sm'}>{c.u ? (c.u.from_time ? `from ${t12(c.u.from_time)}` : 'any time') : 'not set'}</span>
+      <span className="grow"><b>{c.s.full_name}</b> <i className={'bk-t t' + (c.s.staff_private?.tier ?? 'x')} /><small> rank {c.s.staff_private?.ranking ?? '—'}</small>{c.linkedBooked && <small className="okc"> · 🔗 partner is on</small>}
+        <small className={'bk-usual' + (c.u ? ' ok' : '')}>{usualText(c.s.id).t}</small></span>
       <span className="bk-n30"><i style={{ width: `${Math.min(100, c.n30 * 12)}%` }} /></span><span className="sm" style={{ width: 34, textAlign: 'right' }}>{Math.round(c.rate * 100)}%</span>
       {c.held && <small className="gold" style={{ width: 150 }}>{c.held}</small>}
     </label>);
@@ -1017,11 +1030,13 @@ function AskMore({ date, dept, events, staff, av, wk, off, conds, links, booked,
         <input autoFocus={!!q0} placeholder="🔍 Search a name to ask them yourself…" value={q} onChange={(e) => setQ(e.target.value)} />
         {found.map((s) => { const fl = flags(s); return (
           <div key={s.id} className="bk-findrow">
-            <span className="grow"><b>{s.full_name}</b> <i className={'bk-t t' + (s.staff_private?.tier ?? 'x')} />{fl && <small className="gold"> · {fl}</small>}</span>
+            <span className="grow"><b>{s.full_name}</b> <i className={'bk-t t' + (s.staff_private?.tier ?? 'x')} />{fl && <small className="gold"> · {fl}</small>}
+              <small className={'bk-usual' + (usualText(s.id).bad ? ' bad' : '')}>{usualText(s.id).t}</small></span>
             {askedNow[s.id] ? <span className="okc sm strong">✓ Asked for {askedNow[s.id]}</span> : <>
               <select value={shiftOf[s.id] ?? ''} onChange={(e) => setShiftOf((m) => ({ ...m, [s.id]: e.target.value }))}>
                 <option value="">Any shift that day</option>{opts.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}</select>
               <button className="abtn sm dark" disabled={busy || practice || booked.has(s.id)} onClick={() => askOne(s)}>Ask {s.full_name.split(' ')[0]}</button></>}
+            {warn?.sid === s.id && <div className="bk-warnask"><span className="grow">⚠ {warn.msg} Still send?</span><button className="abtn sm dark" onClick={() => askOne(s, true)}>Send anyway</button><button className="lnk muted sm" onClick={() => setWarn(null)}>Cancel</button></div>}
           </div>); })}
         {ql.length >= 2 && !found.length && <span className="muted sm">No active {dept} staff named “{q}”.</span>}
       </div>

@@ -4370,3 +4370,5 @@ a.ch-name-link { display: block; text-decoration: none; color: inherit; } a.ch-n
 .bk-findp input { height: 40px; border-radius: 10px; border: 1px solid var(--line); padding: 0 12px; font: inherit; font-size: 14px; background: #fff; }
 .bk-findrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: #fff; border-radius: 10px; padding: 8px 10px; }
 .bk-findrow select { height: 32px; border-radius: 8px; border: 1px solid var(--line); font: inherit; font-size: 13px; max-width: 260px; }
+.bk-usual { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; } .bk-usual.ok { color: #14603F; } .bk-usual.bad { color: #9A7413; font-weight: 600; }
+.bk-warnask { flex-basis: 100%; display: flex; align-items: center; gap: 8px; background: #FBF3E0; color: #6B4A12; border-radius: 10px; padding: 8px 10px; font-size: 13px; }
