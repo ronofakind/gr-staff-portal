@@ -85,7 +85,10 @@ export default async function handler(req, res) {
     // push 106 (120) · "we got your application" email: new applications not confirmed yet (the hourly task sends it from the business inbox)
     if (req.method === 'GET' && req.query.confirm) {
       const apps = await get('applications?confirm_sent_at=is.null&status=in.(new,kept)&email=not.is.null&select=id,created_at,lang,first_name,email&order=created_at&limit=20');
-      return res.json({ apps });
+      // accepted → "You're in" email with their personal app link (one use, 7 days from Accept)
+      const acc = await get('applications?status=eq.accepted&welcome_token=not.is.null&welcome_sent_at=is.null&email=not.is.null&select=id,decided_at,lang,first_name,email,welcome_token&order=decided_at&limit=20');
+      const welcome = acc.map((a) => ({ id: a.id, lang: a.lang, first_name: a.first_name, email: a.email, link: `https://gr-staff-portal.vercel.app/go/${a.welcome_token}` }));
+      return res.json({ apps, welcome });
     }
     if (req.method === 'GET' && req.query.apps) {
       const apps = await get('applications?status=eq.new&ai_at=is.null&select=id,created_at,first_name,last_name,email,phone,roles,worked_in,years,lang_fr,lang_en,days,transport,neighbourhood,cv_path,cv_name,no_cv_note,referrer_id,referrer_text&order=created_at&limit=10');
@@ -164,8 +167,9 @@ export default async function handler(req, res) {
       if (Array.isArray(body.confirmed)) {
         for (const c of body.confirmed.slice(0, 40)) {
           if (!/^[0-9a-f-]{36}$/i.test(c?.id || '')) continue;
-          const r = await fetch(`${URL_}/rest/v1/applications?id=eq.${c.id}&confirm_sent_at=is.null`, { method: 'PATCH', headers: H({ Prefer: 'return=minimal' }),
-            body: JSON.stringify({ confirm_sent_at: new Date().toISOString(), confirm_note: c.status === 'error' ? s(c.note, 200) || 'error' : null }) });
+          const w = c.kind === 'welcome';
+          const r = await fetch(`${URL_}/rest/v1/applications?id=eq.${c.id}&${w ? 'welcome' : 'confirm'}_sent_at=is.null`, { method: 'PATCH', headers: H({ Prefer: 'return=minimal' }),
+            body: JSON.stringify({ [w ? 'welcome_sent_at' : 'confirm_sent_at']: new Date().toISOString(), [w ? 'welcome_note' : 'confirm_note']: c.status === 'error' ? s(c.note, 200) || 'error' : null }) });
           if (r.ok) confirmed++;
         }
       }

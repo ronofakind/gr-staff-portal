@@ -10,11 +10,11 @@ export type App = {
   id: string; created_at: string; status: 'new' | 'kept' | 'accepted' | 'rejected'; lang: string | null;
   first_name: string; last_name: string; email: string | null; phone: string | null; neighbourhood: string | null;
   roles: string[]; worked_in: string[]; years: string | null; lang_fr: number | null; lang_en: number | null; days: string[]; transport: string | null;
-  cv_path: string | null; cv_name: string | null; confirm_sent_at?: string | null; confirm_note?: string | null; no_cv_note: string | null; referrer_id: string | null; referrer_text: string | null; note: string | null;
+  cv_path: string | null; cv_name: string | null; confirm_sent_at?: string | null; confirm_note?: string | null; welcome_sent_at?: string | null; welcome_note?: string | null; no_cv_note: string | null; referrer_id: string | null; referrer_text: string | null; note: string | null;
   ai_summary: string | null; ai_level: string | null; decided_at: string | null; level: string | null; start_rate: number | null;
   handbook_roles: string[]; paid_by: 'payroll' | 'cash' | null; admin_note: string | null; staff_id: string | null;
 };
-const COLS = 'id,created_at,status,lang,first_name,last_name,email,phone,neighbourhood,roles,worked_in,years,lang_fr,lang_en,days,transport,cv_path,cv_name,no_cv_note,referrer_id,referrer_text,note,ai_summary,ai_level,confirm_sent_at,confirm_note,decided_at,level,start_rate,handbook_roles,paid_by,admin_note,staff_id';
+const COLS = 'id,created_at,status,lang,first_name,last_name,email,phone,neighbourhood,roles,worked_in,years,lang_fr,lang_en,days,transport,cv_path,cv_name,no_cv_note,referrer_id,referrer_text,note,ai_summary,ai_level,confirm_sent_at,confirm_note,welcome_sent_at,welcome_note,decided_at,level,start_rate,handbook_roles,paid_by,admin_note,staff_id';
 const ROLE: Record<string, string> = { waiter: 'Waiter', bartender: 'Bartender', barback: 'Barback', cook: 'Cook', manager: 'Manager' };
 const WORK: Record<string, string> = { fine_dining: 'Fine dining', banquets: 'Banquets', catering: 'Catering', hotel: 'Hotel', cocktail_bar: 'Cocktail bar', cafe: 'Café', none: 'Not yet' };
 const YRS: Record<string, string> = { none: 'no experience', lt1: '< 1 year', '1-2': '1–2 years', '3-5': '3–5 years', '5+': '5+ years' };
@@ -69,6 +69,7 @@ export function AppCard({ a, all, staff, full, onOpen }: { a: App; all: App[]; s
         <span className="grow"><b>{fullName(a)}</b><small className="muted">{line || '—'}</small></span>
         <span className="muted sm">{ago(a.created_at)}</span>
       </div>
+      {a.status === 'accepted' && (a.welcome_sent_at ? <small className={a.welcome_note ? 'gold' : 'okc'}>{a.welcome_note ? `✉ Welcome email not sent · ${a.welcome_note}` : `✉ Welcome email sent ${new Date(a.welcome_sent_at).toLocaleString('en-CA', { weekday: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' }).replace('a.m.', 'AM').replace('p.m.', 'PM')}`}</small> : null)}
       {a.confirm_sent_at && a.confirm_note !== 'before' && <small className={a.confirm_note ? 'gold' : 'okc'}>{a.confirm_note ? `✉ Confirmation not sent · ${a.confirm_note}` : `✉ Confirmation sent ${new Date(a.confirm_sent_at).toLocaleString('en-CA', { weekday: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' }).replace('a.m.', 'AM').replace('p.m.', 'PM')}`}</small>}
       {a.ai_summary ? <div className="hr-ai"><b>AI · first read{a.ai_level ? ` · suggests ${a.ai_level.toLowerCase()}` : ''}</b><span style={{ whiteSpace: 'pre-line' }}>{a.ai_summary}</span></div> : full ? <div className="muted sm">AI first read: within the hour (the hourly check reads the CV).</div> : null}
       {(ref || flags.length > 0) && <div className="row wrap" style={{ gap: 6 }}>{ref && <i className="hr-tag ok">Referred by {ref}</i>}{flags.map((f) => <i key={f.t} className={'hr-tag ' + f.cls}>{f.t}</i>)}</div>}
@@ -149,8 +150,13 @@ export function AppSheet({ a, all, staff, onClose, onDone }: { a: App; all: App[
     const knows = refStaff ? { knows_staff_id: refStaff.id, knows_text: 'referred them' } : {};
     await supabase.from('staff_private').upsert({ staff_id: sid, tier, ...(a.cv_path ? { cv_path: a.cv_path, cv_name: a.cv_name } : {}), ...knows, neighbourhood: a.neighbourhood?.trim() || null, ...(langs ? { languages: langs } : {}), notes: `Hired ${isoDay(new Date())} · ${lv.l} · ${paid === 'cash' ? 'cash' : 'payroll'}${refStaff ? ` · referred by ${refStaff.full_name}` : ''}` });
     await supabase.from('staff_onboarding').upsert({ staff_id: sid, level, handbook_roles: hb, paid_by: paid }); // push 56 · handbook by role + tax & pay
-    const up = await supabase.from('applications').update({ status: 'accepted', decided_at: new Date().toISOString(), level, start_rate: r, handbook_roles: hb, paid_by: paid, staff_id: sid, updated_at: new Date().toISOString(), ...(refStaff ? { referral_status: 'matched' } : {}) }).eq('id', a.id);
+    // Nov 11 · their app link goes by email (hourly task): make it, start its 7 days, keep it on the application
+    let welcome_token: string | null = null;
+    if (row.email) { const l = await supabase.rpc('admin_invite_link', { p_staff: sid }); const tok = (l.data as { token?: string } | null)?.token;
+      if (tok && !(await supabase.rpc('admin_mark_invited', { p_token: tok })).error) welcome_token = tok; }
+    const up = await supabase.from('applications').update({ welcome_token, status: 'accepted', decided_at: new Date().toISOString(), level, start_rate: r, handbook_roles: hb, paid_by: paid, staff_id: sid, updated_at: new Date().toISOString(), ...(refStaff ? { referral_status: 'matched' } : {}) }).eq('id', a.id);
     setBusy(false); if (up.error) { setErr(up.error.message); return; }
+    if (welcome_token) { onDone(`${a.first_name} · accepted · welcome email with the app link goes out within the hour`); return; }
     setInvite({ id: sid, full_name: row.full_name, email: row.email, phone: row.phone, language: row.language as 'fr' | 'en', department: dept as 'floor' | 'bar', role: 'staff', positions: row.positions, active: true, photo_url: null, staff_private: null });
   };
 
@@ -178,7 +184,7 @@ export function AppSheet({ a, all, staff, onClose, onDone }: { a: App; all: App[
         <div className="hr-q"><b>Handbook · which parts</b><div className="hr-chips">{HB.map((x) => <button key={x.k} className={hb.includes(x.k) ? 'on' : ''} onClick={() => setHb(hb.includes(x.k) ? hb.filter((y) => y !== x.k) : [...hb, x.k])}>{x.l}</button>)}</div></div>
         <div className="hr-q"><b>Paid by</b><div className="hr-chips">{(['payroll', 'cash'] as const).map((x) => <button key={x} className={paid === x ? 'on' : ''} onClick={() => setPaid(x)}>{x === 'payroll' ? 'Payroll' : 'Cash · by their manager'}</button>)}</div>
           <small className="muted">{paid === 'cash' ? 'No SIN, address or void cheque asked. Not added to QuickBooks / payroll.' : 'Tax & pay step (SIN, address, void cheque) before their first shift.'}</small></div>
-        <div className="muted sm">Adds {a.first_name} to Staff with this rate, then gives you the welcome text with their personal app link to copy.</div>
+        <div className="muted sm">Adds {a.first_name} to Staff with this rate. Within the hour they get the “You’re in” email with their personal app link (7 days).</div>
         {err && <p className="error">{err}</p>}
         <div className="row" style={{ gap: 8 }}><button className="abtn ok" disabled={busy || !tier || !level} onClick={accept}>{busy ? 'Adding…' : `Accept ${a.first_name} · $${rate}/h`}</button><button className="lnk muted" onClick={() => setMode('view')}>Cancel</button></div>
       </div>}
