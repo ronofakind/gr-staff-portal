@@ -10,7 +10,7 @@ import { allStaff, addDays, dLabel, isoDay, roleName, startIso, type AStaff } fr
 
 type Ev = { id: string; title: string; start_time: string | null; staff_needed: number; staffing: { dept: string; code: string; start: string; count: number }[] | null;
   details_pending: boolean | null; start_tbc: boolean | null; tentative: boolean | null; caterer_name?: string | null; venues: { name: string } | null };
-type Sh = { id: string; event_id: string; staff_id: string; position_code: string | null; status: string; pool_hold: boolean; locked: boolean | null; notified_at: string | null };
+type Sh = { id: string; event_id: string; staff_id: string; position_code: string | null; status: string; pool_hold: boolean; locked: boolean | null; notified_at: string | null; planned_start?: string | null };
 type Av = { staff_id: string; status: string; from_time: string | null; answered_at: string | null; released_at: string | null };
 const TORD: Record<string, number> = { A: 0, B: 1, C: 2 };
 
@@ -24,7 +24,7 @@ export function DayPool() {
     if (error) { setErr(error.message); return; }
     const es = (e ?? []) as unknown as Ev[]; setEvs(es);
     const [s, a, st] = await Promise.all([
-      supabase.from('shifts').select('id,event_id,staff_id,position_code,status,pool_hold,locked,notified_at').in('event_id', es.length ? es.map((x) => x.id) : ['00000000-0000-0000-0000-000000000000']).neq('status', 'declined'),
+      supabase.from('shifts').select('id,event_id,staff_id,position_code,status,pool_hold,locked,notified_at,planned_start').in('event_id', es.length ? es.map((x) => x.id) : ['00000000-0000-0000-0000-000000000000']).neq('status', 'declined'),
       supabase.from('availability').select('staff_id,status,from_time,answered_at,released_at').eq('for_date', date).not('ask_id', 'is', null),
       staff.length ? Promise.resolve(staff) : allStaff(),
     ]);
@@ -45,13 +45,25 @@ export function DayPool() {
   const placedOf = (e: Ev) => sh.filter((s) => s.event_id === e.id);
   const openOf = (e: Ev) => Math.max(0, needOf(e) - placedOf(e).length);
   const waiterStart = (e: Ev) => (e.staffing ?? []).find((l) => !['MD', 'BM'].includes(l.code) && l.dept !== 'bar')?.start ?? e.start_time ?? '17:00';
+  // Nov 11 · Ronnie: autofill puts everyone at the first time. Fill each staff line to its count, in sheet order (1:30 line, then 5:00 line).
+  const hhmm = (iso: string | null | undefined) => iso ? new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Toronto' }) : '';
+  const wLines = (e: Ev) => (e.staffing ?? []).filter((l) => !['MD', 'BM'].includes(l.code) && l.dept !== 'bar' && l.count > 0);
+  const nextStart = (e: Ev, extra: Record<string, number> = {}) => { const used: Record<string, number> = { ...extra };
+    for (const s of placedOf(e)) if (!['MD', 'BM'].includes(s.position_code ?? '')) { const t = hhmm(s.planned_start); used[t] = (used[t] ?? 0) + 1; }
+    const free = wLines(e).find((l) => { const n = used[l.start] ?? 0; if (n < l.count) return true; used[l.start] = n - l.count; return false; });
+    return free?.start ?? waiterStart(e); };
+  const ap = (t: string) => { const h = Number(t.slice(0, 2)); return `${h % 12 || 12}${t.slice(2, 5) !== ':00' ? t.slice(2, 5) : ''} ${h < 12 ? 'AM' : 'PM'}`; };
+  const slots = evs.flatMap((e) => [...new Set(wLines(e).map((l) => l.start))].map((t) => ({ v: `${e.id}|${t}`, e, t, label: `${(e.venues?.name ?? e.title).replace(/^(Le|La|Les|Salon|Maison|Théâtre)\s+/i, '').slice(0, 14)} · ${ap(t)}` })));
+  const [lastIds, setLastIds] = useState<string[]>([]);
+  const undo = () => run(async () => { const { error } = await supabase.from('shifts').delete().in('id', lastIds).eq('pool_hold', true).or('locked.is.null,locked.eq.false'); if (error) throw error; setLastIds([]); return 'Undone: the last ✦ placement is back in the pool (locked people stayed).'; });
+  const move = (s: Sh, v: string) => run(async () => { const [eid, t] = v.split('|'); const { error } = await supabase.from('shifts').update({ event_id: eid, planned_start: startIso(date, t) }).eq('id', s.id).eq('pool_hold', true); if (error) throw error; });
   const holds = sh.filter((s) => s.pool_hold);
   const fourOut = addDays(date, -4); const today = isoDay(new Date());
   const missing = evs.filter((e) => e.details_pending || e.start_tbc).map((e) => e.venues?.name ?? e.title);
 
   const run = async (f: () => Promise<string | void>) => { setBusy(true); setErr(''); setMsg(''); try { const m = await f(); if (m) setMsg(m); } catch (x) { setErr((x as Error).message); } setBusy(false); setTick((t) => t + 1); };
   const place = (staffId: string, e: Ev) => run(async () => {
-    const { error } = await supabase.from('shifts').insert({ event_id: e.id, staff_id: staffId, position_code: 'W', position_detail: roleName('W'), planned_start: startIso(date, waiterStart(e)), status: 'booked', pool_hold: true, time_tbc: !!(e.start_tbc || e.details_pending) });
+    const { error } = await supabase.from('shifts').insert({ event_id: e.id, staff_id: staffId, position_code: 'W', position_detail: roleName('W'), planned_start: startIso(date, nextStart(e)), status: 'booked', pool_hold: true, time_tbc: !!(e.start_tbc || e.details_pending) });
     if (error) throw error;
   });
   const unplace = (s: Sh) => run(async () => { const { error } = await supabase.from('shifts').delete().eq('id', s.id).eq('pool_hold', true); if (error) throw error; });
@@ -59,15 +71,17 @@ export function DayPool() {
   /** ✦ fill the open spots from the pool: best first, spread so the strongest people don't all land on one event. Never touches anyone already placed. */
   const suggest = () => run(async () => {
     const opens = evs.map((e) => ({ e, n: openOf(e) })).filter((x) => x.n > 0);
-    const rows: Record<string, unknown>[] = []; let i = 0;
+    const rows: Record<string, unknown>[] = []; let i = 0; const added: Record<string, Record<string, number>> = {};
     for (const p of pool) {
       const live = opens.filter((x) => x.n > 0); if (!live.length) break;
       const x = live[i % live.length]; i++; x.n--;
-      rows.push({ event_id: x.e.id, staff_id: p.staff_id, position_code: 'W', position_detail: roleName('W'), planned_start: startIso(date, waiterStart(x.e)), status: 'booked', pool_hold: true, time_tbc: !!(x.e.start_tbc || x.e.details_pending) });
+      const t = nextStart(x.e, added[x.e.id] ?? {}); (added[x.e.id] ??= {})[t] = (added[x.e.id][t] ?? 0) + 1;
+      rows.push({ event_id: x.e.id, staff_id: p.staff_id, position_code: 'W', position_detail: roleName('W'), planned_start: startIso(date, t), status: 'booked', pool_hold: true, time_tbc: !!(x.e.start_tbc || x.e.details_pending) });
     }
     if (!rows.length) return 'Nothing to place: no open spots, or nobody left in the pool.';
-    const { error } = await supabase.from('shifts').insert(rows); if (error) throw error;
-    return `Placed ${rows.length}. Check the teams, move anyone, lock the final ones. Staff see nothing yet.`;
+    const { data: ins, error } = await supabase.from('shifts').insert(rows).select('id'); if (error) throw error;
+    setLastIds(((ins ?? []) as { id: string }[]).map((x) => x.id));
+    return `Placed ${rows.length}, each on a staff line time. Move anyone with the time menu, or ↶ Undo. Staff see nothing yet.`;
   });
   const confirmAll = () => run(async () => {
     if (missing.length && !confirm(`Start time / venue still missing: ${missing.join(', ')}. Send the confirmations anyway?`)) return;
@@ -86,6 +100,7 @@ export function DayPool() {
         <div className="muted sm">{evs.length} events · {pool.length} in the pool · {holds.length} placed, not confirmed yet · confirm ~{dLabel(fourOut, { weekday: 'short', month: 'short', day: 'numeric' })}</div></div>
         <div className="row wrap" style={{ gap: 8 }}>
           <button className="abtn dark" disabled={busy || !pool.length || !evs.some((e) => openOf(e) > 0)} onClick={suggest}>✦ Place the pool</button>
+          {lastIds.length > 0 && <button className="abtn" disabled={busy} onClick={undo}>↶ Undo ✦ ({lastIds.length})</button>}
           <button className={'abtn' + (today >= fourOut ? ' dark' : '')} disabled={busy || (!holds.length && !pool.length)} onClick={confirmAll}>Confirm {holds.length} &amp; release the rest</button>
         </div></div>
       {msg && <div className="adm-card okc sm">{msg}</div>}{err && <div className="adm-card err sm">{err}</div>}
@@ -106,9 +121,12 @@ export function DayPool() {
           <section key={e.id} className="adm-card dp-ev">
             <div className="spread"><b>{e.venues?.name ?? e.title}</b><Link className="lnk sm" to={`/admin/event/${e.id}`}>Event ›</Link></div>
             <small className="muted">{[e.caterer_name ? `Food by ${e.caterer_name}` : null, e.tentative ? 'client to confirm' : null, e.start_tbc || e.details_pending ? 'start to come' : e.start_time?.slice(0, 5), `need ${needOf(e)}`, openOf(e) ? `${openOf(e)} open` : 'full'].filter(Boolean).join(' · ')}</small>
-            {ps.map((s) => <P key={s.id} id={s.staff_id} note={s.position_code && s.position_code !== 'W' ? s.position_code : undefined}
+            {ps.map((s) => <P key={s.id} id={s.staff_id} note={[s.position_code && s.position_code !== 'W' ? s.position_code : null, s.planned_start ? ap(hhmm(s.planned_start)) : null].filter(Boolean).join(' · ') || undefined}
               right={<span className="dp-go">
                 {!s.pool_hold ? <small className="okc">{s.status === 'confirmed' ? '✓ confirmed' : s.notified_at ? 'sent' : 'booked'}</small> : <>
+                  {!lockedOf(s) && slots.length > 1 && <select className="dp-move" disabled={busy} value={`${s.event_id}|${hhmm(s.planned_start)}`} onChange={(ev) => move(s, ev.target.value)} title="Move to another event or time">
+                    {!slots.some((x) => x.v === `${s.event_id}|${hhmm(s.planned_start)}`) && <option value={`${s.event_id}|${hhmm(s.planned_start)}`}>{hhmm(s.planned_start)}</option>}
+                    {slots.map((x) => <option key={x.v} value={x.v}>{x.label}</option>)}</select>}
                   <button className={'abtn sm' + (lockedOf(s) ? ' dark' : '')} disabled={busy} onClick={() => lock(s, !lockedOf(s))} title={lockedOf(s) ? 'Locked: final, they see “You’re on”' : 'Lock: final placement'}>{lockedOf(s) ? '🔒' : '🔓'}</button>
                   {!lockedOf(s) && <button className="lnk sm" disabled={busy} onClick={() => unplace(s)}>back to pool</button>}</>}
               </span>} />)}
