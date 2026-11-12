@@ -135,7 +135,7 @@ export function Staff() {
                 <span className="hide-sm">{month[s.id] ?? 0}</span>
                 <span className="hide-sm">{o ? <span className="tag" style={{ height: 24 }}>{o}</span> : <span className="muted">—</span>}</span>
                 <span className="sl-app">{invRows && <><AppChip st={ap} /><span className="sl-btns">{ap.action ? <button className={'abtn sm' + (ap.action === 'Invite' ? ' dark' : '')} onClick={act}>{ap.action}</button> : null}
-                  <Link className="abtn sm" to={`/admin/view/${s.id}`} title={`See the app as ${s.full_name}`} onClick={(e) => e.stopPropagation()}>👁 View as</Link></span></>}</span>
+                  <Link className="abtn sm" to={`/admin/view/${s.id}`} title={`See the app as ${s.full_name}`} onClick={(e) => e.stopPropagation()}>View as</Link></span></>}</span>
                 <span className="st-open">{prof?.id === s.id ? <b className="accent sm">Selected</b> : <span className="sm strong">Open ›</span>}</span>
               </div>
               {open === s.id && <div style={{ padding: '0 16px 16px' }}><Editor s={s} onDone={() => { setOpen(null); load(); }} /></div>}
