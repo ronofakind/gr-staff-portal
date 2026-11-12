@@ -132,6 +132,17 @@ export function DaySheet() {
     if (big) setMsg(`${label} · ${short(nm0(s0))}${await tell([s0], how)}.`);
     return { label: `${label} · ${byId[s0.staff_id]?.full_name ?? ''}`, undo: () => supabase.from('shifts').update(b as unknown as Record<string, unknown>).eq('id', s0.id).then() };
   });
+  /** push 117 · they told Ronnie yes by text / call: confirmed, nothing sent (placed ones skip the confirmation request too). */
+  const markConfirmed = (s0: Sh) => run(async () => {
+    const { data: me } = await supabase.rpc('me'); const now = new Date().toISOString();
+    const { data: b } = await supabase.from('shifts').select('pool_hold,notified_at,status,responded_at,confirmed_by').eq('id', s0.id).single();
+    const { error } = s0.pool_hold
+      ? await supabase.from('shifts').update({ pool_hold: false, notified_at: now, status: 'confirmed', responded_at: now, confirmed_by: me ?? null }).eq('id', s0.id)
+      : await supabase.rpc('admin_mark_confirmed', { p_shift: s0.id, p_on: true });
+    if (error) throw error; setCard(null);
+    setMsg(`✓ ${short(nm0(s0))} marked confirmed · no message sent.`);
+    return { label: `confirmed ${nm0(s0)}`, undo: () => supabase.from('shifts').update(b as Record<string, unknown>).eq('id', s0.id).then() };
+  });
   const lockAll = () => run(async () => {
     const xs = sh.filter((x) => x.pool_hold && !x.locked && !LEAD.includes(x.position_code ?? '') && shown.some((e) => e.id === x.event_id));
     if (!xs.length) return 'Nothing to lock: everyone placed is already locked.';
@@ -323,6 +334,7 @@ export function DaySheet() {
           onMove={(e2, code, start) => { setCard(null); move(c, e2, code, start); }}
           onStart={(t) => patch(c, { planned_start: startIso(date, t) }, `start ${ap(t)}`)}
           onRole={(code) => patch(c, { position_code: code, position_detail: roleName(code) }, roleName(code))}
+          onConfirm={() => markConfirmed(c)}
           onLock={() => patch(c, { locked: c.locked ? false : true, locked_at: new Date().toISOString() }, c.locked ? 'unlocked' : 'locked')}
           onSwap={(id) => patch(c, { staff_id: id }, `swapped for ${byId[id]?.full_name ?? ''}`)}
           onReplace={() => run(async () => { const all = await eventsBetween(date, date); const fe = all.find((x) => x.id === c.event_id); const fs = fe?.shifts.find((x) => x.id === c.id);
@@ -364,10 +376,10 @@ function PickSheet({ date, e, code, start, staff, av, onDay, off, sortP, tier, o
 }
 
 /** push 110 · click a name: move, start later, role, lock, swap, profile, back to Free. Sent / confirmed shifts: lock + profile only (change them from the event). */
-function PersonCard({ s, e, date, evs, lays, byId, av, onDay, off, sortP, tier, busy, wn, why, onClose, onMove, onStart, onRole, onLock, onSwap, onRemove, onNote, onReplace }: {
+function PersonCard({ s, e, date, evs, lays, byId, av, onDay, off, sortP, tier, busy, wn, why, onClose, onMove, onStart, onRole, onLock, onConfirm, onSwap, onRemove, onNote, onReplace }: {
   s: Sh; e: Ev; date: string; evs: Ev[]; lays: Record<string, ReturnType<typeof layout>>; byId: Record<string, AStaff>; av: Av[]; onDay: Set<string>; off: Set<string>;
   sortP: (a: string, b: string) => number; tier: (id: string) => string | null; busy: boolean; wn: number; why: string; onClose: () => void;
-  onMove: (e: Ev, code: string, start: string | null) => void; onStart: (t: string) => void; onRole: (code: string) => void; onLock: () => void; onSwap: (id: string) => void; onRemove: () => void; onNote: (t: string) => void; onReplace: () => void }) {
+  onMove: (e: Ev, code: string, start: string | null) => void; onStart: (t: string) => void; onRole: (code: string) => void; onLock: () => void; onConfirm: () => void; onSwap: (id: string) => void; onRemove: () => void; onNote: (t: string) => void; onReplace: () => void }) {
   const [tab, setTab] = useState<'main' | 'swap'>('main'); const [t, setT] = useState(hm(s.planned_start)); const [q, setQ] = useState(''); const [nt, setNt] = useState(s.booking_note ?? '');
   const p = byId[s.staff_id]; const can = !LEAD.includes(s.position_code ?? '');
   const a = av.find((x) => x.staff_id === s.staff_id);
@@ -398,6 +410,7 @@ function PersonCard({ s, e, date, evs, lays, byId, av, onDay, off, sortP, tier, 
           <span className="row" style={{ gap: 6 }}><input className="grow" placeholder="e.g. from 4:00 PM · brings the truck" value={nt} onChange={(ev) => setNt(ev.target.value)} />
           <button className="abtn sm" disabled={busy || nt.trim() === (s.booking_note ?? '')} onClick={() => onNote(nt)}>Save</button></span></label>
         <div className="row wrap" style={{ gap: 8, gridColumn: '1 / -1' }}>
+          {s.status !== 'confirmed' && <button className="abtn sm ok" disabled={busy} onClick={onConfirm} title="They told you yes (text, call): marked confirmed, no message sent">✓ Mark confirmed · no message</button>}
           <button className="abtn sm" disabled={busy} onClick={onLock}>{s.locked ? '🔓 Unlock' : '🔒 Lock'}</button>
           {can && <button className="abtn sm" disabled={busy} onClick={onRemove}>× Back to Free</button>}
           {!s.pool_hold && !LEAD.includes(s.position_code ?? '') && <button className="abtn sm dark" disabled={busy} onClick={onReplace} title="Asks the best free people; they stay on until someone says yes">Can't make it · find a replacement</button>}
