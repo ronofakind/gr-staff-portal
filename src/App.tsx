@@ -147,7 +147,7 @@ export function App() {
             <Route path="event/new" element={<EventForm />} />
             <Route path="event/:id" element={<EventDetail />} />
             <Route path="pool/:date" element={<PoolToSheet />} />{/* push 97 → push 112: the Day sheet */}
-            <Route path="day-sheet/:date" element={<DaySheet />} />{/* push 108 */}
+            <Route path="day-sheet" element={<DaySheet />} /><Route path="day-sheet/:date" element={<DaySheet />} />{/* push 108 */}
             <Route path="event/:id/edit" element={<EventForm />} />
             <Route path="event/:id/change" element={<ClientChange />} />
             <Route path="free" element={<Free />} />

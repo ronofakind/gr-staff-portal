@@ -25,7 +25,7 @@ export const ICONS = {
 };
 /** push 47 · desktop left nav in 4 groups (Plan · People · Pay · Talk), setup pages greyed at the bottom. */
 export const NAV_GROUPS: { title: string; items: [string, string, keyof typeof ICONS][] }[] = [
-  { title: 'PLAN', items: [['/admin', 'Today', 'today'], ['/admin/bookings', 'Bookings', 'book'], ['/admin/calendar', 'Calendar', 'week']] },
+  { title: 'PLAN', items: [['/admin', 'Today', 'today'], ['/admin/day-sheet', 'Bookings', 'book'], ['/admin/calendar', 'Calendar', 'week']] },
   { title: 'PEOPLE', items: [['/admin/staff', 'Staff', 'staff'], ['/admin/availability', 'Availability', 'avail'], ['/admin/tiers', 'Tiers & ranking', 'tiers'], ['/admin/reliability', 'Reliability', 'flag'], ['/admin/debriefs', 'Debriefs & ratings', 'msg'], ['/admin/rates', 'Pay rates', 'hours'], ['/admin/hiring', 'Hiring', 'staff']] },
   { title: 'PAY', items: [['/admin/hours', 'Hours', 'hours'], ['/admin/payroll', 'Payroll', 'hours']] },
   { title: 'TALK', items: [['/admin/messages', 'Messages', 'msg'], ['/admin/meetings', 'Meetings', 'meet'], ['/admin/incidents', 'Incidents', 'alert']] },
@@ -33,7 +33,7 @@ export const NAV_GROUPS: { title: string; items: [string, string, keyof typeof I
 const SETUP: [string, string, keyof typeof ICONS][] = [['/admin/venues', 'Venues & clients', 'venue'], ['/admin/bottles', 'Bar bottle list', 'venue'], ['/admin/settings', 'Settings', 'gear'], ['/me', 'My shifts', 'today']];
 export const NAV = [...NAV_GROUPS.flatMap((g) => g.items), ...SETUP.filter(([to]) => to !== '/me')];
 /** One nav line stands for several pages: Calendar = Week + Day, Tiers & ranking = Tiers + Ranking. */
-const ALSO: Record<string, string[]> = { '/admin/calendar': ['/admin/week', '/admin/day', '/admin/month'], '/admin/week': ['/admin/day', '/admin/calendar', '/admin/month'], '/admin/tiers': ['/admin/ranking'] };
+const ALSO: Record<string, string[]> = { '/admin/day-sheet': ['/admin/bookings', '/admin/day-sheet'], '/admin/calendar': ['/admin/week', '/admin/day', '/admin/month'], '/admin/week': ['/admin/day', '/admin/calendar', '/admin/month'], '/admin/tiers': ['/admin/ranking'] };
 const TABS: [string, string, keyof typeof ICONS][] = [
   ['/admin', 'Today', 'today'], ['/admin/week', 'Week', 'week'], ['/admin/availability', 'Availability', 'avail'], ['/admin/staff', 'Staff', 'staff'], ['/admin/more', 'More', 'more'],
 ];
@@ -53,7 +53,7 @@ export function AdminLayout() {
           <div key={g.title} className="adm-grp">
             <div className="adm-grp-h">{g.title}</div>
             {g.items.map(([to, label, ic]) => (
-              <NavLink key={to} to={to} end={to === '/admin'} className={({ isActive }) => 'adm-link' + (isActive || (ALSO[to] ?? []).some((p) => loc.pathname.startsWith(p)) ? ' on' : '')}>{I(ICONS[ic])}{label}{to === '/admin/incidents' && newInc > 0 && <span className="nav-badge">{newInc}</span>}{to === '/admin/messages' && needsReply > 0 && <span className="nav-badge">{needsReply}</span>}</NavLink>
+              <NavLink key={to} to={to} end={to === '/admin'} className={({ isActive }) => 'adm-link' + (isActive || (ALSO[to] ?? []).some((p) => loc.pathname === p || loc.pathname.startsWith(p + '/')) ? ' on' : '')}>{I(ICONS[ic])}{label}{to === '/admin/incidents' && newInc > 0 && <span className="nav-badge">{newInc}</span>}{to === '/admin/messages' && needsReply > 0 && <span className="nav-badge">{needsReply}</span>}</NavLink>
             ))}
           </div>
         ))}
@@ -78,7 +78,7 @@ export function AdminLayout() {
 export function More() {
   const needsReply = useInboxCount();
   const items: [string, string, keyof typeof ICONS][] = [
-    ['/admin/bookings', 'Bookings', 'book'], ['/admin/day', 'Day view', 'day'], ['/admin/hours', 'Hours & pay period', 'hours'], ['/admin/payroll', 'Payroll', 'hours'], ['/admin/reliability', 'Reliability', 'flag'], ['/admin/debriefs', 'Debriefs & ratings', 'msg'], ['/admin/rates', 'Pay rates', 'hours'], ['/admin/hiring', 'Hiring', 'staff'], ['/admin/incidents', 'Incidents', 'alert'], ['/admin/messages', 'Messages', 'msg'],
+    ['/admin/day-sheet', 'Bookings', 'book'], ['/admin/day', 'Day view', 'day'], ['/admin/hours', 'Hours & pay period', 'hours'], ['/admin/payroll', 'Payroll', 'hours'], ['/admin/reliability', 'Reliability', 'flag'], ['/admin/debriefs', 'Debriefs & ratings', 'msg'], ['/admin/rates', 'Pay rates', 'hours'], ['/admin/hiring', 'Hiring', 'staff'], ['/admin/incidents', 'Incidents', 'alert'], ['/admin/messages', 'Messages', 'msg'],
     ['/admin/meetings', 'Meetings', 'meet'], ['/admin/tiers', 'Tiers', 'tiers'], ['/admin/ranking', 'Ranking · score', 'rank'], ['/admin/venues', 'Venues & clients', 'venue'], ['/admin/bottles', 'Bar bottle list', 'venue'], ['/admin/settings', 'Settings', 'gear'], ['/me', 'My shifts', 'today'],
   ];
   return (
