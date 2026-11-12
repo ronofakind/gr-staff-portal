@@ -645,6 +645,7 @@ export function Bookings() {
               </button>); })}
             {evs.length > 3 && <span className="bk-wmore">+{evs.length - 3} more</span>}
             {evs.some((e) => !isBarEv(e)) && d >= today0 && <Link className="bk-wpool" to={`/admin/pool/${d}`} onClick={(ev) => ev.stopPropagation()}>Day pool ›</Link>}{/* push 97 */}
+            {evs.length > 0 && <Link className="bk-wpool ds-new" to={`/admin/day-sheet/${d}`} onClick={(ev) => ev.stopPropagation()}>Day sheet ›</Link>}{/* push 108 */}
           </div>); })
           : <span className="grow muted sm" style={{ textAlign: 'center' }}>{dLabel(range.from)} – {dLabel(range.to)}</span>}
         <button className="round" onClick={() => setP('date', addDays(date, 7))}>›</button>
