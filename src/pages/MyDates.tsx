@@ -73,9 +73,9 @@ export function MyDates({ me, base = '', preview = false }: { me: Staff; base?: 
     supabase.from('staff_weekly').select('dow,status,from_time,until_time').eq('staff_id', me.id)
       .then(({ data }) => setWeek(Object.fromEntries(((data ?? []) as Week[]).map((w) => [w.dow, w]))));
     // push 65 · place + start times when Ronnie turned them on for that date
-    supabase.rpc('my_ask_times').then(({ data, error }) => { if (error || !Array.isArray(data)) return; const m: Record<string, ATimes> = {};
-      for (const r of data as { avail_id: string; venue: string; starts: (string | null)[] }[]) { const st = (r.starts ?? []).filter(Boolean) as string[]; if (!st.length) continue; (m[r.avail_id] ??= []).push({ venue: r.venue, starts: st }); }
-      setTimesBy(m); });
+    supabase.rpc('my_ask_times', preview ? { p_staff: me.id } : {}).then(({ data, error }) => { if (error || !Array.isArray(data)) return; const m: Record<string, ATimes> = {};
+      for (const r of data as { avail_id: string; venue: string; starts: (string | null)[]; shift?: boolean }[]) { const st = (r.starts ?? []).filter(Boolean) as string[]; if (!st.length && !r.shift) continue; (m[r.avail_id] ??= []).push({ venue: r.venue, starts: st, shift: !!r.shift }); }
+      setTimesBy(m); }); // push 102 · View as shows their asks; shift = asked for one shift
     // push 64 · day-only answers (my_dates doesn't return until_time)
     supabase.from('availability').select('id,until_time').eq('staff_id', me.id).gte('for_date', today).not('until_time', 'is', null)
       .then(({ data, error }) => { if (!error) setUntilBy(Object.fromEntries(((data ?? []) as { id: string; until_time: string }[]).map((x) => [x.id, x.until_time.slice(0, 5)]))); });
@@ -181,12 +181,12 @@ export function MyDates({ me, base = '', preview = false }: { me: Staff; base?: 
                 <button className="md-dky-btn" onClick={() => { setDky(null); setDkyOpen(true); }}>Tell him</button>
               </div>
             )}
-            {answerList.length > 0 && <div className="md-plan-note">📅 We’re planning these dates. Tell us which ones you can work: a yes doesn’t book you yet, we confirm as events are confirmed.</div>}{/* Nov 11 · month ask wording, promises nothing */}
+            {answerList.length > 0 && !answerList.every((d) => timesBy[d.id]?.[0]?.shift) && <div className="md-plan-note">📅 We’re planning these dates. Tell us which ones you can work: a yes doesn’t book you yet, we confirm as events are confirmed.</div>}{/* Nov 11 · month ask wording, promises nothing */}
             {answerList.map((d) => justDone.has(d.id) && !toAnswer(d, today)
               ? <AnsweredRow key={d.id} d={d} times={timesBy[d.id]} until={untilBy[d.id]} onTap={() => setSheet({ d, mode: 'pick' })} />
               : <AnswerRow key={d.id} d={d} times={timesBy[d.id]} onYes={() => setSheet({ d, mode: 'yes' })} onMaybe={() => setSheet({ d, mode: 'maybe' })} onNo={() => save(d, 'no')} />)}
             {!answerList.length && !dky && !fills.length && <div className="md-empty"><b className="serif">All answered, thanks!</b><span>When <Brand /> sends you new dates, they show up here.</span></div>}
-            {answerList.length > 0 && <p className="md-foot">Answer any date, in any order. Saying yes doesn’t book you yet.</p>}
+            {answerList.length > 0 && <p className="md-foot">Answer any date, in any order.{answerList.every((d) => timesBy[d.id]?.[0]?.shift) ? '' : ' Saying yes doesn’t book you yet.'}</p>}
           </section>
         ) : curTab === 'booked' ? (
           <section className="md-list">
@@ -229,9 +229,9 @@ function DateSq({ iso, kind }: { iso: string; kind: 'neutral' | 'booked' | 'yes'
 
 /** Board D: plain white card, neutral date, venue · evening, red "Answer by …"; red outline only under 24 h. */
 /** push 65 · [{venue, starts}] per event that night, when Ronnie showed the times */
-type ATimes = { venue: string; starts: string[] }[];
+type ATimes = { venue: string; starts: string[]; shift?: boolean }[];
 /** "Le Andover · starts 4:00 or 6:00 PM" · two events: "Le Andover 4:00 PM · Salon Richmond 5:00 PM" */
-const timesText = (t: ATimes) => t.length === 1 ? `${t[0].venue} · starts ${t[0].starts.map((x) => ampm15(x)).join(' or ')}` : t.map((e) => `${e.venue} ${e.starts.map((x) => ampm15(x)).join(' or ')}`).join(' · ');
+const timesText = (t: ATimes) => t.length === 1 ? (t[0].shift ? `${t[0].venue}${t[0].starts.length ? ` · ${ampm15(t[0].starts[0])}` : ''}` : `${t[0].venue} · starts ${t[0].starts.map((x) => ampm15(x)).join(' or ')}`) : t.map((e) => `${e.venue} ${e.starts.map((x) => ampm15(x)).join(' or ')}`).join(' · ');
 
 function AnswerRow({ d, onYes, onMaybe, onNo, times }: { d: MyDate; onYes: () => void; onMaybe: () => void; onNo: () => void; times?: ATimes }) {
   const hot = urgent(d);
@@ -241,6 +241,7 @@ function AnswerRow({ d, onYes, onMaybe, onNo, times }: { d: MyDate; onYes: () =>
         <DateSq iso={d.for_date} kind="neutral" />
         <div className="grow" style={{ minWidth: 0 }}>
           <b className="md-where">{times ? <>{timesText(times)}</> : whereText(d)}</b>
+          {times?.[0]?.shift && <span className="md-tag yes">ASKED FOR THIS SHIFT · YES BOOKS YOU</span>}
           <span className="md-by">{times && times.some((t) => t.starts.length > 1) || (times && times.length > 1) ? 'We’ll tell you which · ' : ''}{hot ? '⏰ ' : ''}{answerByText(d)}</span>
           {d.status === 'maybe' && d.knows_by && <span className="md-tag maybe">MAYBE · KNOWS BY {monDay(d.knows_by).toUpperCase()}</span>}
         </div>
