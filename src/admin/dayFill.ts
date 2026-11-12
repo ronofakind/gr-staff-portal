@@ -79,7 +79,7 @@ export function layout(e: Ev, shifts: Sh[], rk?: (sid: string) => number) {
   const exN = e.extras != null ? Math.max(0, e.extras) : !isBar(e) && client > 7 ? Math.ceil(client * 0.1) : 0;
   const lastStart = lines.length ? lines[lines.length - 1].start : e.start_time?.slice(0, 5) ?? null;
   const extras = { key: 'x', code: isBar(e) ? 'BT' : 'W', start: lastStart, count: exN, people: left.splice(0, exN) };
-  return { lines, leads, leadNeed: Math.max(leadNeed, 1), client, extras, over: left };
+  return { lines, leads, leadNeed: (e.staffing ?? []).some((l) => LEAD.includes(l.code)) ? leadNeed : 1, leadIdx: (e.staffing ?? []).findIndex((l) => LEAD.includes(l.code)), client, extras, over: left };
 }
 
 const HARD = new Set(['not_venue', 'private_only', 'big_dates_only', 'not_weekday', 'min_guests', 'areas']);

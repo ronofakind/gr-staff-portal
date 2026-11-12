@@ -91,21 +91,32 @@ export function DaySheet() {
       time_tbc: !!(e.start_tbc || e.details_pending) }).select('id').single(); if (error) throw error;
     const id = (data as { id: string }).id; return { label: `placed ${byId[staffId]?.full_name ?? ''}`, undo: () => supabase.from('shifts').delete().eq('id', id).eq('pool_hold', true).then() };
   });
+  // push 114 · anyone can be dragged / removed. Placed (not sent) = silent; already sent = asked first, then the notice waits in About to send.
+  const nm0 = (s: Sh) => byId[s.staff_id]?.full_name ?? '…';
+  const sentTxt = (s: Sh) => s.status === 'confirmed' ? 'confirmed' : s.notified_at ? 'sent (not confirmed yet)' : 'booked';
+  const okSent = (s: Sh, what: string, notice: string) => s.pool_hold || confirm(`${nm0(s)} is already ${sentTxt(s)}.\n\n${what}\n→ They get "${notice}". It waits in "About to send" until you press Send.\n\nGo ahead?`);
   const remove = (s: Sh) => run(async () => {
-    if (!removable(s)) throw new Error('Only placed (not locked, not sent) people go back to Free here.');
+    const ev = evs.find((x) => x.id === s.event_id);
+    if (!okSent(s, `Back to Free = off ${ev?.venues?.name ?? ev?.title ?? 'this event'}.`, 'Shift removed')) return;
+    if (s.pool_hold && s.locked && !confirm(`${nm0(s)} is locked 🔒. Back to Free anyway?`)) return;
     const { data: row } = await supabase.from('shifts').select('*').eq('id', s.id).single();
-    const { error } = await supabase.from('shifts').delete().eq('id', s.id).eq('pool_hold', true); if (error) throw error;
-    return { label: `removed ${byId[s.staff_id]?.full_name ?? ''}`, undo: () => supabase.from('shifts').insert(row as Record<string, unknown>).then() };
+    const { error } = await supabase.from('shifts').delete().eq('id', s.id); if (error) throw error;
+    if (!s.pool_hold) await supabase.rpc('admin_shift_note', { p_staff: s.staff_id, p_kind: 'removed', p_shift: null, p_alert: null, p_meta: { date, venue: ev?.venues?.name ?? ev?.title, event_id: s.event_id } });
+    setMsg(s.pool_hold ? `${short(nm0(s))} back to Free · no notification (not sent yet).` : `${short(nm0(s))} back to Free · "Shift removed" waiting in About to send.`);
+    return { label: `removed ${nm0(s)}`, undo: () => supabase.from('shifts').insert(row as Record<string, unknown>).then() };
   });
   const move = (s: Sh, e: Ev, code: string, start: string | null) => run(async () => {
-    if (!removable(s)) throw new Error('Locked or already sent: change it from the event.');
-    const before = { event_id: s.event_id, position_code: s.position_code, position_detail: s.position_detail ?? null, planned_start: s.planned_start };
     const t = start ?? e.start_time?.slice(0, 5) ?? '17:00';
+    if (s.event_id === e.id && hm(s.planned_start) === t && (s.position_code ?? '') === code) return;
+    if (!okSent(s, `Move to ${e.venues?.name ?? e.title} · ${roleName(code)} ${ap(t)}.`, 'Your shift changed')) return;
+    const before = { event_id: s.event_id, position_code: s.position_code, position_detail: s.position_detail ?? null, planned_start: s.planned_start };
     const { error } = await supabase.from('shifts').update({ event_id: e.id, position_code: code, position_detail: roleName(code), planned_start: startIso(date, t) }).eq('id', s.id); if (error) throw error;
-    return { label: `moved ${byId[s.staff_id]?.full_name ?? ''}`, undo: () => supabase.from('shifts').update(before).eq('id', s.id).then() };
+    setMsg(s.pool_hold ? `Moved ${short(nm0(s))} · no notification (not sent yet).` : `Moved ${short(nm0(s))} · "Your shift changed" waiting in About to send.`);
+    return { label: `moved ${nm0(s)}`, undo: () => supabase.from('shifts').update(before).eq('id', s.id).then() };
   });
   /** push 110 · person card: one change = one undo step. */
   const patch = (s0: Sh, row: Record<string, unknown>, label: string) => run(async () => {
+    if (['planned_start', 'position_code', 'staff_id', 'event_id'].some((k) => k in row) && !okSent(s0, `Change: ${label}.`, row.staff_id ? 'Shift removed' : 'Your shift changed')) return;
     const keys = Object.keys(row); const { data: b, error: e0 } = await supabase.from('shifts').select(keys.join(',')).eq('id', s0.id).single(); if (e0) throw e0;
     const { error } = await supabase.from('shifts').update(row).eq('id', s0.id); if (error) throw error;
     return { label: `${label} · ${byId[s0.staff_id]?.full_name ?? ''}`, undo: () => supabase.from('shifts').update(b as unknown as Record<string, unknown>).eq('id', s0.id).then() };
@@ -189,6 +200,15 @@ export function DaySheet() {
     const moves = (line?.people ?? []).filter((x) => hm(x.planned_start) === line?.start).map((x) => ({ s: x, t }));
     st[idx] = { ...l, start: t }; lineSave(e, st, `${plural(l.code, 2)} → ${ap(t)}`, moves);
   };
+  /** push 114 · how many MDs / bar managers: the MD (BM) line in the event's staffing. */
+  const setLeads = (e: Ev, n: number) => {
+    if (n < 0) return; const code = isBar(e) ? 'BM' : 'MD'; const st = [...(e.staffing ?? [])]; const i = st.findIndex((l) => LEAD.includes(l.code));
+    const have = sh.filter((x) => x.event_id === e.id && LEAD.includes(x.position_code ?? '')).length;
+    if (n < have && !confirm(`${have} ${code === 'MD' ? 'MD' : 'bar manager'}${have > 1 ? 's are' : ' is'} on this event. Lower to ${n} anyway? (Nobody is taken off: drag one to Free if needed.)`)) return;
+    if (i >= 0) { if (n === 0) st.splice(i, 1); else st[i] = { ...st[i], count: n }; }
+    else if (n > 0) st.unshift({ dept: isBar(e) ? 'bar' : 'floor', code, count: n, start: e.start_time?.slice(0, 5) ?? null });
+    lineSave(e, st, `${code === 'MD' ? 'MDs' : 'bar managers'} → ${n}`);
+  };
   const setExtras = (e: Ev, n: number) => run(async () => { const b = e.extras ?? null; const { error } = await supabase.from('events').update({ extras: Math.max(0, n) }).eq('id', e.id); if (error) throw error;
     return { label: `extras → ${n}`, undo: () => supabase.from('events').update({ extras: b }).eq('id', e.id).then() }; });
   const addLine = () => { if (!add) return; const e = evs.find((x) => x.id === add.eid); const n = parseInt(add.count, 10); if (!e || !(n > 0) || !add.t) return;
@@ -201,9 +221,9 @@ export function DaySheet() {
     const e = evs.find((x) => x.id === s.event_id); const n = wn[s.staff_id] ?? 0;
     const w = [why[s.id] ? `✦ ${why[s.id]}` : null, e && ctx ? whyText(s.staff_id, e, ctx, sh.filter((x) => x.event_id === s.event_id && x.staff_id !== s.staff_id).map((x) => x.staff_id), n, a) : null,
       s.locked ? 'locked' : null, !s.pool_hold ? (s.status === 'confirmed' ? 'confirmed' : s.notified_at ? 'sent' : 'booked') : null].filter(Boolean).join(' · ');
-    return <span className={'ds-chip' + (can ? '' : ' fixed') + (n > 3 ? ' flag' : '') + (flagged[s.id] ? ' over' : '')} draggable={can} onDragStart={(ev) => { ev.dataTransfer.setData('text/plain', s.id); ev.dataTransfer.effectAllowed = 'move'; setDrag(s); }} onDragEnd={() => setDrag(null)} title={`${nm} · ${w}${s.booking_note ? ` · 📌 ${s.booking_note}` : ''} · click = options`} onClick={() => setCard(s)}>
+    return <span className={'ds-chip' + (can ? '' : ' fixed') + (n > 3 ? ' flag' : '') + (flagged[s.id] ? ' over' : '')} draggable onDragStart={(ev) => { ev.dataTransfer.setData('text/plain', s.id); ev.dataTransfer.effectAllowed = 'move'; setDrag(s); }} onDragEnd={() => setDrag(null)} title={`${nm} · ${w}${s.booking_note ? ` · 📌 ${s.booking_note}` : ''}${s.pool_hold ? ' · moving them sends nothing' : ' · already sent: moving them sends "Your shift changed" (asked first)'} · click = options`} onClick={() => setCard(s)}>
       <i className={'ds-t ' + (t ?? '')} /><span className="ds-nm">{short(nm)}</span>{s.locked ? ' 🔒' : ''}{!s.pool_hold && s.status === 'confirmed' ? ' ✓' : ''}{late ? <small className="gold"> from {ap(a!.from_time)}</small> : null}{s.booking_note ? <small className="ds-note" title={s.booking_note}>📌</small> : null}{n > 3 ? <small className="ds-flag" title={`${n} shifts this week`}>⚑{n}</small> : null}
-      {can && <button className="ds-x" disabled={busy} onClick={(ev) => { ev.stopPropagation(); remove(s); }} aria-label={`Back to free: ${nm}`}>×</button>}</span>; };
+      {!LEAD.includes(s.position_code ?? '') && <button className="ds-x" disabled={busy} onClick={(ev) => { ev.stopPropagation(); remove(s); }} aria-label={`Back to free: ${nm}`}>×</button>}</span>; };
   const Slot = ({ e, code, start }: { e: Ev; code: string; start: string | null }) =>
     <button className="ds-slot" onClick={() => setPick({ e, code, start })} onDragOver={(ev) => ev.preventDefault()} onDrop={() => dropOn(e, code, start)}>+ fill</button>;
   const Step = ({ n, on }: { n: number; on: (n: number) => void }) => <span className="ds-step"><button disabled={busy} onClick={() => on(n - 1)} aria-label="One less">−</button><b>{n}</b><button disabled={busy} onClick={() => on(n + 1)} aria-label="One more">+</button></span>;
@@ -256,8 +276,8 @@ export function DaySheet() {
                   {sh.some((x) => x.event_id === e.id && x.pool_hold && !x.locked && !LEAD.includes(x.position_code ?? '')) && <button className="lnk sm muted" disabled={busy} onClick={() => clear(e)}>Clear</button>}
                   <Link className="lnk sm" to={`/admin/event/${e.id}`}>Event ›</Link></div>
                 <div className="ds-lead" onDragOver={(ev) => ev.preventDefault()} onDrop={() => dropOn(e, isBar(e) ? 'BM' : 'MD', e.start_time?.slice(0, 5) ?? null)}>
-                  <small>{isBar(e) ? 'BAR MANAGER' : 'MD'}</small><span /><span className="ds-cells" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>{L.leads.map((s) => <Chip key={s.id} s={s} />)}
-                  {L.leads.length < L.leadNeed && <Slot e={e} code={isBar(e) ? 'BM' : 'MD'} start={e.start_time?.slice(0, 5) ?? null} />}</span><span /></div>
+                  <span className="ds-lbl"><small>{isBar(e) ? 'BAR MANAGERS' : 'MDS'}</small><Step n={L.leadNeed} on={(n) => setLeads(e, n)} /></span><span /><span className="ds-cells" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>{L.leads.map((s) => <Chip key={s.id} s={s} />)}
+                  {[...Array(Math.max(0, L.leadNeed - L.leads.length))].map((_, i) => <Slot key={i} e={e} code={isBar(e) ? 'BM' : 'MD'} start={e.start_time?.slice(0, 5) ?? null} />)}</span><span /></div>
                 {L.lines.map((l) => <Row key={l.key} idx={l.idx} e={e} label={plural(l.code, 2).toUpperCase()} code={l.code} start={l.start} count={l.count} people={l.people} />)}
                 {!L.lines.length && <div className="muted sm" style={{ padding: '8px 0' }}>No staff lines yet: <Link to={`/admin/event/${e.id}/edit`}>add them on the event ›</Link></div>}
                 {(L.extras.count > 0 || !isBar(e)) && L.lines.length > 0 && <Row e={e} extra label={<>EXTRAS <em>{e.extras == null ? '10%' : 'set by you'}</em></>} code={L.extras.code} start={L.extras.start} count={L.extras.count} people={L.extras.people} />}
@@ -337,7 +357,7 @@ function PersonCard({ s, e, date, evs, lays, byId, av, onDay, off, sortP, tier, 
   sortP: (a: string, b: string) => number; tier: (id: string) => string | null; busy: boolean; wn: number; why: string; onClose: () => void;
   onMove: (e: Ev, code: string, start: string | null) => void; onStart: (t: string) => void; onRole: (code: string) => void; onLock: () => void; onSwap: (id: string) => void; onRemove: () => void; onNote: (t: string) => void; onReplace: () => void }) {
   const [tab, setTab] = useState<'main' | 'swap'>('main'); const [t, setT] = useState(hm(s.planned_start)); const [q, setQ] = useState(''); const [nt, setNt] = useState(s.booking_note ?? '');
-  const p = byId[s.staff_id]; const can = s.pool_hold && !LEAD.includes(s.position_code ?? '');
+  const p = byId[s.staff_id]; const can = !LEAD.includes(s.position_code ?? '');
   const a = av.find((x) => x.staff_id === s.staff_id);
   const dept = isBar(e) ? 'bar' : 'floor';
   const slots = evs.filter((x) => isBar(x) === isBar(e)).flatMap((x) => { const L = lays[x.id]; const ls = [...L.lines.map((l) => ({ ...l, extra: false })), ...(L.extras.count ? [{ ...L.extras, extra: true }] : [])];
@@ -353,8 +373,8 @@ function PersonCard({ s, e, date, evs, lays, byId, av, onDay, off, sortP, tier, 
       <div className="row" style={{ gap: 8, alignItems: 'center' }}><i className={'ds-t ' + (tier(s.staff_id) ?? '')} /><b className="grow serif" style={{ fontSize: 18 }}>{p?.full_name ?? '…'}</b><button className="lnk muted" onClick={onClose}>✕</button></div>
       <small className="muted">{e.venues?.name ?? e.title} · {roleName(s.position_code)} · {e.start_tbc || e.details_pending ? 'time TBC' : ap(hm(s.planned_start))} · {state}{a?.from_time ? ` · free from ${ap(a.from_time)}` : ''}{wn > 3 ? ` · ⚑ ${wn} shifts this week` : ''}</small>
       {why && <small className="ds-why">{why}</small>}
-      {!can && <small className="gold">{LEAD.includes(s.position_code ?? '') ? 'MD / bar manager: change it from the event.' : 'Already sent to them: change the time or place from the event so they get told.'}</small>}
-      <div className="seg3"><button className={tab === 'main' ? 'on' : ''} onClick={() => setTab('main')}>Change</button><button className={tab === 'swap' ? 'on' : ''} disabled={!can} onClick={() => setTab('swap')}>{can ? 'Swap' : 'Swap (placed only)'}</button></div>
+      {!can ? <small className="gold">MD / bar manager: drag them, or change it from the event.</small> : !s.pool_hold ? <small className="gold">Already {s.status === 'confirmed' ? 'confirmed' : 'sent'}: any change here asks you first, then “Your shift changed” waits in About to send.</small> : <small className="muted">Placed, not sent: changes here send nothing.</small>}
+      <div className="seg3"><button className={tab === 'main' ? 'on' : ''} onClick={() => setTab('main')}>Change</button><button className={tab === 'swap' ? 'on' : ''} disabled={!can || !s.pool_hold} onClick={() => setTab('swap')}>{can && s.pool_hold ? 'Swap' : 'Swap (placed only)'}</button></div>
       {tab === 'main' ? <div className="ds-cardgrid">
         <label>Move to<select disabled={!can || busy} value={slots.find((x) => x.here)?.v ?? ''} onChange={(ev) => { const x = slots.find((y) => y.v === ev.target.value); if (x) onMove(x.e, x.code, x.start); }}>
           {!slots.some((x) => x.here) && <option value="">—</option>}{slots.map((x) => <option key={x.v} value={x.v}>{x.label}</option>)}</select></label>
