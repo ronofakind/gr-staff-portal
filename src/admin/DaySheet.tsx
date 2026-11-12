@@ -2,43 +2,19 @@
 // One screen shaped like the Events sheet: each event = a block (MD / bar manager at the head, one row per staff line with its
 // count, time and slots, + an extras line), "Free this day" on the right. Tap a slot → pick; drag a name to another slot / event /
 // back to Free; × → back to Free; ↶ Undo = last move. New placements are pool shifts (staff see nothing until you confirm).
-// Part 2 = ✦ Fill, part 3 = click a name (person card, note, lock, confirm), part 4 = phone swap + retire Bookings / Day pool.
+// Part 2 (push 109) = ✦ Fill the day / week / block, Clear, ⚑ more than 3 shifts, hover = why. Part 3 = click a name (person card, note, lock, confirm), part 4 = phone swap + retire Bookings / Day pool.
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { allStaff, addDays, dLabel, isoDay, roleName, startIso, type AStaff } from './api';
+import { addDays, dLabel, isoDay, roleName, startIso, type AStaff } from './api';
+import { LEAD, hm, isBar, isFar, layout, loadCtx, loadDay, planFill, weekCounts, whyText, type Av, type Ctx, type Ev, type Line, type Row, type Sh } from './dayFill';
 
-type Line = { dept?: string; code: string; start: string | null; count: number };
-type Ev = { id: string; title: string; department: string; start_time: string | null; staff_needed: number; guests: number | null; staffing: Line[] | null;
-  details_pending: boolean | null; start_tbc: boolean | null; caterer_name?: string | null; venues: { name: string } | null };
-type Sh = { id: string; event_id: string; staff_id: string; position_code: string | null; position_detail?: string | null; status: string; pool_hold: boolean; locked: boolean | null;
-  notified_at: string | null; planned_start: string | null; time_tbc?: boolean | null };
-type Av = { staff_id: string; status: string; from_time: string | null; released_at: string | null };
 type Op = { label: string; undo: () => PromiseLike<unknown> };
 const TORD: Record<string, number> = { A: 0, B: 1, C: 2 };
-const LEAD = ['MD', 'BM'];
-const hm = (iso: string | null | undefined) => iso ? new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Toronto' }) : '';
 const ap = (t: string | null | undefined) => { if (!t) return 'TBC'; const h = Number(t.slice(0, 2)); return `${h % 12 || 12}${t.slice(2, 5) !== ':00' ? t.slice(2, 5) : ''} ${h < 12 ? 'AM' : 'PM'}`; };
 const plural = (code: string, n: number) => { const r = roleName(code) || code; return n === 1 ? r : r.endsWith('s') ? r : r + 's'; };
 const short = (n: string) => { const p = n.trim().split(/\s+/); return p.length > 1 ? `${p[0]} ${p[p.length - 1][0]}.` : n; };
-const isBar = (e: Ev) => e.department === 'bar';
 const monday = (d: string) => { const x = new Date(d + 'T12:00:00'); const k = (x.getDay() + 6) % 7; return addDays(d, -k); };
-
-/** Place each shift on a line (same code + same time, up to its count). Leftovers go to the extras line, then "also placed". */
-function layout(e: Ev, shifts: Sh[]) {
-  const lines = (e.staffing ?? []).filter((l) => !LEAD.includes(l.code) && l.count > 0).map((l, i) => ({ key: `${i}`, code: l.code, start: l.start ?? e.start_time?.slice(0, 5) ?? null, count: l.count, people: [] as Sh[] }));
-  const leadNeed = (e.staffing ?? []).filter((l) => LEAD.includes(l.code)).reduce((n, l) => n + l.count, 0);
-  const leads = shifts.filter((s) => LEAD.includes(s.position_code ?? ''));
-  const rest = shifts.filter((s) => !LEAD.includes(s.position_code ?? '')).sort((a, b) => (a.planned_start ?? '').localeCompare(b.planned_start ?? ''));
-  const left: Sh[] = [];
-  for (const s of rest) { const t = hm(s.planned_start); const L = lines.find((l) => l.code === (s.position_code ?? 'W') && l.start === t && l.people.length < l.count)
-      ?? lines.find((l) => l.start === t && l.people.length < l.count); if (L) L.people.push(s); else left.push(s); }
-  const client = lines.reduce((n, l) => n + l.count, 0) + leadNeed;
-  const exN = !isBar(e) && client > 7 ? Math.ceil(client * 0.1) : 0;
-  const lastStart = lines.length ? lines[lines.length - 1].start : e.start_time?.slice(0, 5) ?? null;
-  const extras = { key: 'x', code: isBar(e) ? 'BT' : 'W', start: lastStart, count: exN, people: left.splice(0, exN) };
-  return { lines, leads, leadNeed: Math.max(leadNeed, isBar(e) ? 1 : 1), client, extras, over: left };
-}
 
 export function DaySheet() {
   const { date = isoDay(new Date()) } = useParams(); const nav = useNavigate();
@@ -48,22 +24,15 @@ export function DaySheet() {
   const [tick, setTick] = useState(0); const [busy, setBusy] = useState(false); const [err, setErr] = useState(''); const [msg, setMsg] = useState('');
   const [ops, setOps] = useState<Op[]>([]); const [pick, setPick] = useState<{ e: Ev; code: string; start: string | null } | null>(null);
   const [drag, setDrag] = useState<Sh | { staff_id: string } | null>(null); const [tab, setTab] = useState<'yes' | 'maybe'>('yes');
+  const [ctx, setCtx] = useState<Ctx | null>(null); const [wn, setWn] = useState<Record<string, number>>({}); const [why, setWhy] = useState<Record<string, string>>({});
+  useEffect(() => { loadCtx().then((c) => { setCtx(c); setStaff(c.staff); }).catch((x) => setErr((x as Error).message)); }, []);
   useEffect(() => { try { localStorage.setItem('gr_ds_dept', dept); } catch { /* */ } }, [dept]);
   const wk0 = monday(date);
 
   useEffect(() => { (async () => {
-    const [e, a, o, st] = await Promise.all([
-      supabase.from('events').select('id,title,department,start_time,staff_needed,guests,staffing,details_pending,start_tbc,caterer_name,venues(name)').eq('event_date', date).order('start_time'),
-      supabase.from('availability').select('staff_id,status,from_time,released_at').eq('for_date', date).not('ask_id', 'is', null),
-      supabase.from('days_off').select('staff_id').lte('from_date', date).gte('to_date', date),
-      staff.length ? Promise.resolve(staff) : allStaff(),
-    ]);
-    if (e.error) { setErr(e.error.message); return; }
-    const es = (e.data ?? []) as unknown as Ev[]; setEvs(es); setAv((a.data ?? []) as Av[]); setOff(new Set(((o.data ?? []) as { staff_id: string }[]).map((x) => x.staff_id))); setStaff(st);
-    const s = await supabase.from('shifts').select('id,event_id,staff_id,position_code,position_detail,status,pool_hold,locked,notified_at,planned_start,time_tbc,attendance')
-      .in('event_id', es.length ? es.map((x) => x.id) : ['00000000-0000-0000-0000-000000000000']).neq('status', 'declined');
-    setSh(((s.data ?? []) as Sh[]).filter((x) => (x as unknown as { attendance?: string }).attendance !== 'cancelled'));
-  })(); }, [date, tick]); // eslint-disable-line react-hooks/exhaustive-deps
+    try { const d = await loadDay(date); setEvs(d.evs); setSh(d.sh); setAv(d.av); setOff(d.off); } catch (x) { setErr((x as Error).message); }
+  })(); }, [date, tick]);
+  useEffect(() => { weekCounts(wk0, addDays(wk0, 6)).then(setWn); }, [wk0, tick]);
 
   // week strip
   useEffect(() => { (async () => {
@@ -86,9 +55,11 @@ export function DaySheet() {
   const sortP = (a: string, b: string) => (TORD[tier(a) ?? ''] ?? 9) - (TORD[tier(b) ?? ''] ?? 9) || rank(a) - rank(b);
   const onDay = new Set(sh.map((s) => s.staff_id));
   const shown = evs.filter((e) => dept === 'both' || (dept === 'bar') === isBar(e));
-  const free = av.filter((a) => a.status === tab && !a.released_at && !onDay.has(a.staff_id) && !off.has(a.staff_id)).sort((a, b) => sortP(a.staff_id, b.staff_id));
-  const nYes = av.filter((a) => a.status === 'yes' && !a.released_at && !onDay.has(a.staff_id) && !off.has(a.staff_id)).length;
-  const nMaybe = av.filter((a) => a.status === 'maybe' && !a.released_at && !onDay.has(a.staff_id)).length;
+  const aDept = (a: Av) => a.avail_asks?.department ?? byId[a.staff_id]?.department ?? 'floor';
+  const inDept = (a: Av) => dept === 'both' || (aDept(a) === 'bar') === (dept === 'bar');
+  const free = av.filter((a) => inDept(a) && a.status === tab && !a.released_at && !onDay.has(a.staff_id) && !off.has(a.staff_id)).sort((a, b) => sortP(a.staff_id, b.staff_id));
+  const nYes = av.filter((a) => inDept(a) && a.status === 'yes' && !a.released_at && !onDay.has(a.staff_id) && !off.has(a.staff_id)).length;
+  const nMaybe = av.filter((a) => inDept(a) && a.status === 'maybe' && !a.released_at && !onDay.has(a.staff_id)).length;
   const lays = useMemo(() => Object.fromEntries(evs.map((e) => [e.id, layout(e, sh.filter((s) => s.event_id === e.id))])), [evs, sh]);
   const tot = (b: boolean) => evs.filter((e) => isBar(e) === b).reduce((acc, e) => { const L = lays[e.id]; const need = L.client + L.extras.count; const have = sh.filter((s) => s.event_id === e.id).length; return [acc[0] + have, acc[1] + need]; }, [0, 0]);
   const [fl, br] = [tot(false), tot(true)];
@@ -117,13 +88,48 @@ export function DaySheet() {
     return { label: `moved ${byId[s.staff_id]?.full_name ?? ''}`, undo: () => supabase.from('shifts').update(before).eq('id', s.id).then() };
   });
   const undo = () => { const last = ops[ops.length - 1]; if (!last) return; setOps((o) => o.slice(0, -1)); run(async () => { await last.undo(); return `Undone: ${last.label}.`; }); };
+  /** ✦ one move: fills the open slots of these events (Floor / Bar switch respected). Undo takes the whole fill back. */
+  const insertPlan = async (rows: Row[], w: Record<string, string>, label: string, extra: string): Promise<Op | string> => {
+    if (!rows.length) return `Nothing to place${extra}: no open slots, or nobody free who fits (said yes, from time, department, rules).`;
+    const { data, error } = await supabase.from('shifts').insert(rows).select('id,event_id,staff_id'); if (error) throw error;
+    const ins = (data ?? []) as { id: string; event_id: string; staff_id: string }[]; const ids = ins.map((x) => x.id);
+    setWhy((o) => { const n = { ...o }; for (const x of ins) { const k = `${x.event_id}|${x.staff_id}`; if (w[k]) n[x.id] = w[k]; } return n; });
+    setMsg(`✦ Placed ${rows.length}${extra}. Hover a name to see why · ↶ Undo takes the whole fill back · staff see nothing yet.`);
+    return { label: `${label} (${rows.length})`, undo: () => supabase.from('shifts').delete().in('id', ids).eq('pool_hold', true).then() };
+  };
+  const note = (held: string[], flags: string[]) => [held.length ? ` · ${held.length} at $18 kept free (event type not cocktail / dînatoire / stations)` : '', flags.length ? ` · ⚑ more than 3 shifts this week: ${[...new Set(flags)].join(', ')}` : ''].join('');
+  const fillDay = (only?: Ev) => run(async () => {
+    if (!ctx) throw new Error('Still loading…'); const d = await loadDay(date); const n = await weekCounts(wk0, addDays(wk0, 6));
+    const targets = only ? d.evs.filter((x) => x.id === only.id) : d.evs.filter((x) => dept === 'both' || (dept === 'bar') === isBar(x));
+    const p = planFill(d, targets, ctx, n); const r = await insertPlan(p.rows, p.why, only ? `✦ ${only.venues?.name ?? only.title}` : '✦ Fill the day', note(p.held, p.flags));
+    if (typeof r === 'string') return r; return r;
+  });
+  const fillWeek = () => run(async () => {
+    if (!ctx) throw new Error('Still loading…'); const today = isoDay(new Date()); const n = await weekCounts(wk0, addDays(wk0, 6));
+    const rows: Row[] = []; const w: Record<string, string> = {}; const held: string[] = []; const flags: string[] = []; const days: string[] = [];
+    for (let i = 0; i < 7; i++) { const dd = addDays(wk0, i); if (dd < today) continue; const d = await loadDay(dd); if (!d.evs.length) continue;
+      const p = planFill(d, d.evs.filter((x) => dept === 'both' || (dept === 'bar') === isBar(x)), ctx, n);
+      rows.push(...p.rows); Object.assign(w, p.why); held.push(...p.held); flags.push(...p.flags); if (p.rows.length) days.push(dLabel(dd, { weekday: 'short' })); }
+    return insertPlan(rows, w, '✦ Fill the week', `${days.length ? ` on ${days.join(', ')}` : ''}${note([...new Set(held)], flags)}`);
+  });
+  /** Clear = everyone placed but not locked / not sent back to Free (MDs, bar managers, locked, sent stay). */
+  const clear = (only?: Ev) => run(async () => {
+    const xs = sh.filter((x) => x.pool_hold && !x.locked && !LEAD.includes(x.position_code ?? '') && (only ? x.event_id === only.id : shown.some((e) => e.id === x.event_id)));
+    if (!xs.length) return 'Nothing to clear: only placed people that are not locked or sent go back to Free.';
+    if (!confirm(`Put ${xs.length} placed ${xs.length === 1 ? 'person' : 'people'} back in Free${only ? ` (${only.venues?.name ?? only.title})` : ''}? Locked, sent, MDs and bar managers stay. ↶ Undo brings them back.`)) return;
+    const { data: rows } = await supabase.from('shifts').select('*').in('id', xs.map((x) => x.id));
+    const { error } = await supabase.from('shifts').delete().in('id', xs.map((x) => x.id)).eq('pool_hold', true); if (error) throw error;
+    return { label: `cleared ${xs.length}`, undo: () => supabase.from('shifts').insert((rows ?? []) as Record<string, unknown>[]).then() };
+  });
   const dropOn = (e: Ev, code: string, start: string | null) => { const d = drag; setDrag(null); if (!d) return; if ('id' in d) move(d, e, code, start); else place(d.staff_id, e, code, start); };
 
   const Chip = ({ s }: { s: Sh }) => { const nm = byId[s.staff_id]?.full_name ?? '…'; const t = tier(s.staff_id); const can = removable(s);
     const a = av.find((x) => x.staff_id === s.staff_id); const late = a?.from_time && s.planned_start && a.from_time.slice(0, 5) > hm(s.planned_start);
-    return <span className={'ds-chip' + (can ? '' : ' fixed')} draggable={can} onDragStart={() => setDrag(s)} onDragEnd={() => setDrag(null)}
-      title={`${nm}${t ? ` · ${t}` : ''}${a?.from_time ? ` · free from ${ap(a.from_time)}` : ''}${s.locked ? ' · locked' : ''}${!s.pool_hold ? ` · ${s.status === 'confirmed' ? 'confirmed' : s.notified_at ? 'sent' : 'booked'}` : ''}`}>
-      <i className={'ds-t ' + (t ?? '')} />{short(nm)}{s.locked ? ' 🔒' : ''}{!s.pool_hold && s.status === 'confirmed' ? ' ✓' : ''}{late ? <small className="gold"> from {ap(a!.from_time)}</small> : null}
+    const e = evs.find((x) => x.id === s.event_id); const n = wn[s.staff_id] ?? 0;
+    const w = [why[s.id] ? `✦ ${why[s.id]}` : null, e && ctx ? whyText(s.staff_id, e, ctx, sh.filter((x) => x.event_id === s.event_id && x.staff_id !== s.staff_id).map((x) => x.staff_id), n, a) : null,
+      s.locked ? 'locked' : null, !s.pool_hold ? (s.status === 'confirmed' ? 'confirmed' : s.notified_at ? 'sent' : 'booked') : null].filter(Boolean).join(' · ');
+    return <span className={'ds-chip' + (can ? '' : ' fixed') + (n > 3 ? ' flag' : '')} draggable={can} onDragStart={() => setDrag(s)} onDragEnd={() => setDrag(null)} title={`${nm} · ${w}`}>
+      <i className={'ds-t ' + (t ?? '')} />{short(nm)}{s.locked ? ' 🔒' : ''}{!s.pool_hold && s.status === 'confirmed' ? ' ✓' : ''}{late ? <small className="gold"> from {ap(a!.from_time)}</small> : null}{n > 3 ? <small className="ds-flag" title={`${n} shifts this week`}>⚑{n}</small> : null}
       {can && <button className="ds-x" disabled={busy} onClick={() => remove(s)} aria-label={`Back to free: ${nm}`}>×</button>}</span>; };
   const Slot = ({ e, code, start }: { e: Ev; code: string; start: string | null }) =>
     <button className="ds-slot" onClick={() => setPick({ e, code, start })} onDragOver={(ev) => ev.preventDefault()} onDrop={() => dropOn(e, code, start)}>+ tap to fill</button>;
@@ -142,11 +148,14 @@ export function DaySheet() {
         <span className="serif-h ds-day"><Link to={`/admin/day-sheet/${addDays(date, -1)}`}>‹</Link> {dLabel(date, { weekday: 'short', month: 'short', day: 'numeric' })} <Link to={`/admin/day-sheet/${addDays(date, 1)}`}>›</Link></span>
         <span className="grow" />
         <span className="seg3">{(['floor', 'bar', 'both'] as const).map((d) => <button key={d} className={dept === d ? 'on' : ''} onClick={() => setDept(d)}>{d === 'both' ? 'Both' : d === 'floor' ? 'Floor' : 'Bar'}</button>)}</span>
+        <button className="abtn dark" disabled={busy || !ctx || !shown.length} onClick={() => fillDay()} title="Fills the open slots of the events shown, best first, by the rules · one move for Undo">✦ Fill the day</button>
+        <button className="abtn" disabled={busy || !ctx} onClick={fillWeek} title={`Every day from today to Sun ${dLabel(addDays(wk0, 6), { month: 'short', day: 'numeric' })} · ${dept === 'both' ? 'floor + bar' : dept}`}>✦ Fill the week</button>
+        <button className="abtn" disabled={busy || !sh.some((x) => x.pool_hold && !x.locked && !LEAD.includes(x.position_code ?? ''))} onClick={() => clear()}>Clear unlocked</button>
         <button className="abtn" disabled={busy || !ops.length} onClick={undo} title={ops.length ? `Undo: ${ops[ops.length - 1].label}` : 'Nothing to undo'}>↶ Undo{ops.length ? ` (${ops.length})` : ''}</button>
         <Link className="abtn" to={`/admin/pool/${date}`}>Confirm in Day pool ›</Link>
       </div>
       <div className="ds-sum"><b>{evs.length} event{evs.length === 1 ? '' : 's'}</b><span>Floor <b className={fl[0] >= fl[1] ? 'okc' : 'accent'}>{fl[0]}/{fl[1]}</b></span><span>Bar <b className={br[0] >= br[1] ? 'okc' : 'accent'}>{br[0]}/{br[1]}</b></span><span>Free <b>{nYes}</b></span>
-        <span className="muted">Tap a slot to fill · drag a name to move it · × = back to Free · staff see nothing until you confirm</span></div>
+        <span className="muted">✦ fills by your rules · hover a name = why · ⚑ = more than 3 shifts this week · tap a slot to fill · drag a name to move it · × = back to Free · staff see nothing until you confirm</span></div>
       {msg && <div className="adm-card okc sm">{msg}</div>}{err && <div className="adm-card err sm">{err}</div>}
       <div className="ds-cols">
         <div className="ds-blocks">
@@ -154,9 +163,11 @@ export function DaySheet() {
           {shown.map((e) => { const L = lays[e.id]; const have = sh.filter((s) => s.event_id === e.id).length; const need = L.client + L.extras.count;
             return (
               <section key={e.id} className={'ds-block' + (isBar(e) ? ' bar' : '')}>
-                <div className="ds-bh"><span className="serif ds-title">{e.venues?.name ?? e.title}{isBar(e) ? ' · bar' : ''}</span>
+                <div className="ds-bh"><span className="serif ds-title">{e.venues?.name ?? e.title}{isBar(e) ? ' · bar' : ''}</span>{isFar(e) && <span className="ds-far" title="Far venue: ✦ puts drivers first, with the people they're linked to">🚗 far</span>}
                   <small className="muted">{[e.caterer_name ? `Food by ${e.caterer_name}` : null, e.guests ? `${e.guests} guests` : null].filter(Boolean).join(' · ')}</small>
                   <span className="grow" /><span className="ds-count">Client {L.client}{L.extras.count ? ` · +${L.extras.count} extra${L.extras.count > 1 ? 's' : ''} = ${need}` : isBar(e) ? '' : ' · no extras'} · <b className={have >= need ? 'okc' : 'accent'}>{have} placed</b></span>
+                  {need > have && <button className="lnk sm" disabled={busy || !ctx} onClick={() => fillDay(e)} title="✦ Fill this block only">✦ Fill</button>}
+                  {sh.some((x) => x.event_id === e.id && x.pool_hold && !x.locked && !LEAD.includes(x.position_code ?? '')) && <button className="lnk sm muted" disabled={busy} onClick={() => clear(e)}>Clear</button>}
                   <Link className="lnk sm" to={`/admin/event/${e.id}`}>Event ›</Link></div>
                 <div className="ds-lead" onDragOver={(ev) => ev.preventDefault()} onDrop={() => dropOn(e, isBar(e) ? 'BM' : 'MD', e.start_time?.slice(0, 5) ?? null)}>
                   <small>{isBar(e) ? 'BAR MANAGER' : 'MD'}</small>{L.leads.map((s) => <Chip key={s.id} s={s} />)}
@@ -173,7 +184,7 @@ export function DaySheet() {
           <span className="seg3"><button className={tab === 'yes' ? 'on' : ''} onClick={() => setTab('yes')}>Yes {nYes}</button><button className={tab === 'maybe' ? 'on' : ''} onClick={() => setTab('maybe')}>Maybe {nMaybe}</button></span>
           {!free.length && <span className="muted sm">{tab === 'yes' ? 'Nobody left. Ask more from Bookings → Ask more people.' : 'No maybes.'}</span>}
           {free.map((a) => <div key={a.staff_id} className="ds-fp" draggable onDragStart={() => setDrag({ staff_id: a.staff_id })} onDragEnd={() => setDrag(null)}>
-            <i className={'ds-t ' + (tier(a.staff_id) ?? '')} /><b className="grow">{byId[a.staff_id]?.full_name ?? '…'}</b><small className="muted">{a.from_time ? `from ${ap(a.from_time)}` : 'any time'}</small></div>)}
+            <i className={'ds-t ' + (tier(a.staff_id) ?? '')} /><b className="grow">{byId[a.staff_id]?.full_name ?? '…'}{ctx?.cars.has(a.staff_id) ? ' 🚗' : ''}</b>{(wn[a.staff_id] ?? 0) >= 3 && <small className="ds-flag" title={`Already ${wn[a.staff_id]} shifts this week`}>⚑{wn[a.staff_id]}</small>}<small className="muted">{a.from_time ? `from ${ap(a.from_time)}` : 'any time'}</small></div>)}
           {(() => { const open = shown.reduce((n, e) => { const L = lays[e.id]; return n + Math.max(0, L.client + L.extras.count - sh.filter((s) => s.event_id === e.id).length); }, 0);
             return <div className="ds-after">{open > 0 ? <><b>{open} open</b> slot{open > 1 ? 's' : ''} · {nYes} free</> : <><b>All slots filled.</b> {nYes} left = backups (not booked, released when you confirm)</>}</div>; })()}
         </aside>
