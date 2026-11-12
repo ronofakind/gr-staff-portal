@@ -4475,3 +4475,11 @@ a.ch-name-link { display: block; text-decoration: none; color: inherit; } a.ch-n
 .ds-flag { color: #a8770a; font-weight: 700; font-size: 10.5px; margin-left: 2px; }
 .ds-far { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: #eef3fb; color: #2b4f86; }
 .ds-bh .lnk[disabled] { opacity: .4; }
+/* push 110 · Day sheet person card */
+.ds-chip { user-select: none; }
+.ds-card { width: min(480px, 100%); }
+.ds-why { background: #f6f2ea; border-radius: 8px; padding: 6px 9px; font-size: 12px; }
+.ds-cardgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.ds-cardgrid label { display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; font-weight: 600; color: var(--muted); }
+.ds-cardgrid label:first-child { grid-column: 1 / -1; }
+.ds-cardgrid select, .ds-cardgrid input { padding: 7px 9px; border-radius: 8px; border: 1px solid var(--line, #ddd); font: inherit; font-size: 13.5px; color: var(--ink); }

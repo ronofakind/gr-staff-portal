@@ -24,7 +24,7 @@ export function DaySheet() {
   const [tick, setTick] = useState(0); const [busy, setBusy] = useState(false); const [err, setErr] = useState(''); const [msg, setMsg] = useState('');
   const [ops, setOps] = useState<Op[]>([]); const [pick, setPick] = useState<{ e: Ev; code: string; start: string | null } | null>(null);
   const [drag, setDrag] = useState<Sh | { staff_id: string } | null>(null); const [tab, setTab] = useState<'yes' | 'maybe'>('yes');
-  const [ctx, setCtx] = useState<Ctx | null>(null); const [wn, setWn] = useState<Record<string, number>>({}); const [why, setWhy] = useState<Record<string, string>>({});
+  const [ctx, setCtx] = useState<Ctx | null>(null); const [wn, setWn] = useState<Record<string, number>>({}); const [why, setWhy] = useState<Record<string, string>>({}); const [card, setCard] = useState<Sh | null>(null);
   useEffect(() => { loadCtx().then((c) => { setCtx(c); setStaff(c.staff); }).catch((x) => setErr((x as Error).message)); }, []);
   useEffect(() => { try { localStorage.setItem('gr_ds_dept', dept); } catch { /* */ } }, [dept]);
   const wk0 = monday(date);
@@ -87,6 +87,18 @@ export function DaySheet() {
     const { error } = await supabase.from('shifts').update({ event_id: e.id, position_code: code, position_detail: roleName(code), planned_start: startIso(date, t) }).eq('id', s.id); if (error) throw error;
     return { label: `moved ${byId[s.staff_id]?.full_name ?? ''}`, undo: () => supabase.from('shifts').update(before).eq('id', s.id).then() };
   });
+  /** push 110 · person card: one change = one undo step. */
+  const patch = (s0: Sh, row: Record<string, unknown>, label: string) => run(async () => {
+    const keys = Object.keys(row); const { data: b, error: e0 } = await supabase.from('shifts').select(keys.join(',')).eq('id', s0.id).single(); if (e0) throw e0;
+    const { error } = await supabase.from('shifts').update(row).eq('id', s0.id); if (error) throw error;
+    return { label: `${label} · ${byId[s0.staff_id]?.full_name ?? ''}`, undo: () => supabase.from('shifts').update(b as unknown as Record<string, unknown>).eq('id', s0.id).then() };
+  });
+  const lockAll = () => run(async () => {
+    const xs = sh.filter((x) => x.pool_hold && !x.locked && !LEAD.includes(x.position_code ?? '') && shown.some((e) => e.id === x.event_id));
+    if (!xs.length) return 'Nothing to lock: everyone placed is already locked.';
+    const ids = xs.map((x) => x.id); const { error } = await supabase.from('shifts').update({ locked: true, locked_at: new Date().toISOString() }).in('id', ids); if (error) throw error;
+    return { label: `locked ${ids.length}`, undo: () => supabase.from('shifts').update({ locked: null, locked_at: null }).in('id', ids).then() };
+  });
   const undo = () => { const last = ops[ops.length - 1]; if (!last) return; setOps((o) => o.slice(0, -1)); run(async () => { await last.undo(); return `Undone: ${last.label}.`; }); };
   /** ✦ one move: fills the open slots of these events (Floor / Bar switch respected). Undo takes the whole fill back. */
   const insertPlan = async (rows: Row[], w: Record<string, string>, label: string, extra: string): Promise<Op | string> => {
@@ -128,9 +140,9 @@ export function DaySheet() {
     const e = evs.find((x) => x.id === s.event_id); const n = wn[s.staff_id] ?? 0;
     const w = [why[s.id] ? `✦ ${why[s.id]}` : null, e && ctx ? whyText(s.staff_id, e, ctx, sh.filter((x) => x.event_id === s.event_id && x.staff_id !== s.staff_id).map((x) => x.staff_id), n, a) : null,
       s.locked ? 'locked' : null, !s.pool_hold ? (s.status === 'confirmed' ? 'confirmed' : s.notified_at ? 'sent' : 'booked') : null].filter(Boolean).join(' · ');
-    return <span className={'ds-chip' + (can ? '' : ' fixed') + (n > 3 ? ' flag' : '')} draggable={can} onDragStart={() => setDrag(s)} onDragEnd={() => setDrag(null)} title={`${nm} · ${w}`}>
+    return <span className={'ds-chip' + (can ? '' : ' fixed') + (n > 3 ? ' flag' : '')} draggable={can} onDragStart={() => setDrag(s)} onDragEnd={() => setDrag(null)} title={`${nm} · ${w} · click = options`} onClick={() => setCard(s)}>
       <i className={'ds-t ' + (t ?? '')} />{short(nm)}{s.locked ? ' 🔒' : ''}{!s.pool_hold && s.status === 'confirmed' ? ' ✓' : ''}{late ? <small className="gold"> from {ap(a!.from_time)}</small> : null}{n > 3 ? <small className="ds-flag" title={`${n} shifts this week`}>⚑{n}</small> : null}
-      {can && <button className="ds-x" disabled={busy} onClick={() => remove(s)} aria-label={`Back to free: ${nm}`}>×</button>}</span>; };
+      {can && <button className="ds-x" disabled={busy} onClick={(ev) => { ev.stopPropagation(); remove(s); }} aria-label={`Back to free: ${nm}`}>×</button>}</span>; };
   const Slot = ({ e, code, start }: { e: Ev; code: string; start: string | null }) =>
     <button className="ds-slot" onClick={() => setPick({ e, code, start })} onDragOver={(ev) => ev.preventDefault()} onDrop={() => dropOn(e, code, start)}>+ tap to fill</button>;
   const Row = ({ e, label, code, start, count, people, extra }: { e: Ev; label: React.ReactNode; code: string; start: string | null; count: number; people: Sh[]; extra?: boolean }) => (
@@ -151,6 +163,7 @@ export function DaySheet() {
         <button className="abtn dark" disabled={busy || !ctx || !shown.length} onClick={() => fillDay()} title="Fills the open slots of the events shown, best first, by the rules · one move for Undo">✦ Fill the day</button>
         <button className="abtn" disabled={busy || !ctx} onClick={fillWeek} title={`Every day from today to Sun ${dLabel(addDays(wk0, 6), { month: 'short', day: 'numeric' })} · ${dept === 'both' ? 'floor + bar' : dept}`}>✦ Fill the week</button>
         <button className="abtn" disabled={busy || !sh.some((x) => x.pool_hold && !x.locked && !LEAD.includes(x.position_code ?? ''))} onClick={() => clear()}>Clear unlocked</button>
+        <button className="abtn" disabled={busy || !sh.some((x) => x.pool_hold && !x.locked && !LEAD.includes(x.position_code ?? ''))} onClick={lockAll} title="🔒 everyone placed: ✦ Fill and Clear won't move them">🔒 Lock all</button>
         <button className="abtn" disabled={busy || !ops.length} onClick={undo} title={ops.length ? `Undo: ${ops[ops.length - 1].label}` : 'Nothing to undo'}>↶ Undo{ops.length ? ` (${ops.length})` : ''}</button>
         <Link className="abtn" to={`/admin/pool/${date}`}>Confirm in Day pool ›</Link>
       </div>
@@ -189,6 +202,16 @@ export function DaySheet() {
             return <div className="ds-after">{open > 0 ? <><b>{open} open</b> slot{open > 1 ? 's' : ''} · {nYes} free</> : <><b>All slots filled.</b> {nYes} left = backups (not booked, released when you confirm)</>}</div>; })()}
         </aside>
       </div>
+      {card && (() => { const c = sh.find((x) => x.id === card.id); if (!c) return null; const e = evs.find((x) => x.id === c.event_id); if (!e) return null;
+        return <PersonCard s={c} e={e} date={date} evs={evs} lays={lays} byId={byId} av={av} onDay={onDay} off={off} sortP={sortP} tier={tier} busy={busy} wn={wn[c.staff_id] ?? 0}
+          why={[why[c.id] ? `✦ ${why[c.id]}` : null, ctx ? whyText(c.staff_id, e, ctx, sh.filter((x) => x.event_id === c.event_id && x.staff_id !== c.staff_id).map((x) => x.staff_id), wn[c.staff_id] ?? 0, av.find((x) => x.staff_id === c.staff_id)) : null].filter(Boolean).join(' · ')}
+          onClose={() => setCard(null)}
+          onMove={(e2, code, start) => { setCard(null); move(c, e2, code, start); }}
+          onStart={(t) => patch(c, { planned_start: startIso(date, t) }, `start ${ap(t)}`)}
+          onRole={(code) => patch(c, { position_code: code, position_detail: roleName(code) }, roleName(code))}
+          onLock={() => patch(c, { locked: c.locked ? false : true, locked_at: new Date().toISOString() }, c.locked ? 'unlocked' : 'locked')}
+          onSwap={(id) => patch(c, { staff_id: id }, `swapped for ${byId[id]?.full_name ?? ''}`)}
+          onRemove={() => { setCard(null); remove(c); }} />; })()}
       {pick && <PickSheet date={date} e={pick.e} code={pick.code} start={pick.start} staff={staff} av={av} onDay={onDay} off={off} sortP={sortP} tier={tier}
         onClose={() => setPick(null)} onPick={(id) => { const p = pick; setPick(null); place(id, p.e, p.code, p.start); }} onAsk={() => nav(`/admin/bookings?date=${date}&ask=1`)} />}
     </div>
@@ -219,5 +242,49 @@ function PickSheet({ date, e, code, start, staff, av, onDay, off, sortP, tier, o
       {others.length > 0 && <><small className="kick">OTHERS · NOT ASKED FOR THIS DAY</small>{others.map((s) => <button key={s.id} className="ds-pp" onClick={() => onPick(s.id)}>
         <i className={'ds-t ' + (s.staff_private?.tier ?? '')} /><b className="grow">{s.full_name}</b><small className="gold">not asked · placing = you’ll ask them</small></button>)}</>}
       <button className="lnk sm" onClick={onAsk}>Ask more people for this day ›</button>
+    </div></div>);
+}
+
+/** push 110 · click a name: move, start later, role, lock, swap, profile, back to Free. Sent / confirmed shifts: lock + profile only (change them from the event). */
+function PersonCard({ s, e, date, evs, lays, byId, av, onDay, off, sortP, tier, busy, wn, why, onClose, onMove, onStart, onRole, onLock, onSwap, onRemove }: {
+  s: Sh; e: Ev; date: string; evs: Ev[]; lays: Record<string, ReturnType<typeof layout>>; byId: Record<string, AStaff>; av: Av[]; onDay: Set<string>; off: Set<string>;
+  sortP: (a: string, b: string) => number; tier: (id: string) => string | null; busy: boolean; wn: number; why: string; onClose: () => void;
+  onMove: (e: Ev, code: string, start: string | null) => void; onStart: (t: string) => void; onRole: (code: string) => void; onLock: () => void; onSwap: (id: string) => void; onRemove: () => void }) {
+  const [tab, setTab] = useState<'main' | 'swap'>('main'); const [t, setT] = useState(hm(s.planned_start)); const [q, setQ] = useState('');
+  const p = byId[s.staff_id]; const can = s.pool_hold && !LEAD.includes(s.position_code ?? '');
+  const a = av.find((x) => x.staff_id === s.staff_id);
+  const dept = isBar(e) ? 'bar' : 'floor';
+  const slots = evs.filter((x) => isBar(x) === isBar(e)).flatMap((x) => { const L = lays[x.id]; const ls = [...L.lines.map((l) => ({ ...l, extra: false })), ...(L.extras.count ? [{ ...L.extras, extra: true }] : [])];
+    return ls.map((l) => ({ v: `${x.id}|${l.code}|${l.start ?? ''}`, e: x, code: l.code, start: l.start, label: `${x.venues?.name ?? x.title} · ${l.extra ? 'Extras' : plural(l.code, 2)} ${ap(l.start)} (${l.people.length}/${l.count})`, here: x.id === s.event_id && hm(s.planned_start) === l.start })); });
+  const ql = q.trim().toLowerCase();
+  const swaps = av.filter((x) => x.status === 'yes' && !x.released_at && !onDay.has(x.staff_id) && !off.has(x.staff_id) && (!ql || (byId[x.staff_id]?.full_name ?? '').toLowerCase().includes(ql))).sort((x, y) => sortP(x.staff_id, y.staff_id)).slice(0, 12);
+  const state = s.pool_hold ? (s.locked ? 'placed · locked' : 'placed · not sent') : s.status === 'confirmed' ? 'confirmed' : s.notified_at ? 'sent · waiting for confirm' : 'booked';
+  return (
+    <div className="ds-pick-wrap" onClick={onClose}><div className="ds-pick ds-card" onClick={(ev) => ev.stopPropagation()}>
+      <div className="row" style={{ gap: 8, alignItems: 'center' }}><i className={'ds-t ' + (tier(s.staff_id) ?? '')} /><b className="grow serif" style={{ fontSize: 18 }}>{p?.full_name ?? '…'}</b><button className="lnk muted" onClick={onClose}>✕</button></div>
+      <small className="muted">{e.venues?.name ?? e.title} · {roleName(s.position_code)} · {e.start_tbc || e.details_pending ? 'time TBC' : ap(hm(s.planned_start))} · {state}{a?.from_time ? ` · free from ${ap(a.from_time)}` : ''}{wn > 3 ? ` · ⚑ ${wn} shifts this week` : ''}</small>
+      {why && <small className="ds-why">{why}</small>}
+      {!can && <small className="gold">{LEAD.includes(s.position_code ?? '') ? 'MD / bar manager: change it from the event.' : 'Already sent to them: change the time or place from the event so they get told.'}</small>}
+      <div className="seg3"><button className={tab === 'main' ? 'on' : ''} onClick={() => setTab('main')}>Change</button><button className={tab === 'swap' ? 'on' : ''} disabled={!can} onClick={() => setTab('swap')}>Swap</button></div>
+      {tab === 'main' ? <div className="ds-cardgrid">
+        <label>Move to<select disabled={!can || busy} value={slots.find((x) => x.here)?.v ?? ''} onChange={(ev) => { const x = slots.find((y) => y.v === ev.target.value); if (x) onMove(x.e, x.code, x.start); }}>
+          {!slots.some((x) => x.here) && <option value="">—</option>}{slots.map((x) => <option key={x.v} value={x.v}>{x.label}</option>)}</select></label>
+        <label>Start<span className="row" style={{ gap: 6 }}><input type="time" step={900} value={t} disabled={!can || busy} onChange={(ev) => setT(ev.target.value)} />
+          <button className="abtn sm" disabled={!can || busy || !t || t === hm(s.planned_start)} onClick={() => onStart(t)}>Set</button></span></label>
+        <label>Role<select disabled={!can || busy} value={s.position_code ?? ''} onChange={(ev) => onRole(ev.target.value)}>
+          {(dept === 'bar' ? ['BT', 'BB', 'WW'] : ['W', 'BUS']).map((c) => <option key={c} value={c}>{roleName(c)}</option>)}</select></label>
+        <div className="row wrap" style={{ gap: 8, gridColumn: '1 / -1' }}>
+          <button className="abtn sm" disabled={busy} onClick={onLock}>{s.locked ? '🔓 Unlock' : '🔒 Lock'}</button>
+          {can && <button className="abtn sm" disabled={busy} onClick={onRemove}>× Back to Free</button>}
+          <span className="grow" /><a className="lnk sm" href={`/admin/staff?open=${s.staff_id}`}>Profile ›</a></div>
+        <small className="muted" style={{ gridColumn: '1 / -1' }}>🔒 locked = ✦ Fill and Clear leave them where they are · every change here is one ↶ Undo</small>
+      </div> : <>
+        <input autoFocus placeholder="🔍 Search a free name…" value={q} onChange={(ev) => setQ(ev.target.value)} />
+        <small className="kick">FREE · SAID YES · PUT IN THEIR PLACE</small>
+        {!swaps.length && <span className="muted sm">Nobody free{ql ? ' with that name' : ''}.</span>}
+        {swaps.map((x) => <button key={x.staff_id} className="ds-pp" disabled={busy} onClick={() => { onSwap(x.staff_id); onClose(); }}>
+          <i className={'ds-t ' + (tier(x.staff_id) ?? '')} /><b className="grow">{byId[x.staff_id]?.full_name ?? '…'}</b><small className="muted">{x.from_time ? `from ${ap(x.from_time)}` : 'any time'}</small></button>)}
+        <small className="muted">{p?.full_name ?? 'They'} go{p?.full_name ? 'es' : ''} back to Free · {dLabel(date, { weekday: 'short', month: 'short', day: 'numeric' })}</small>
+      </>}
     </div></div>);
 }
