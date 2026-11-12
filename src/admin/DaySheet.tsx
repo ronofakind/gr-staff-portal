@@ -8,6 +8,8 @@ import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { addDays, dLabel, eventsBetween, isoDay, roleName, startIso, type AEvent, type AShift, type AStaff } from './api';
 import { ReplaceSheet } from './Replace';
+import { SendBox, pendingCount } from './SendBox';
+import { ROLES } from './api';
 import { LEAD, hm, isBar, isFar, layout, loadCtx, loadDay, planFill, weekCounts, whyText, type Av, type Ctx, type Ev, type Line, type Row, type Sh } from './dayFill';
 
 type Op = { label: string; undo: () => PromiseLike<unknown> };
@@ -29,7 +31,11 @@ export function DaySheet() {
   const [ops, setOps] = useState<Op[]>([]); const [pick, setPick] = useState<{ e: Ev; code: string; start: string | null } | null>(null);
   // a ref, not state: setting state on drag start re-rendered the page and the browser dropped the drag (Ronnie, Nov 12)
   const dragR = useRef<Sh | { staff_id: string } | null>(null); const setDrag = (d: Sh | { staff_id: string } | null) => { dragR.current = d; }; const [tab, setTab] = useState<'yes' | 'maybe'>('yes');
-  const [ctx, setCtx] = useState<Ctx | null>(null); const [wn, setWn] = useState<Record<string, number>>({}); const [why, setWhy] = useState<Record<string, string>>({}); const [card, setCard] = useState<Sh | null>(null); const [repl, setRepl] = useState<{ s: AShift; e: AEvent } | null>(null);
+  const [ctx, setCtx] = useState<Ctx | null>(null); const [wn, setWn] = useState<Record<string, number>>({}); const [why, setWhy] = useState<Record<string, string>>({}); const [card, setCard] = useState<Sh | null>(null);
+  // push 113 · line editing + cell grid
+  const [ed, setEd] = useState<{ eid: string; key: string } | null>(null); const [edT, setEdT] = useState(''); const [add, setAdd] = useState<{ eid: string; code: string; count: string; t: string } | null>(null);
+  const [flagged, setFlagged] = useState<Record<string, string>>({}); const [pend, setPend] = useState(0); const [sendOpen, setSendOpen] = useState(false);
+  const blocksR = useRef<HTMLDivElement | null>(null); const [cols, setCols] = useState(4); const [repl, setRepl] = useState<{ s: AShift; e: AEvent } | null>(null);
   useEffect(() => { loadCtx().then((c) => { setCtx(c); setStaff(c.staff); }).catch((x) => setErr((x as Error).message)); }, []);
   useEffect(() => { try { localStorage.setItem('gr_ds_dept', dept); } catch { /* */ } }, [dept]);
   const wk0 = monday(date);
@@ -38,6 +44,11 @@ export function DaySheet() {
     try { const d = await loadDay(date); setEvs(d.evs); setSh(d.sh); setAv(d.av); setOff(d.off); } catch (x) { setErr((x as Error).message); }
   })(); }, [date, tick]);
   useEffect(() => { weekCounts(wk0, addDays(wk0, 6)).then(setWn); }, [wk0, tick]);
+  useEffect(() => { const ids = evs.map((e) => e.id); if (!ids.length) { setPend(0); return; } pendingCount(ids).then(setPend); }, [evs, tick]);
+  // C · as many equal cells across as fit (Ronnie, Nov 12): one count for the whole sheet so every block lines up
+  useEffect(() => { const el = blocksR.current; if (!el) return; const f = () => { const w = el.clientWidth; const phone = window.innerWidth <= 700;
+      const room = phone ? w - 30 : w - 30 - 104 - 74 - 50 - 30; setCols(Math.max(2, Math.floor((room + 6) / ((phone ? 128 : 142) + 6)))); };
+    f(); const ro = new ResizeObserver(f); ro.observe(el); return () => ro.disconnect(); }, [evs.length]);
 
   // week strip
   useEffect(() => { (async () => {
@@ -57,6 +68,7 @@ export function DaySheet() {
   const byId = useMemo(() => Object.fromEntries(staff.map((s) => [s.id, s])), [staff]);
   const tier = (id: string) => byId[id]?.staff_private?.tier ?? null;
   const rank = (id: string) => byId[id]?.staff_private?.ranking ?? 9999;
+  const rkOf = (id: string) => (TORD[tier(id) ?? ''] ?? 9) * 100000 + rank(id);
   const sortP = (a: string, b: string) => (TORD[tier(a) ?? ''] ?? 9) - (TORD[tier(b) ?? ''] ?? 9) || rank(a) - rank(b);
   const onDay = new Set(sh.map((s) => s.staff_id));
   const shown = evs.filter((e) => dept === 'both' || (dept === 'bar') === isBar(e));
@@ -65,7 +77,7 @@ export function DaySheet() {
   const free = av.filter((a) => inDept(a) && a.status === tab && !a.released_at && !onDay.has(a.staff_id) && !off.has(a.staff_id)).sort((a, b) => sortP(a.staff_id, b.staff_id));
   const nYes = av.filter((a) => inDept(a) && a.status === 'yes' && !a.released_at && !onDay.has(a.staff_id) && !off.has(a.staff_id)).length;
   const nMaybe = av.filter((a) => inDept(a) && a.status === 'maybe' && !a.released_at && !onDay.has(a.staff_id)).length;
-  const lays = useMemo(() => Object.fromEntries(evs.map((e) => [e.id, layout(e, sh.filter((s) => s.event_id === e.id))])), [evs, sh]);
+  const lays = useMemo(() => Object.fromEntries(evs.map((e) => [e.id, layout(e, sh.filter((s) => s.event_id === e.id), rkOf)])), [evs, sh, staff]); // eslint-disable-line react-hooks/exhaustive-deps
   const tot = (b: boolean) => evs.filter((e) => isBar(e) === b).reduce((acc, e) => { const L = lays[e.id]; const need = L.client + L.extras.count; const have = sh.filter((s) => s.event_id === e.id).length; return [acc[0] + have, acc[1] + need]; }, [0, 0]);
   const [fl, br] = [tot(false), tot(true)];
   const removable = (s: Sh) => s.pool_hold && !s.locked;
@@ -149,6 +161,39 @@ export function DaySheet() {
     const { error } = await supabase.from('shifts').delete().in('id', xs.map((x) => x.id)).eq('pool_hold', true); if (error) throw error;
     return { label: `cleared ${xs.length}`, undo: () => supabase.from('shifts').insert((rows ?? []) as Record<string, unknown>[]).then() };
   });
+  /** push 113 · change a line (count / time / add) right on the Day sheet. Saves to the event like the event form. */
+  const lineSave = (e: Ev, next: Line[], label: string, moves: { s: Sh; t: string }[] = []) => run(async () => {
+    const sent = moves.filter((m) => !m.s.pool_hold);
+    if (sent.length && !confirm(`${sent.length} already sent: ${sent.map((m) => short(byId[m.s.staff_id]?.full_name ?? '…')).join(', ')}.\n\nThey will get "Your shift changed" (${ap(sent[0].t)} instead of ${ap(hm(sent[0].s.planned_start))}).\nIt waits in "About to send" until you press Send.\n\nChange the time?`)) return;
+    const before = { staffing: e.staffing, staff_needed: e.staff_needed, start_time: e.start_time };
+    const starts = next.map((l) => l.start).filter(Boolean).sort() as string[];
+    const row = { staffing: next, staff_needed: next.reduce((n, l) => n + (l.count || 0), 0), start_time: starts[0] ?? e.start_time };
+    const { error } = await supabase.from('events').update(row).eq('id', e.id); if (error) throw error;
+    const old = moves.map((m) => ({ id: m.s.id, planned_start: m.s.planned_start }));
+    for (const m of moves) { const { error: e2 } = await supabase.from('shifts').update({ planned_start: startIso(date, m.t) }).eq('id', m.s.id); if (e2) throw e2; }
+    if (sent.length) setMsg(`Saved. ${sent.length} change${sent.length > 1 ? 's' : ''} waiting in "About to send": press Send changes when you're ready.`);
+    return { label: `${label} · ${e.venues?.name ?? e.title}`, undo: async () => { await supabase.from('events').update(before).eq('id', e.id); for (const o of old) await supabase.from('shifts').update({ planned_start: o.planned_start }).eq('id', o.id); } };
+  });
+  const setCount = (e: Ev, idx: number, n: number) => {
+    const st = [...(e.staffing ?? [])]; const l = st[idx]; if (!l || n < 0) return;
+    if (n === 0 && !confirm(`Remove the line "${l.count} ${plural(l.code, l.count)} ${ap(l.start)}"?`)) return;
+    const L = lays[e.id]; const line = L.lines.find((x) => x.idx === idx);
+    if (line && n < line.people.length) { const over = [...line.people].sort((a, b) => rkOf(a.staff_id) - rkOf(b.staff_id)).slice(n);
+      setFlagged((f) => { const g = { ...f }; for (const x of over) g[x.id] = `${plural(l.code, 2)} ${ap(l.start)} lowered to ${n}`; return g; }); }
+    if (n === 0) st.splice(idx, 1); else st[idx] = { ...l, count: n };
+    lineSave(e, st, `${plural(l.code, 2)} ${ap(l.start)} → ${n}`);
+  };
+  const setTime = (e: Ev, idx: number, t: string) => {
+    const st = [...(e.staffing ?? [])]; const l = st[idx]; if (!l || !t) return; setEd(null);
+    const line = lays[e.id].lines.find((x) => x.idx === idx);
+    const moves = (line?.people ?? []).filter((x) => hm(x.planned_start) === line?.start).map((x) => ({ s: x, t }));
+    st[idx] = { ...l, start: t }; lineSave(e, st, `${plural(l.code, 2)} → ${ap(t)}`, moves);
+  };
+  const setExtras = (e: Ev, n: number) => run(async () => { const b = e.extras ?? null; const { error } = await supabase.from('events').update({ extras: Math.max(0, n) }).eq('id', e.id); if (error) throw error;
+    return { label: `extras → ${n}`, undo: () => supabase.from('events').update({ extras: b }).eq('id', e.id).then() }; });
+  const addLine = () => { if (!add) return; const e = evs.find((x) => x.id === add.eid); const n = parseInt(add.count, 10); if (!e || !(n > 0) || !add.t) return;
+    const st = [...(e.staffing ?? []), { dept: isBar(e) ? 'bar' : 'floor', code: add.code, count: n, start: add.t }]; setAdd(null); lineSave(e, st, `+ ${n} ${plural(add.code, n)} ${ap(add.t)}`); };
+  const unflag = (id: string) => setFlagged((f) => { const g = { ...f }; delete g[id]; return g; });
   const dropOn = (e: Ev, code: string, start: string | null) => { const d = dragR.current; setDrag(null); if (!d) return; if ('id' in d) move(d, e, code, start); else place(d.staff_id, e, code, start); };
 
   const Chip = ({ s }: { s: Sh }) => { const nm = byId[s.staff_id]?.full_name ?? '…'; const t = tier(s.staff_id); const can = removable(s);
@@ -156,17 +201,25 @@ export function DaySheet() {
     const e = evs.find((x) => x.id === s.event_id); const n = wn[s.staff_id] ?? 0;
     const w = [why[s.id] ? `✦ ${why[s.id]}` : null, e && ctx ? whyText(s.staff_id, e, ctx, sh.filter((x) => x.event_id === s.event_id && x.staff_id !== s.staff_id).map((x) => x.staff_id), n, a) : null,
       s.locked ? 'locked' : null, !s.pool_hold ? (s.status === 'confirmed' ? 'confirmed' : s.notified_at ? 'sent' : 'booked') : null].filter(Boolean).join(' · ');
-    return <span className={'ds-chip' + (can ? '' : ' fixed') + (n > 3 ? ' flag' : '')} draggable={can} onDragStart={(ev) => { ev.dataTransfer.setData('text/plain', s.id); ev.dataTransfer.effectAllowed = 'move'; setDrag(s); }} onDragEnd={() => setDrag(null)} title={`${nm} · ${w}${s.booking_note ? ` · 📌 ${s.booking_note}` : ''} · click = options`} onClick={() => setCard(s)}>
-      <i className={'ds-t ' + (t ?? '')} />{short(nm)}{s.locked ? ' 🔒' : ''}{!s.pool_hold && s.status === 'confirmed' ? ' ✓' : ''}{late ? <small className="gold"> from {ap(a!.from_time)}</small> : null}{s.booking_note ? <small className="ds-note" title={s.booking_note}>📌</small> : null}{n > 3 ? <small className="ds-flag" title={`${n} shifts this week`}>⚑{n}</small> : null}
+    return <span className={'ds-chip' + (can ? '' : ' fixed') + (n > 3 ? ' flag' : '') + (flagged[s.id] ? ' over' : '')} draggable={can} onDragStart={(ev) => { ev.dataTransfer.setData('text/plain', s.id); ev.dataTransfer.effectAllowed = 'move'; setDrag(s); }} onDragEnd={() => setDrag(null)} title={`${nm} · ${w}${s.booking_note ? ` · 📌 ${s.booking_note}` : ''} · click = options`} onClick={() => setCard(s)}>
+      <i className={'ds-t ' + (t ?? '')} /><span className="ds-nm">{short(nm)}</span>{s.locked ? ' 🔒' : ''}{!s.pool_hold && s.status === 'confirmed' ? ' ✓' : ''}{late ? <small className="gold"> from {ap(a!.from_time)}</small> : null}{s.booking_note ? <small className="ds-note" title={s.booking_note}>📌</small> : null}{n > 3 ? <small className="ds-flag" title={`${n} shifts this week`}>⚑{n}</small> : null}
       {can && <button className="ds-x" disabled={busy} onClick={(ev) => { ev.stopPropagation(); remove(s); }} aria-label={`Back to free: ${nm}`}>×</button>}</span>; };
   const Slot = ({ e, code, start }: { e: Ev; code: string; start: string | null }) =>
-    <button className="ds-slot" onClick={() => setPick({ e, code, start })} onDragOver={(ev) => ev.preventDefault()} onDrop={() => dropOn(e, code, start)}>+ tap to fill</button>;
-  const Row = ({ e, label, code, start, count, people, extra }: { e: Ev; label: React.ReactNode; code: string; start: string | null; count: number; people: Sh[]; extra?: boolean }) => (
+    <button className="ds-slot" onClick={() => setPick({ e, code, start })} onDragOver={(ev) => ev.preventDefault()} onDrop={() => dropOn(e, code, start)}>+ fill</button>;
+  const Step = ({ n, on }: { n: number; on: (n: number) => void }) => <span className="ds-step"><button disabled={busy} onClick={() => on(n - 1)} aria-label="One less">−</button><b>{n}</b><button disabled={busy} onClick={() => on(n + 1)} aria-label="One more">+</button></span>;
+  const Row = ({ e, label, code, start, count, people, extra, idx }: { e: Ev; label: React.ReactNode; code: string; start: string | null; count: number; people: Sh[]; extra?: boolean; idx?: number }) => {
+    const cells = people.length + Math.max(0, count - people.length); const pad = (cols - (cells % cols)) % cols; const tbc = !!(e.start_tbc || e.details_pending); const k = `${e.id}|${idx ?? 'x'}`;
+    return (
     <div className={'ds-line' + (extra ? ' ex' : '')} onDragOver={(ev) => ev.preventDefault()} onDrop={() => dropOn(e, code, start)}>
-      <b className="ds-lbl">{label}</b><span className="ds-time">{e.start_tbc || e.details_pending ? 'TBC' : ap(start)}</span>
-      <span className="ds-cells">{people.map((s) => <Chip key={s.id} s={s} />)}{[...Array(Math.max(0, count - people.length))].map((_, i) => <Slot key={i} e={e} code={code} start={start} />)}</span>
+      <span className="ds-lbl"><small>{label}</small>{extra ? <Step n={count} on={(n) => setExtras(e, n)} /> : idx != null ? <Step n={count} on={(n) => setCount(e, idx, n)} /> : <b>{count}</b>}</span>
+      <span className="ds-time">{idx != null && !tbc ? <button className={'ds-tbtn' + (ed?.eid === e.id && ed.key === String(idx) ? ' on' : '')} disabled={busy} onClick={() => { setEdT(start ?? ''); setEd(ed?.eid === e.id && ed.key === String(idx) ? null : { eid: e.id, key: String(idx) }); }}>🕐 {ap(start)} ▾</button> : <span className="ds-tro">{tbc ? 'TBC' : ap(start)}</span>}
+        {ed && `${ed.eid}|${ed.key}` === k && idx != null && <span className="ds-tpop" onClick={(ev) => ev.stopPropagation()}><b>Start of this line</b>
+          <span className="ds-tq">{(() => { const [h, m] = (start ?? '17:00').split(':').map(Number); const b0 = h * 60 + m; return [-60, -30, -15, 15, 30, 60].map((d) => { const x = b0 + d; const t = `${String(Math.floor(((x % 1440) + 1440) % 1440 / 60)).padStart(2, '0')}:${String(((x % 60) + 60) % 60).padStart(2, '0')}`; return <button key={d} onClick={() => setTime(e, idx, t)}>{ap(t)}</button>; }); })()}</span>
+          <span className="row" style={{ gap: 6 }}><input type="time" step={900} value={edT} onChange={(ev) => setEdT(ev.target.value)} /><button className="abtn sm dark" disabled={!edT || edT === start} onClick={() => setTime(e, idx, edT)}>Set</button></span>
+          <small className="muted">{people.length ? `${people.length} on this line move with it${people.some((x) => !x.pool_hold) ? ' · the ones already sent get "Your shift changed" (you\'ll be asked first)' : ' (not sent yet)'}` : 'nobody on it yet'}</small></span>}</span>
+      <span className="ds-cells" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>{people.map((s) => <Chip key={s.id} s={s} />)}{[...Array(Math.max(0, count - people.length))].map((_, i) => <Slot key={i} e={e} code={code} start={start} />)}{[...Array(pad)].map((_, i) => <i key={'p' + i} className="ds-off" />)}</span>
       <span className={'ds-n' + (people.length >= count ? ' ok' : '')}>{people.length}/{count}{people.length >= count ? ' ✓' : ''}</span>
-    </div>);
+    </div>); };
 
   return (
     <div className="stack-lg ds">
@@ -187,9 +240,11 @@ export function DaySheet() {
       </div>
       <div className="ds-sum"><b>{evs.length} event{evs.length === 1 ? '' : 's'}</b><span>Floor <b className={fl[0] >= fl[1] ? 'okc' : 'accent'}>{fl[0]}/{fl[1]}</b></span><span>Bar <b className={br[0] >= br[1] ? 'okc' : 'accent'}>{br[0]}/{br[1]}</b></span><span>Free <b>{nYes}</b></span>
         <span className="muted">✦ fills by your rules · hover a name = why · ⚑ = more than 3 shifts this week · tap a slot to fill · drag a name to move it · × = back to Free · staff see nothing until you confirm</span></div>
+      {pend > 0 && <div className="ds-pend"><b>✉ {pend} change{pend > 1 ? 's' : ''} not sent yet</b><span className="muted">staff who were already sent a shift that changed · they're told when you press Send</span><span className="grow" /><button className="abtn sm dark" onClick={() => setSendOpen(true)}>Review &amp; send ›</button></div>}
+      {sendOpen && <SendBox events={evs.map((e) => e.id)} onClose={() => { setSendOpen(false); setTick((t) => t + 1); }} onSent={() => { setMsg('Sent.'); setTick((t) => t + 1); }} />}
       {msg && <div className="adm-card okc sm">{msg}</div>}{err && <div className="adm-card err sm">{err}</div>}
       <div className="ds-cols">
-        <div className="ds-blocks">
+        <div className="ds-blocks" ref={blocksR} onClick={() => ed && setEd(null)}>
           {!shown.length && <div className="adm-card muted">No {dept === 'both' ? '' : dept + ' '}events this day.</div>}
           {shown.map((e) => { const L = lays[e.id]; const have = sh.filter((s) => s.event_id === e.id).length; const need = L.client + L.extras.count;
             return (
@@ -201,12 +256,22 @@ export function DaySheet() {
                   {sh.some((x) => x.event_id === e.id && x.pool_hold && !x.locked && !LEAD.includes(x.position_code ?? '')) && <button className="lnk sm muted" disabled={busy} onClick={() => clear(e)}>Clear</button>}
                   <Link className="lnk sm" to={`/admin/event/${e.id}`}>Event ›</Link></div>
                 <div className="ds-lead" onDragOver={(ev) => ev.preventDefault()} onDrop={() => dropOn(e, isBar(e) ? 'BM' : 'MD', e.start_time?.slice(0, 5) ?? null)}>
-                  <small>{isBar(e) ? 'BAR MANAGER' : 'MD'}</small>{L.leads.map((s) => <Chip key={s.id} s={s} />)}
-                  {L.leads.length < L.leadNeed && <Slot e={e} code={isBar(e) ? 'BM' : 'MD'} start={e.start_time?.slice(0, 5) ?? null} />}</div>
-                {L.lines.map((l) => <Row key={l.key} e={e} label={`${l.count} ${plural(l.code, l.count)}`} code={l.code} start={l.start} count={l.count} people={l.people} />)}
+                  <small>{isBar(e) ? 'BAR MANAGER' : 'MD'}</small><span /><span className="ds-cells" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>{L.leads.map((s) => <Chip key={s.id} s={s} />)}
+                  {L.leads.length < L.leadNeed && <Slot e={e} code={isBar(e) ? 'BM' : 'MD'} start={e.start_time?.slice(0, 5) ?? null} />}</span><span /></div>
+                {L.lines.map((l) => <Row key={l.key} idx={l.idx} e={e} label={plural(l.code, 2).toUpperCase()} code={l.code} start={l.start} count={l.count} people={l.people} />)}
                 {!L.lines.length && <div className="muted sm" style={{ padding: '8px 0' }}>No staff lines yet: <Link to={`/admin/event/${e.id}/edit`}>add them on the event ›</Link></div>}
-                {L.extras.count > 0 && <Row e={e} extra label={<>+{L.extras.count} Extras <small>(10%)</small></>} code={L.extras.code} start={L.extras.start} count={L.extras.count} people={L.extras.people} />}
-                {L.over.length > 0 && <div className="ds-line over"><b className="ds-lbl">Also placed</b><span className="ds-time" /><span className="ds-cells">{L.over.map((s) => <Chip key={s.id} s={s} />)}</span><span className="ds-n">over</span></div>}
+                {(L.extras.count > 0 || !isBar(e)) && L.lines.length > 0 && <Row e={e} extra label={<>EXTRAS <em>{e.extras == null ? '10%' : 'set by you'}</em></>} code={L.extras.code} start={L.extras.start} count={L.extras.count} people={L.extras.people} />}
+                {(() => { const fl = sh.filter((x) => x.event_id === e.id && flagged[x.id]); return fl.length > 0 && <div className="ds-flagbox"><b>⚑ Line lowered · weakest flagged</b>
+                  {fl.map((x) => <span key={x.id} className="ds-flagp"><span className="grow">{byId[x.staff_id]?.full_name ?? '…'} <small className="muted">{flagged[x.id]}</small></span>
+                    <button className="abtn sm" disabled={busy} onClick={() => { unflag(x.id); const ex = L.extras.start; if (ex && hm(x.planned_start) !== ex) patch(x, { planned_start: startIso(date, ex) }, 'to extras'); }}>Make extra</button>
+                    {x.pool_hold && !x.locked ? <button className="abtn sm" disabled={busy} onClick={() => { unflag(x.id); remove(x); }}>Back to Free</button> : <small className="muted">sent: change from the event</small>}
+                    <button className="lnk sm muted" onClick={() => unflag(x.id)}>Keep</button></span>)}</div>; })()}
+                {add?.eid === e.id ? <div className="ds-add"><select value={add.code} onChange={(ev) => setAdd({ ...add, code: ev.target.value })}>{ROLES.filter((r) => r.dept === (isBar(e) ? 'bar' : 'floor') && !LEAD.includes(r.code)).map((r) => <option key={r.code} value={r.code}>{r.label}</option>)}</select>
+                  <input inputMode="numeric" style={{ width: 60 }} placeholder="How many" value={add.count} onChange={(ev) => setAdd({ ...add, count: ev.target.value })} />
+                  <input type="time" step={900} value={add.t} onChange={(ev) => setAdd({ ...add, t: ev.target.value })} />
+                  <button className="abtn sm dark" disabled={busy || !(parseInt(add.count, 10) > 0) || !add.t} onClick={addLine}>Add line</button><button className="lnk sm muted" onClick={() => setAdd(null)}>Cancel</button></div>
+                  : <button className="ds-addbtn" onClick={() => setAdd({ eid: e.id, code: isBar(e) ? 'BT' : 'W', count: '', t: L.lines[L.lines.length - 1]?.start ?? e.start_time?.slice(0, 5) ?? '17:00' })}>+ Add a line</button>}
+                {L.over.length > 0 && <div className="ds-line over"><span className="ds-lbl"><small>ALSO PLACED</small></span><span className="ds-time" /><span className="ds-cells" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>{L.over.map((s) => <Chip key={s.id} s={s} />)}</span><span className="ds-n">over</span></div>}
               </section>); })}
         </div>
         <aside className="ds-free" onDragOver={(ev) => ev.preventDefault()} onDrop={() => { const d = dragR.current; setDrag(null); if (d && 'id' in d) remove(d); }}>

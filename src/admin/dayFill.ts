@@ -66,11 +66,12 @@ export async function weekCounts(mon: string, sun: string) {
 }
 
 /** Lines of an event with the people on them (same code + time, up to the count). Leftovers → extras line, then "also placed". */
-export function layout(e: Ev, shifts: Sh[]) {
-  const lines = (e.staffing ?? []).filter((l) => !LEAD.includes(l.code) && l.count > 0).map((l, i) => ({ key: `${i}`, code: l.code, start: l.start ?? e.start_time?.slice(0, 5) ?? null, count: l.count, people: [] as Sh[] }));
+/** rk = ranking (lower = better): inside a line the best are kept, the weakest overflow (push 113). */
+export function layout(e: Ev, shifts: Sh[], rk?: (sid: string) => number) {
+  const lines = (e.staffing ?? []).map((l, i) => ({ l, i })).filter(({ l }) => !LEAD.includes(l.code) && l.count > 0).map(({ l, i }) => ({ idx: i, key: `${i}`, code: l.code, start: l.start ?? e.start_time?.slice(0, 5) ?? null, count: l.count, people: [] as Sh[] }));
   const leadNeed = (e.staffing ?? []).filter((l) => LEAD.includes(l.code)).reduce((n, l) => n + l.count, 0);
   const leads = shifts.filter((s) => LEAD.includes(s.position_code ?? ''));
-  const rest = shifts.filter((s) => !LEAD.includes(s.position_code ?? '')).sort((a, b) => (a.planned_start ?? '').localeCompare(b.planned_start ?? ''));
+  const rest = shifts.filter((s) => !LEAD.includes(s.position_code ?? '')).sort((a, b) => (a.planned_start ?? '').localeCompare(b.planned_start ?? '') || (rk ? rk(a.staff_id) - rk(b.staff_id) : 0));
   const left: Sh[] = [];
   for (const s of rest) { const t = hm(s.planned_start); const L = lines.find((l) => l.code === (s.position_code ?? 'W') && l.start === t && l.people.length < l.count)
       ?? lines.find((l) => l.start === t && l.people.length < l.count); if (L) L.people.push(s); else left.push(s); }

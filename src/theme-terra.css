@@ -1297,4 +1297,11 @@ html[data-theme="terra"] { --teams: #5B5FC7; --teams-bg: #EEEFFB; --teams-ink: #
 :where(html[data-theme="terra"]) .ds-why { background: #F6F2EA; }
 :where(html[data-theme="terra"]) .ds-cardgrid select, :where(html[data-theme="terra"]) .ds-cardgrid input { border: 1px solid var(--line, #DEE0D5); }
 :where(html[data-theme="terra"]) .ds-seglink:hover { background: #FBFAF6; }
+:where(html[data-theme="terra"]) .ds-lead { border-bottom: 1px dashed var(--line, #E6E0D6); }
+:where(html[data-theme="terra"]) .ds-step { border: 1px solid var(--line, #D6D7D0); background: #FBFAF6; }
+:where(html[data-theme="terra"]) .ds-tbtn { border: 1px solid var(--line, #D6D7D0); background: #FBFAF6; }
+:where(html[data-theme="terra"]) .ds-tpop { background: #FBFAF6; box-shadow: 0 12px 40px rgba(0,0,0,0.18); }
+:where(html[data-theme="terra"]) .ds-tq button:hover { color: #FBFAF6; }
+:where(html[data-theme="terra"]) .ds-chip { background: #FBFAF6; }
+:where(html[data-theme="terra"]) .ds-add select, :where(html[data-theme="terra"]) .ds-add input { border: 1px solid var(--line, #DEE0D5); }
 html[data-theme="terra"] body { background: #EEF0E8; color: #2A2A24; }

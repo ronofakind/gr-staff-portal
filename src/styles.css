@@ -4500,3 +4500,41 @@ a.ch-name-link { display: block; text-decoration: none; color: inherit; } a.ch-n
   .ds-pick-wrap { align-items: flex-end; padding: 0; } .ds-pick { border-radius: 16px 16px 0 0; max-height: 88vh; width: 100%; }
   .ds-pp { padding: 12px; }
 }
+/* push 113 · Day sheet: names in equal cells (C · fit the screen) + count / time on the line */
+.ds-line, .ds-lead { display: grid; grid-template-columns: 104px 74px minmax(0, 1fr) 50px; gap: 6px 8px; align-items: start; padding: 8px 0; }
+.ds-lead { border-bottom: 1px dashed var(--line, #e6e0d6); align-items: center; }
+.ds-lead > small { width: auto; }
+.ds-line.ex { padding: 8px 6px; }
+.ds-lbl { display: flex; flex-direction: column; gap: 4px; }
+.ds-lbl small { font-size: 10.5px; font-weight: 800; letter-spacing: .07em; color: var(--muted); } .ds-lbl em { font-style: normal; font-weight: 600; color: #9A7413; letter-spacing: 0; }
+.ds-step { display: inline-flex; align-items: center; align-self: flex-start; border: 1px solid var(--line, #DDD5CA); border-radius: 9px; overflow: hidden; background: #fff; }
+.ds-step button { border: 0; background: #F6F2EC; width: 26px; height: 28px; font-size: 15px; font-weight: 700; cursor: pointer; color: var(--ink); }
+.ds-step button:hover { background: #ECE5DA; } .ds-step b { min-width: 30px; text-align: center; font-size: 13.5px; }
+.ds-time { position: relative; padding-top: 16px; }
+.ds-tbtn { border: 1px solid var(--line, #DDD5CA); background: #fff; border-radius: 9px; padding: 5px 7px; font: 700 12px Inter, sans-serif; cursor: pointer; white-space: nowrap; color: var(--ink); }
+.ds-tbtn.on, .ds-tbtn:hover { border-color: var(--ink); } .ds-tro { font-size: 12.5px; font-weight: 700; display: inline-block; padding-top: 5px; }
+.ds-tpop { position: absolute; z-index: 30; top: 48px; left: 0; width: 240px; background: #fff; border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,.18); padding: 10px; display: flex; flex-direction: column; gap: 7px; font-size: 12.5px; }
+.ds-tq { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.ds-tq button { border: 0; background: #F6F2EC; border-radius: 7px; padding: 6px 0; font: 700 12px Inter, sans-serif; cursor: pointer; } .ds-tq button:hover { background: var(--ink); color: #fff; }
+.ds-cells { display: grid !important; gap: 6px; padding-top: 16px; flex-wrap: nowrap; }
+.ds-lead .ds-cells { padding-top: 0; }
+.ds-n { padding-top: 24px; }
+.ds-chip { display: flex; height: 34px; box-sizing: border-box; border-radius: 8px; border: 1px solid #E6DED3; background: #fff; padding: 0 6px 0 9px; min-width: 0; overflow: hidden; font-weight: 600; font-size: 12.5px; }
+.ds-chip.fixed { background: #F3F8F2; border-color: #DCE8DA; padding-right: 9px; cursor: pointer; }
+.ds-chip .ds-nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 0 1 auto; }
+.ds-chip .ds-x { margin-left: auto; }
+.ds-chip.over { border: 1.5px solid #C9A227; background: #FBF4E2; }
+.ds-slot { height: 34px; border-radius: 8px; padding: 0; width: 100%; }
+.ds-off { display: block; height: 34px; border-radius: 8px; background: repeating-linear-gradient(45deg, #F3EEE6, #F3EEE6 6px, #EEE8DE 6px, #EEE8DE 12px); }
+.ds-flagbox { margin: 6px 0; padding: 10px 12px; border-radius: 10px; background: #FBF4E2; display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; }
+.ds-flagp { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ds-addbtn { border: 0; background: none; color: #6B64D8; font: 700 12.5px Inter, sans-serif; padding: 8px 0 2px; cursor: pointer; text-align: left; }
+.ds-add { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 8px 0; }
+.ds-add select, .ds-add input { padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line, #ddd); font: inherit; font-size: 13px; }
+.ds-pend { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px; border-radius: 12px; background: #FBF4E2; border: 1px solid #E9D9A8; font-size: 13px; }
+@media (max-width: 700px) {
+  .ds-line, .ds-lead { grid-template-columns: 1fr auto auto; }
+  .ds-line .ds-cells, .ds-lead .ds-cells { grid-column: 1 / -1; order: 4; padding-top: 0; }
+  .ds-time, .ds-n { padding-top: 6px; }
+  .ds-tpop { left: auto; right: 0; }
+}

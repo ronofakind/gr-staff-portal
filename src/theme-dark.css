@@ -2193,6 +2193,23 @@ html[data-theme="dark"] { --teams: #8487CC; --teams-bg: #1F2137; --teams-ink: #8
 :where(html[data-theme="dark"]) .ds-why { background: #332E24; }
 :where(html[data-theme="dark"]) .ds-cardgrid select, :where(html[data-theme="dark"]) .ds-cardgrid input { border: 1px solid var(--line, #37332F); }
 :where(html[data-theme="dark"]) .ds-seglink:hover { background: #1F1D1A; }
+:where(html[data-theme="dark"]) .ds-lead { border-bottom: 1px dashed var(--line, #4A443B); }
+:where(html[data-theme="dark"]) .ds-lbl em { color: #E2C16F; }
+:where(html[data-theme="dark"]) .ds-step { border: 1px solid var(--line, #3D3834); background: #1F1D1A; }
+:where(html[data-theme="dark"]) .ds-step button { background: #322D24; }
+:where(html[data-theme="dark"]) .ds-step button:hover { background: #322D25; }
+:where(html[data-theme="dark"]) .ds-tbtn { border: 1px solid var(--line, #3D3834); background: #1F1D1A; }
+:where(html[data-theme="dark"]) .ds-tpop { background: #1F1D1A; box-shadow: 0 12px 40px rgba(0,0,0,0.45); }
+:where(html[data-theme="dark"]) .ds-tq button { background: #322D24; }
+:where(html[data-theme="dark"]) .ds-tq button:hover { color: #1A1714; }
+:where(html[data-theme="dark"]) .ds-chip { border: 1px solid #4B443A; background: #1F1D1A; }
+:where(html[data-theme="dark"]) .ds-chip.fixed { background: #25221F; border-color: #3D493B; }
+:where(html[data-theme="dark"]) .ds-chip.over { border: 1.5px solid #C19E2F; background: #3A321D; }
+:where(html[data-theme="dark"]) .ds-off { background: repeating-linear-gradient(45deg, #322D24, #322D24 6px, #322D25 6px, #322D25 12px); }
+:where(html[data-theme="dark"]) .ds-flagbox { background: #3A321D; }
+:where(html[data-theme="dark"]) .ds-addbtn { color: #827CD4; }
+:where(html[data-theme="dark"]) .ds-add select, :where(html[data-theme="dark"]) .ds-add input { border: 1px solid var(--line, #37332F); }
+:where(html[data-theme="dark"]) .ds-pend { background: #3A321D; border: 1px solid #E6D7AB; }
 html[data-theme="dark"] { color-scheme: dark; }
 html[data-theme="dark"] body { background: #121110; color: #F1ECE4; }
 html[data-theme="dark"] img[src$="logo-mark.png"]:not(.adm-side img):not(.side-logo), html[data-theme="dark"] img[src$="logo-full.png"] { filter: invert(1) hue-rotate(180deg); mix-blend-mode: normal !important; }
