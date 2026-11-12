@@ -240,7 +240,9 @@ export function EventForm() {
       const { data: e } = await supabase.from('events').select('*,event_private(client,client_id,rate_set,pay_method,qb_doc_type,qb_doc_number)').eq('id', id!).single();
       if (!e) return;
       const { data: sib } = await supabase.from('events').select('id,department,staffing,manager_id').eq('event_date', e.event_date).eq('title', e.title);
-      const evs = (sib ?? []) as Ev[];
+      // Nov 11 · two floor events at the same place that day (Olympia: one team per floor, each MD has their own) → only edit the one opened,
+      // plus at most one event of the other department; never fold two floor events into one form.
+      const evs = ((sib ?? []) as Ev[]).filter((x, i, a) => x.id === e.id || (x.department !== e.department && a.findIndex((y) => y.department === x.department && y.id !== e.id) === i));
       const { data: sh } = await supabase.from('shifts').select('id,event_id,staff_id,position_code,planned_start,attendance,notified_at,punches(punch_in)').in('event_id', evs.map((x) => x.id)).neq('status', 'declined');
       const shifts = (sh ?? []) as unknown as Sh[];
       setExisting(evs); setOldShifts(shifts);
