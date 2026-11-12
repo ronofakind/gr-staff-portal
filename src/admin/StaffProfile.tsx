@@ -132,6 +132,7 @@ export function StaffProfile({ s, onClose, onEdit, all }: { s: AStaff; onClose: 
             <RateCard s={s} />
             <ExpenseSwitch staffId={s.id} />{/* push 79 */}
             <TaxCard staffId={s.id} />
+            <CvCard staffId={s.id} />{/* push 103 */}
             <div className="pcard">
               <div className="row" style={{ justifyContent: 'space-between' }}><span className="kick">RELIABILITY · {today.slice(0, 4)}</span><Link to="/admin/reliability" className="sm accent strong">Full log ›</Link></div>
               <div className="rel4">
@@ -442,4 +443,35 @@ function PinNoteCard({ staffId, first }: { staffId: string; first: string }) {
       <small className="muted">Change it from Bookings → {first} → Note for the manager.</small>
     </div>
   );
+}
+
+/** push 103 · CV on the profile (admin only). From the application on Accept, or uploaded here. Private bucket "applications", staff/<id>/. */
+function CvCard({ staffId }: { staffId: string }) {
+  const [cv, setCv] = useState<{ path: string | null; name: string | null } | null>(null); const [busy, setBusy] = useState(false); const [err, setErr] = useState('');
+  const load = () => supabase.from('staff_private').select('cv_path,cv_name').eq('staff_id', staffId).maybeSingle()
+    .then(({ data }) => setCv({ path: (data as { cv_path?: string } | null)?.cv_path ?? null, name: (data as { cv_name?: string } | null)?.cv_name ?? null }));
+  useEffect(() => { load(); }, [staffId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const open = async () => { if (!cv?.path) return; const w = window.open('', '_blank'); const { data } = await supabase.storage.from('applications').createSignedUrl(cv.path, 600); if (data && w) w.location.href = data.signedUrl; else w?.close(); };
+  const upload = async (f: File | undefined) => {
+    if (!f) return; setBusy(true); setErr('');
+    const path = `staff/${staffId}/${Date.now()}-${f.name.replace(/[^\w.-]+/g, '_')}`;
+    const up = await supabase.storage.from('applications').upload(path, f, { contentType: f.type || undefined });
+    if (up.error) { setErr(up.error.message); setBusy(false); return; }
+    const { error } = await supabase.from('staff_private').upsert({ staff_id: staffId, cv_path: path, cv_name: f.name });
+    setBusy(false); if (error) setErr(error.message); else load();
+  };
+  const remove = async () => { if (!cv?.path || !confirmRemove()) return; setBusy(true);
+    if (cv.path.startsWith('staff/')) await supabase.storage.from('applications').remove([cv.path]);
+    await supabase.from('staff_private').update({ cv_path: null, cv_name: null }).eq('staff_id', staffId); setBusy(false); load(); };
+  const confirmRemove = () => window.confirm('Remove this CV from the profile?');
+  if (!cv) return null;
+  return (
+    <div className="pcard">
+      <div className="row" style={{ justifyContent: 'space-between' }}><span className="kick">CV</span><span className="muted sm">only you see it</span></div>
+      {cv.path ? <div className="row wrap" style={{ gap: 8 }}><button className="abtn sm dark" onClick={open}>📄 Open CV{cv.name ? ` · ${cv.name.length > 28 ? cv.name.slice(0, 26) + '…' : cv.name}` : ''}</button>
+        <label className="abtn sm">{busy ? 'Uploading…' : 'Replace'}<input type="file" hidden accept=".pdf,.doc,.docx,image/*" onChange={(e) => upload(e.target.files?.[0])} /></label>
+        <button className="lnk muted sm" disabled={busy} onClick={remove}>Remove</button></div>
+        : <label className="abtn sm" style={{ alignSelf: 'flex-start' }}>{busy ? 'Uploading…' : '+ Upload CV'}<input type="file" hidden accept=".pdf,.doc,.docx,image/*" onChange={(e) => upload(e.target.files?.[0])} /></label>}
+      {err && <span className="error sm">{err}</span>}
+    </div>);
 }

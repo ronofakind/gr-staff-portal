@@ -104,6 +104,7 @@ const welcome = (lang: 'fr' | 'en') => (s: AStaff, token: string) => {
 /** Review sheet: full card + Accept (level, handbook roles, paid by) · Keep for later · Reject. */
 export function AppSheet({ a, all, staff, onClose, onDone }: { a: App; all: App[]; staff: AStaff[]; onClose: () => void; onDone: (msg: string) => void }) {
   const [mode, setMode] = useState<'view' | 'accept' | 'reject'>('view');
+  const [tier, setTier] = useState<'A' | 'B' | 'C' | null>(null); // push 103 · Ronnie picks it on Accept
   const [level, setLevel] = useState(guessLevel(a)); const [rate, setRate] = useState(String(LEVELS.find((x) => x.k === guessLevel(a))!.rate));
   const [hb, setHb] = useState<string[]>(guessHb(a)); const [paid, setPaid] = useState<'payroll' | 'cash'>('payroll');
   const [refRate, setRefRate] = useState<number | null>(null); const [err, setErr] = useState(''); const [busy, setBusy] = useState(false);
@@ -126,6 +127,8 @@ export function AppSheet({ a, all, staff, onClose, onDone }: { a: App; all: App[
   const accept = async () => {
     const r = Number(rate.replace(',', '.'));
     if (!(r >= 15 && r <= 60)) { setErr('Check the rate'); return; }
+    if (!tier) { setErr('Pick their tier'); return; }
+    if (!level) { setErr('Pick their experience'); return; }
     if (!hb.length) { setErr('Pick at least one handbook role'); return; }
     setBusy(true); setErr('');
     const both = hb.includes('floor') && hb.includes('bar');
@@ -143,7 +146,7 @@ export function AppSheet({ a, all, staff, onClose, onDone }: { a: App; all: App[
     const langs = a.lang_fr && a.lang_en ? { fr: a.lang_fr, en: a.lang_en } : null;
     // push 75 · came through a staff share link → Knows fills itself ("Knows Melanie · referred them"); a typed name gets a check card on Today.
     const knows = refStaff ? { knows_staff_id: refStaff.id, knows_text: 'referred them' } : {};
-    await supabase.from('staff_private').upsert({ staff_id: sid, ...knows, neighbourhood: a.neighbourhood?.trim() || null, ...(langs ? { languages: langs } : {}), notes: `Hired ${isoDay(new Date())} · ${lv.l} · ${paid === 'cash' ? 'cash' : 'payroll'}${refStaff ? ` · referred by ${refStaff.full_name}` : ''}` });
+    await supabase.from('staff_private').upsert({ staff_id: sid, tier, ...(a.cv_path ? { cv_path: a.cv_path, cv_name: a.cv_name } : {}), ...knows, neighbourhood: a.neighbourhood?.trim() || null, ...(langs ? { languages: langs } : {}), notes: `Hired ${isoDay(new Date())} · ${lv.l} · ${paid === 'cash' ? 'cash' : 'payroll'}${refStaff ? ` · referred by ${refStaff.full_name}` : ''}` });
     await supabase.from('staff_onboarding').upsert({ staff_id: sid, level, handbook_roles: hb, paid_by: paid }); // push 56 · handbook by role + tax & pay
     const up = await supabase.from('applications').update({ status: 'accepted', decided_at: new Date().toISOString(), level, start_rate: r, handbook_roles: hb, paid_by: paid, staff_id: sid, updated_at: new Date().toISOString(), ...(refStaff ? { referral_status: 'matched' } : {}) }).eq('id', a.id);
     setBusy(false); if (up.error) { setErr(up.error.message); return; }
@@ -166,7 +169,8 @@ export function AppSheet({ a, all, staff, onClose, onDone }: { a: App; all: App[
         <div className="row" style={{ gap: 8 }}><button className="abtn dark" disabled={busy} onClick={() => decide('rejected', why.trim())}>Reject · nothing sent</button><button className="lnk muted" onClick={() => setMode('view')}>Cancel</button></div>
       </div>}
       {mode === 'accept' && <div className="stack" style={{ gap: 12 }}>
-        <div className="hr-q"><b>Level</b><div className="hr-opts">{LEVELS.map((x) => <button key={x.k} className={level === x.k ? 'on' : ''} onClick={() => pickLevel(x.k)}><b>{x.l}</b><small>{x.sub}</small></button>)}</div></div>
+        <div className="hr-q"><b>Tier <span className="accent">*</span></b><div className="hr-chips">{(['A', 'B', 'C'] as const).map((t) => <button key={t} className={tier === t ? 'on' : ''} onClick={() => setTier(t)}>Tier {t}</button>)}</div><small className="muted">the colour on the Bookings board · you pick it</small></div>
+        <div className="hr-q"><b>Experience <span className="accent">*</span></b><div className="hr-opts">{LEVELS.map((x) => <button key={x.k} className={level === x.k ? 'on' : ''} onClick={() => pickLevel(x.k)}><b>{x.l}</b><small>{x.sub}</small></button>)}</div></div>
         <label className="rt-f">Start rate ($/h)<input inputMode="decimal" value={rate} onChange={(e) => setRate(e.target.value)} /></label>
         {refStaff && refRate != null && <div className="cu-box amber"><span>Referred by <b>{refStaff.full_name}</b> · {refStaff.full_name.split(' ')[0]} is at <b>${refRate}</b>/h. Same experience → same rate.</span>
           {Number(rate) !== refRate && <button className="abtn sm" style={{ alignSelf: 'flex-start' }} onClick={() => setRate(String(refRate))}>Use ${refRate}</button>}</div>}
@@ -175,7 +179,7 @@ export function AppSheet({ a, all, staff, onClose, onDone }: { a: App; all: App[
           <small className="muted">{paid === 'cash' ? 'No SIN, address or void cheque asked. Not added to QuickBooks / payroll.' : 'Tax & pay step (SIN, address, void cheque) before their first shift.'}</small></div>
         <div className="muted sm">Adds {a.first_name} to Staff with this rate, then gives you the welcome text with their personal app link to copy.</div>
         {err && <p className="error">{err}</p>}
-        <div className="row" style={{ gap: 8 }}><button className="abtn ok" disabled={busy} onClick={accept}>{busy ? 'Adding…' : `Accept ${a.first_name} · $${rate}/h`}</button><button className="lnk muted" onClick={() => setMode('view')}>Cancel</button></div>
+        <div className="row" style={{ gap: 8 }}><button className="abtn ok" disabled={busy || !tier || !level} onClick={accept}>{busy ? 'Adding…' : `Accept ${a.first_name} · $${rate}/h`}</button><button className="lnk muted" onClick={() => setMode('view')}>Cancel</button></div>
       </div>}
       {mode !== 'accept' && err && <p className="error">{err}</p>}
       {a.status === 'accepted' && <div className="cu-box ok"><b>Accepted {a.decided_at ? dLabel(isoDay(new Date(a.decided_at)), { month: 'short', day: 'numeric' }) : ''}</b><span>{a.level ? LEVELS.find((x) => x.k === a.level)?.l : ''}{a.start_rate ? ` · $${a.start_rate}/h` : ''}{a.paid_by ? ` · ${a.paid_by}` : ''}{a.handbook_roles.length ? ` · handbook: ${a.handbook_roles.join(', ')}` : ''}</span></div>}
