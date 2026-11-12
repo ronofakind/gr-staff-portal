@@ -137,6 +137,7 @@ export function StaffProfile({ s, onClose, onEdit, all }: { s: AStaff; onClose: 
             <ExpenseSwitch staffId={s.id} />{/* push 79 */}
             <TaxCard staffId={s.id} />
             <CvCard staffId={s.id} />{/* push 103 */}
+            <TextViaCard staffId={s.id} />{/* push 107 */}
             <div className="pcard">
               <div className="row" style={{ justifyContent: 'space-between' }}><span className="kick">RELIABILITY · {today.slice(0, 4)}</span><Link to="/admin/reliability" className="sm accent strong">Full log ›</Link></div>
               <div className="rel4">
@@ -477,5 +478,19 @@ function CvCard({ staffId }: { staffId: string }) {
         <button className="lnk muted sm" disabled={busy} onClick={remove}>Remove</button></div>
         : <label className="abtn sm" style={{ alignSelf: 'flex-start' }}>{busy ? 'Uploading…' : '+ Upload CV'}<input type="file" hidden accept=".pdf,.doc,.docx,image/*" onChange={(e) => upload(e.target.files?.[0])} /></label>}
       {err && <span className="error sm">{err}</span>}
+    </div>);
+}
+
+/** push 107 · how reminder texts reach them (Staff Hub column W moved into the app). Read by the Mac mini texting task. */
+function TextViaCard({ staffId }: { staffId: string }) {
+  const [v, setV] = useState<string | null | undefined>(undefined);
+  useEffect(() => { supabase.from('staff_private').select('text_via').eq('staff_id', staffId).maybeSingle().then(({ data }) => setV((data as { text_via?: string | null } | null)?.text_via ?? null)); }, [staffId]);
+  const set = async (x: string) => { setV(x); await supabase.from('staff_private').upsert({ staff_id: staffId, text_via: x }); };
+  if (v === undefined) return null;
+  return (
+    <div className="pcard">
+      <div className="row" style={{ justifyContent: 'space-between' }}><span className="kick">TEXTS VIA</span><span className="muted sm">reminder texts from the Mac mini</span></div>
+      <div className="seg3" style={{ marginTop: 6 }}>{[['imessage', 'iMessage'], ['whatsapp', 'WhatsApp'], ['sms', 'SMS · you text'], ['check', 'Not sure']].map(([k, l]) => <button key={k} className={v === k ? 'on' : ''} onClick={() => set(k)}>{l}</button>)}</div>
+      {!v && <small className="gold">Not set yet: pick one so reminders can reach them.</small>}
     </div>);
 }
