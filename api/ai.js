@@ -82,6 +82,11 @@ export default async function handler(req, res) {
     }
 
     // Nov 8 · push 55b · AI first read of new applications. GET ?apps=1 → new ones not read yet, with a 1-hour CV link.
+    // push 106 (120) · "we got your application" email: new applications not confirmed yet (the hourly task sends it from the business inbox)
+    if (req.method === 'GET' && req.query.confirm) {
+      const apps = await get('applications?confirm_sent_at=is.null&status=in.(new,kept)&email=not.is.null&select=id,created_at,lang,first_name,email&order=created_at&limit=20');
+      return res.json({ apps });
+    }
     if (req.method === 'GET' && req.query.apps) {
       const apps = await get('applications?status=eq.new&ai_at=is.null&select=id,created_at,first_name,last_name,email,phone,roles,worked_in,years,lang_fr,lang_en,days,transport,neighbourhood,cv_path,cv_name,no_cv_note,referrer_id,referrer_text&order=created_at&limit=10');
       const [past, staff] = await Promise.all([
@@ -155,6 +160,15 @@ export default async function handler(req, res) {
       }
       // push 55b · AI first read: { apps: [{ id, summary, level: JUNIOR|MID|SENIOR, flags: [] }] }
       let reads = 0;
+      let confirmed = 0;
+      if (Array.isArray(body.confirmed)) {
+        for (const c of body.confirmed.slice(0, 40)) {
+          if (!/^[0-9a-f-]{36}$/i.test(c?.id || '')) continue;
+          const r = await fetch(`${URL_}/rest/v1/applications?id=eq.${c.id}&confirm_sent_at=is.null`, { method: 'PATCH', headers: H({ Prefer: 'return=minimal' }),
+            body: JSON.stringify({ confirm_sent_at: new Date().toISOString(), confirm_note: c.status === 'error' ? s(c.note, 200) || 'error' : null }) });
+          if (r.ok) confirmed++;
+        }
+      }
       if (Array.isArray(body.apps)) {
         for (const a of body.apps.slice(0, 20)) {
           if (!/^[0-9a-f-]{36}$/i.test(a?.id || '') || !a.summary) continue;
@@ -222,7 +236,7 @@ export default async function handler(req, res) {
         added = (await r.json()).length;
       }
       if (body.checked) await fetch(`${URL_}/rest/v1/ai_settings?id=eq.1`, { method: 'PATCH', headers: H(), body: JSON.stringify({ inbox_checked_at: new Date().toISOString() }) });
-      return res.json({ added, skipped: rows.length - added, invoices, reads, vendors, payroll, expenses, notes, beo });
+      return res.json({ added, skipped: rows.length - added, invoices, reads, vendors, payroll, expenses, notes, beo, confirmed });
     }
     return res.status(405).json({ error: 'GET or POST' });
   } catch (e) {

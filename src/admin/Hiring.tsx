@@ -10,11 +10,11 @@ export type App = {
   id: string; created_at: string; status: 'new' | 'kept' | 'accepted' | 'rejected'; lang: string | null;
   first_name: string; last_name: string; email: string | null; phone: string | null; neighbourhood: string | null;
   roles: string[]; worked_in: string[]; years: string | null; lang_fr: number | null; lang_en: number | null; days: string[]; transport: string | null;
-  cv_path: string | null; cv_name: string | null; no_cv_note: string | null; referrer_id: string | null; referrer_text: string | null; note: string | null;
+  cv_path: string | null; cv_name: string | null; confirm_sent_at?: string | null; confirm_note?: string | null; no_cv_note: string | null; referrer_id: string | null; referrer_text: string | null; note: string | null;
   ai_summary: string | null; ai_level: string | null; decided_at: string | null; level: string | null; start_rate: number | null;
   handbook_roles: string[]; paid_by: 'payroll' | 'cash' | null; admin_note: string | null; staff_id: string | null;
 };
-const COLS = 'id,created_at,status,lang,first_name,last_name,email,phone,neighbourhood,roles,worked_in,years,lang_fr,lang_en,days,transport,cv_path,cv_name,no_cv_note,referrer_id,referrer_text,note,ai_summary,ai_level,decided_at,level,start_rate,handbook_roles,paid_by,admin_note,staff_id';
+const COLS = 'id,created_at,status,lang,first_name,last_name,email,phone,neighbourhood,roles,worked_in,years,lang_fr,lang_en,days,transport,cv_path,cv_name,no_cv_note,referrer_id,referrer_text,note,ai_summary,ai_level,confirm_sent_at,confirm_note,decided_at,level,start_rate,handbook_roles,paid_by,admin_note,staff_id';
 const ROLE: Record<string, string> = { waiter: 'Waiter', bartender: 'Bartender', barback: 'Barback', cook: 'Cook', manager: 'Manager' };
 const WORK: Record<string, string> = { fine_dining: 'Fine dining', banquets: 'Banquets', catering: 'Catering', hotel: 'Hotel', cocktail_bar: 'Cocktail bar', cafe: 'Café', none: 'Not yet' };
 const YRS: Record<string, string> = { none: 'no experience', lt1: '< 1 year', '1-2': '1–2 years', '3-5': '3–5 years', '5+': '5+ years' };
@@ -69,6 +69,7 @@ export function AppCard({ a, all, staff, full, onOpen }: { a: App; all: App[]; s
         <span className="grow"><b>{fullName(a)}</b><small className="muted">{line || '—'}</small></span>
         <span className="muted sm">{ago(a.created_at)}</span>
       </div>
+      {a.confirm_sent_at && a.confirm_note !== 'before' && <small className={a.confirm_note ? 'gold' : 'okc'}>{a.confirm_note ? `✉ Confirmation not sent · ${a.confirm_note}` : `✉ Confirmation sent ${new Date(a.confirm_sent_at).toLocaleString('en-CA', { weekday: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' }).replace('a.m.', 'AM').replace('p.m.', 'PM')}`}</small>}
       {a.ai_summary ? <div className="hr-ai"><b>AI · first read{a.ai_level ? ` · suggests ${a.ai_level.toLowerCase()}` : ''}</b><span style={{ whiteSpace: 'pre-line' }}>{a.ai_summary}</span></div> : full ? <div className="muted sm">AI first read: within the hour (the hourly check reads the CV).</div> : null}
       {(ref || flags.length > 0) && <div className="row wrap" style={{ gap: 6 }}>{ref && <i className="hr-tag ok">Referred by {ref}</i>}{flags.map((f) => <i key={f.t} className={'hr-tag ' + f.cls}>{f.t}</i>)}</div>}
       {full && <div className="hr-grid">
