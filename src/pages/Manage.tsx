@@ -98,7 +98,7 @@ import { Brand } from '../components/Brand';
 
 type Row = {
   id: string; staff_id?: string; position_code: string | null; position_detail: string | null; planned_start: string; planned_end: string | null;
-  attendance: 'no_show' | 'cancelled' | null; leave_by: string | null; manager_note: string | null; left_early?: boolean; attendance_reason?: string | null; added_note?: string | null; adder?: { full_name: string } | null;
+  attendance: 'no_show' | 'cancelled' | null; leave_by: string | null; manager_note: string | null; left_early?: boolean; attendance_reason?: string | null; added_note?: string | null; booking_note?: string | null; adder?: { full_name: string } | null;
   staff: { full_name: string; nickname?: string | null; photo_url: string | null; phone: string | null } | null; punches: { punch_in: string | null; punch_out: string | null; arrived_at: string | null; updated_at: string; late_entry_at?: string | null; late_reason?: string | null; late_ok_at?: string | null } | null;
   /** push 28 (migration 034) */
   cancel_self?: boolean; cancel_sent_to_manager?: string | null; replacement_for?: string | null;
@@ -109,7 +109,7 @@ type Row = {
 };
 /** push 28e · "I'm running late" from the person (late_notices, read by the event's manager). */
 type Late = { id: string; shift_id: string; minutes: number; eta: string; reason: string | null; note?: string | null; sent_at: string; seen_at: string | null };
-const ROW_COLS = 'id,staff_id,ends_own,cut_first_at,position_code,position_detail,planned_start,planned_end,attendance,left_early,attendance_reason,added_note,adder:staff!shifts_added_by_fkey(full_name),leave_by,manager_note,staff:staff!shifts_staff_id_fkey(full_name,nickname,photo_url,phone),punches(punch_in,punch_out,arrived_at,updated_at,late_entry_at,late_reason,late_ok_at)';
+const ROW_COLS = 'id,staff_id,ends_own,cut_first_at,position_code,position_detail,planned_start,planned_end,attendance,left_early,attendance_reason,added_note,booking_note,adder:staff!shifts_added_by_fkey(full_name),leave_by,manager_note,staff:staff!shifts_staff_id_fkey(full_name,nickname,photo_url,phone),punches(punch_in,punch_out,arrived_at,updated_at,late_entry_at,late_reason,late_ok_at)';
 const fullT = (iso: string) => new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' });
 const shortT = (iso: string) => fullT(iso).replace(/\s?[AP]M$/, '');
 type Ev = { id: string; title: string; event_date: string };
@@ -589,6 +589,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
                     {ln && lnPassed && <span><i className="p28-tag red">~{shortT(ln.eta)} PASSED · NOT IN YET</i></span>}
                     {ln && pin && <span><i className="p28-tag green">IN {fullT(r.punches?.arrived_at ?? pin)} · TOLD AHEAD</i></span>}
                     <span className="rl">{roleLabel(r.position_code, r.position_detail)}{r.manager_note ? ' · 📝 note' : ''}{fbOn && inf?.fb_stars ? ` · ★ ${inf.fb_stars}` : ''}</span>
+                    {r.booking_note && !r.attendance && <span className="rl">📌 {r.booking_note}</span>}
                     {!r.attendance && (() => {
                       // push 46 · two shifts the same day: LEAVES <end> (another shift later) / COMING FROM <venue> (earlier shift)
                       const os = r.staff_id ? otherSh[r.staff_id] ?? [] : []; const me0 = new Date(r.planned_start).getTime();

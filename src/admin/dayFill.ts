@@ -12,7 +12,7 @@ export type Ev = { id: string; title: string; event_date: string; department: st
   details_pending: boolean | null; start_tbc: boolean | null; caterer_name?: string | null; event_type?: string | null; extras?: number | null; venue_id: string | null;
   event_private?: { client: string | null; client_id?: string | null } | null; venues: { name: string; far?: boolean | null; area?: string | null } | null };
 export type Sh = { id: string; event_id: string; staff_id: string; position_code: string | null; position_detail?: string | null; status: string; pool_hold: boolean; locked: boolean | null;
-  notified_at: string | null; planned_start: string | null; time_tbc?: boolean | null };
+  notified_at: string | null; planned_start: string | null; time_tbc?: boolean | null; booking_note?: string | null };
 export type Av = { staff_id: string; status: string; from_time: string | null; released_at: string | null; avail_asks?: { department: string | null } | null };
 export type Day = { date: string; evs: Ev[]; sh: Sh[]; av: Av[]; off: Set<string> };
 export type Ctx = { staff: AStaff[]; byId: Record<string, AStaff>; cars: Set<string>; worked: Record<string, number>; links: SLink[]; conds: SCond[]; rate: Record<string, number>; venues: Venue[]; clients: Client[] };
@@ -35,7 +35,7 @@ export async function loadDay(date: string): Promise<Day> {
   if (e.error) throw e.error;
   const a = a0.error ? await supabase.from('availability').select('staff_id,status,from_time,released_at').eq('for_date', date).not('ask_id', 'is', null) : a0;
   const evs = (e.data ?? []) as unknown as Ev[];
-  const s = await supabase.from('shifts').select('id,event_id,staff_id,position_code,position_detail,status,pool_hold,locked,notified_at,planned_start,time_tbc,attendance')
+  const s = await supabase.from('shifts').select('id,event_id,staff_id,position_code,position_detail,status,pool_hold,locked,notified_at,planned_start,time_tbc,attendance,booking_note')
     .in('event_id', evs.length ? evs.map((x) => x.id) : NONE).neq('status', 'declined');
   const sh = ((s.data ?? []) as (Sh & { attendance?: string | null })[]).filter((x) => x.attendance !== 'cancelled');
   // one row per person (an ask for floor and one for bar the same day: keep the yes)

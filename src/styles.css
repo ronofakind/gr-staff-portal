@@ -4483,3 +4483,4 @@ a.ch-name-link { display: block; text-decoration: none; color: inherit; } a.ch-n
 .ds-cardgrid label { display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; font-weight: 600; color: var(--muted); }
 .ds-cardgrid label:first-child { grid-column: 1 / -1; }
 .ds-cardgrid select, .ds-cardgrid input { padding: 7px 9px; border-radius: 8px; border: 1px solid var(--line, #ddd); font: inherit; font-size: 13.5px; color: var(--ink); }
+.ds-note { font-size: 10.5px; margin-left: 2px; }
