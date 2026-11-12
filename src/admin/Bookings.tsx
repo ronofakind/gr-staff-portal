@@ -104,7 +104,7 @@ export function Bookings() {
   const [findQ, setFindQ] = useState(''); const [flash, setFlash] = useState('');
   const [pair, setPair] = useState<{ moving: Pl; partner: Pl; to: { event_id: string; start: string } } | null>(null);
   const [auto, setAuto] = useState<{ open: boolean; skipped: { name: string; why: string }[] } | null>(null);
-  const [review, setReview] = useState(false); const [askMore, setAskMore] = useState(() => params.get('ask') === '1');
+  const [review, setReview] = useState(false); const [askMore, setAskMore] = useState(() => params.get('ask') === '1'); const [askQ, setAskQ] = useState(''); // push 101
   // push 28 · opened from "Find a replacement ›" / "Accept + fill the spot": Ask more for N spots, and the next person added to
   // that event (Live save) is saved as the replacement of the cancelled shift (shifts.replacement_for).
   const spots = params.get('spots') ? Math.max(1, Number(params.get('spots')) || 1) : undefined;
@@ -619,6 +619,8 @@ export function Bookings() {
           <div className="seg3">{(['floor', 'bar', 'both'] as const).map((v) => <button key={v} className={dept === v ? 'on' : ''} onClick={() => setP('dept', v)}>{v === 'floor' ? 'Floor' : v === 'bar' ? 'Bar' : 'Both'}</button>)}</div>
           {view === 'sheet' && <div className="seg3">{[7, 14, 31].map((n) => <button key={n} className={span === n ? 'on' : ''} onClick={() => setP('span', String(n))}>{n === 31 ? 'Month' : `${n} days`}</button>)}</div>}
           {view === 'board' && <button className="abtn" onClick={() => (auto?.open ? setAuto(null) : setAuto({ open: false, skipped: [] }))}>Auto-fill</button>}
+          <input className="bk-askq" placeholder="🔍 Ask someone…" value={askQ} onChange={(e) => setAskQ(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && askQ.trim().length >= 2) setAskMore(true); }} title="Type a name, Enter: ask them for this date (pick the shift if you know it)" />
           <button className="abtn" onClick={() => setAskMore(true)}>Ask more people</button>
           {dept === 'both' && <div className="seg3 bk-onedept" title="Auto-fill and Ask more work on this team">{(['floor', 'bar'] as const).map((v) => <button key={v} className={oneDept === v ? 'on' : ''} onClick={() => setOneDept(v)}>for {v}</button>)}</div>}
           <Link className="abtn dark" to={`/admin/event/new?d=${date}`}>+ New event</Link>
@@ -928,16 +930,17 @@ export function Bookings() {
       )}
 
       {askMore && events && staff.length > 0 && <AskMore date={date} dept={fillDept} events={(events ?? []).filter((e) => e.event_date === date)} staff={staff} av={av} wk={wk} off={off} conds={conds} links={links} venues={venues} clients={clients}
-        booked={bookedOn(date)} shifts30={shifts30} yesRate={yesRate} extras={(e) => extrasOf(date, e)} practice={mode === 'practice'} spots={spots} spotAt={replaceAt} onClose={() => setAskMore(false)} onAsked={load} />}
+        booked={bookedOn(date)} shifts30={shifts30} yesRate={yesRate} extras={(e) => extrasOf(date, e)} practice={mode === 'practice'} spots={spots} spotAt={replaceAt} q0={askQ} onClose={() => { setAskMore(false); setAskQ(''); }} onAsked={load} />}
     </div>
   );
 }
 
 /** Ask more people: who to ask so the date fills, by rank, weekday fit, recent shifts and yes rate. */
-function AskMore({ date, dept, events, staff, av, wk, off, conds, links, booked, shifts30, yesRate, extras, practice, onClose, onAsked, spots, spotAt, venues, clients }: {
+function AskMore({ date, dept, events, staff, av, wk, off, conds, links, booked, shifts30, yesRate, extras, practice, onClose, onAsked, spots, spotAt, venues, clients, q0 = '' }: {
   date: string; dept: 'floor' | 'bar'; events: AEvent[]; staff: AStaff[]; av: Av[]; wk: Wk[]; off: Set<string>; conds: Cond[]; links: [string, string][]; venues: Venue[]; clients: Client[];
   booked: Set<string>; shifts30: Record<string, number>; yesRate: Record<string, number>; extras: (e: AEvent) => number; practice: boolean; onClose: () => void; onAsked: () => void;
   /** push 28: "Find a replacement" → ask for exactly this many spots (pre-ticks enough people for it) */ spots?: number; spotAt?: string | null;
+  /** push 101 · name typed on the board */ q0?: string;
 }) {
   const evs = events.filter((e) => (dept === 'bar') === isBarEv(e));
   const order = evs.reduce((n, e) => n + e.staff_needed, 0); const ex = evs.reduce((n, e) => n + extras(e), 0); const target = order + ex;
@@ -963,11 +966,33 @@ function AskMore({ date, dept, events, staff, av, wk, off, conds, links, booked,
   const timesOk = evs.length > 0 && evs.every((e) => !e.details_pending && (e.start_time || (e.staffing ?? []).length));
   const [showTimes, setShowTimes] = useState(false);
   const text = `Hey! G&R has a new date for you: ${dLabel(date, { weekday: 'long', month: 'long', day: 'numeric' })}. Let me know in the app (My dates) 👉 https://gr-staff-portal.vercel.app/my-dates`;
+  const askRow = () => supabase.from('avail_asks').upsert({ for_date: date, department: dept, label: evs.length === 1 ? 'Evening event' : `${evs.length} events`, approx_start: evs[0]?.start_time ?? null, staff_needed: target, show_times: showTimes && timesOk }, { onConflict: 'for_date,department' }).select('id').single();
+  // push 101 · search a name, pick the shift if known. Shift picked: she sees place + time and her yes books her on it.
+  const [q, setQ] = useState(q0); const [shiftOf, setShiftOf] = useState<Record<string, string>>({}); const [askedNow, setAskedNow] = useState<Record<string, string>>({});
+  const opts = evs.flatMap((e) => { const ls = (e.staffing ?? []).filter((l) => !['MD', 'BM'].includes(l.code) && l.count > 0 && l.start);
+    const u = [...new Map((ls.length ? ls.map((l) => [l.start + l.code, { start: l.start, code: l.code }]) : [[String(e.start_time), { start: e.start_time ?? '', code: dept === 'bar' ? 'BT' : 'W' }]]) as [string, { start: string; code: string }][]).values()];
+    return u.map((l) => ({ v: `${e.id}|${l.start}|${l.code}`, label: `${e.details_pending ? 'Venue TBC' : e.title}${l.start ? ` · ${t12(l.start)}` : ''}${!['W', 'BT'].includes(l.code) ? ` · ${roleName(l.code)}` : ''}` })); });
+  const ql = q.trim().toLowerCase();
+  const found = ql.length < 2 ? [] : staff.filter((s) => s.active && (dept === 'bar' ? doesBar(s) : s.department !== 'bar') && (s.full_name.toLowerCase().includes(ql) || (s.nickname ?? '').toLowerCase().includes(ql))).slice(0, 8);
+  const flags = (s: AStaff) => { const a = av.find((x) => x.staff_id === s.id); const u = wk.find((w) => w.staff_id === s.id && w.dow === dow);
+    return [booked.has(s.id) && 'booked that day', off.has(s.id + date) && 'time off', a && (a.status === 'asked' ? 'already asked' : `said ${a.status}`), u?.status === 'no' && `usually says no on ${dLabel(date, { weekday: 'long' })}s`,
+      /manual booking only|leaving|do not book/i.test(s.staff_private?.notes ?? '') && 'manual booking only'].filter(Boolean).join(' · '); };
+  const askOne = async (s: AStaff) => {
+    if (practice) return;
+    setBusy(true); setMsg('');
+    const { data: a, error } = await askRow();
+    if (error || !a) { setMsg(error?.message ?? 'Could not save'); setBusy(false); return; }
+    const [ev, st, code] = (shiftOf[s.id] ?? '').split('|');
+    const r = await supabase.from('availability').upsert({ staff_id: s.id, for_date: date, part: 'evening', status: 'asked', ask_id: a.id, tier: s.staff_private?.tier ?? null, asked_at: new Date().toISOString(),
+      answered_at: null, from_time: null, released_at: null, event_id: ev || null, event_start: st || null, event_role: code || null, direct: true }, { onConflict: 'staff_id,for_date,part' });
+    setBusy(false);
+    if (r.error) setMsg(r.error.message); else { const o = opts.find((x) => x.v === shiftOf[s.id]); setAskedNow((m) => ({ ...m, [s.id]: o ? o.label : 'the day' })); onAsked(); }
+  };
   const ask = async () => {
     if (practice) return;
     setBusy(true); setMsg('');
     const people = staff.filter((s) => pick.has(s.id));
-    const { data: a, error } = await supabase.from('avail_asks').upsert({ for_date: date, department: dept, label: evs.length === 1 ? 'Evening event' : `${evs.length} events`, approx_start: evs[0]?.start_time ?? null, staff_needed: target, show_times: showTimes && timesOk }, { onConflict: 'for_date,department' }).select('id').single();
+    const { data: a, error } = await askRow();
     if (error || !a) { setMsg(error?.message ?? 'Could not save'); setBusy(false); return; }
     const r = await supabase.from('availability').upsert(people.map((s) => ({ staff_id: s.id, for_date: date, part: 'evening', status: 'asked', ask_id: a.id, tier: s.staff_private?.tier ?? null, asked_at: new Date().toISOString() })), { onConflict: 'staff_id,for_date,part', ignoreDuplicates: true });
     setBusy(false); if (r.error) setMsg(r.error.message); else { setMsg(`${people.length} people asked. They see it in the app.`); onAsked(); }
@@ -987,6 +1012,18 @@ function AskMore({ date, dept, events, staff, av, wk, off, conds, links, booked,
       <div className="bk-stats">
         <div><small>CLIENT ORDER</small><b>{order}</b></div><div><small>+ EXTRAS</small><b>{ex}</b></div><div><small>TARGET</small><b>{target}</b></div>
         <div><small>COVERED</small><b>{covered}</b></div><div><small>STILL WAITING</small><b>{waiting.length}</b><span>≈ {expected.toFixed(1)} yes</span></div><div className="need"><small>NEED MORE YES</small><b>{need}</b></div>
+      </div>
+      <div className="bk-findp">
+        <input autoFocus={!!q0} placeholder="🔍 Search a name to ask them yourself…" value={q} onChange={(e) => setQ(e.target.value)} />
+        {found.map((s) => { const fl = flags(s); return (
+          <div key={s.id} className="bk-findrow">
+            <span className="grow"><b>{s.full_name}</b> <i className={'bk-t t' + (s.staff_private?.tier ?? 'x')} />{fl && <small className="gold"> · {fl}</small>}</span>
+            {askedNow[s.id] ? <span className="okc sm strong">✓ Asked for {askedNow[s.id]}</span> : <>
+              <select value={shiftOf[s.id] ?? ''} onChange={(e) => setShiftOf((m) => ({ ...m, [s.id]: e.target.value }))}>
+                <option value="">Any shift that day</option>{opts.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}</select>
+              <button className="abtn sm dark" disabled={busy || practice || booked.has(s.id)} onClick={() => askOne(s)}>Ask {s.full_name.split(' ')[0]}</button></>}
+          </div>); })}
+        {ql.length >= 2 && !found.length && <span className="muted sm">No active {dept} staff named “{q}”.</span>}
       </div>
       <div className="kick">SUGGESTED · {main.length}</div>
       <div className="bk-asklist">{main.map((c) => <Row key={c.s.id} c={c} />)}</div>

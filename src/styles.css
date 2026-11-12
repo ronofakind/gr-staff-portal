@@ -4364,3 +4364,9 @@ a.ch-name-link { display: block; text-decoration: none; color: inherit; } a.ch-n
 .cmg-strip b, .cmg-wear { height: 28px; line-height: 28px; display: flex; align-items: center; justify-content: center; }
 .cmg-wear img { display: block; }
 .sl-btns { display: flex; gap: 6px; flex: 0 0 auto; } /* Nov 11 · View as next to Invite */
+/* push 101 · ask one person (search + shift) */
+.bk-askq { height: 36px; border-radius: 10px; border: 1px solid var(--line); padding: 0 12px; font: inherit; font-size: 13px; width: 170px; background: #fff; }
+.bk-findp { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 14px; background: #F6F2EC; }
+.bk-findp input { height: 40px; border-radius: 10px; border: 1px solid var(--line); padding: 0 12px; font: inherit; font-size: 14px; background: #fff; }
+.bk-findrow { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: #fff; border-radius: 10px; padding: 8px 10px; }
+.bk-findrow select { height: 32px; border-radius: 8px; border: 1px solid var(--line); font: inherit; font-size: 13px; max-width: 260px; }
