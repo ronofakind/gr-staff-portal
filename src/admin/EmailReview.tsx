@@ -9,7 +9,7 @@ import { ap12, ENDS } from './api';
    Staff times change only when the email says so; if guests move and staff don't, a ⚠ line flags it. */
 
 export type ALine = { label: string; old?: string | null; new?: string | null; field?: string; value?: string | null };
-export type AApply = { item: string; event: string | null; who: string | null; changes: { field: string; value: string; label: string; old?: string | null }[] };
+export type AApply = { item: string; event: string | null; rest?: string[]; who: string | null; changes: { field: string; value: string; label: string; old?: string | null }[] };
 export const AI_APPLY_KEY = 'gr-ai-apply';
 
 type Ev = { id: string; event_date: string; title: string; address: string | null; guests: number | null; end_time: string | null; ends_label: string | null;
@@ -43,7 +43,16 @@ export function EmailReview({ item, onClose, onCreate }: { item: { id: string; w
   const nav = useNavigate();
   const [ev, setEv] = useState<Ev | null>(null);
   // Nov 11 · Ronnie: in Review, choose the event (the AI's guess, that day's events, another date) or create a new one
-  const [evId, setEvId] = useState<string | null>(item.event_id);
+  const [evIds, setEvIds] = useState<string[]>(item.event_id ? [item.event_id] : []); // Nov 11 · one or several events (floor + bar…)
+  const evId = evIds[0] ?? null;
+  const [names, setNames] = useState<Record<string, string>>({});
+  const toggle = (d: { id: string; title: string; event_date?: string; department: string }) => { setNames((n) => ({ ...n, [d.id]: `${d.title}${d.department === 'bar' ? ' · bar' : ''}${d.event_date ? ' · ' + d.event_date.slice(5) : ''}` }));
+    setEvIds((x) => (x.includes(d.id) ? x.filter((y) => y !== d.id) : [...x, d.id])); };
+  const [q, setQ] = useState(''); const [found, setFound] = useState<{ id: string; title: string; event_date: string; department: string }[]>([]);
+  useEffect(() => { const t = q.trim(); if (t.length < 2) { setFound([]); return; }
+    const from = new Date(Date.now() - 400 * 864e5).toISOString().slice(0, 10);
+    supabase.from('events').select('id,title,event_date,department').ilike('title', `%${t}%`).gte('event_date', from).order('event_date', { ascending: false }).limit(12)
+      .then(({ data }) => setFound((data ?? []) as typeof found)); }, [q]);
   const dateLine = item.lines.find((l) => l.field === 'date' && /^\d{4}-\d{2}-\d{2}$/.test(String(l.value ?? '')))?.value ?? null;
   const [pDate, setPDate] = useState<string>(dateLine ?? '');
   const [dayEvs, setDayEvs] = useState<{ id: string; title: string; department: string; start_time: string | null }[]>([]);
@@ -68,7 +77,7 @@ export function EmailReview({ item, onClose, onCreate }: { item: { id: string; w
   const n = diff.filter((d) => on[d.k]).length;
   const apply = () => {
     supabase.from('ai_items').update({ event_id: evId, sure: true }).eq('id', item.id).then(() => {});
-    const a: AApply = { item: item.id, event: evId, who: item.who, changes: diff.filter((d) => on[d.k]).map((d) => ({ field: d.r.field, value: ['staff_start', 'guests_arrive', 'end'].includes(d.r.field) ? hm(vals[d.k]) ?? vals[d.k] : vals[d.k], label: FIELD_LABEL[d.r.field] ?? d.r.label, old: d.now && d.now !== '—' ? String(d.now) : null })) };
+    const a: AApply = { item: item.id, event: evId, rest: evIds.slice(1), who: item.who, changes: diff.filter((d) => on[d.k]).map((d) => ({ field: d.r.field, value: ['staff_start', 'guests_arrive', 'end'].includes(d.r.field) ? hm(vals[d.k]) ?? vals[d.k] : vals[d.k], label: FIELD_LABEL[d.r.field] ?? d.r.label, old: d.now && d.now !== '—' ? String(d.now) : null })) };
     try { sessionStorage.setItem(AI_APPLY_KEY, JSON.stringify(a)); } catch { /* */ }
     nav(isNew ? `/admin/event/new?ai=1${a.changes.find((c) => c.field === 'date') ? '&d=' + a.changes.find((c) => c.field === 'date')!.value : ''}` : `/admin/event/${evId}/edit?ai=1`);
   };
@@ -78,8 +87,11 @@ export function EmailReview({ item, onClose, onCreate }: { item: { id: string; w
       <div className="er-pick"><b>Which event?</b>
         <input type="date" value={pDate} onChange={(e) => setPDate(e.target.value)} />
         {pDate && !dayEvs.length && <small className="muted">no event that day</small>}
-        {dayEvs.map((d) => <button key={d.id} className={'abtn sm' + (d.id === evId ? ' dark' : '')} onClick={() => setEvId(d.id)}>{d.id === evId ? '✓ ' : ''}{d.title}{d.department === 'bar' ? ' · bar' : ''}{d.start_time ? ' · ' + ap12(d.start_time.slice(0, 5)) : ''}</button>)}
-        <button className={'abtn sm' + (!evId ? ' ok' : '')} onClick={() => setEvId(null)}>{!evId ? '✓ ' : ''}+ New event</button>
+        {dayEvs.map((d) => <button key={d.id} className={'abtn sm' + (evIds.includes(d.id) ? ' dark' : '')} onClick={() => toggle({ ...d, event_date: pDate })}>{evIds.includes(d.id) ? '✓ ' : ''}{d.title}{d.department === 'bar' ? ' · bar' : ''}{d.start_time ? ' · ' + ap12(d.start_time.slice(0, 5)) : ''}</button>)}
+        <input className="er-q" placeholder="🔍 or search a name (past events too)" value={q} onChange={(e) => setQ(e.target.value)} />
+        {found.map((d) => <button key={d.id} className={'abtn sm' + (evIds.includes(d.id) ? ' dark' : '')} onClick={() => toggle(d)}>{evIds.includes(d.id) ? '✓ ' : ''}{d.title}{d.department === 'bar' ? ' · bar' : ''} · {new Date(d.event_date + 'T12:00:00').toLocaleDateString('en-CA', { month: 'short', day: 'numeric', year: d.event_date.slice(0, 4) !== String(new Date().getFullYear()) ? 'numeric' : undefined })}</button>)}
+        <button className={'abtn sm' + (!evIds.length ? ' ok' : '')} onClick={() => setEvIds([])}>{!evIds.length ? '✓ ' : ''}+ New event</button>
+        {evIds.length > 1 && <small className="er-multi">Applies to {evIds.length} events, one after the other: {evIds.map((x) => names[x] ?? '…').join(' → ')}. Each opens with the changes filled in; you Save each one.</small>}
       </div>
       {item.quote && <div className="er-quote">✉ {item.who ? <b>{item.who}: </b> : null}“{item.quote}”{item.email_url && <> · <a href={item.email_url} target="_blank" rel="noreferrer">Open email</a></>}</div>}
       {!rows.length ? <p className="muted">This card has no lines to compare. Open the event and change it yourself.</p> : !diff.length ? <p className="muted">Everything in the email already matches the app. Nothing to apply.</p> : <>
@@ -94,7 +106,7 @@ export function EmailReview({ item, onClose, onCreate }: { item: { id: string; w
         {flag && <div className="er-grid er-flag"><span /><b>⚠ Staff start</b><span>{firstStaff ? ap12(firstStaff) : ''}</span><span /><span>The email doesn’t change staff times. Staff would start <b>{Math.abs(gap!)} min {gap! >= 0 ? 'before' : 'after'}</b> guests. Change it in the form if needed.</span></div>}
         <p className="muted sm">Only what’s different is shown. Staff count never changes here (fewer people → Client change). Apply opens the {isNew ? 'New event' : 'event'} form with these filled in; nothing is saved until you press Save there.</p>
         <div className="row" style={{ gap: 8 }}>
-          <button className="abtn dark" disabled={!n} onClick={apply}>{isNew ? 'Create event ›' : `Apply ${n} change${n === 1 ? '' : 's'} ›`}</button>
+          <button className="abtn dark" disabled={!n} onClick={apply}>{isNew ? 'Create event ›' : `Apply ${n} change${n === 1 ? '' : 's'}${evIds.length > 1 ? ` to ${evIds.length} events` : ''} ›`}</button>
           <button className="abtn" onClick={onClose}>Not now</button>
         </div></>}
     </div></div>

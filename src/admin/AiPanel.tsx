@@ -100,7 +100,7 @@ function Waiting({ i, set, reload }: { i: Item; set: (i: Item, st: 'done' | 'ign
                   <div key={k} className="ai-line"><span>{l.label}</span><span>{l.old ? <><s>{l.old}</s> → </> : null}<b>{l.new}</b></span></div>
                 ))}
                 <div className="ai-acts">
-                  {canReview ? <button className="abtn dark sm" onClick={() => setRev(true)}>'Review ›'</button> : p && <Link className="abtn dark sm" to={p.to}>{p.label}</Link>}
+                  {canReview ? <button className="abtn dark sm" onClick={() => setRev(true)}>Review ›</button> : p && <Link className="abtn dark sm" to={p.to}>{p.label}</Link>}
                   {canReview && i.kind === 'count_change' && i.event_id && <Link className="abtn sm" to={`/admin/event/${i.event_id}/change`}>Client change ›</Link>}
                   <button className="abtn sm" onClick={() => set(i, 'done')}>Done</button>
                   <button className="abtn sm" onClick={() => set(i, 'ignored')}>Ignore</button>

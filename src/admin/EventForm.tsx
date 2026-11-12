@@ -197,6 +197,7 @@ export function EventForm() {
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false); const [loaded, setLoaded] = useState(isNew);
   // push 67 · a reviewed client email → fill the form once loaded (nothing saved until Save)
   const [aiApply, setAiApply] = useState<AApply | null>(null); const [aiSkipped, setAiSkipped] = useState<string[]>([]);
+  useEffect(() => { setAiApply(null); setAiSkipped([]); }, [id]); // next event of a multi-event review
   useEffect(() => {
     if (!loaded || params.get('ai') !== '1' || aiApply) return;
     const a = takeAiApply(isNew ? null : id!); if (!a) return;
@@ -551,6 +552,10 @@ export function EventForm() {
         const r = await fetch('/api/drive/folder', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${ses.session?.access_token}` }, body: JSON.stringify({ event_id: evId, month: driveMonth(date), name: driveName(date, title, client?.name ?? null, !!privateId) }) });
         if (!r.ok) setErr('Saved, but the Drive folder was not created: ' + (await r.text()));
       }
+      // Nov 11 · several events picked in Review → next one opens with the same changes
+      if (aiApply?.rest?.length) { const [nx, ...more] = aiApply.rest;
+        try { sessionStorage.setItem(AI_APPLY_KEY, JSON.stringify({ ...aiApply, event: nx, rest: more, changes: aiApply.changes.map((c) => ({ ...c, old: null })) })); } catch { /* */ }
+        setBusy(false); nav(`/admin/event/${nx}/edit?ai=1`); return; }
       if (aiApply) { await supabase.from('ai_items').update({ status: 'done', done_at: new Date().toISOString(), done_note: `applied ${aiApply.changes.length} change(s)` }).eq('id', aiApply.item); try { sessionStorage.removeItem(AI_APPLY_KEY); } catch { /* */ } }
       setBusy(false); if (evId) nav(`/admin/event/${evId}`);
     }
