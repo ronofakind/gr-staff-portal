@@ -42,15 +42,22 @@ const show = (f: string, v: string) => (['staff_start', 'guests_arrive', 'end'].
 export function EmailReview({ item, onClose, onCreate }: { item: { id: string; who: string | null; quote: string | null; email_url: string | null; event_id: string | null; kind: string; created_at: string; lines: ALine[] }; onClose: () => void; onCreate?: boolean }) {
   const nav = useNavigate();
   const [ev, setEv] = useState<Ev | null>(null);
+  // Nov 11 · Ronnie: in Review, choose the event (the AI's guess, that day's events, another date) or create a new one
+  const [evId, setEvId] = useState<string | null>(item.event_id);
+  const dateLine = item.lines.find((l) => l.field === 'date' && /^\d{4}-\d{2}-\d{2}$/.test(String(l.value ?? '')))?.value ?? null;
+  const [pDate, setPDate] = useState<string>(dateLine ?? '');
+  const [dayEvs, setDayEvs] = useState<{ id: string; title: string; department: string; start_time: string | null }[]>([]);
+  useEffect(() => { if (item.event_id) supabase.from('events').select('event_date').eq('id', item.event_id).maybeSingle().then(({ data }) => { if (data) setPDate((data as { event_date: string }).event_date); }); }, [item.event_id]);
+  useEffect(() => { if (!pDate) { setDayEvs([]); return; } supabase.from('events').select('id,title,department,start_time').eq('event_date', pDate).order('start_time').then(({ data }) => setDayEvs((data ?? []) as typeof dayEvs)); }, [pDate]);
   const rows = useMemo(() => item.lines.filter((l) => l.field && (l.value ?? l.new)).map((l) => ({ ...l, field: l.field!, value: String(l.value ?? l.new) })), [item.lines]);
   const [vals, setVals] = useState<Record<number, string>>(() => Object.fromEntries(rows.map((r, k) => [k, show(r.field, r.value)])));
   const [on, setOn] = useState<Record<number, boolean>>(() => Object.fromEntries(rows.map((_, k) => [k, true])));
   useEffect(() => {
-    if (!item.event_id) return;
-    supabase.from('events').select('id,event_date,title,address,guests,end_time,ends_label,description,start_time,staffing').eq('id', item.event_id).maybeSingle()
+    setEv(null); if (!evId) return;
+    supabase.from('events').select('id,event_date,title,address,guests,end_time,ends_label,description,start_time,staffing').eq('id', evId).maybeSingle()
       .then(({ data }) => { if (data) setEv(data as unknown as Ev); });
-  }, [item.event_id]);
-  const isNew = !item.event_id;
+  }, [evId]);
+  const isNew = !evId;
   // only what's different
   const diff = rows.map((r, k) => ({ r, k, now: isNew ? '—' : nowOf(ev, r.field) })).filter(({ r, now }) => isNew || !same(now, show(r.field, r.value)));
   // ⚠ guests move, staff don't
@@ -60,13 +67,20 @@ export function EmailReview({ item, onClose, onCreate }: { item: { id: string; w
   const flag = gap != null && (gap < 45 || gap > 120);
   const n = diff.filter((d) => on[d.k]).length;
   const apply = () => {
-    const a: AApply = { item: item.id, event: item.event_id, who: item.who, changes: diff.filter((d) => on[d.k]).map((d) => ({ field: d.r.field, value: ['staff_start', 'guests_arrive', 'end'].includes(d.r.field) ? hm(vals[d.k]) ?? vals[d.k] : vals[d.k], label: FIELD_LABEL[d.r.field] ?? d.r.label, old: d.now && d.now !== '—' ? String(d.now) : null })) };
+    supabase.from('ai_items').update({ event_id: evId, sure: true }).eq('id', item.id).then(() => {});
+    const a: AApply = { item: item.id, event: evId, who: item.who, changes: diff.filter((d) => on[d.k]).map((d) => ({ field: d.r.field, value: ['staff_start', 'guests_arrive', 'end'].includes(d.r.field) ? hm(vals[d.k]) ?? vals[d.k] : vals[d.k], label: FIELD_LABEL[d.r.field] ?? d.r.label, old: d.now && d.now !== '—' ? String(d.now) : null })) };
     try { sessionStorage.setItem(AI_APPLY_KEY, JSON.stringify(a)); } catch { /* */ }
-    nav(isNew ? `/admin/event/new?ai=1${a.changes.find((c) => c.field === 'date') ? '&d=' + a.changes.find((c) => c.field === 'date')!.value : ''}` : `/admin/event/${item.event_id}/edit?ai=1`);
+    nav(isNew ? `/admin/event/new?ai=1${a.changes.find((c) => c.field === 'date') ? '&d=' + a.changes.find((c) => c.field === 'date')!.value : ''}` : `/admin/event/${evId}/edit?ai=1`);
   };
   return (
     <div className="bk-modal" onClick={onClose}><div className="adm-card er-card" onClick={(e) => e.stopPropagation()}>
       <div className="spread"><b className="serif" style={{ fontSize: 22 }}>{isNew ? 'New event by email' : `Review · ${ev ? `${ev.title} · ${new Date(ev.event_date + 'T12:00:00').toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' })}` : '…'}`}</b><button className="abtn sm" onClick={onClose}>✕</button></div>
+      <div className="er-pick"><b>Which event?</b>
+        <input type="date" value={pDate} onChange={(e) => setPDate(e.target.value)} />
+        {pDate && !dayEvs.length && <small className="muted">no event that day</small>}
+        {dayEvs.map((d) => <button key={d.id} className={'abtn sm' + (d.id === evId ? ' dark' : '')} onClick={() => setEvId(d.id)}>{d.id === evId ? '✓ ' : ''}{d.title}{d.department === 'bar' ? ' · bar' : ''}{d.start_time ? ' · ' + ap12(d.start_time.slice(0, 5)) : ''}</button>)}
+        <button className={'abtn sm' + (!evId ? ' ok' : '')} onClick={() => setEvId(null)}>{!evId ? '✓ ' : ''}+ New event</button>
+      </div>
       {item.quote && <div className="er-quote">✉ {item.who ? <b>{item.who}: </b> : null}“{item.quote}”{item.email_url && <> · <a href={item.email_url} target="_blank" rel="noreferrer">Open email</a></>}</div>}
       {!rows.length ? <p className="muted">This card has no lines to compare. Open the event and change it yourself.</p> : !diff.length ? <p className="muted">Everything in the email already matches the app. Nothing to apply.</p> : <>
         <div className="er-grid er-h"><span /><span /><small>IN THE APP NOW</small><span /><small className="er-blue">WHAT THE EMAIL SAYS · tap to edit</small></div>

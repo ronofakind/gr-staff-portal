@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { EmailReview, type ALine } from './EmailReview';
 
@@ -88,26 +88,26 @@ export function AiPanel({ bare = false }: { bare?: boolean } = {}) {
 }
 
 function Waiting({ i, set, reload }: { i: Item; set: (i: Item, st: 'done' | 'ignored', note?: string) => void; reload: () => void }) {
-  const [rev, setRev] = useState(false); const [newEv, setNewEv] = useState(false); const canReview = (i.source === 'email' || i.source === 'meeting') && i.lines.some((l) => l.field) && ['count_change', 'time_change', 'address', 'new_event', 'other'].includes(i.kind);
+  const [rev, setRev] = useState(false); const canReview = (i.source === 'email' || i.source === 'meeting') && i.lines.some((l) => l.field) && ['count_change', 'time_change', 'address', 'new_event', 'other'].includes(i.kind);
 
             const [t, tone] = TAG[i.kind] ?? TAG.other; const p = primary(i);
             return (
               <div key={i.id} className="ai-item">
                 <div className="ai-top"><span aria-hidden="true">{i.source === 'email' ? '✉' : i.source === 'meeting' ? '📝' : '⚡'}</span><span className={'ai-tag ' + tone}>{t}</span><b>{i.who}</b><span className="muted sm">{ago(i.created_at)}</span>{!i.sure && <span className="ai-look">needs a look</span>}</div>
                 {i.quote && <div className="ai-quote">“{i.quote}”</div>}
-                {i.kind !== 'shift_cancelled' ? <EventPick i={i} onPicked={reload} onNew={canReview ? () => { setNewEv(true); setRev(true); } : undefined} /> : (i.events || i.event_hint) && <div className="ai-line"><span>Event</span><b>{i.events ? `${day(i.events.event_date)} · ${i.events.title}` : i.event_hint}</b></div>}
+                {(i.events || i.event_hint) && <div className="ai-line"><span>Event</span><b>{i.events ? `${day(i.events.event_date)} · ${i.events.title}` : i.event_hint}</b></div>}
                 {i.lines.filter((l) => l.label !== 'Shift' || !i.events).map((l, k) => (
                   <div key={k} className="ai-line"><span>{l.label}</span><span>{l.old ? <><s>{l.old}</s> → </> : null}<b>{l.new}</b></span></div>
                 ))}
                 <div className="ai-acts">
-                  {canReview ? <button className="abtn dark sm" onClick={() => setRev(true)}>{!i.event_id ? 'Review & create event ›' : 'Review changes ›'}</button> : p && <Link className="abtn dark sm" to={p.to}>{p.label}</Link>}
+                  {canReview ? <button className="abtn dark sm" onClick={() => setRev(true)}>'Review ›'</button> : p && <Link className="abtn dark sm" to={p.to}>{p.label}</Link>}
                   {canReview && i.kind === 'count_change' && i.event_id && <Link className="abtn sm" to={`/admin/event/${i.event_id}/change`}>Client change ›</Link>}
                   <button className="abtn sm" onClick={() => set(i, 'done')}>Done</button>
                   <button className="abtn sm" onClick={() => set(i, 'ignored')}>Ignore</button>
                   <span className="grow" />
                   {i.email_url && <a className="ai-link" href={i.email_url} target="_blank" rel="noreferrer">Open email ›</a>}
                 </div>
-                {rev && <EmailReview item={newEv ? { ...i, event_id: null } : i} onClose={() => { setRev(false); setNewEv(false); }} />}
+                {rev && <EmailReview item={i} onClose={() => { setRev(false); reload(); }} />}
               </div>
             );
           }
@@ -126,30 +126,3 @@ function DoneList({ done, load }: { done: Item[]; load: () => void }) {
   );
 }
 
-/** Nov 11 · Ronnie: "I should be able to choose which event the change goes to" + "if there is no event, the option to create it".
- *  The AI's guess first, then every event that day (floor + bar), another date, or a new event. Saved on the card (ai_items.event_id). */
-function EventPick({ i, onPicked, onNew }: { i: Item; onPicked: () => void; onNew?: () => void }) {
-  const nav = useNavigate();
-  const dateLine = i.lines.find((l) => l.field === 'date' && /^\d{4}-\d{2}-\d{2}$/.test(String(l.value ?? '')))?.value as string | undefined;
-  const [date, setDate] = useState(i.events?.event_date ?? dateLine ?? '');
-  const [evs, setEvs] = useState<{ id: string; title: string; department: string; start_time: string | null }[]>([]);
-  const [open, setOpen] = useState(!i.event_id); const [busy, setBusy] = useState(false);
-  useEffect(() => { if (!date) { setEvs([]); return; } supabase.from('events').select('id,title,department,start_time').eq('event_date', date).order('start_time')
-    .then(({ data }) => setEvs((data ?? []) as typeof evs)); }, [date]);
-  const pick = async (id: string | null) => { setBusy(true); await supabase.from('ai_items').update({ event_id: id, sure: true }).eq('id', i.id); setBusy(false); setOpen(false); onPicked(); };
-  const t12 = (t: string | null) => { if (!t) return ''; const h = Number(t.slice(0, 2)); return ` · ${h % 12 || 12}${t.slice(2, 5) !== ':00' ? t.slice(2, 5) : ''} ${h < 12 ? 'AM' : 'PM'}`; };
-  const unsure = !i.event_id || !i.sure;
-  return (
-    <div className={'ai-line ai-pick' + (unsure ? ' unsure' : '')}>
-      <span>Event</span>
-      {!open ? <span className="grow"><b>{i.events ? `${day(i.events.event_date)} · ${i.events.title}` : i.event_hint ?? 'No event yet'}</b>
-        {unsure && <em className="gold"> · {i.event_id ? 'the AI isn’t sure' : 'choose the event'}</em>} <button className="lnk sm" onClick={() => setOpen(true)}>Change ›</button></span>
-      : <span className="grow ai-pickrow">
-        <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-        {date && !evs.length && <small className="muted">no event that day</small>}
-        {evs.map((e) => <button key={e.id} disabled={busy} className={'abtn sm' + (e.id === i.event_id ? ' dark' : '')} onClick={() => pick(e.id)}>{e.id === i.event_id ? '✓ ' : ''}{e.title}{e.department === 'bar' ? ' · bar' : ''}{t12(e.start_time)}</button>)}
-        <button className="abtn sm ok" disabled={busy} onClick={async () => { await pick(null); if (onNew) onNew(); else nav(`/admin/event/new${date ? `?d=${date}` : ''}`); }}>+ Create a new event</button>
-        {i.event_id && <button className="lnk muted sm" onClick={() => setOpen(false)}>Cancel</button>}
-      </span>}
-    </div>);
-}
