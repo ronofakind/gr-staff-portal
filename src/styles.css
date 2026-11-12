@@ -2031,7 +2031,7 @@ div.avatar { color: var(--accent); background: var(--accent-bg); }
 
 /* ───────── push 34 · invite by text · /go page · usual week ───────── */
 /* Staff list rows: own grid (the push 32 Settings .st-row rule, later in this file, was overriding the staff list grid) */
-.st-row.sl-row { grid-template-columns: 26px minmax(0, 2.4fr) 120px 60px 140px 250px 80px; padding: 10px 16px; }
+.st-row.sl-row { grid-template-columns: 26px minmax(0, 2.4fr) 120px 60px 140px 320px 80px; padding: 10px 16px; }
 .st-row.st-head.sl-row { padding: 10px 16px; }
 .sl-check { display: flex; align-items: center; } .sl-check input { width: 18px; height: 18px; accent-color: var(--ink); cursor: pointer; }
 .sl-app { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
@@ -4363,3 +4363,4 @@ a.ch-name-link { display: block; text-decoration: none; color: inherit; } a.ch-n
 /* Nov 11 · symmetry: time, role and uniform icon share one 28 px line, centered */
 .cmg-strip b, .cmg-wear { height: 28px; line-height: 28px; display: flex; align-items: center; justify-content: center; }
 .cmg-wear img { display: block; }
+.sl-btns { display: flex; gap: 6px; flex: 0 0 auto; } /* Nov 11 · View as next to Invite */
