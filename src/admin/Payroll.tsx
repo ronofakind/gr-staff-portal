@@ -88,13 +88,13 @@ export function Payroll() {
       const h = noEnd ? 0 : hoursBetween(s.punches.punch_in, s.punches.punch_out, !!s.left_early);
       const travel = e.transport && e.paid_travel_min && rate != null ? r2((e.paid_travel_min / 60) * rate) : 0;
       const gas = e.transport && e.gas_per_car && drivers.has(e.id + '|' + s.staff_id) ? Number(e.gas_per_car) : 0;
-      const pay = rate == null ? 0 : r2(h * rate);
+      const raw = rate == null ? 0 : h * rate; const pay = r2(raw); // Nov 12 · round the total, not each shift (sheet: 17 h × $21.50 = $365.50, not $365.51)
       x.shifts.push({ id: s.id, date: e.event_date, title: e.title + (e.department === 'bar' ? ' · bar' : ''), hours: h, rate, pay, travel, gas, paypal: ppd.has(s.id), noEnd });
       if (x.salary) { x.hours += h; x.base += gas; if (noEnd) x.noEnd++; continue; } // push 86 · salary: hours tracked, not paid here
-      x.hours += h; x.base += pay + travel + gas; if (rate == null) x.noRate = true; if (noEnd) x.noEnd++;
+      x.hours += h; x.base += raw + travel + gas; if (rate == null) x.noRate = true; if (noEnd) x.noEnd++;
     }
-    for (const g of mh) { const x = get(g.staff_id, g.full_name); const rate = rateOn(rates[g.staff_id], g.meeting_date); const pay = rate == null ? 0 : r2(Number(g.hours) * rate);
-      x.mtg.push({ date: g.meeting_date, title: g.title, hours: Number(g.hours), pay: x.salary ? 0 : pay }); x.hours += Number(g.hours); if (!x.salary) { x.base += pay; if (rate == null) x.noRate = true; } }
+    for (const g of mh) { const x = get(g.staff_id, g.full_name); const rate = rateOn(rates[g.staff_id], g.meeting_date); const raw = rate == null ? 0 : Number(g.hours) * rate; const pay = r2(raw);
+      x.mtg.push({ date: g.meeting_date, title: g.title, hours: Number(g.hours), pay: x.salary ? 0 : pay }); x.hours += Number(g.hours); if (!x.salary) { x.base += raw; if (rate == null) x.noRate = true; } }
     for (const l of lines) { const x = get(l.staff_id, extra[l.staff_id] ?? roster.find((r) => r.id === l.staff_id)?.full_name ?? '?'); x.lines.push(l); if (l.kind === 'hours') x.hours += Number(l.hours ?? 0); }
     for (const id of added) if (!m.has(id)) get(id, roster.find((r) => r.id === id)?.full_name ?? '?');
     for (const x of m.values()) x.total = r2(x.base + x.lines.reduce((n, l) => n + l.amount, 0));
