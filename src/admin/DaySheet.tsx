@@ -231,9 +231,22 @@ export function DaySheet() {
     else if (n > 0) st.unshift({ dept: isBar(e) ? 'bar' : 'floor', code, count: n, start: e.start_time?.slice(0, 5) ?? null });
     lineSave(e, st, `${code === 'MD' ? 'MDs' : 'bar managers'} → ${n}`);
   };
+  /** push 116 · extras line time (events.extras_start). People on the extras line move with it (asked first if already sent). */
+  const setExtrasTime = (e: Ev, t: string) => run(async () => {
+    setEd(null); const L = lays[e.id]; const who = L.extras.people.filter((x) => hm(x.planned_start) === L.extras.start);
+    const how = await askTell(who, `Extras: ${ap(L.extras.start)} → ${ap(t)}.`, 'Your shift changed'); if (!how) return;
+    const b = e.extras_start ?? null; const { error } = await supabase.from('events').update({ extras_start: t }).eq('id', e.id); if (error) throw error;
+    const old = who.map((x) => ({ id: x.id, p: x.planned_start }));
+    for (const x of who) await supabase.from('shifts').update({ planned_start: startIso(date, t) }).eq('id', x.id);
+    if (who.some((x) => !x.pool_hold)) setMsg(`Extras → ${ap(t)}${await tell(who, how)}.`);
+    return { label: `extras → ${ap(t)}`, undo: async () => { await supabase.from('events').update({ extras_start: b }).eq('id', e.id); for (const o of old) await supabase.from('shifts').update({ planned_start: o.p }).eq('id', o.id); } };
+  });
   const setExtras = (e: Ev, n: number) => run(async () => { const b = e.extras ?? null; const { error } = await supabase.from('events').update({ extras: Math.max(0, n) }).eq('id', e.id); if (error) throw error;
     return { label: `extras → ${n}`, undo: () => supabase.from('events').update({ extras: b }).eq('id', e.id).then() }; });
   const addLine = () => { if (!add) return; const e = evs.find((x) => x.id === add.eid); const n = parseInt(add.count, 10); if (!e || !(n > 0) || !add.t) return;
+    if (add.code === 'EX') { const a0 = add; setAdd(null); run(async () => { const b = { extras: e.extras ?? null, extras_start: e.extras_start ?? null };
+      const { error } = await supabase.from('events').update({ extras: n, extras_start: a0.t }).eq('id', e.id); if (error) throw error;
+      return { label: `+ ${n} extras ${ap(a0.t)}`, undo: () => supabase.from('events').update(b).eq('id', e.id).then() }; }); return; }
     const st = [...(e.staffing ?? []), { dept: isBar(e) ? 'bar' : 'floor', code: add.code, count: n, start: add.t }]; setAdd(null); lineSave(e, st, `+ ${n} ${plural(add.code, n)} ${ap(add.t)}`); };
   const unflag = (id: string) => setFlagged((f) => { const g = { ...f }; delete g[id]; return g; });
   const dropOn = (e: Ev, code: string, start: string | null) => { const d = dragR.current; setDrag(null); if (!d) return; if ('id' in d) move(d, e, code, start); else place(d.staff_id, e, code, start); };
@@ -254,7 +267,10 @@ export function DaySheet() {
     return (
     <div className={'ds-line' + (extra ? ' ex' : '')} onDragOver={(ev) => ev.preventDefault()} onDrop={() => dropOn(e, code, start)}>
       <span className="ds-lbl"><small>{label}</small>{extra ? <Step n={count} on={(n) => setExtras(e, n)} /> : idx != null ? <Step n={count} on={(n) => setCount(e, idx, n)} /> : <b>{count}</b>}</span>
-      <span className="ds-time">{idx != null && !tbc ? <button className={'ds-tbtn' + (ed?.eid === e.id && ed.key === String(idx) ? ' on' : '')} disabled={busy} onClick={() => { setEdT(start ?? ''); setEd(ed?.eid === e.id && ed.key === String(idx) ? null : { eid: e.id, key: String(idx) }); }}>🕐 {ap(start)} ▾</button> : <span className="ds-tro">{tbc ? 'TBC' : ap(start)}</span>}
+      <span className="ds-time">{extra && !tbc ? <button className={'ds-tbtn' + (ed?.eid === e.id && ed.key === 'x' ? ' on' : '')} disabled={busy} onClick={() => { setEdT(start ?? ''); setEd(ed?.eid === e.id && ed.key === 'x' ? null : { eid: e.id, key: 'x' }); }}>🕐 {ap(start)} ▾</button> : idx != null && !tbc ? <button className={'ds-tbtn' + (ed?.eid === e.id && ed.key === String(idx) ? ' on' : '')} disabled={busy} onClick={() => { setEdT(start ?? ''); setEd(ed?.eid === e.id && ed.key === String(idx) ? null : { eid: e.id, key: String(idx) }); }}>🕐 {ap(start)} ▾</button> : <span className="ds-tro">{tbc ? 'TBC' : ap(start)}</span>}
+        {extra && ed?.eid === e.id && ed.key === 'x' && <span className="ds-tpop" onClick={(ev) => ev.stopPropagation()}><b>Start of the extras</b>
+          <span className="ds-tq">{(() => { const [h, m] = (start ?? '17:00').split(':').map(Number); const b0 = h * 60 + m; return [-60, -30, -15, 15, 30, 60].map((d) => { const x = b0 + d; const t = `${String(Math.floor(((x % 1440) + 1440) % 1440 / 60)).padStart(2, '0')}:${String(((x % 60) + 60) % 60).padStart(2, '0')}`; return <button key={d} onClick={() => setExtrasTime(e, t)}>{ap(t)}</button>; }); })()}</span>
+          <span className="row" style={{ gap: 6 }}><input type="time" step={900} value={edT} onChange={(ev) => setEdT(ev.target.value)} /><button className="abtn sm dark" disabled={!edT || edT === start} onClick={() => setExtrasTime(e, edT)}>Set</button></span></span>}
         {ed && `${ed.eid}|${ed.key}` === k && idx != null && <span className="ds-tpop" onClick={(ev) => ev.stopPropagation()}><b>Start of this line</b>
           <span className="ds-tq">{(() => { const [h, m] = (start ?? '17:00').split(':').map(Number); const b0 = h * 60 + m; return [-60, -30, -15, 15, 30, 60].map((d) => { const x = b0 + d; const t = `${String(Math.floor(((x % 1440) + 1440) % 1440 / 60)).padStart(2, '0')}:${String(((x % 60) + 60) % 60).padStart(2, '0')}`; return <button key={d} onClick={() => setTime(e, idx, t)}>{ap(t)}</button>; }); })()}</span>
           <span className="row" style={{ gap: 6 }}><input type="time" step={900} value={edT} onChange={(ev) => setEdT(ev.target.value)} /><button className="abtn sm dark" disabled={!edT || edT === start} onClick={() => setTime(e, idx, edT)}>Set</button></span>
@@ -308,7 +324,7 @@ export function DaySheet() {
                     <button className="abtn sm" disabled={busy} onClick={() => { unflag(x.id); const ex = L.extras.start; if (ex && hm(x.planned_start) !== ex) patch(x, { planned_start: startIso(date, ex) }, 'to extras'); }}>Make extra</button>
                     {x.pool_hold && !x.locked ? <button className="abtn sm" disabled={busy} onClick={() => { unflag(x.id); remove(x); }}>Back to Free</button> : <small className="muted">sent: change from the event</small>}
                     <button className="lnk sm muted" onClick={() => unflag(x.id)}>Keep</button></span>)}</div>; })()}
-                {add?.eid === e.id ? <div className="ds-add"><select value={add.code} onChange={(ev) => setAdd({ ...add, code: ev.target.value })}>{ROLES.filter((r) => r.dept === (isBar(e) ? 'bar' : 'floor') && !LEAD.includes(r.code)).map((r) => <option key={r.code} value={r.code}>{r.label}</option>)}</select>
+                {add?.eid === e.id ? <div className="ds-add"><select value={add.code} onChange={(ev) => setAdd({ ...add, code: ev.target.value })}>{ROLES.filter((r) => r.dept === (isBar(e) ? 'bar' : 'floor') && !LEAD.includes(r.code)).map((r) => <option key={r.code} value={r.code}>{r.label}</option>)}<option value="EX">Extras</option></select>
                   <input inputMode="numeric" style={{ width: 60 }} placeholder="How many" value={add.count} onChange={(ev) => setAdd({ ...add, count: ev.target.value })} />
                   <input type="time" step={900} value={add.t} onChange={(ev) => setAdd({ ...add, t: ev.target.value })} />
                   <button className="abtn sm dark" disabled={busy || !(parseInt(add.count, 10) > 0) || !add.t} onClick={addLine}>Add line</button><button className="lnk sm muted" onClick={() => setAdd(null)}>Cancel</button></div>
