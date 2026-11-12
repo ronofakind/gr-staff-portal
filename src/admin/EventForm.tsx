@@ -650,7 +650,7 @@ export function EventForm() {
               <option value="__new">+ New type (saved for next time)</option>
             </select></label>
             <div className="ef-f"><span>GUESTS <i className="only">only you</i></span>{/* push 74 · range + Final */}
-              <div className="row" style={{ gap: 6, alignItems: 'center' }}>
+              <div className="ef-guests">
                 <input type="number" min={0} value={guests} onChange={(e) => setGuests(e.target.value)} placeholder={gFinal ? 'e.g. 140' : 'from'} style={{ width: gFinal ? 120 : 84 }} />
                 {!gFinal && <><span className="muted">–</span><input type="number" min={0} value={guestsMax} onChange={(e) => setGuestsMax(e.target.value)} placeholder="to" style={{ width: 84 }} /></>}
                 <button type="button" className={'ef-final' + (gFinal ? ' on' : '')} onClick={() => setGFinal(!gFinal)}>{gFinal ? '✓ Final' : 'Final?'}</button>

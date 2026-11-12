@@ -4410,3 +4410,8 @@ a.ch-name-link { display: block; text-decoration: none; color: inherit; } a.ch-n
 .er-pick { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 10px 12px; border-radius: 12px; background: #F6F2EC; } .er-pick input[type=date] { height: 30px; border-radius: 8px; border: 1px solid var(--line); padding: 0 6px; font: inherit; font-size: 12.5px; }
 .dp-move { height: 28px; border-radius: 8px; border: 1px solid var(--line); font: inherit; font-size: 12px; max-width: 150px; }
 .er-q { height: 30px; border-radius: 8px; border: 1px solid var(--line); padding: 0 10px; font: inherit; font-size: 12.5px; min-width: 220px; } .er-multi { flex-basis: 100%; color: #6B4A12; font-size: 12px; }
+/* Nov 11 · guests from – to + Final stay inside their column */
+.ef-row3 { grid-template-columns: 1fr 1.2fr 1.3fr; }
+.ef-guests { display: flex; gap: 6px; align-items: center; min-width: 0; }
+.ef-guests input { flex: 1 1 0; min-width: 0; width: auto !important; }
+.ef-guests .ef-final { flex: 0 0 auto; white-space: nowrap; height: 40px; padding: 0 14px; }
