@@ -2,6 +2,7 @@ import { RateCard } from './Rates';
 import { ExpenseSwitch } from './Expenses';
 import { TaxCard } from './Hiring';
 import { useEffect, useState } from 'react';
+import { AvailTab } from './StaffAvail';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { Avatar } from '../components/Avatar';
@@ -27,6 +28,7 @@ export function StaffProfile({ s, onClose, onEdit, all }: { s: AStaff; onClose: 
   const [sex, setSex] = useState<'m' | 'f' | null>(s.sex ?? null);
   useEffect(() => setSex(s.sex ?? null), [s.id]);
   const [shifts, setShifts] = useState<Sh[]>([]);
+  const [pview, setPview] = useState<'profile' | 'avail'>('profile'); // Nov 11 · Availability tab (board StaffAvailV1)
   // push 34a · Invite / Resend (same pop-up as the Staff list)
   const [inv, setInv] = useState<InviteRow | null | undefined>(undefined); const [inviting, setInviting] = useState(false);
   const loadInv = () => loadInviteStatus().then((m) => setInv(typeof m === 'string' ? null : m[s.id] ?? null));
@@ -45,7 +47,7 @@ export function StaffProfile({ s, onClose, onEdit, all }: { s: AStaff; onClose: 
   useEffect(() => {
     setNotes(s.staff_private?.notes ?? ''); setSaved(true);
     Promise.all([
-      supabase.from('staff_weekly').select('dow,status,from_time,until_time').eq('staff_id', s.id),
+      supabase.from('staff_weekly').select('dow,status,from_time,until_time,set_by_admin,own_status,own_from,own_until').eq('staff_id', s.id),
       supabase.from('days_off').select('id,from_date,to_date,reason,every_dow,added_by_admin,created_at,days_off_private(note)').eq('staff_id', s.id).gte('to_date', today).order('from_date'),
       supabase.from('shifts').select('id,planned_start,attendance,left_early,punches(punch_in,punch_out),events!inner(event_date,title)').eq('staff_id', s.id).neq('status', 'declined')
         .gte('events.event_date', today.slice(0, 4) + '-01-01'),
@@ -119,7 +121,9 @@ export function StaffProfile({ s, onClose, onEdit, all }: { s: AStaff; onClose: 
             <small>{place ? `#${place.n} of ${place.of} · ${tab === 'md' ? 'MD' : tab}` : ' '}</small></div>
           <button className="sq sp-x" aria-label="Close" onClick={onClose}>×</button>
         </div>
-        <div className="sp-cols">
+        <div className="seg3 sp-tabs">{(['profile', 'avail'] as const).map((v) => <button key={v} className={pview === v ? 'on' : ''} onClick={() => setPview(v)}>{v === 'profile' ? 'Profile' : 'Availability'}</button>)}</div>
+        {pview === 'avail' && <AvailTab s={s} week={week} off={off} onWeek={(w) => setWeek(w)} />}
+        <div className="sp-cols" style={pview === 'avail' ? { display: 'none' } : undefined}>
           <div className="sp-col">
             <div className="sp-colh">HOW THEY’RE DOING</div>
             {sd && sc && <div className="pcard"><div className="row" style={{ justifyContent: 'space-between' }}><span className="kick">RANKING · WHY {sc.form}</span><Link to="/admin/ranking" className="sm accent strong">All rankings ›</Link></div>
