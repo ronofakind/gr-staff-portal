@@ -371,9 +371,9 @@ function DayPop({ x, d, period, rate, onClose, onDone }: { x: Person; d: string;
     setErr(''); const n = Number(h.replace(',', '.'));
     if (man) { const { error } = await supabase.from('pay_lines').delete().eq('id', man.id); if (error) { setErr(error.message); return; } }
     if (h.trim() && n > 0) {
-      if (rate == null) { setErr(`${x.name} has no pay rate.`); return; }
+      if (rate == null && !x.salary) { setErr(`${x.name} has no pay rate.`); return; } // salary: hours tracked, $0 here
       const { data: me } = await supabase.rpc('me');
-      const { error } = await supabase.from('pay_lines').insert({ staff_id: x.id, period_start: period, kind: 'hours', hours: n, amount: r2(n * rate), line_date: d, note: note.trim() || null, source: 'manual', created_by: me });
+      const { error } = await supabase.from('pay_lines').insert({ staff_id: x.id, period_start: period, kind: 'hours', hours: n, amount: x.salary || rate == null ? 0 : r2(n * rate), line_date: d, note: note.trim() || null, source: 'manual', created_by: me });
       if (error) { setErr(error.message); return; }
     }
     onDone();
@@ -383,7 +383,7 @@ function DayPop({ x, d, period, rate, onClose, onDone }: { x: Person; d: string;
       <div className="spread"><b>{x.name} · {dLabel(d)}</b><button className="lnk sm" onClick={onClose}>✕</button></div>
       {sh.map((s) => <div key={s.id} className="sm">{s.title} · {s.noEnd ? <span className="accent">no end time</span> : <b>{s.hours} h</b>} <Link className="lnk" to="/admin/hours">Change the times ›</Link></div>)}
       {mt.map((g, i) => <div key={i} className="sm muted">Meeting · {g.title} · {g.hours} h</div>)}
-      <span className="muted sm">{sh.length ? '+ Add hours (typed in, on top of the app hours)' : 'Type the hours'}{rate != null ? ` · × ${money2(rate)}` : ' · no pay rate!'}</span>
+      <span className="muted sm">{sh.length ? '+ Add hours (typed in, on top of the app hours)' : 'Type the hours'}{x.salary ? ' · salary: hours tracked, not paid here' : rate != null ? ` · × ${money2(rate)}` : ' · no pay rate!'}</span>
       <div className="row" style={{ gap: 6 }}><input autoFocus inputMode="decimal" style={{ width: 80 }} placeholder="Hours" value={h} onChange={(e) => setH(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && save()} />
         <input className="grow" placeholder="Note (only you see it)" value={note} onChange={(e) => setNote(e.target.value)} /></div>
       <div className="row" style={{ gap: 8 }}><button className="abtn sm dark" onClick={save}>Save</button>{man && <button className="abtn sm" onClick={() => { setH(''); setTimeout(save); }}>Remove</button>}</div>
