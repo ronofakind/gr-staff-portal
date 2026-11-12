@@ -206,7 +206,7 @@ function VenueCard({ v, clients, count, has038, all, onSaved, onGone, onClient }
   const [parking, setParking] = useState(v?.staff_notes ?? ''); const [notes, setNotes] = useState(v?.venue_notes ?? '');
   const [pin, setPin] = useState<Pin | null>(() => { const x = v as unknown as { pin_lat?: number | null; pin_lng?: number | null; pin_label?: string | null } | null; return x?.pin_lat != null && x?.pin_lng != null ? { lat: x.pin_lat, lng: x.pin_lng, label: x.pin_label ?? '' } : null; });
   const [links, setLinks] = useState<HLink[]>(() => asLinks((v as unknown as { links?: unknown } | null)?.links));
-  const [rides, setRides] = useState(!!v?.always_offer_rides); const [far, setFar] = useState(!!v?.far); const [noFood, setNoFood] = useState(!!v?.no_outside_food); const [u, setU] = useState<Uni>(() => uniOf(v));
+  const [rides, setRides] = useState(!!v?.always_offer_rides); const [farV, setFarV] = useState(!!v?.far); const [noFood, setNoFood] = useState(!!v?.no_outside_food); const [u, setU] = useState<Uni>(() => uniOf(v));
   const vx = v as unknown as { area?: string | null; postal_code?: string | null } | null; const [area, setArea] = useState(vx?.area ?? areaFromPostal(vx?.postal_code) ?? ''); // push 63
   const [busy, setBusy] = useState(false); const [err, setErr] = useState(''); const [saved, setSaved] = useState<string | null>(null);
   const client = clients.find((c) => c.id === clientId) ?? null;
@@ -216,7 +216,7 @@ function VenueCard({ v, clients, count, has038, all, onSaved, onGone, onClient }
     if (!name.trim()) return setErr('Give the venue a name (what staff see).');
     setBusy(true); setErr('');
     const row: Record<string, unknown> = {
-      name: name.trim(), usual_client_id: clientId || null, usual_caterer_id: catId || null, address: address.trim() || null, staff_notes: parking.trim() || null, always_offer_rides: rides, far, no_outside_food: noFood, ...uniRow(u), area: area || (parts ? areaFromPostal(parts.postal_code) : null) || null,
+      name: name.trim(), usual_client_id: clientId || null, usual_caterer_id: catId || null, address: address.trim() || null, staff_notes: parking.trim() || null, always_offer_rides: rides, far: farV, no_outside_food: noFood, ...uniRow(u), area: area || (parts ? areaFromPostal(parts.postal_code) : null) || null,
       ...(parts ? { street: parts.street, unit: parts.unit || null, city: parts.city, province: parts.province, postal_code: parts.postal_code } : {}),
       ...(has038 ? { venue_notes: notes.trim() || null } : {}),
       pin_lat: pin?.lat ?? null, pin_lng: pin?.lng ?? null, pin_label: pin?.label?.trim() || null, links,
@@ -267,7 +267,7 @@ function VenueCard({ v, clients, count, has038, all, onSaved, onGone, onClient }
           <Sec title="USUAL UNIFORMS" sub="pre-filled on New event"><Uniforms u={u} set={setU} /></Sec>
           <Sec title="TRANSPORT">
             <Sw on={rides} set={setRides} label="Always offer rides" sub="turn on for hard-to-reach venues (e.g. Le Andover) · New event suggests Transport ON" />
-            <Sw on={far} set={setFar} label="Far venue" sub="✦ Fill on the Day sheet puts people with a car first, with the people they're linked to (Le Andover, Porsche Laval…)" />
+            <Sw on={farV} set={setFarV} label="Far venue" sub="✦ Fill on the Day sheet puts people with a car first, with the people they're linked to (Le Andover, Porsche Laval…)" />
             <Sw on={noFood} set={setNoFood} label="No outside food" sub="synagogues / Chabad · staff see the no-outside-food icon on every event here" />
             <small className="muted">Far event = {far} min+ drive from the office (<Link to="/admin/settings">Settings</Link>). Drive time from the office isn’t stored on venues yet (needs the Google Maps key), so it isn’t shown here.</small>
           </Sec>
