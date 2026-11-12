@@ -4439,7 +4439,7 @@ a.ch-name-link { display: block; text-decoration: none; color: inherit; } a.ch-n
 @media (max-width: 900px) { .ds-cols { grid-template-columns: 1fr; } .ds-week { grid-template-columns: repeat(7, minmax(60px, 1fr)); overflow-x: auto; } }
 .ds-blocks { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .ds-block { background: var(--card, #fff); border: 1px solid var(--line, #e3ddd3); border-left: 4px solid #8a6d3b; border-radius: 12px; padding: 10px 12px; }
-.ds-block.bar { border-left-color: #5b4b8a; }
+.ds-block.ds-barev { border-left-color: #5b4b8a; }
 .ds-bh { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; padding-bottom: 6px; border-bottom: 1px solid var(--line, #eee); }
 .ds-title { font-size: 17px; font-weight: 600; } .ds-count { font-size: 12.5px; }
 .ds-lead { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 7px 0; border-bottom: 1px dashed var(--line, #e6e0d6); }

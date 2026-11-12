@@ -192,7 +192,7 @@ export function DaySheet() {
           {!shown.length && <div className="adm-card muted">No {dept === 'both' ? '' : dept + ' '}events this day.</div>}
           {shown.map((e) => { const L = lays[e.id]; const have = sh.filter((s) => s.event_id === e.id).length; const need = L.client + L.extras.count;
             return (
-              <section key={e.id} className={'ds-block' + (isBar(e) ? ' bar' : '')}>
+              <section key={e.id} className={'ds-block' + (isBar(e) ? ' ds-barev' : '')}>
                 <div className="ds-bh"><span className="serif ds-title">{e.venues?.name ?? e.title}{isBar(e) ? ' · bar' : ''}</span>{isFar(e) && <span className="ds-far" title="Far venue: ✦ puts drivers first, with the people they're linked to">🚗 far</span>}
                   <small className="muted">{[e.caterer_name ? `Food by ${e.caterer_name}` : null, e.guests ? `${e.guests} guests` : null].filter(Boolean).join(' · ')}</small>
                   <span className="grow" /><span className="ds-count">Client {L.client}{L.extras.count ? ` · +${L.extras.count} extra${L.extras.count > 1 ? 's' : ''} = ${need}` : isBar(e) ? '' : ' · no extras'} · <b className={have >= need ? 'okc' : 'accent'}>{have} placed</b></span>
