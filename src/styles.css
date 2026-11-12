@@ -4484,3 +4484,19 @@ a.ch-name-link { display: block; text-decoration: none; color: inherit; } a.ch-n
 .ds-cardgrid label:first-child { grid-column: 1 / -1; }
 .ds-cardgrid select, .ds-cardgrid input { padding: 7px 9px; border-radius: 8px; border: 1px solid var(--line, #ddd); font: inherit; font-size: 13.5px; color: var(--ink); }
 .ds-note { font-size: 10.5px; margin-left: 2px; }
+/* push 112 · Day sheet on the phone + Put in */
+.ds-seglink { height: 36px; display: inline-flex; align-items: center; padding: 0 14px; border-radius: 9px; font: 600 14px Inter, sans-serif; color: var(--muted); text-decoration: none; }
+.ds-seglink:hover { background: #fff; color: var(--ink); }
+.ds-putin { font-size: 11.5px; font-weight: 700; color: var(--ok); margin-left: 6px; }
+@media (max-width: 700px) {
+  .ds-top { gap: 6px; } .ds-top .abtn { padding: 0 10px; font-size: 13px; } .ds-day { font-size: 19px; width: 100%; }
+  .ds-sum .muted { display: none; }
+  .ds-line { grid-template-columns: 1fr auto auto; row-gap: 6px; }
+  .ds-line .ds-cells { grid-column: 1 / -1; order: 4; }
+  .ds-chip { padding: 6px 6px 6px 10px; font-size: 13.5px; } .ds-x { font-size: 18px; padding: 0 6px; }
+  .ds-slot { padding: 6px 12px; font-size: 12.5px; }
+  .ds-free { position: static; max-height: none; }
+  .ds-cardgrid { grid-template-columns: 1fr; }
+  .ds-pick-wrap { align-items: flex-end; padding: 0; } .ds-pick { border-radius: 16px 16px 0 0; max-height: 88vh; width: 100%; }
+  .ds-pp { padding: 12px; }
+}

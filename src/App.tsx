@@ -13,8 +13,7 @@ import { AdminLayout, More } from './admin/AdminLayout';
 import { Today } from './admin/Today';
 import { Debriefs } from './admin/Debriefs';
 import { Rates } from './admin/Rates';
-import { DayPool } from './admin/DayPool';
-import { DaySheet } from './admin/DaySheet';
+import { DaySheet, PoolToSheet } from './admin/DaySheet';
 import { DeleteAccountPublic } from './pages/DeleteAccount';
 import { Apply } from './pages/Apply';
 import { Hiring } from './admin/Hiring';
@@ -147,7 +146,7 @@ export function App() {
             <Route path="day" element={<Calendar view="day" />} />
             <Route path="event/new" element={<EventForm />} />
             <Route path="event/:id" element={<EventDetail />} />
-            <Route path="pool/:date" element={<DayPool />} />{/* push 97 */}
+            <Route path="pool/:date" element={<PoolToSheet />} />{/* push 97 → push 112: the Day sheet */}
             <Route path="day-sheet/:date" element={<DaySheet />} />{/* push 108 */}
             <Route path="event/:id/edit" element={<EventForm />} />
             <Route path="event/:id/change" element={<ClientChange />} />

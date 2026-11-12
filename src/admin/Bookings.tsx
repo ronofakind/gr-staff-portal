@@ -1,7 +1,7 @@
 import { ShiftExpenseToggle } from './Expenses';
 import { BookingsMeetings } from './Meetings';
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { StaffProfile } from './StaffProfile';
 import { openReminders, resolveReminder, friendly, type Reminder } from './StaffRemind';
 import { supabase } from '../lib/supabase';
@@ -603,6 +603,8 @@ export function Bookings() {
   }, []);
   const focusEv = params.get('ev');
   useEffect(() => { if (!focusEv || !events) return; const t = setTimeout(() => document.querySelector(`[data-ev="${CSS.escape(focusEv)}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' }), 300); return () => clearTimeout(t); }, [focusEv, events]);
+  // push 112 · the Day sheet replaces the Board view (and the Day pool). Sheet / List stay for the week view + Ask more people.
+  if (view === 'board' && !askMore) return <Navigate to={`/admin/day-sheet/${date}`} replace />;
   return (
     <div className="stack-lg bk">
       <div className={'bk-mode ' + mode}>
@@ -615,7 +617,7 @@ export function Bookings() {
       <div className="toolbar">
         <div><div className="kick">BOOKINGS</div><h1 className="serif-h">{view === 'board' ? dLabel(date, { weekday: 'long', month: 'long', day: 'numeric' }) : `From ${dLabel(date)}`}</h1></div>
         <div className="row wrap" style={{ gap: 8 }}>
-          <div className="seg3">{(['board', 'sheet', 'list'] as View[]).map((v) => <button key={v} className={view === v ? 'on' : ''} onClick={() => setP('view', v)}>{v[0].toUpperCase() + v.slice(1)}</button>)}</div>
+          <div className="seg3"><Link className="ds-seglink" to={`/admin/day-sheet/${date}`}>Day sheet</Link>{(['sheet', 'list'] as View[]).map((v) => <button key={v} className={view === v ? 'on' : ''} onClick={() => setP('view', v)}>{v[0].toUpperCase() + v.slice(1)}</button>)}</div>
           <div className="seg3">{(['floor', 'bar', 'both'] as const).map((v) => <button key={v} className={dept === v ? 'on' : ''} onClick={() => setP('dept', v)}>{v === 'floor' ? 'Floor' : v === 'bar' ? 'Bar' : 'Both'}</button>)}</div>
           {view === 'sheet' && <div className="seg3">{[7, 14, 31].map((n) => <button key={n} className={span === n ? 'on' : ''} onClick={() => setP('span', String(n))}>{n === 31 ? 'Month' : `${n} days`}</button>)}</div>}
           {view === 'board' && <button className="abtn" onClick={() => (auto?.open ? setAuto(null) : setAuto({ open: false, skipped: [] }))}>Auto-fill</button>}
@@ -644,7 +646,6 @@ export function Bookings() {
                 {st === 'sent' ? <span className="bk-wok">✓</span> : st === 'ready' && d >= today0 ? <span className="bk-wsend" role="button" tabIndex={0} onClick={(ev) => { ev.stopPropagation(); setSendOf(sendOf === e.id ? null : e.id); }}>SEND</span> : st === 'later' ? <span className="bk-wlater">○</span> : null}
               </button>); })}
             {evs.length > 3 && <span className="bk-wmore">+{evs.length - 3} more</span>}
-            {evs.some((e) => !isBarEv(e)) && d >= today0 && <Link className="bk-wpool" to={`/admin/pool/${d}`} onClick={(ev) => ev.stopPropagation()}>Day pool ›</Link>}{/* push 97 */}
             {evs.length > 0 && <Link className="bk-wpool ds-new" to={`/admin/day-sheet/${d}`} onClick={(ev) => ev.stopPropagation()}>Day sheet ›</Link>}{/* push 108 */}
           </div>); })
           : <span className="grow muted sm" style={{ textAlign: 'center' }}>{dLabel(range.from)} – {dLabel(range.to)}</span>}

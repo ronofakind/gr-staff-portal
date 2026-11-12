@@ -1296,4 +1296,5 @@ html[data-theme="terra"] { --teams: #5B5FC7; --teams-bg: #EEEFFB; --teams-ink: #
 :where(html[data-theme="terra"]) .ds-far { background: #EEF3FB; color: #2B4F86; }
 :where(html[data-theme="terra"]) .ds-why { background: #F6F2EA; }
 :where(html[data-theme="terra"]) .ds-cardgrid select, :where(html[data-theme="terra"]) .ds-cardgrid input { border: 1px solid var(--line, #DEE0D5); }
+:where(html[data-theme="terra"]) .ds-seglink:hover { background: #FBFAF6; }
 html[data-theme="terra"] body { background: #EEF0E8; color: #2A2A24; }
