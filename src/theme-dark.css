@@ -2242,6 +2242,7 @@ html[data-theme="dark"] { --teams: #8487CC; --teams-bg: #1F2137; --teams-ink: #8
 :where(html[data-theme="dark"]) .ds-undofab { background: var(--ink, #2A2622); color: #F5F2ED; box-shadow: 0 10px 30px rgba(0,0,0,0.6); }
 :where(html[data-theme="dark"]) .ds-undofab button { background: #322D24; color: var(--ink, #E1DEDB); }
 :where(html[data-theme="dark"]) .ds-undofab small { color: #9B9289; }
+:where(html[data-theme="dark"]) .ds-new { color: #F1ECE4; background: #706AD2; }
 html[data-theme="dark"] { color-scheme: dark; }
 html[data-theme="dark"] body { background: #121110; color: #F1ECE4; }
 html[data-theme="dark"] img[src$="logo-mark.png"]:not(.adm-side img):not(.side-logo), html[data-theme="dark"] img[src$="logo-full.png"] { filter: invert(1) hue-rotate(180deg); mix-blend-mode: normal !important; }

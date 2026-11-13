@@ -1323,4 +1323,5 @@ html[data-theme="terra"] { --teams: #5B5FC7; --teams-bg: #EEEFFB; --teams-ink: #
 :where(html[data-theme="terra"]) .ds-undofab { background: var(--ink, #3B4A3F); box-shadow: 0 10px 30px rgba(0,0,0,0.25); }
 :where(html[data-theme="terra"]) .ds-undofab button { color: var(--ink, #181915); }
 :where(html[data-theme="terra"]) .ds-undofab small { color: #B2B4A8; }
+:where(html[data-theme="terra"]) .ds-new { color: #FBFAF6; }
 html[data-theme="terra"] body { background: #EEF0E8; color: #2A2A24; }

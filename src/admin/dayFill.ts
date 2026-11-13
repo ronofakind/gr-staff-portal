@@ -15,7 +15,7 @@ export type Sh = { id: string; event_id: string; staff_id: string; position_code
   notified_at: string | null; planned_start: string | null; time_tbc?: boolean | null; booking_note?: string | null };
 export type Av = { staff_id: string; status: string; from_time: string | null; released_at: string | null; avail_asks?: { department: string | null } | null };
 export type Day = { date: string; evs: Ev[]; sh: Sh[]; av: Av[]; off: Set<string> };
-export type Ctx = { staff: AStaff[]; byId: Record<string, AStaff>; cars: Set<string>; worked: Record<string, number>; links: SLink[]; conds: SCond[]; rate: Record<string, number>; venues: Venue[]; clients: Client[] };
+export type Ctx = { staff: AStaff[]; byId: Record<string, AStaff>; cars: Set<string>; worked: Record<string, number>; newIds: Set<string>; links: SLink[]; conds: SCond[]; rate: Record<string, number>; venues: Venue[]; clients: Client[] };
 
 export const LEAD = ['MD', 'BM'];
 const TORD: Record<string, number> = { A: 0, B: 1, C: 2 };
@@ -51,12 +51,14 @@ export async function loadCtx(staff0?: AStaff[]): Promise<Ctx> {
     supabase.from('venues').select('*'), supabase.from('clients').select('id,name,area,kind'),
   ]);
   const { data: tr } = await supabase.from('staff').select('id,transport').eq('transport', 'car');
+  // Ronnie, Nov 12: "the only new staff are coming through our onboarding system now" → new = has an onboarding record (and under 5 shifts in the app)
+  const { data: ob } = await supabase.from('staff_onboarding').select('staff_id').limit(1000);
   // "new" = fewer than 5 shifts worked (created_at is the app import date for most people)
   const worked: Record<string, number> = {}; const today = new Date().toISOString().slice(0, 10);
   for (let i = 0; i < 20; i++) { const { data } = await supabase.from('shifts').select('staff_id,events!inner(event_date)').lt('events.event_date', today).neq('status', 'declined').range(i * 1000, i * 1000 + 999);
     const xs = (data ?? []) as { staff_id: string }[]; for (const x of xs) worked[x.staff_id] = (worked[x.staff_id] ?? 0) + 1; if (xs.length < 1000) break; }
   const rate: Record<string, number> = {}; for (const x of (r.data ?? []) as { staff_id: string; rate: number }[]) if (rate[x.staff_id] == null) rate[x.staff_id] = Number(x.rate);
-  return { staff, byId: Object.fromEntries(staff.map((s) => [s.id, s])), cars: new Set(((tr ?? []) as { id: string }[]).map((x) => x.id)), worked, links: rules.links, conds: rules.conds, rate, venues: (v.data ?? []) as Venue[], clients: (c.data ?? []) as unknown as Client[] };
+  return { staff, byId: Object.fromEntries(staff.map((s) => [s.id, s])), cars: new Set(((tr ?? []) as { id: string }[]).map((x) => x.id)), worked, newIds: new Set(((ob ?? []) as { staff_id: string }[]).map((x) => x.staff_id)), links: rules.links, conds: rules.conds, rate, venues: (v.data ?? []) as Venue[], clients: (c.data ?? []) as unknown as Client[] };
 }
 
 /** Shifts per person in the Mon–Sun week (for the "more than 3" flag). */
@@ -96,13 +98,15 @@ const deptOf = (a: Av, s?: AStaff) => a.avail_asks?.department ?? s?.department 
 export type Row = Record<string, unknown> & { staff_id: string; event_id: string };
 export type Plan = { rows: Row[]; why: Record<string, string>; held: string[]; flags: string[] };
 
+export const isNewStaff = (ctx: Ctx, sid: string) => ctx.newIds.has(sid) && (ctx.worked[sid] ?? 0) < 5;
+
 /** Why this person sits here (hover on a name). */
 export function whyText(sid: string, e: Ev, ctx: Ctx, onEvent: string[], weekN: number, a?: Av | null) {
   const s = ctx.byId[sid]; const sp = s?.staff_private;
   const bits = [sp?.tier ? `Tier ${sp.tier}` : 'no tier', sp?.ranking ? `rank ${sp.ranking}` : null, a?.from_time ? `free from ${a.from_time.slice(0, 5)}` : a ? 'any time' : null,
     isFar(e) ? (ctx.cars.has(sid) ? '🚗 has a car' : 'no car listed') : null,
     ...ctx.links.filter((l) => l.kind === 'together' && (l.staff_a === sid || l.staff_b === sid) && onEvent.includes(other(l, sid))).map((l) => `with ${ctx.byId[other(l, sid)]?.full_name ?? '…'}`),
-    (ctx.worked[sid] ?? 0) < 5 ? `new · ${ctx.worked[sid] ?? 0} shifts so far` : null, ctx.rate[sid] != null && ctx.rate[sid] <= 18 ? '$18' : null, weekN > 3 ? `⚑ ${weekN} shifts this week` : null,
+    isNewStaff(ctx, sid) ? `new · ${ctx.worked[sid] ?? 0} shift${(ctx.worked[sid] ?? 0) === 1 ? '' : 's'} so far` : null, ctx.rate[sid] != null && ctx.rate[sid] <= 18 ? '$18' : null, weekN > 3 ? `⚑ ${weekN} shifts this week` : null,
     ...misfits(sid, e as never, { conds: ctx.conds, clients: ctx.clients, venues: ctx.venues, big: true }).filter((m) => m.kind !== 'big_dates_only').map((m) => `⚠ ${m.text}`)];
   return bits.filter(Boolean).join(' · ');
 }
@@ -129,7 +133,7 @@ export function planFill(day: Day, targets: Ev[], ctx: Ctx, weekN: Record<string
   const apart = (sid: string) => ctx.links.filter((l) => l.kind === 'apart' && (l.staff_a === sid || l.staff_b === sid)).map((l) => other(l, sid));
   const onlyIfNeeded = (sid: string) => ctx.conds.some((c) => c.staff_id === sid && c.kind === 'only_if_needed');
   const car = (sid: string) => ctx.cars.has(sid);
-  const isNew = (sid: string) => (ctx.worked[sid] ?? 0) < 5;
+  const isNew = (sid: string) => isNewStaff(ctx, sid);
 
   const fits = (sid: string, sl: Slot) => {
     const a = avOf[sid]; if (!a) return false;

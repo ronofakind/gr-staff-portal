@@ -4614,3 +4614,4 @@ a.ch-name-link { display: block; text-decoration: none; color: inherit; } a.ch-n
 .ds-undofab button { border: 0; background: #F6F2EC; color: var(--ink, #1A1714); border-radius: 999px; padding: 7px 14px; font: 700 13px Inter, sans-serif; cursor: pointer; white-space: nowrap; }
 .ds-undofab small { color: #B8AFA4; white-space: nowrap; padding-right: 8px; }
 .ds-detg label.wide2 { grid-column: span 2; }
+.ds-new { flex: none; font-size: 9.5px; font-weight: 800; letter-spacing: .06em; color: #fff; background: #6B64D8; border-radius: 5px; padding: 1px 5px; margin-left: 4px; }
