@@ -4720,3 +4720,6 @@ a.ch-name-link { display: block; text-decoration: none; color: inherit; } a.ch-n
 .ds-line2 { overflow: visible; } .ds-line2 > .ds-lh { border-radius: 6px 11px 0 0; } .ds-line2 > .ds-cells { border-radius: 0 0 11px 6px; }
 .ds-tpop { z-index: 60; }
 .ds-tsel { height: 34px; border: 1px solid #E2D7CA; border-radius: 9px; background: #fff; font: 600 14px Inter, sans-serif; padding: 0 8px; color: var(--ink); max-height: 300px; }
+/* Nov 13 · Coming up: long roles ("Bar manager") no longer cut on both sides */
+.cmg-strip > div:nth-child(2) { flex: 1.5; }
+.cmg-strip b.lead, .cmg-strip > div:nth-child(2) b { display: block; white-space: normal; height: auto; min-height: 28px; line-height: 1.15; padding-top: 5px; overflow-wrap: anywhere; }
