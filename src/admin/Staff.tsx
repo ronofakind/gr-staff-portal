@@ -104,7 +104,7 @@ export function Staff() {
       <div className="ps">
         <div className="ps-top"><span className="serif ps-h">Staff</span><span className="grow" />
           <button className="ps-lnk" onClick={() => { setSelMode(!selMode); setSel(new Set()); }}>{selMode ? 'Done' : 'Select'}</button>
-          <button className="ps-add" onClick={() => setOpen('new')} aria-label="Add staff">+</button></div>
+          <button className="ps-lnk" onClick={() => setOpen('new')}>+ Add</button></div>
         <input className="ps-q" placeholder="🔍 Search a name, nickname, phone" value={q} onChange={(e) => setQ(e.target.value)} />
         <div className="ps-chips">{([['all', 'All'], ['floor', 'Floor'], ['bar', 'Bar'], ['not', 'Not invited'], ['noemail', 'No email']] as const).map(([k, l]) => <button key={k} className={pf === k ? 'on' : ''} onClick={() => setPf(k)}>{l}</button>)}
           <label className="ps-inact"><input type="checkbox" checked={inactive} onChange={(e) => setInactive(e.target.checked)} /> inactive</label></div>
