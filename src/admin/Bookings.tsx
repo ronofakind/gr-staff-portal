@@ -576,7 +576,7 @@ export function Bookings() {
   // Nov 4 · the manager sees who the extras are (migration 061). Worked out from the real schedule, never from practice or unsaved changes.
   const xSent = useRef<Record<string, string>>({});
   useEffect(() => {
-    if (!events || !sd) return;
+    if (!events || !sd || 1) return; // Nov 13 · the Day sheet now decides who the extras are (same lines you see there)
     for (const e of events) {
       const ax = autoX(e.event_date, e, base[e.event_date] ?? []); // the real schedule, never a practice board
       const ids = (base[e.event_date] ?? []).filter((p) => p.event_id === e.id && p.shift_id && ax.has(p.key)).map((p) => p.shift_id!).sort();

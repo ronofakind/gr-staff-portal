@@ -90,6 +90,12 @@ export function DaySheet() {
   const nYes = av.filter((a) => inDept(a) && a.status === 'yes' && !a.released_at && !onDay.has(a.staff_id) && !off.has(a.staff_id)).length;
   const nMaybe = av.filter((a) => inDept(a) && a.status === 'maybe' && !a.released_at && !onDay.has(a.staff_id)).length;
   const lays = useMemo(() => Object.fromEntries(evs.map((e) => [e.id, layout(e, sh.filter((s) => s.event_id === e.id), rkOf)])), [evs, sh, staff]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Nov 13 · the manager's EXTRA tag = who sits on the Extras line here (automatic rows only; your own picks stay)
+  const xSent = useRef<Record<string, string>>({});
+  useEffect(() => { if (!ctx) return;
+    for (const e of evs) { const L = lays[e.id]; if (!L) continue; const ids = L.extras.people.map((x) => x.id).sort(); const sig = ids.join(',');
+      if (xSent.current[e.id] === sig) continue; xSent.current[e.id] = sig;
+      supabase.rpc('admin_set_extras', { p_event: e.id, p_shifts: ids }).then(({ error }) => { if (error) delete xSent.current[e.id]; }); } }, [lays, ctx]); // eslint-disable-line react-hooks/exhaustive-deps
   const tot = (b: boolean) => evs.filter((e) => isBar(e) === b).reduce((acc, e) => { const L = lays[e.id]; const need = L.client + L.extras.count; const have = sh.filter((s) => s.event_id === e.id).length; return [acc[0] + have, acc[1] + need]; }, [0, 0]);
   const [fl, br] = [tot(false), tot(true)];
   const removable = (s: Sh) => s.pool_hold && !s.locked;
