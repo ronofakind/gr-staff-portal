@@ -447,7 +447,7 @@ function PersonCard({ s, e, date, evs, lays, byId, av, onDay, off, sortP, tier, 
     .sort((x, y) => Number(!fitT(x)) - Number(!fitT(y)) || sortP(x.staff_id, y.staff_id)).slice(0, 12);
   const state = s.pool_hold ? (s.locked ? 'placed · locked' : 'placed · not sent') : s.status === 'confirmed' ? 'confirmed' : s.notified_at ? 'sent · waiting for confirm' : 'booked';
   return (
-    <div className="ds-pick-wrap" onClick={onClose}><div className="ds-pick ds-card" onClick={(ev) => ev.stopPropagation()}>
+    <div className="ds-pick-wrap" onClick={onClose}><div className="ds-pick ds-pcard" onClick={(ev) => ev.stopPropagation()}>
       <div className="row" style={{ gap: 8, alignItems: 'center' }}><i className={'ds-t ' + (tier(s.staff_id) ?? '')} /><b className="grow serif" style={{ fontSize: 18 }}>{p?.full_name ?? '…'}</b><button className="lnk muted" onClick={onClose}>✕</button></div>
       <small className="muted">{e.venues?.name ?? e.title} · {roleName(s.position_code)} · {e.start_tbc || e.details_pending ? 'time TBC' : ap(hm(s.planned_start))} · {state}{a?.from_time ? ` · free from ${ap(a.from_time)}` : ''}{wn > 3 ? ` · ⚑ ${wn} shifts this week` : ''}</small>
       {why && <small className="ds-why">{why}</small>}

@@ -4477,7 +4477,7 @@ a.ch-name-link { display: block; text-decoration: none; color: inherit; } a.ch-n
 .ds-bh .lnk[disabled] { opacity: .4; }
 /* push 110 · Day sheet person card */
 .ds-chip { user-select: none; }
-.ds-card { width: min(480px, 100%); }
+.ds-pcard { width: min(480px, 100%); }
 .ds-why { background: #f6f2ea; border-radius: 8px; padding: 6px 9px; font-size: 12px; }
 .ds-cardgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .ds-cardgrid label { display: flex; flex-direction: column; gap: 4px; font-size: 11.5px; font-weight: 600; color: var(--muted); }
