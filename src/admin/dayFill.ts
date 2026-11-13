@@ -73,8 +73,15 @@ export function layout(e: Ev, shifts: Sh[], rk?: (sid: string) => number) {
   const leads = shifts.filter((s) => LEAD.includes(s.position_code ?? ''));
   const rest = shifts.filter((s) => !LEAD.includes(s.position_code ?? '')).sort((a, b) => (a.planned_start ?? '').localeCompare(b.planned_start ?? '') || (rk ? rk(a.staff_id) - rk(b.staff_id) : 0));
   const left: Sh[] = [];
+  const odd: Sh[] = [];
   for (const s of rest) { const t = hm(s.planned_start); const L = lines.find((l) => l.code === (s.position_code ?? 'W') && l.start === t && l.people.length < l.count)
-      ?? lines.find((l) => l.start === t && l.people.length < l.count); if (L) L.people.push(s); else left.push(s); }
+      ?? lines.find((l) => l.start === t && l.people.length < l.count); if (L) L.people.push(s); else odd.push(s); }
+  // Nov 12 · someone given their own start (e.g. 4:30 on a 4 PM line) stays on their line: same role, the closest line that starts before them
+  const exStart0 = e.extras_start?.slice(0, 5) ?? (lines.length ? lines[lines.length - 1].start : null);
+  for (const s of odd) { const t = hm(s.planned_start); const code = s.position_code ?? 'W';
+    const L = t === exStart0 ? undefined : [...lines].filter((l) => l.code === code && l.people.length < l.count && (l.start ?? '') <= t).sort((a, b) => (b.start ?? '').localeCompare(a.start ?? ''))[0]
+      ?? [...lines].filter((l) => l.code === code && l.people.length < l.count).sort((a, b) => (a.start ?? '').localeCompare(b.start ?? ''))[0];
+    if (L) L.people.push(s); else left.push(s); }
   const client = lines.reduce((n, l) => n + l.count, 0) + leadNeed;
   const exN = e.extras != null ? Math.max(0, e.extras) : !isBar(e) && client > 7 ? Math.ceil(client * 0.1) : 0;
   const lastStart = lines.length ? lines[lines.length - 1].start : e.start_time?.slice(0, 5) ?? null;
