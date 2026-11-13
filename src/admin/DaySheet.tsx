@@ -255,6 +255,11 @@ export function DaySheet() {
     const moves = (line?.people ?? []).filter((x) => hm(x.planned_start) === line?.start).map((x) => ({ s: x, t }));
     st[idx] = { ...l, start: t }; lineSave(e, st, `${plural(l.code, 2)} → ${ap(t)}`, moves);
   };
+  /** Nov 13 · MD / bar manager start: the lead line's time + the leads on it move with it (asked first if already sent). */
+  const setLeadTime = (e: Ev, t: string) => { if (!t) return; setEd(null);
+    const st = [...(e.staffing ?? [])]; const i = st.findIndex((l) => LEAD.includes(l.code));     if (i >= 0) st[i] = { ...st[i], start: t }; else st.unshift({ dept: isBar(e) ? 'bar' : 'floor', code: isBar(e) ? 'BM' : 'MD', count: 1, start: t });
+    const moves = sh.filter((x) => x.event_id === e.id && LEAD.includes(x.position_code ?? '') && hm(x.planned_start) !== t).map((x) => ({ s: x, t }));
+    lineSave(e, st, `${isBar(e) ? 'Bar managers' : 'MD'} → ${ap(t)}`, moves); };
   /** push 114 · how many MDs / bar managers: the MD (BM) line in the event's staffing. */
   const setLeads = (e: Ev, n: number) => {
     if (n < 0) return; const code = isBar(e) ? 'BM' : 'MD'; const st = [...(e.staffing ?? [])]; const i = st.findIndex((l) => LEAD.includes(l.code));
@@ -336,7 +341,7 @@ export function DaySheet() {
     const roleC = lead || extra ? <b className="ds-lname">{name}{extra && e.extras == null ? <em> 10%</em> : null}</b>
       : <select className="ds-lsel" value={code} disabled={busy || idx == null} onChange={(ev) => idx != null && setRole(e, idx, ev.target.value)}>{roles.some((r) => r.code === code) ? null : <option value={code}>{plural(code, Math.max(2, count))}</option>}{roles.map((r) => <option key={r.code} value={r.code}>{r.code === 'WW' ? (count === 1 ? 'Wine waiter' : 'Wine waiters') : plural(r.code, Math.max(2, count))}</option>)}</select>;
     const stepC = lead ? <Step n={count} on={(n) => setLeads(e, n)} /> : extra ? <Step n={count} on={(n) => setExtras(e, n)} /> : idx != null ? <Step n={count} on={(n) => setCount(e, idx, n)} /> : <b>{count}</b>;
-    const timeC = tbc ? <span className="ds-tro">TBC</span> : lead ? <span className="ds-tro">{ap(start)}</span> : extra ? <>{tBtn(e, 'x', start)}<TimePop e={e} k="x" start={start} title="Start of the extras" onSet={(t) => setExtrasTime(e, t)} /></>
+    const timeC = tbc ? <span className="ds-tro">TBC</span> : lead ? <>{tBtn(e, 'L', start)}<TimePop e={e} k="L" start={start} title={isBar(e) ? 'Start of the bar managers' : 'Start of the MD'} onSet={(t) => setLeadTime(e, t)} people={people} /></> : extra ? <>{tBtn(e, 'x', start)}<TimePop e={e} k="x" start={start} title="Start of the extras" onSet={(t) => setExtrasTime(e, t)} /></>
       : idx != null ? <>{tBtn(e, String(idx), start)}<TimePop e={e} k={String(idx)} start={start} title="Start of this line" onSet={(t) => setTime(e, idx, t)} people={people} /></> : <span className="ds-tro">{ap(start)}</span>;
     const endC = !plain ? null : end || endK === k ? <input type="time" step={900} value={end ?? ''} disabled={busy} autoFocus={!end} title="End ~ (optional) · clear it to remove" onBlur={() => setEndK(null)}
         onChange={(ev) => { setEndK(null); setLineField(e, idx!, { end: ev.target.value || null }, `end ${ev.target.value ? ap(ev.target.value) : '—'}`); }} />
@@ -346,7 +351,7 @@ export function DaySheet() {
     const band = narrow
       ? <><div className="ds-lh ph"><span className="serif ds-lt">{lead || extra ? name : `${count} ${plural(code, count)}`}</span><span className="ds-lt2">{tbc ? 'TBC' : ap(start)}{end ? ` → ${ap(end)}` : ''}</span><span className="grow" />{badge}
           {(lead || extra || idx != null) && <button className={'ds-pen' + (lineEd === k ? ' on' : '')} onClick={() => setLineEd(lineEd === k ? null : k)} aria-label="Edit this line">✎</button>}</div>
-        {lineEd === k && <div className="ds-led">{!lead && !extra && <label><small>Position</small>{roleC}</label>}<label><small>How many</small>{stepC}</label>{!lead && <label><small>Start</small><span className="ds-time">{timeC}</span></label>}
+        {lineEd === k && <div className="ds-led">{!lead && !extra && <label><small>Position</small>{roleC}</label>}<label><small>How many</small>{stepC}</label><label><small>Start</small><span className="ds-time">{timeC}</span></label>
           {plain && <label><small>End (optional)</small><span className="ds-end">{endC}</span></label>}
           {plain && <button className="lnk sm ds-ldel" disabled={busy} onClick={() => { setLineEd(null); setCount(e, idx!, 0); }}>🗑 Remove line</button>}<button className="abtn sm dark" onClick={() => setLineEd(null)}>Done</button></div>}</>
       : <div className="ds-lh al">{roleC}{stepC}
@@ -401,7 +406,7 @@ export function DaySheet() {
                   onEv={(row, label) => saveEv(e, row, label)} onVenue={(v) => setVenue(e, v)} onClient={(c) => saveClient(e, c)} />
                 <div className="ds-grid">
                   <div className={'ds-grp ' + (isBar(e) ? 'g-bar' : 'g-floor')}><div className="ds-grph"><i />{isBar(e) ? 'BAR' : 'FLOOR'}</div>
-                    <Row e={e} lead code={isBar(e) ? 'BM' : 'MD'} start={e.start_time?.slice(0, 5) ?? null} count={L.leadNeed} people={L.leads} />
+                    <Row e={e} lead code={isBar(e) ? 'BM' : 'MD'} start={(e.staffing ?? []).find((l) => LEAD.includes(l.code))?.start ?? e.start_time?.slice(0, 5) ?? null} count={L.leadNeed} people={L.leads} />
                     {L.lines.map((l) => <Row key={l.key} idx={l.idx} e={e} code={l.code} start={l.start} end={(e.staffing ?? [])[l.idx] ? ((e.staffing ?? [])[l.idx] as Line & { end?: string | null }).end ?? null : null} count={l.count} people={l.people} />)}
                     {(L.extras.count > 0 || (!isBar(e) && L.lines.length > 0)) && <Row e={e} extra code={L.extras.code} start={L.extras.start} count={L.extras.count} people={L.extras.people} />}
                     {cx.some((x) => x.event_id === e.id) && <div className="ds-line2 cxl"><div className="ds-lh"><b className="ds-lname">Cancelled</b></div>
@@ -506,13 +511,13 @@ function PersonCard({ s, e, date, evs, lays, byId, av, onDay, off, sortP, tier, 
       <div className="row" style={{ gap: 8, alignItems: 'center' }}><i className={'ds-t ' + (tier(s.staff_id) ?? '')} /><b className="grow serif" style={{ fontSize: 18 }}>{p?.full_name ?? '…'}</b><button className="lnk muted" onClick={onClose}>✕</button></div>
       <small className="muted">{e.venues?.name ?? e.title} · {roleName(s.position_code)} · {e.start_tbc || e.details_pending ? 'time TBC' : ap(hm(s.planned_start))} · {state}{a?.from_time ? ` · free from ${ap(a.from_time)}` : ''}{wn > 3 ? ` · ⚑ ${wn} shifts this week` : ''}</small>
       {why && <small className="ds-why">{why}</small>}
-      {!can ? <small className="gold">MD / bar manager: drag them, or change it from the event.</small> : !s.pool_hold ? <small className="gold">Already {s.status === 'confirmed' ? 'confirmed' : 'sent'}: any change here asks you first, then “Your shift changed” waits in About to send.</small> : <small className="muted">Placed, not sent: changes here send nothing.</small>}
+      {!can ? <small className="gold">MD / bar manager: start time can be changed here · drag them to move.</small> : !s.pool_hold ? <small className="gold">Already {s.status === 'confirmed' ? 'confirmed' : 'sent'}: any change here asks you first, then “Your shift changed” waits in About to send.</small> : <small className="muted">Placed, not sent: changes here send nothing.</small>}
       <div className="seg3"><button className={tab === 'main' ? 'on' : ''} onClick={() => setTab('main')}>Change</button><button className={tab === 'swap' ? 'on' : ''} disabled={!can || !s.pool_hold} onClick={() => setTab('swap')}>{can && s.pool_hold ? 'Swap' : 'Swap (placed only)'}</button></div>
       {tab === 'main' ? <div className="ds-cardgrid">
         <label>Move to<select disabled={!can || busy} value={slots.find((x) => x.here)?.v ?? ''} onChange={(ev) => { const x = slots.find((y) => y.v === ev.target.value); if (x) onMove(x.e, x.code, x.start); }}>
           {!slots.some((x) => x.here) && <option value="">—</option>}{slots.map((x) => <option key={x.v} value={x.v}>{x.label}</option>)}</select></label>
-        <label>Start<span className="row" style={{ gap: 6 }}><input type="time" step={900} value={t} disabled={!can || busy} onChange={(ev) => setT(ev.target.value)} />
-          <button className="abtn sm" disabled={!can || busy || !t || t === hm(s.planned_start)} onClick={() => onStart(t)}>Set</button></span></label>
+        <label>Start<span className="row" style={{ gap: 6 }}><input type="time" step={900} value={t} disabled={busy} onChange={(ev) => setT(ev.target.value)} />
+          <button className="abtn sm" disabled={busy || !t || t === hm(s.planned_start)} onClick={() => onStart(t)}>Set</button></span></label>
         <label>Role<select disabled={!can || busy} value={s.position_code ?? ''} onChange={(ev) => onRole(ev.target.value)}>
           {(dept === 'bar' ? ['BT', 'BB', 'WW'] : ['W', 'BUS']).map((c) => <option key={c} value={c}>{roleName(c)}</option>)}</select></label>
         <label style={{ gridColumn: '1 / -1' }}>Note for this shift <small className="muted" style={{ fontWeight: 400 }}>(you + the MD see it, not them)</small>
