@@ -554,7 +554,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
                           <span className="cmg-st">{waiting ? <span className="cmg-soon">Details coming</span> : s.status === 'confirmed' ? <span className="cmg-ok">✓ Confirmed</span> : <span className="cmg-ask">Confirm</span>}</span></div>
                         <div className="cmg-strip">
                           <div><small>Starts</small>{pend || s.time_tbc ? <b className="tbc">Time TBC</b> : <b>{time(s.planned_start, lang)}</b>}</div>
-                          <div><small>Role</small><b className={isLead(s) ? 'lead' : ''}>{pos(s)}</b></div>
+                          <div><small>Role</small><b className={isLead(s) ? 'lead' : ''}>{isLead(s) || coMgr(s) ? (lang === 'fr' ? 'Gérant' : 'Manager') : pos(s)}</b></div>
                           <div title={uniformLabel(uniformFor(s))}><small>Uniform</small><span className="cmg-wear"><UniformIcon kind={uniformFor(s)} size={26} /></span></div>
                         </div>
                       </div>
