@@ -89,9 +89,9 @@ export function layout(e: Ev, shifts: Sh[], rk?: (sid: string) => number) {
     const L = lines.find((l) => ends[l.idx] === te && l.code === (s.position_code ?? 'W') && l.start === t && l.people.length < l.count);
     if (L) { L.people.push(s); rest.splice(rest.indexOf(s), 1); } }
   for (const s of rest) { const t = hm(s.planned_start); const L = lines.find((l) => l.code === (s.position_code ?? 'W') && l.start === t && l.people.length < l.count)
-      ?? lines.find((l) => l.start === t && l.people.length < l.count); if (L) L.people.push(s); else odd.push(s); }
+      ?? (lines.some((l) => l.code === (s.position_code ?? 'W')) ? undefined : lines.find((l) => l.start === t && l.people.length < l.count)); if (L) L.people.push(s); else odd.push(s); } // Nov 13 · never onto another position's line when theirs exists
   // Nov 12 · someone given their own start (e.g. 4:30 on a 4 PM line) stays on their line: same role, the closest line that starts before them
-  const exStart0 = e.extras_start?.slice(0, 5) ?? (lines.length ? lines[lines.length - 1].start : null);
+  const exStart0 = e.extras_start?.slice(0, 5) ?? null; // Nov 13 · only an extras time you set pulls someone to Extras; otherwise they stay on their line with their own time
   for (const s of odd) { const t = hm(s.planned_start); const code = s.position_code ?? 'W';
     const L = t === exStart0 ? undefined : [...lines].filter((l) => l.code === code && l.people.length < l.count && (l.start ?? '') <= t).sort((a, b) => (b.start ?? '').localeCompare(a.start ?? ''))[0]
       ?? [...lines].filter((l) => l.code === code && l.people.length < l.count).sort((a, b) => (a.start ?? '').localeCompare(b.start ?? ''))[0];
