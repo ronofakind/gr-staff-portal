@@ -341,6 +341,7 @@ export function DaySheet() {
         <span className="muted">✦ fills by your rules · hover a name = why · ⚑ = more than 3 shifts this week · tap a slot to fill · drag a name to move it · × = back to Free · staff see nothing until you confirm</span></div>
       {pend > 0 && <div className="ds-pend"><b>✉ {pend} change{pend > 1 ? 's' : ''} not sent yet</b><span className="muted">staff who were already sent a shift that changed · they're told when you press Send</span><span className="grow" /><button className="abtn sm dark" onClick={() => setSendOpen(true)}>Review &amp; send ›</button></div>}
       {sendOpen && <SendBox events={evs.map((e) => e.id)} onClose={() => { setSendOpen(false); setTick((t) => t + 1); }} onSent={() => { setMsg('Sent.'); setTick((t) => t + 1); }} />}
+      {ops.length > 0 && <div className="ds-undofab"><span className="grow">{ops[ops.length - 1].label}</span><button disabled={busy} onClick={undo}>↶ Undo</button>{ops.length > 1 && <small>{ops.length} steps</small>}</div>}{/* push 120 · always in reach */}
       {msg && <div className="adm-card okc sm">{msg}</div>}{err && <div className="adm-card err sm">{err}</div>}
       <div className={'ds-cols' + (freeFold ? ' ffold' : '')}>
         <div className={'ds-blocks' + (narrow ? ' narrow' : '') + (noEnd ? ' noend' : '')} ref={blocksR} onClick={() => ed && setEd(null)}>
@@ -510,8 +511,8 @@ function TellBox({ q, names, states }: { q: { what: string; notice: string; res:
 /** push 118 · event details right in the booking card (Ronnie: collapsible, open by default, remembered per event). */
 function Details({ e, open, onToggle, venues, clients, types, busy, onEv, onVenue, onClient }: { e: Ev; open: boolean; onToggle: () => void; venues: { id: string; name: string }[]; clients: { id: string; name: string }[]; types: string[]; busy: boolean;
   onEv: (row: Record<string, unknown>, label: string) => void; onVenue: (id: string) => void; onClient: (id: string) => void }) {
-  const [g, setG] = useState(e.guests ? String(e.guests) : ''); const [nt, setNt] = useState(e.notes ?? '');
-  useEffect(() => { setG(e.guests ? String(e.guests) : ''); setNt(e.notes ?? ''); }, [e.guests, e.notes]);
+  const [g, setG] = useState(e.guests ? String(e.guests) : ''); const [nt, setNt] = useState(e.notes ?? ''); const [ti, setTi] = useState(e.title ?? '');
+  useEffect(() => { setG(e.guests ? String(e.guests) : ''); setNt(e.notes ?? ''); setTi(e.title ?? ''); }, [e.guests, e.notes, e.title]);
   const uKey = isBar(e) ? 'uniform_bar' : 'uniform_floor'; const uVal = (isBar(e) ? e.uniform_bar : e.uniform_floor) ?? '';
   const uLabel = UNIFORMS.find(([k]) => k === uVal)?.[1];
   const sum = [e.event_private?.client, e.guests ? `${e.guests} guests${e.guests_final ? ' · final' : ''}` : null, e.caterer_name ? `Food by ${e.caterer_name}` : null, uLabel, e.event_type].filter(Boolean).join(' · ');
@@ -521,6 +522,7 @@ function Details({ e, open, onToggle, venues, clients, types, busy, onEv, onVenu
     <div className="ds-det">
       <div className="row" style={{ alignItems: 'center' }}><b>Details</b><span className="grow" /><button className="ds-dett" onClick={onToggle}>Hide details ▴</button></div>
       <div className="ds-detg">
+        <label className="wide2">EVENT NAME<input value={ti} disabled={busy} onChange={(ev) => setTi(ev.target.value)} onBlur={() => { if (ti.trim() && ti.trim() !== (e.title ?? '')) onEv({ title: ti.trim() }, `name → ${ti.trim()}`); else setTi(e.title ?? ''); }} onKeyDown={(ev) => { if (ev.key === 'Enter') (ev.target as HTMLInputElement).blur(); }} /></label>
         <label>VENUE<select value={e.venue_id ?? ''} disabled={busy} onChange={(ev) => onVenue(ev.target.value)}><option value="">—</option>{vs.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</select></label>
         <label>CLIENT<select value={e.event_private?.client_id ?? ''} disabled={busy} onChange={(ev) => onClient(ev.target.value)}><option value="">{e.event_private?.client ?? '—'}</option>{cs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
         <label>GUESTS<span className="row" style={{ gap: 4 }}><input inputMode="numeric" value={g} disabled={busy} onChange={(ev) => setG(ev.target.value.replace(/\D/g, ''))} onBlur={() => { const n = g ? Number(g) : null; if (n !== (e.guests ?? null)) onEv({ guests: n }, `guests → ${n ?? '—'}`); }} />
