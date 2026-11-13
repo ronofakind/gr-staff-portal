@@ -4646,3 +4646,8 @@ a.ch-name-link { display: block; text-decoration: none; color: inherit; } a.ch-n
 .ps-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .ps-acts > * { text-align: center; padding: 13px 0; border-radius: 12px; border: 1px solid var(--line, #E6DED3); background: #fff; font: 700 14px Inter, sans-serif; color: var(--ink); text-decoration: none; cursor: pointer; }
 .ps-acts > .dark { background: var(--ink, #1A1714); color: #fff; border-color: var(--ink, #1A1714); }
+/* Nov 12 · profile on the phone: no sideways scroll, scrolls like a page */
+.adm-panel { overflow-x: hidden; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.adm-panel .seg3 { flex-wrap: wrap; max-width: 100%; height: auto; }
+.adm-panel .seg3 > button { flex: 1 1 auto; white-space: nowrap; }
+@media (max-width: 700px) { body:has(.adm-panel) { overflow: hidden; } }
