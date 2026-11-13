@@ -2212,6 +2212,29 @@ html[data-theme="dark"] { --teams: #8487CC; --teams-bg: #1F2137; --teams-ink: #8
 :where(html[data-theme="dark"]) .ds-pend { background: #3A321D; border: 1px solid #E6D7AB; }
 :where(html[data-theme="dark"]) .ds-topt { border: 1px solid var(--line, #4B443A); background: #1F1D1A; }
 :where(html[data-theme="dark"]) .ds-topt.on { background: #322D24; }
+:where(html[data-theme="dark"]) .ds-card { background: #1F1D1A; box-shadow: 0 1px 2px rgba(0,0,0,0.125), 0 8px 26px rgba(0,0,0,0.15); }
+:where(html[data-theme="dark"]) .ds-det { border-top: 1px solid var(--line, #4B443A); background: #211F1C; }
+:where(html[data-theme="dark"]) .ds-det.fold { border-top: 1px solid var(--line, #4B443A); }
+:where(html[data-theme="dark"]) .ds-det.fold .grow { color: #BDB7B2; }
+:where(html[data-theme="dark"]) .ds-dett { color: #827CD4; }
+:where(html[data-theme="dark"]) .ds-detg select, :where(html[data-theme="dark"]) .ds-detg input { border: 1px solid var(--line, #4B443A); background: #1F1D1A; }
+:where(html[data-theme="dark"]) .ds-fin { border: 1px solid var(--line, #4B443A); background: #1F1D1A; }
+:where(html[data-theme="dark"]) .ds-fin.on { background: #25312A; border-color: #3A4B3F; }
+:where(html[data-theme="dark"]) .ds-gh { background: #23201E; border-top: 1px solid var(--line, #4B443A); }
+:where(html[data-theme="dark"]) .ds-grp.g-floor { background: #24211F; }
+:where(html[data-theme="dark"]) .ds-grp.g-bar { background: #24211F; }
+:where(html[data-theme="dark"]) .ds-grph i { background: #3C5E7C; }
+:where(html[data-theme="dark"]) .g-bar .ds-grph i { background: #95282C; }
+:where(html[data-theme="dark"]) .ds-card .ds-line { border-top: 1px solid rgba(243,242,241,0.06); }
+:where(html[data-theme="dark"]) .ds-card .ds-line.ex { background: #38301F; }
+:where(html[data-theme="dark"]) .ds-role select:hover { background: rgba(42,38,34,0.04); }
+:where(html[data-theme="dark"]) .ds-role em { color: #E2C16F; }
+:where(html[data-theme="dark"]) .ds-end input:hover, :where(html[data-theme="dark"]) .ds-end input:focus { border-color: var(--line, #37332F); background: #1F1D1A; }
+:where(html[data-theme="dark"]) .ds-addrow button { border-top: 1px solid var(--line, #4B443A); background: #1F1D1A; }
+:where(html[data-theme="dark"]) .ds-addrow button:hover { background: #322D24; }
+:where(html[data-theme="dark"]) .ds-tot { background: var(--ink, #2A2622); color: #F5F2ED; }
+:where(html[data-theme="dark"]) .ds-tot small { color: #9B9289; }
+:where(html[data-theme="dark"]) .ds-tot em { color: #ECA6A6; }
 html[data-theme="dark"] { color-scheme: dark; }
 html[data-theme="dark"] body { background: #121110; color: #F1ECE4; }
 html[data-theme="dark"] img[src$="logo-mark.png"]:not(.adm-side img):not(.side-logo), html[data-theme="dark"] img[src$="logo-full.png"] { filter: invert(1) hue-rotate(180deg); mix-blend-mode: normal !important; }

@@ -4545,3 +4545,49 @@ a.ch-name-link { display: block; text-decoration: none; color: inherit; } a.ch-n
 .ds-topt.on { border-color: var(--ink); background: #F6F2EC; }
 .ds-topt i { font-style: normal; font-size: 14px; line-height: 1.3; }
 .ds-topt b { display: block; font-size: 13.5px; } .ds-topt small { color: var(--muted); font-size: 12px; }
+/* push 118 · Bookings: event-form look × Day sheet, details in the card */
+.ds-card { background: #fff; border-radius: 20px; box-shadow: 0 1px 2px rgba(0,0,0,.05), 0 8px 26px rgba(0,0,0,.06); overflow: visible; }
+.ds-ch { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; padding: 14px 16px 10px; }
+.ds-ch .ds-title { font-size: 21px; font-weight: 500; }
+.ds-det { display: flex; flex-direction: column; gap: 8px; padding: 10px 16px 12px; border-top: 1px solid var(--line, #E6DED3); background: #FDFBF8; font-size: 13px; }
+.ds-det.fold { flex-direction: row; align-items: center; gap: 14px; width: 100%; border: 0; border-top: 1px solid var(--line, #E6DED3); text-align: left; cursor: pointer; font: inherit; font-size: 13px; color: var(--ink); }
+.ds-det.fold .grow { color: #4A433C; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ds-dett { border: 0; background: none; font: 700 12.5px Inter, sans-serif; color: #6B64D8; cursor: pointer; white-space: nowrap; }
+.ds-detg { display: grid; grid-template-columns: 1.3fr 1.1fr .9fr 1.1fr 1.1fr 1fr; gap: 10px; }
+.ds-detg label { display: flex; flex-direction: column; gap: 3px; font-size: 10.5px; font-weight: 800; letter-spacing: .08em; color: var(--muted); min-width: 0; }
+.ds-detg label.wide { grid-column: 1 / -1; }
+.ds-detg select, .ds-detg input { font: 500 13.5px Inter, sans-serif; letter-spacing: 0; color: var(--ink); border: 1px solid var(--line, #E6DED3); border-radius: 8px; padding: 7px 9px; background: #fff; min-width: 0; width: 100%; box-sizing: border-box; }
+.ds-detg select:focus, .ds-detg input:focus { outline: 2px solid var(--ink); outline-offset: -1px; }
+.ds-fin { flex: none; border: 1px solid var(--line, #E6DED3); background: #fff; border-radius: 8px; padding: 0 8px; font: 700 11.5px Inter, sans-serif; cursor: pointer; white-space: nowrap; }
+.ds-fin.on { background: #E8F3EC; border-color: #BFDCC8; color: var(--ok); }
+.ds-grid { padding: 0 10px 10px; }
+.ds-gh, .ds-card .ds-line { display: grid; grid-template-columns: 140px 92px 92px 112px minmax(0, 1fr) 46px; gap: 0 8px; align-items: start; }
+.ds-gh { font-size: 11px; letter-spacing: .1em; font-weight: 700; color: var(--muted); background: #FBF8F4; border-top: 1px solid var(--line, #E6DED3); padding: 8px 6px; }
+.ds-grp { border-radius: 14px; padding: 4px 0 2px; margin-top: 8px; } .ds-grp.g-floor { background: #F3F6F9; } .ds-grp.g-bar { background: #FBF1F1; }
+.ds-grph { display: flex; align-items: center; gap: 8px; padding: 6px 12px; font-size: 11.5px; font-weight: 800; letter-spacing: .08em; }
+.ds-grph i { width: 4px; height: 14px; border-radius: 2px; background: #2F4F6B; } .g-bar .ds-grph i { background: #9B2226; }
+.ds-card .ds-line { padding: 8px 6px; border-top: 1px solid rgba(0,0,0,.06); }
+.ds-card .ds-line.ex { background: #FBF6EC; border-radius: 0; }
+.ds-role, .ds-time, .ds-end, .ds-hm { padding-top: 0 !important; min-width: 0; display: flex; align-items: center; min-height: 34px; position: relative; }
+.ds-role select { border: 0; background: transparent; font: 500 14px Inter, sans-serif; color: var(--ink); padding: 6px 4px; cursor: pointer; max-width: 100%; }
+.ds-role select:hover { background: rgba(0,0,0,.04); border-radius: 8px; }
+.ds-role b { font-size: 14px; padding-left: 4px; } .ds-role em { font-style: normal; font-weight: 600; color: #9A7413; font-size: 12px; }
+.ds-end input { border: 1px solid transparent; background: transparent; font: 500 13px Inter, sans-serif; color: var(--muted); padding: 5px 4px; border-radius: 8px; width: 100%; min-width: 0; }
+.ds-end input:hover, .ds-end input:focus { border-color: var(--line, #ddd); background: #fff; color: var(--ink); }
+.ds-card .ds-cells { padding-top: 0 !important; }
+.ds-card .ds-n { padding-top: 9px !important; }
+.ds-card .ds-tbtn { height: 32px; font-size: 13px; font-weight: 600; }
+.ds-card .ds-tpop { top: 38px; }
+.ds-addrow { display: flex; gap: 6px; flex-wrap: wrap; padding-top: 6px; }
+.ds-addrow button { border: 0; border-top: 1px solid var(--line, #E6DED3); background: #fff; padding: 10px 14px; font: 600 13px Inter, sans-serif; cursor: pointer; color: var(--ink); }
+.ds-addrow button:hover { background: #F6F2EC; }
+.ds-tot { background: var(--ink, #1A1714); color: #F6F2EC; border-radius: 0 0 20px 20px; padding: 12px 18px; display: flex; flex-wrap: wrap; gap: 6px 22px; align-items: baseline; font-size: 14px; }
+.ds-tot b { font: 500 22px Fraunces, Georgia, serif; } .ds-tot small { color: #B8AFA4; font-size: 12px; } .ds-tot em { font-style: normal; color: #F2A0A0; }
+@media (max-width: 900px) { .ds-detg { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 700px) {
+  .ds-gh { display: none; }
+  .ds-card .ds-line { grid-template-columns: 1fr auto auto; row-gap: 6px; }
+  .ds-card .ds-line .ds-end { display: none; }
+  .ds-card .ds-line .ds-cells { grid-column: 1 / -1; order: 5; }
+  .ds-card .ds-line .ds-n { display: none; }
+}

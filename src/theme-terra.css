@@ -1305,4 +1305,19 @@ html[data-theme="terra"] { --teams: #5B5FC7; --teams-bg: #EEEFFB; --teams-ink: #
 :where(html[data-theme="terra"]) .ds-chip { background: #FBFAF6; }
 :where(html[data-theme="terra"]) .ds-add select, :where(html[data-theme="terra"]) .ds-add input { border: 1px solid var(--line, #DEE0D5); }
 :where(html[data-theme="terra"]) .ds-topt { background: #FBFAF6; }
+:where(html[data-theme="terra"]) .ds-card { background: #FBFAF6; box-shadow: 0 1px 2px rgba(0,0,0,0.05), 0 8px 26px rgba(0,0,0,0.06); }
+:where(html[data-theme="terra"]) .ds-det { background: #F8F9F7; }
+:where(html[data-theme="terra"]) .ds-det.fold .grow { color: #47483E; }
+:where(html[data-theme="terra"]) .ds-detg select, :where(html[data-theme="terra"]) .ds-detg input { background: #FBFAF6; }
+:where(html[data-theme="terra"]) .ds-fin { background: #FBFAF6; }
+:where(html[data-theme="terra"]) .ds-gh { background: #F5F6F4; }
+:where(html[data-theme="terra"]) .ds-grp.g-bar { background: #FBF4F1; }
+:where(html[data-theme="terra"]) .g-bar .ds-grph i { background: #9B4D31; }
+:where(html[data-theme="terra"]) .ds-card .ds-line { border-top: 1px solid rgba(0,0,0,0.06); }
+:where(html[data-theme="terra"]) .ds-role select:hover { background: rgba(59,74,63,0.04); }
+:where(html[data-theme="terra"]) .ds-end input:hover, :where(html[data-theme="terra"]) .ds-end input:focus { border-color: var(--line, #DEE0D5); background: #FBFAF6; }
+:where(html[data-theme="terra"]) .ds-addrow button { background: #FBFAF6; }
+:where(html[data-theme="terra"]) .ds-tot { background: var(--ink, #3B4A3F); }
+:where(html[data-theme="terra"]) .ds-tot small { color: #B2B4A8; }
+:where(html[data-theme="terra"]) .ds-tot em { color: #C87051; }
 html[data-theme="terra"] body { background: #EEF0E8; color: #2A2A24; }

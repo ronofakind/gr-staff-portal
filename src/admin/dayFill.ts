@@ -9,7 +9,7 @@ import { loadRules, misfits, other, type SCond, type SLink } from './rules';
 
 export type Line = { dept?: string; code: string; start: string | null; count: number };
 export type Ev = { id: string; title: string; event_date: string; department: string; start_time: string | null; staff_needed: number; guests: number | null; staffing: Line[] | null;
-  details_pending: boolean | null; start_tbc: boolean | null; caterer_name?: string | null; event_type?: string | null; extras?: number | null; extras_start?: string | null; venue_id: string | null;
+  details_pending: boolean | null; start_tbc: boolean | null; caterer_name?: string | null; caterer_id?: string | null; uniform_floor?: string | null; uniform_bar?: string | null; notes?: string | null; guests_final?: boolean | null; event_type?: string | null; extras?: number | null; extras_start?: string | null; venue_id: string | null;
   event_private?: { client: string | null; client_id?: string | null } | null; venues: { name: string; far?: boolean | null; area?: string | null } | null };
 export type Sh = { id: string; event_id: string; staff_id: string; position_code: string | null; position_detail?: string | null; status: string; pool_hold: boolean; locked: boolean | null;
   notified_at: string | null; planned_start: string | null; time_tbc?: boolean | null; booking_note?: string | null };
@@ -23,7 +23,7 @@ export const hm = (iso: string | null | undefined) => iso ? new Date(iso).toLoca
 export const isBar = (e: { department: string }) => e.department === 'bar';
 export const isFar = (e: Ev) => !!(e.venues?.far || e.venues?.area === 'Far');
 const NONE = ['00000000-0000-0000-0000-000000000000'];
-const EV_COLS = 'id,title,event_date,department,start_time,staff_needed,guests,staffing,details_pending,start_tbc,caterer_name,event_type,extras,extras_start,venue_id,event_private(client,client_id),venues(*)';
+const EV_COLS = 'id,title,event_date,department,start_time,staff_needed,guests,staffing,details_pending,start_tbc,caterer_name,caterer_id,uniform_floor,uniform_bar,notes,guests_final,event_type,extras,extras_start,venue_id,event_private(client,client_id),venues(*)';
 
 /** One day: its events (both departments), the shifts on them, the answers for that date, who is off. */
 export async function loadDay(date: string): Promise<Day> {
