@@ -4715,4 +4715,8 @@ a.ch-name-link { display: block; text-decoration: none; color: inherit; } a.ch-n
 .ds-fill i { flex: 1; height: 8px; border-radius: 5px; background: #E2D7CA; overflow: hidden; } .ds-fill i b { display: block; height: 100%; background: #B4452F; }
 .ds-fill em { font-style: normal; font-size: 12.5px; font-weight: 800; color: #B4452F; white-space: nowrap; min-width: 52px; text-align: right; }
 .ds-line2.full .ds-fill i b { background: #1F7A55; } .ds-line2.full .ds-fill em { color: #1F7A55; }
-.ds-lh.al .ds-end > input { padding: 0 4px; font-size: 13px; }
+.ds-lh.al .ds-end > input, .ds-lh.al .ds-end > select { padding: 0 4px; font-size: 13px; width: 100%; }
+/* Nov 13 · time menus not cut off by the line cards; any 15-minute time */
+.ds-line2 { overflow: visible; } .ds-line2 > .ds-lh { border-radius: 6px 11px 0 0; } .ds-line2 > .ds-cells { border-radius: 0 0 11px 6px; }
+.ds-tpop { z-index: 60; }
+.ds-tsel { height: 34px; border: 1px solid #E2D7CA; border-radius: 9px; background: #fff; font: 600 14px Inter, sans-serif; padding: 0 8px; color: var(--ink); max-height: 300px; }

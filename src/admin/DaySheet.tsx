@@ -14,6 +14,8 @@ import { LEAD, hm, isBar, isFar, layout, loadCtx, loadDay, planFill, weekCounts,
 
 type Op = { label: string; undo: () => PromiseLike<unknown> };
 const TORD: Record<string, number> = { A: 0, B: 1, C: 2 };
+/** Nov 13 · every 15 minutes, 6 AM → 3:45 AM (next day) */
+const Q15 = Array.from({ length: 88 }, (_, k) => { const m = 6 * 60 + k * 15; return `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; });
 const ap = (t: string | null | undefined) => { if (!t) return 'TBC'; const h = Number(t.slice(0, 2)); return `${h % 12 || 12}${t.slice(2, 5) !== ':00' ? t.slice(2, 5) : ''} ${h < 12 ? 'AM' : 'PM'}`; };
 const roleShort = (c: string) => ({ W: 'W', WW: 'WW', BT: 'BT', BB: 'BB', BUS: 'Bus', MD: 'MD', BM: 'BM' } as Record<string, string>)[c] ?? c;
 const plural = (code: string, n: number) => { const r = roleName(code) || code; return n === 1 ? r : r.endsWith('s') ? r : r + 's'; };
@@ -335,7 +337,7 @@ export function DaySheet() {
   const TimePop = ({ e, k, start, title, onSet, people }: { e: Ev; k: string; start: string | null; title: string; onSet: (t: string) => void; people?: Sh[] }) => (
     ed?.eid === e.id && ed.key === k ? <span className="ds-tpop" onClick={(ev) => ev.stopPropagation()}><b>{title}</b>
       <span className="ds-tq">{(() => { const [h, m] = (start ?? '17:00').split(':').map(Number); const b0 = h * 60 + m; return [-60, -30, -15, 15, 30, 60].map((d) => { const x = b0 + d; const t = `${String(Math.floor(((x % 1440) + 1440) % 1440 / 60)).padStart(2, '0')}:${String(((x % 60) + 60) % 60).padStart(2, '0')}`; return <button key={d} onClick={() => onSet(t)}>{ap(t)}</button>; }); })()}</span>
-      <span className="row" style={{ gap: 6 }}><input type="time" step={900} value={edT} onChange={(ev) => setEdT(ev.target.value)} /><button className="abtn sm dark" disabled={!edT || edT === start} onClick={() => onSet(edT)}>Set</button></span>
+      <span className="row" style={{ gap: 6 }}><select className="ds-tsel" value={edT} onChange={(ev) => setEdT(ev.target.value)}>{!Q15.includes(edT) && <option value={edT}>{edT ? ap(edT) : '—'}</option>}{Q15.map((q) => <option key={q} value={q}>{ap(q)}</option>)}</select><button className="abtn sm dark" disabled={!edT || edT === start} onClick={() => onSet(edT)}>Set</button></span>
       {people && <small className="muted">{people.length ? `${people.length} on this line move with it${people.some((x) => !x.pool_hold) ? ' · already sent: you choose how they’re told' : ' (not sent yet)'}` : 'nobody on it yet'}</small>}</span> : null);
   const tBtn = (e: Ev, k: string, start: string | null) => <button className={'ds-tbtn' + (ed?.eid === e.id && ed.key === k ? ' on' : '')} disabled={busy} onClick={() => { setEdT(start ?? ''); setEd(ed?.eid === e.id && ed.key === k ? null : { eid: e.id, key: k }); }}>{ap(start)}</button>;
   /** push 123 · each line = a band on top (desktop: position · − n + · start · end, all clickable · phone: "6 Barbacks · 12 PM" + ✎) and the names under it, 5 across. */
@@ -349,8 +351,8 @@ export function DaySheet() {
     const stepC = lead ? <Step n={count} on={(n) => setLeads(e, n)} /> : extra ? <Step n={count} on={(n) => setExtras(e, n)} /> : idx != null ? <Step n={count} on={(n) => setCount(e, idx, n)} /> : <b>{count}</b>;
     const timeC = tbc ? <span className="ds-tro">TBC</span> : lead ? <>{tBtn(e, 'L', start)}<TimePop e={e} k="L" start={start} title={isBar(e) ? 'Start of the bar managers' : 'Start of the MD'} onSet={(t) => setLeadTime(e, t)} people={people} /></> : extra ? <>{tBtn(e, 'x', start)}<TimePop e={e} k="x" start={start} title="Start of the extras" onSet={(t) => setExtrasTime(e, t)} /></>
       : idx != null ? <>{tBtn(e, String(idx), start)}<TimePop e={e} k={String(idx)} start={start} title="Start of this line" onSet={(t) => setTime(e, idx, t)} people={people} /></> : <span className="ds-tro">{ap(start)}</span>;
-    const endC = !plain ? null : end || endK === k ? <input type="time" step={900} value={end ?? ''} disabled={busy} autoFocus={!end} title="End ~ (optional) · clear it to remove" onBlur={() => setEndK(null)}
-        onChange={(ev) => { setEndK(null); setLineField(e, idx!, { end: ev.target.value || null }, `end ${ev.target.value ? ap(ev.target.value) : '—'}`); }} />
+    const endC = !plain ? null : end || endK === k ? <select className="ds-tsel" value={end ?? ''} disabled={busy} autoFocus={!end} title="End ~ (optional)" onBlur={() => setEndK(null)}
+        onChange={(ev) => { setEndK(null); setLineField(e, idx!, { end: ev.target.value || null }, `end ${ev.target.value ? ap(ev.target.value) : '—'}`); }}><option value="">— no end</option>{end && !Q15.includes(end) && <option value={end}>{ap(end)}</option>}{Q15.map((q) => <option key={q} value={q}>{ap(q)}</option>)}</select>
       : <button className="ds-endb" disabled={busy} onClick={() => setEndK(k)} title="Add an end time (optional)">→ end</button>;
     const ok = people.length >= count;
     const badge = <span className={'ds-badge' + (ok ? ' ok' : '')}>{people.length}/{count} {ok ? 'full' : `${count - people.length} short`}</span>;
@@ -522,7 +524,7 @@ function PersonCard({ s, e, date, evs, lays, byId, av, onDay, off, sortP, tier, 
       {tab === 'main' ? <div className="ds-cardgrid">
         <label>Move to<select disabled={!can || busy} value={slots.find((x) => x.here)?.v ?? ''} onChange={(ev) => { const x = slots.find((y) => y.v === ev.target.value); if (x) onMove(x.e, x.code, x.start); }}>
           {!slots.some((x) => x.here) && <option value="">—</option>}{slots.map((x) => <option key={x.v} value={x.v}>{x.label}</option>)}</select></label>
-        <label>Start<span className="row" style={{ gap: 6 }}><input type="time" step={900} value={t} disabled={busy} onChange={(ev) => setT(ev.target.value)} />
+        <label>Start<span className="row" style={{ gap: 6 }}><select className="ds-tsel" value={t} disabled={busy} onChange={(ev) => setT(ev.target.value)}>{!Q15.includes(t) && <option value={t}>{t ? ap(t) : '—'}</option>}{Q15.map((q) => <option key={q} value={q}>{ap(q)}</option>)}</select>
           <button className="abtn sm" disabled={busy || !t || t === hm(s.planned_start)} onClick={() => onStart(t)}>Set</button></span></label>
         <label>Role<select disabled={!can || busy} value={s.position_code ?? ''} onChange={(ev) => onRole(ev.target.value)}>
           {(dept === 'bar' ? ['BT', 'BB', 'WW'] : ['W', 'BUS']).map((c) => <option key={c} value={c}>{roleName(c)}</option>)}</select></label>
