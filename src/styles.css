@@ -4651,3 +4651,23 @@ a.ch-name-link { display: block; text-decoration: none; color: inherit; } a.ch-n
 .adm-panel .seg3 { flex-wrap: wrap; max-width: 100%; height: auto; }
 .adm-panel .seg3 > button { flex: 1 1 auto; white-space: nowrap; }
 @media (max-width: 700px) { body:has(.adm-panel) { overflow: hidden; } }
+/* push 122 · week arrows · find a name · cancel with a reason */
+.ds-weekw { display: flex; align-items: stretch; gap: 6px; } .ds-weekw .ds-week { flex: 1; min-width: 0; }
+.ds-warr { display: flex; align-items: center; justify-content: center; width: 34px; border-radius: 10px; border: 1px solid var(--line, #e3ddd3); background: var(--card, #fff); text-decoration: none; color: var(--ink); font-size: 20px; font-weight: 700; flex: none; }
+.ds-warr:hover { background: #F6F2EC; }
+.ds-find { position: relative; } .ds-find input { width: 200px; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line, #E6DED3); font: 500 14px Inter, sans-serif; background: #fff; }
+.ds-find input:focus { outline: 2px solid var(--ink); outline-offset: -1px; }
+.ds-findl { position: absolute; z-index: 40; top: 44px; left: 0; width: 340px; background: #fff; border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,.18); padding: 6px; display: flex; flex-direction: column; gap: 2px; }
+.ds-findl button { border: 0; background: none; text-align: left; padding: 8px 10px; border-radius: 8px; cursor: pointer; font: 500 13px Inter, sans-serif; color: var(--ink); } .ds-findl button:hover { background: #EEEDFB; }
+.ds-findl small { color: var(--muted); }
+.ds-chip.hl, .ds-fp.hl { box-shadow: 0 0 0 3px #6B64D8; }
+.ds-chip.cx { text-decoration: line-through; color: #9B2226; background: #FBEDED; border-color: #F0CACA; cursor: pointer; font: inherit; font-weight: 600; font-size: 12.5px; }
+.ds-chip.cx small { margin-left: auto; text-decoration: none; font-size: 10.5px; color: #9B2226; opacity: .8; }
+.ds-line.cxl .ds-role b { color: #9B2226; }
+.ds-cxbtn { color: #9B2226; border-color: #F0CACA; }
+.ds-rs { display: flex; flex-wrap: wrap; gap: 6px; } .ds-rs.two button { flex: 1; }
+.ds-rs button { border: 1px solid var(--line, #E6DED3); background: #fff; border-radius: 999px; padding: 7px 12px; font: 700 13px Inter, sans-serif; cursor: pointer; color: var(--ink); }
+.ds-rs.two button { border-radius: 10px; } .ds-rs button.on { background: var(--ink, #1A1714); color: #fff; border-color: var(--ink, #1A1714); }
+.ds-tell input:not([type=checkbox]) { padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line, #E6DED3); font: 500 14px Inter, sans-serif; }
+.ds-cxgo { background: #9B2226 !important; color: #fff !important; border-color: #9B2226 !important; }
+@media (max-width: 700px) { .ds-find input { width: 150px; } .ds-findl { width: min(340px, 90vw); } .ds-warr { width: 26px; } }

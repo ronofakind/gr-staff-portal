@@ -14,7 +14,8 @@ export type Ev = { id: string; title: string; event_date: string; department: st
 export type Sh = { id: string; event_id: string; staff_id: string; position_code: string | null; position_detail?: string | null; status: string; pool_hold: boolean; locked: boolean | null;
   notified_at: string | null; planned_start: string | null; time_tbc?: boolean | null; booking_note?: string | null };
 export type Av = { staff_id: string; status: string; from_time: string | null; released_at: string | null; avail_asks?: { department: string | null } | null };
-export type Day = { date: string; evs: Ev[]; sh: Sh[]; av: Av[]; off: Set<string> };
+export type Cx = Sh & { cancel_reason?: string | null; cancel_note?: string | null; cancel_late?: boolean | null; cancelled_at?: string | null };
+export type Day = { date: string; evs: Ev[]; sh: Sh[]; av: Av[]; off: Set<string>; cx: Cx[] };
 export type Ctx = { staff: AStaff[]; byId: Record<string, AStaff>; cars: Set<string>; worked: Record<string, number>; newIds: Set<string>; links: SLink[]; conds: SCond[]; rate: Record<string, number>; venues: Venue[]; clients: Client[] };
 
 export const LEAD = ['MD', 'BM'];
@@ -35,12 +36,13 @@ export async function loadDay(date: string): Promise<Day> {
   if (e.error) throw e.error;
   const a = a0.error ? await supabase.from('availability').select('staff_id,status,from_time,released_at').eq('for_date', date).not('ask_id', 'is', null) : a0;
   const evs = (e.data ?? []) as unknown as Ev[];
-  const s = await supabase.from('shifts').select('id,event_id,staff_id,position_code,position_detail,status,pool_hold,locked,notified_at,planned_start,time_tbc,attendance,booking_note')
+  const s = await supabase.from('shifts').select('id,event_id,staff_id,position_code,position_detail,status,pool_hold,locked,notified_at,planned_start,time_tbc,attendance,booking_note,cancel_reason,cancel_note,cancel_late,cancelled_at')
     .in('event_id', evs.length ? evs.map((x) => x.id) : NONE).neq('status', 'declined');
-  const sh = ((s.data ?? []) as (Sh & { attendance?: string | null })[]).filter((x) => x.attendance !== 'cancelled');
+  const all = (s.data ?? []) as (Cx & { attendance?: string | null })[];
+  const sh = all.filter((x) => x.attendance !== 'cancelled'); const cx = all.filter((x) => x.attendance === 'cancelled');
   // one row per person (an ask for floor and one for bar the same day: keep the yes)
   const av: Av[] = []; for (const r of (a.data ?? []) as unknown as Av[]) { const i = av.findIndex((x) => x.staff_id === r.staff_id); if (i < 0) av.push(r); else if (r.status === 'yes' && av[i].status !== 'yes') av[i] = r; }
-  return { date, evs, sh, av, off: new Set(((o.data ?? []) as { staff_id: string }[]).map((x) => x.staff_id)) };
+  return { date, evs, sh, av, cx, off: new Set(((o.data ?? []) as { staff_id: string }[]).map((x) => x.staff_id)) };
 }
 
 /** Everything that doesn't change from day to day: staff, links, Hub conditions, pay rates, venues, clients. */

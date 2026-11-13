@@ -10,7 +10,7 @@ import { UNIFORMS, addDays, dLabel, eventsBetween, isoDay, roleName, startIso, t
 import { ReplaceSheet } from './Replace';
 import { SendBox, pendingCount } from './SendBox';
 import { ROLES } from './api';
-import { LEAD, hm, isBar, isFar, layout, loadCtx, loadDay, planFill, weekCounts, whyText, type Av, type Ctx, type Ev, type Line, type Row, type Sh, isNewStaff } from './dayFill';
+import { LEAD, hm, isBar, isFar, layout, loadCtx, loadDay, planFill, weekCounts, whyText, type Av, type Ctx, type Cx, type Ev, type Line, type Row, type Sh, isNewStaff } from './dayFill';
 
 type Op = { label: string; undo: () => PromiseLike<unknown> };
 const TORD: Record<string, number> = { A: 0, B: 1, C: 2 };
@@ -33,6 +33,8 @@ export function DaySheet() {
   // a ref, not state: setting state on drag start re-rendered the page and the browser dropped the drag (Ronnie, Nov 12)
   const dragR = useRef<Sh | { staff_id: string } | null>(null); const setDrag = (d: Sh | { staff_id: string } | null) => { dragR.current = d; }; const [tab, setTab] = useState<'yes' | 'maybe'>('yes');
   const [ctx, setCtx] = useState<Ctx | null>(null); const [wn, setWn] = useState<Record<string, number>>({}); const [why, setWhy] = useState<Record<string, string>>({}); const [card, setCard] = useState<Sh | null>(null);
+  // push 122 · search a name (day you're on) · cancel with a reason (kept, counts or not) · week arrows
+  const [cx, setCx] = useState<Cx[]>([]); const [find, setFind] = useState(''); const [hl, setHl] = useState<string | null>(null); const [cancelQ, setCancelQ] = useState<Sh | null>(null);
   // push 113 · line editing + cell grid
   const [ed, setEd] = useState<{ eid: string; key: string } | null>(null); const [edT, setEdT] = useState(''); const [add, setAdd] = useState<{ eid: string; code: string; count: string; t: string } | null>(null);
   const [flagged, setFlagged] = useState<Record<string, string>>({}); const [pend, setPend] = useState(0); const [sendOpen, setSendOpen] = useState(false);
@@ -50,7 +52,7 @@ export function DaySheet() {
   const wk0 = monday(date);
 
   useEffect(() => { (async () => {
-    try { const d = await loadDay(date); setEvs(d.evs); setSh(d.sh); setAv(d.av); setOff(d.off); } catch (x) { setErr((x as Error).message); }
+    try { const d = await loadDay(date); setEvs(d.evs); setSh(d.sh); setAv(d.av); setOff(d.off); setCx(d.cx); } catch (x) { setErr((x as Error).message); }
   })(); }, [date, tick]);
   useEffect(() => { weekCounts(wk0, addDays(wk0, 6)).then(setWn); }, [wk0, tick]);
   useEffect(() => { const ids = evs.map((e) => e.id); if (!ids.length) { setPend(0); return; } pendingCount(ids).then(setPend); }, [evs, tick]);
@@ -132,6 +134,27 @@ export function DaySheet() {
     const { error } = await supabase.from('shifts').update({ event_id: e.id, position_code: code, position_detail: roleName(code), planned_start: startIso(date, t) }).eq('id', s.id); if (error) throw error;
     setMsg(`Moved ${short(nm0(s))}${await tell([s], how)}.`);
     return { label: `moved ${nm0(s)}`, undo: () => supabase.from('shifts').update(before).eq('id', s.id).then() };
+  });
+  const findRes = useMemo(() => { const w = find.trim().toLowerCase().split(/\s+/).filter(Boolean); if (w.join('').length < 2) return [];
+    const hit = (n: string) => w.every((x) => n.toLowerCase().includes(x));
+    const on = sh.filter((x) => hit(byId[x.staff_id]?.full_name ?? '')).map((x) => { const e = evs.find((y) => y.id === x.event_id); return { id: x.staff_id, name: byId[x.staff_id]?.full_name ?? '…', where: `${e?.venues?.name ?? e?.title ?? ''}${e && isBar(e) ? ' bar' : ''} · ${roleName(x.position_code)} ${ap(hm(x.planned_start))}${x.status === 'confirmed' ? ' ✓' : ''}`, on: true }; });
+    const off0 = staff.filter((p) => p.active && hit(p.full_name) && !onDay.has(p.id)).slice(0, 6).map((p) => { const a = av.find((x) => x.staff_id === p.id && !x.released_at);
+      return { id: p.id, name: p.full_name, where: `not on today · ${a ? (a.status === 'yes' ? 'free (said yes) · drag from Free' : a.status) : 'not asked'}`, on: false }; });
+    return [...on, ...off0].slice(0, 8); }, [find, sh, staff, av]); // eslint-disable-line react-hooks/exhaustive-deps
+  const goTo = (sid: string) => { setHl(sid); setTimeout(() => { const el = document.querySelector(`[data-sid="${sid}"]`); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); else { setFreeFold(false); setTab('yes'); } }, 50); };
+  /** push 122 · cancel with a reason: kept on their record (Reliability), counts in ranking or not, nothing sent to them; their MD sees them crossed out. */
+  const doCancel = (s0: Sh, reason: string, note: string, counts: boolean, replace: boolean) => run(async () => {
+    setCancelQ(null); setCard(null); const now = new Date().toISOString();
+    const { data: b } = await supabase.from('shifts').select('attendance,cancelled_at,cancel_reason,cancel_note,cancel_late,cancel_self,cancel_sent_to_manager').eq('id', s0.id).single();
+    const { error } = await supabase.from('shifts').update({ attendance: 'cancelled', cancelled_at: now, cancel_reason: reason, cancel_note: note.trim() || null, cancel_late: counts, cancel_self: false, cancel_sent_to_manager: now }).eq('id', s0.id); if (error) throw error;
+    setMsg(`${short(nm0(s0))} cancelled · ${reason}${counts ? ' · counts as a late cancel' : ' · excused (not counted)'} · nothing sent to them.`);
+    if (replace) { const e = evs.find((x) => x.id === s0.event_id); if (e) setTimeout(() => setPick({ e, code: s0.position_code ?? 'W', start: hm(s0.planned_start) || null }), 300); }
+    return { label: `cancelled ${nm0(s0)}`, undo: () => supabase.from('shifts').update(b as Record<string, unknown>).eq('id', s0.id).then() };
+  });
+  const unCancel = (c0: Cx) => run(async () => {
+    const { error } = await supabase.from('shifts').update({ attendance: null, cancelled_at: null, cancel_reason: null, cancel_note: null, cancel_late: false, cancel_sent_to_manager: null }).eq('id', c0.id); if (error) throw error;
+    const b = { attendance: 'cancelled', cancelled_at: c0.cancelled_at, cancel_reason: c0.cancel_reason, cancel_note: c0.cancel_note, cancel_late: c0.cancel_late };
+    return { label: `un-cancelled ${nm0(c0)}`, undo: () => supabase.from('shifts').update(b).eq('id', c0.id).then() };
   });
   /** push 110 · person card: one change = one undo step. */
   const patch = (s0: Sh, row: Record<string, unknown>, label: string) => run(async () => {
@@ -292,7 +315,7 @@ export function DaySheet() {
     const e = evs.find((x) => x.id === s.event_id); const n = wn[s.staff_id] ?? 0;
     const w = [why[s.id] ? `✦ ${why[s.id]}` : null, e && ctx ? whyText(s.staff_id, e, ctx, sh.filter((x) => x.event_id === s.event_id && x.staff_id !== s.staff_id).map((x) => x.staff_id), n, a) : null,
       s.locked ? 'locked' : null, !s.pool_hold ? (s.status === 'confirmed' ? 'confirmed' : s.notified_at ? 'sent' : 'booked') : null].filter(Boolean).join(' · ');
-    return <span className={'ds-chip' + (can ? '' : ' fixed') + (n > 3 ? ' flag' : '') + (flagged[s.id] ? ' over' : '')} draggable onDragStart={(ev) => { ev.dataTransfer.setData('text/plain', s.id); ev.dataTransfer.effectAllowed = 'move'; setDrag(s); }} onDragEnd={() => setDrag(null)} title={`${nm} · ${w}${s.booking_note ? ` · 📌 ${s.booking_note}` : ''}${s.pool_hold ? ' · moving them sends nothing' : ' · already sent: moving them sends "Your shift changed" (asked first)'} · click = options`} onClick={() => setCard(s)}>
+    return <span data-sid={s.staff_id} className={'ds-chip' + (can ? '' : ' fixed') + (n > 3 ? ' flag' : '') + (flagged[s.id] ? ' over' : '') + (hl === s.staff_id ? ' hl' : '')} draggable onDragStart={(ev) => { ev.dataTransfer.setData('text/plain', s.id); ev.dataTransfer.effectAllowed = 'move'; setDrag(s); }} onDragEnd={() => setDrag(null)} title={`${nm} · ${w}${s.booking_note ? ` · 📌 ${s.booking_note}` : ''}${s.pool_hold ? ' · moving them sends nothing' : ' · already sent: moving them sends "Your shift changed" (asked first)'} · click = options`} onClick={() => setCard(s)}>
       <i className={'ds-t ' + (t ?? '')} /><span className="ds-nm">{short(nm)}</span>{ctx && isNewStaff(ctx, s.staff_id) ? <small className="ds-new" title="New: came through onboarding">NEW</small> : null}{s.locked ? ' 🔒' : ''}{!s.pool_hold && s.status === 'confirmed' ? ' ✓' : ''}{own ? <small className="ds-own" title={`Starts at ${ap(own)} (line ${ap(at)})`}>{ap(own)}</small> : late ? <small className="gold"> from {ap(a!.from_time)}</small> : null}{s.booking_note ? <small className="ds-note" title={s.booking_note}>📌</small> : null}{n > 3 ? <small className="ds-flag" title={`${n} shifts this week`}>⚑{n}</small> : null}
       {!LEAD.includes(s.position_code ?? '') && <button className="ds-x" disabled={busy} onClick={(ev) => { ev.stopPropagation(); remove(s); }} aria-label={`Back to free: ${nm}`}>×</button>}</span>; };
   const Slot = ({ e, code, start }: { e: Ev; code: string; start: string | null }) =>
@@ -323,10 +346,13 @@ export function DaySheet() {
   return (
     <div className="stack-lg ds">
       <div className="kick"><Link to={`/admin/bookings?date=${date}&view=sheet`}>Bookings · week</Link> · DAY SHEET</div>
-      <div className="ds-week">{week.map((w) => <Link key={w.d} to={`/admin/day-sheet/${w.d}`} className={'ds-wd' + (w.d === date ? ' on' : '') + (!w.n ? ' none' : w.have >= w.need ? ' done' : ' short')}>
-        <small>{dLabel(w.d, { weekday: 'short', day: 'numeric' })}</small><b>{w.n ? `${w.have}/${w.need}` : '—'}</b><small>{w.n ? `${w.n} event${w.n > 1 ? 's' : ''}${w.free ? ` · ${w.free} free` : ''}` : 'no events'}</small></Link>)}</div>
+      <div className="ds-weekw"><Link className="ds-warr" to={`/admin/day-sheet/${addDays(date, -7)}`} title="Week before">‹</Link><div className="ds-week">{week.map((w) => <Link key={w.d} to={`/admin/day-sheet/${w.d}`} className={'ds-wd' + (w.d === date ? ' on' : '') + (!w.n ? ' none' : w.have >= w.need ? ' done' : ' short')}>
+        <small>{dLabel(w.d, { weekday: 'short', day: 'numeric' })}</small><b>{w.n ? `${w.have}/${w.need}` : '—'}</b><small>{w.n ? `${w.n} event${w.n > 1 ? 's' : ''}${w.free ? ` · ${w.free} free` : ''}` : 'no events'}</small></Link>)}</div><Link className="ds-warr" to={`/admin/day-sheet/${addDays(date, 7)}`} title="Next week">›</Link></div>
       <div className="ds-top">
         <span className="serif-h ds-day"><Link to={`/admin/day-sheet/${addDays(date, -1)}`}>‹</Link> {dLabel(date, { weekday: 'short', month: 'short', day: 'numeric' })} <Link to={`/admin/day-sheet/${addDays(date, 1)}`}>›</Link></span>
+        <span className="ds-find"><input placeholder="🔍 Find a name" value={find} onChange={(ev) => { setFind(ev.target.value); setHl(null); }}
+          onKeyDown={(ev) => { if (ev.key === 'Enter' && findRes[0]) goTo(findRes[0].id); if (ev.key === 'Escape') { setFind(''); setHl(null); } }} />
+          {find.trim().length >= 2 && !hl && <span className="ds-findl">{findRes.length ? findRes.map((r) => <button key={r.id} onClick={() => goTo(r.id)}><b>{r.name}</b> <small>{r.where}</small></button>) : <small className="muted">Nobody by that name</small>}</span>}</span>
         <span className="grow" />
         <span className="seg3">{(['floor', 'bar', 'both'] as const).map((d) => <button key={d} className={dept === d ? 'on' : ''} onClick={() => setDept(d)}>{d === 'both' ? 'Both' : d === 'floor' ? 'Floor' : 'Bar'}</button>)}</span>
         <button className="abtn dark" disabled={busy || !ctx || !shown.length} onClick={() => fillDay()} title="Fills the open slots of the events shown, best first, by the rules · one move for Undo">✦ Fill the day</button>
@@ -363,6 +389,11 @@ export function DaySheet() {
                     <Row e={e} lead code={isBar(e) ? 'BM' : 'MD'} start={e.start_time?.slice(0, 5) ?? null} count={L.leadNeed} people={L.leads} />
                     {L.lines.map((l) => <Row key={l.key} idx={l.idx} e={e} code={l.code} start={l.start} end={(e.staffing ?? [])[l.idx] ? ((e.staffing ?? [])[l.idx] as Line & { end?: string | null }).end ?? null : null} count={l.count} people={l.people} />)}
                     {(L.extras.count > 0 || (!isBar(e) && L.lines.length > 0)) && <Row e={e} extra code={L.extras.code} start={L.extras.start} count={L.extras.count} people={L.extras.people} />}
+                    {cx.some((x) => x.event_id === e.id) && <div className="ds-line cxl"><span className="ds-role"><b>Cancelled</b></span><span /><span className="ds-end" /><span />
+                      <span className="ds-cells" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>{cx.filter((x) => x.event_id === e.id).map((x) => <button key={x.id} className="ds-chip cx" disabled={busy}
+                        title={`${byId[x.staff_id]?.full_name ?? ''} · cancelled · ${x.cancel_reason ?? ''}${x.cancel_note ? ` — ${x.cancel_note}` : ''} · ${x.cancel_late ? 'counts as a late cancel' : 'excused (not counted)'} · click to un-cancel`}
+                        onClick={() => { if (confirm(`Un-cancel ${byId[x.staff_id]?.full_name ?? ''}? They go back on ${roleName(x.position_code)} ${ap(hm(x.planned_start))}.`)) unCancel(x); }}>
+                        <span className="ds-nm">{short(byId[x.staff_id]?.full_name ?? '…')}</span><small>{x.cancel_reason ?? ''}{x.cancel_late ? ' ⚑' : ''}</small></button>)}</span><span /></div>}
                     {L.over.length > 0 && <div className="ds-line over"><span className="ds-role"><b>Also placed</b></span><span /><span /><span /><span className="ds-cells" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>{L.over.map((s) => <Chip key={s.id} s={s} />)}</span><span className="ds-n">over</span></div>}
                   </div>
                   {(() => { const fl = sh.filter((x) => x.event_id === e.id && flagged[x.id]); return fl.length > 0 && <div className="ds-flagbox"><b>⚑ Line lowered · weakest flagged</b>
@@ -382,7 +413,7 @@ export function DaySheet() {
           <small className="muted">said yes, not placed · best first · drag onto a slot, or tap a slot · drop a name here = back to free</small>
           <span className="seg3"><button className={tab === 'yes' ? 'on' : ''} onClick={() => setTab('yes')}>Yes {nYes}</button><button className={tab === 'maybe' ? 'on' : ''} onClick={() => setTab('maybe')}>Maybe {nMaybe}</button></span>
           {!free.length && <span className="muted sm">{tab === 'yes' ? 'Nobody left. Ask more from Bookings → Ask more people.' : 'No maybes.'}</span>}
-          {free.map((a) => <div key={a.staff_id} className="ds-fp" draggable onDragStart={(ev) => { ev.dataTransfer.setData('text/plain', a.staff_id); ev.dataTransfer.effectAllowed = 'move'; setDrag({ staff_id: a.staff_id }); }} onDragEnd={() => setDrag(null)}>
+          {free.map((a) => <div key={a.staff_id} data-sid={a.staff_id} className={'ds-fp' + (hl === a.staff_id ? ' hl' : '')} draggable onDragStart={(ev) => { ev.dataTransfer.setData('text/plain', a.staff_id); ev.dataTransfer.effectAllowed = 'move'; setDrag({ staff_id: a.staff_id }); }} onDragEnd={() => setDrag(null)}>
             <i className={'ds-t ' + (tier(a.staff_id) ?? '')} /><b className="grow">{byId[a.staff_id]?.full_name ?? '…'}{ctx?.cars.has(a.staff_id) ? ' 🚗' : ''}{ctx && isNewStaff(ctx, a.staff_id) ? <small className="ds-new">NEW</small> : null}</b>{(wn[a.staff_id] ?? 0) >= 3 && <small className="ds-flag" title={`Already ${wn[a.staff_id]} shifts this week`}>⚑{wn[a.staff_id]}</small>}<small className="muted">{a.from_time ? `from ${ap(a.from_time)}` : 'any time'}</small></div>)}
           {(() => { const open = shown.reduce((n, e) => { const L = lays[e.id]; return n + Math.max(0, L.client + L.extras.count - sh.filter((s) => s.event_id === e.id).length); }, 0);
             return <div className="ds-after">{open > 0 ? <><b>{open} open</b> slot{open > 1 ? 's' : ''} · {nYes} free</> : <><b>All slots filled.</b> {nYes} left = backups (not booked, released when you confirm)</>}</div>; })()}
@@ -400,7 +431,9 @@ export function DaySheet() {
           onSwap={(id) => patch(c, { staff_id: id }, `swapped for ${byId[id]?.full_name ?? ''}`)}
           onReplace={() => run(async () => { const all = await eventsBetween(date, date); const fe = all.find((x) => x.id === c.event_id); const fs = fe?.shifts.find((x) => x.id === c.id);
             if (!fe || !fs) throw new Error('Could not open the replacement list.'); setCard(null); setRepl({ s: fs, e: fe }); })}
-          onRemove={() => { setCard(null); remove(c); }} onNote={(t) => patch(c, { booking_note: t.trim() || null }, t.trim() ? 'note' : 'note removed')} />; })()}
+          onRemove={() => { setCard(null); remove(c); }} onCancel={() => setCancelQ(c)} onNote={(t) => patch(c, { booking_note: t.trim() || null }, t.trim() ? 'note' : 'note removed')} />; })()}
+      {cancelQ && <CancelBox s={cancelQ} name={byId[cancelQ.staff_id]?.full_name ?? '…'} where={(() => { const e = evs.find((x) => x.id === cancelQ.event_id); return `${e?.venues?.name ?? e?.title ?? ''} · ${roleName(cancelQ.position_code)} ${ap(hm(cancelQ.planned_start))} · ${sentTxt(cancelQ)}`; })()}
+        onClose={() => setCancelQ(null)} onSave={(r, n, c, rep) => doCancel(cancelQ, r, n, c, rep)} />}
       {tellQ && <TellBox q={tellQ} names={tellQ.who.map((x) => byId[x.staff_id]?.full_name ?? '…')} states={tellQ.who.map((x) => sentTxt(x))} />}
       {repl && <ReplaceSheet shift={repl.s} ev={repl.e} onClose={() => setRepl(null)} onDone={(m) => { setRepl(null); setMsg(m); setTick((t) => t + 1); }} />}
       {pick && <PickSheet date={date} e={pick.e} code={pick.code} start={pick.start} staff={staff} av={av} onDay={onDay} off={off} sortP={sortP} tier={tier}
@@ -437,10 +470,10 @@ function PickSheet({ date, e, code, start, staff, av, onDay, off, sortP, tier, o
 }
 
 /** push 110 · click a name: move, start later, role, lock, swap, profile, back to Free. Sent / confirmed shifts: lock + profile only (change them from the event). */
-function PersonCard({ s, e, date, evs, lays, byId, av, onDay, off, sortP, tier, busy, wn, why, onClose, onMove, onStart, onRole, onLock, onConfirm, onSwap, onRemove, onNote, onReplace }: {
+function PersonCard({ s, e, date, evs, lays, byId, av, onDay, off, sortP, tier, busy, wn, why, onClose, onMove, onStart, onRole, onLock, onConfirm, onSwap, onRemove, onNote, onReplace, onCancel }: {
   s: Sh; e: Ev; date: string; evs: Ev[]; lays: Record<string, ReturnType<typeof layout>>; byId: Record<string, AStaff>; av: Av[]; onDay: Set<string>; off: Set<string>;
   sortP: (a: string, b: string) => number; tier: (id: string) => string | null; busy: boolean; wn: number; why: string; onClose: () => void;
-  onMove: (e: Ev, code: string, start: string | null) => void; onStart: (t: string) => void; onRole: (code: string) => void; onLock: () => void; onConfirm: () => void; onSwap: (id: string) => void; onRemove: () => void; onNote: (t: string) => void; onReplace: () => void }) {
+  onMove: (e: Ev, code: string, start: string | null) => void; onStart: (t: string) => void; onRole: (code: string) => void; onLock: () => void; onConfirm: () => void; onSwap: (id: string) => void; onRemove: () => void; onNote: (t: string) => void; onReplace: () => void; onCancel: () => void }) {
   const [tab, setTab] = useState<'main' | 'swap'>('main'); const [t, setT] = useState(hm(s.planned_start)); const [q, setQ] = useState(''); const [nt, setNt] = useState(s.booking_note ?? '');
   const p = byId[s.staff_id]; const can = !LEAD.includes(s.position_code ?? '');
   const a = av.find((x) => x.staff_id === s.staff_id);
@@ -473,7 +506,8 @@ function PersonCard({ s, e, date, evs, lays, byId, av, onDay, off, sortP, tier, 
         <div className="row wrap" style={{ gap: 8, gridColumn: '1 / -1' }}>
           {s.status !== 'confirmed' && <button className="abtn sm ok" disabled={busy} onClick={onConfirm} title="They told you yes (text, call): marked confirmed, no message sent">✓ Mark confirmed · no message</button>}
           <button className="abtn sm" disabled={busy} onClick={onLock}>{s.locked ? '🔓 Unlock' : '🔒 Lock'}</button>
-          {can && <button className="abtn sm" disabled={busy} onClick={onRemove}>× Back to Free</button>}
+          {can && <button className="abtn sm" disabled={busy} onClick={onRemove} title="It never happened: no record">× Back to Free</button>}
+          {can && <button className="abtn sm ds-cxbtn" disabled={busy} onClick={onCancel} title="They cancelled: kept on their record with a reason">Cancel…</button>}
           {!s.pool_hold && !LEAD.includes(s.position_code ?? '') && <button className="abtn sm dark" disabled={busy} onClick={onReplace} title="Asks the best free people; they stay on until someone says yes">Can't make it · find a replacement</button>}
           <span className="grow" /><a className="lnk sm" href={`/admin/staff?open=${s.staff_id}`}>Profile ›</a></div>
         <small className="muted" style={{ gridColumn: '1 / -1' }}>🔒 locked = ✦ Fill and Clear leave them where they are · every change here is one ↶ Undo</small>
@@ -534,4 +568,23 @@ function Details({ e, open, onToggle, venues, clients, types, busy, onEv, onVenu
       </div>
       <small className="muted">Saves as you go, like the event form · ↶ Undo · staff see it in the app (no message) · on-site contact = the MD</small>
     </div>);
+}
+
+/** push 122 · cancel with a reason (Ronnie, Nov 13): kept on their record; ranking or not is his call. */
+function CancelBox({ s, name, where, onClose, onSave }: { s: Sh; name: string; where: string; onClose: () => void; onSave: (reason: string, note: string, counts: boolean, replace: boolean) => void }) {
+  const [r, setR] = useState(''); const [n, setN] = useState(''); const [c, setC] = useState(s.status === 'confirmed'); const [rep, setRep] = useState(false);
+  return (
+    <div className="ds-pick-wrap" onClick={onClose}><div className="ds-pick ds-tell" onClick={(ev) => ev.stopPropagation()}>
+      <b className="serif" style={{ fontSize: 19 }}>{name} · cancel</b><small className="muted">{where}</small>
+      <small className="kick">REASON</small>
+      <div className="ds-rs">{['Sick', 'Emergency', 'Transport', 'Time change', 'No-show', 'Other'].map((x) => <button key={x} className={r === x ? 'on' : ''} onClick={() => setR(x)}>{x}</button>)}</div>
+      <input placeholder="Note (stays on their profile) · e.g. texted at 7:40 AM, fever" value={n} onChange={(ev) => setN(ev.target.value)} />
+      <small className="kick">COUNTS IN RANKING?</small>
+      <div className="ds-rs two"><button className={c ? 'on' : ''} onClick={() => setC(true)}>Yes · late cancel</button><button className={!c ? 'on' : ''} onClick={() => setC(false)}>No · excused</button></div>
+      <small className="muted">Starts on Yes when they had confirmed · you decide</small>
+      <label className="row sm" style={{ gap: 8 }}><input type="checkbox" checked={rep} onChange={(ev) => setRep(ev.target.checked)} /> Find a replacement after (opens the pick list for the spot)</label>
+      <div className="row" style={{ gap: 10, justifyContent: 'flex-end', alignItems: 'center' }}><button className="lnk muted sm" onClick={onClose}>Cancel · change nothing</button>
+        <button className="abtn ds-cxgo" disabled={!r} onClick={() => onSave(r, n, c, rep)}>Cancel {name.split(' ')[0]}</button></div>
+      <small className="muted">Nothing is sent to them · their MD sees them crossed out · ↶ Undo</small>
+    </div></div>);
 }
