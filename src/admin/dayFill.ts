@@ -36,6 +36,11 @@ export async function loadDay(date: string): Promise<Day> {
   if (e.error) throw e.error;
   const a = a0.error ? await supabase.from('availability').select('staff_id,status,from_time,released_at').eq('for_date', date).not('ask_id', 'is', null) : a0;
   const evs = (e.data ?? []) as unknown as Ev[];
+  // push 123 · Ronnie, Nov 13: same position + same start + no end = one line (count added). Saved with the next change to that event.
+  for (const x of evs) if (x.staffing?.length) { const out: (Line & { end?: string | null })[] = [];
+    for (const l of x.staffing as (Line & { end?: string | null })[]) { const m = !l.end && out.find((o) => !o.end && o.code === l.code && (o.start ?? '') === (l.start ?? ''));
+      if (m) m.count += l.count; else out.push({ ...l }); }
+    x.staffing = out; }
   const s = await supabase.from('shifts').select('id,event_id,staff_id,position_code,position_detail,status,pool_hold,locked,notified_at,planned_start,time_tbc,attendance,booking_note,cancel_reason,cancel_note,cancel_late,cancelled_at')
     .in('event_id', evs.length ? evs.map((x) => x.id) : NONE).neq('status', 'declined');
   const all = (s.data ?? []) as (Cx & { attendance?: string | null })[];

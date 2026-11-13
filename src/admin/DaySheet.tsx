@@ -42,7 +42,7 @@ export function DaySheet() {
   useEffect(() => { supabase.from('event_types').select('name,sort').order('sort').then(({ data }) => setTypes(((data ?? []) as { name: string }[]).map((x) => x.name))); }, []);
   const detOpen = (id: string) => { void detTick; try { return localStorage.getItem('gr_ds_det_' + id) !== '0'; } catch { return true; } };
   const togDet = (id: string) => { try { localStorage.setItem('gr_ds_det_' + id, detOpen(id) ? '0' : '1'); } catch { /* */ } setDetTick((t) => t + 1); };
-  const blocksR = useRef<HTMLDivElement | null>(null); const [cols, setCols] = useState(4); const [narrow, setNarrow] = useState(false);
+  const blocksR = useRef<HTMLDivElement | null>(null); const [cols, setCols] = useState(5); const [lineEd, setLineEd] = useState<string | null>(null); const [endK, setEndK] = useState<string | null>(null); const [narrow, setNarrow] = useState(false);
   // push 119 · Ronnie: "a little squished" → Free this day folds to a thin tab, END ~ column can be hidden (both remembered)
   const ls0 = (k: string) => { try { return localStorage.getItem(k) === '1'; } catch { return false; } };
   const [freeFold, setFreeFold] = useState(() => ls0('gr_ds_freefold')); const [noEnd, setNoEnd] = useState(() => ls0('gr_ds_noend'));
@@ -59,7 +59,7 @@ export function DaySheet() {
   const noEndR = useRef(noEnd); noEndR.current = noEnd;
   // C · as many equal cells across as fit (Ronnie, Nov 12): one count for the whole sheet so every block lines up
   useEffect(() => { const el = blocksR.current; if (!el) return; const f = () => { const w = el.clientWidth; const phone = window.innerWidth <= 700 || w < 760; setNarrow(w < 760);
-      const room = phone ? w - 40 : w - 40 - 140 - 92 - (noEndR.current ? 0 : 100) - 112 - 46 - 32; setCols(Math.max(2, Math.floor((room + 6) / ((phone ? 128 : 142) + 6)))); };
+      setCols(phone ? 2 : Math.max(3, Math.min(5, Math.floor((w - 30 + 6) / (124 + 6))))); }; // push 123 · 5 names across on desktop
     f(); const ro = new ResizeObserver(f); ro.observe(el); return () => ro.disconnect(); }, [evs.length, noEnd, freeFold]);
 
   // week strip
@@ -327,20 +327,34 @@ export function DaySheet() {
       <span className="row" style={{ gap: 6 }}><input type="time" step={900} value={edT} onChange={(ev) => setEdT(ev.target.value)} /><button className="abtn sm dark" disabled={!edT || edT === start} onClick={() => onSet(edT)}>Set</button></span>
       {people && <small className="muted">{people.length ? `${people.length} on this line move with it${people.some((x) => !x.pool_hold) ? ' · already sent: you choose how they’re told' : ' (not sent yet)'}` : 'nobody on it yet'}</small>}</span> : null);
   const tBtn = (e: Ev, k: string, start: string | null) => <button className={'ds-tbtn' + (ed?.eid === e.id && ed.key === k ? ' on' : '')} disabled={busy} onClick={() => { setEdT(start ?? ''); setEd(ed?.eid === e.id && ed.key === k ? null : { eid: e.id, key: k }); }}>{ap(start)}</button>;
-  /** push 118 · one row like the event form: ROLE · START · END ~ · HOW MANY · NAMES (equal cells, rating colour) · n/n */
+  /** push 123 · each line = a band on top (desktop: position · − n + · start · end, all clickable · phone: "6 Barbacks · 12 PM" + ✎) and the names under it, 5 across. */
   const Row = ({ e, code, start, end, count, people, extra, idx, lead }: { e: Ev; code: string; start: string | null; end?: string | null; count: number; people: Sh[]; extra?: boolean; idx?: number; lead?: boolean }) => {
     const cells = people.length + Math.max(0, count - people.length); const pad = cells ? (cols - (cells % cols)) % cols : 0; const tbc = !!(e.start_tbc || e.details_pending);
     const roles = ROLES.filter((r) => (isBar(e) ? r.dept === 'bar' : r.dept === 'floor') && !LEAD.includes(r.code));
+    const k = `${e.id}:${lead ? 'L' : extra ? 'X' : idx ?? 'r'}`; const plain = idx != null && !lead && !extra;
+    const name = lead ? (isBar(e) ? 'Bar manager' : 'MD') : extra ? 'Extras' : roleName(code);
+    const roleC = lead || extra ? <b className="ds-lname">{name}{extra && e.extras == null ? <em> 10%</em> : null}</b>
+      : <select className="ds-lsel" value={code} disabled={busy || idx == null} onChange={(ev) => idx != null && setRole(e, idx, ev.target.value)}>{roles.some((r) => r.code === code) ? null : <option value={code}>{plural(code, Math.max(2, count))}</option>}{roles.map((r) => <option key={r.code} value={r.code}>{r.code === 'WW' ? (count === 1 ? 'Wine waiter' : 'Wine waiters') : plural(r.code, Math.max(2, count))}</option>)}</select>;
+    const stepC = lead ? <Step n={count} on={(n) => setLeads(e, n)} /> : extra ? <Step n={count} on={(n) => setExtras(e, n)} /> : idx != null ? <Step n={count} on={(n) => setCount(e, idx, n)} /> : <b>{count}</b>;
+    const timeC = tbc ? <span className="ds-tro">TBC</span> : lead ? <span className="ds-tro">{ap(start)}</span> : extra ? <>{tBtn(e, 'x', start)}<TimePop e={e} k="x" start={start} title="Start of the extras" onSet={(t) => setExtrasTime(e, t)} /></>
+      : idx != null ? <>{tBtn(e, String(idx), start)}<TimePop e={e} k={String(idx)} start={start} title="Start of this line" onSet={(t) => setTime(e, idx, t)} people={people} /></> : <span className="ds-tro">{ap(start)}</span>;
+    const endC = !plain ? null : end || endK === k ? <input type="time" step={900} value={end ?? ''} disabled={busy} autoFocus={!end} title="End ~ (optional) · clear it to remove" onBlur={() => setEndK(null)}
+        onChange={(ev) => { setEndK(null); setLineField(e, idx!, { end: ev.target.value || null }, `end ${ev.target.value ? ap(ev.target.value) : '—'}`); }} />
+      : <button className="ds-endb" disabled={busy} onClick={() => setEndK(k)} title="Add an end time (optional)">→ end</button>;
+    const ok = people.length >= count;
+    const badge = <span className={'ds-badge' + (ok ? ' ok' : '')}>{people.length}/{count} {ok ? 'full' : `${count - people.length} short`}</span>;
+    const band = narrow
+      ? <><div className="ds-lh ph"><span className="serif ds-lt">{lead || extra ? name : `${count} ${plural(code, count)}`}</span><span className="ds-lt2">{tbc ? 'TBC' : ap(start)}{end ? ` → ${ap(end)}` : ''}</span><span className="grow" />{badge}
+          {(lead || extra || idx != null) && <button className={'ds-pen' + (lineEd === k ? ' on' : '')} onClick={() => setLineEd(lineEd === k ? null : k)} aria-label="Edit this line">✎</button>}</div>
+        {lineEd === k && <div className="ds-led">{!lead && !extra && <label><small>Position</small>{roleC}</label>}<label><small>How many</small>{stepC}</label>{!lead && <label><small>Start</small><span className="ds-time">{timeC}</span></label>}
+          {plain && <label><small>End (optional)</small><span className="ds-end">{endC}</span></label>}
+          {plain && <button className="lnk sm ds-ldel" disabled={busy} onClick={() => { setLineEd(null); setCount(e, idx!, 0); }}>🗑 Remove line</button>}<button className="abtn sm dark" onClick={() => setLineEd(null)}>Done</button></div>}</>
+      : <div className="ds-lh">{roleC}{stepC}<span className="ds-time">{timeC}</span>{endC && <span className="ds-end">{endC}</span>}<span className="grow" />{badge}
+          {plain && <button className="ds-ldots" disabled={busy} onClick={() => setCount(e, idx!, 0)} title="Remove this line">⋯</button>}</div>;
     return (
-    <div className={'ds-line' + (extra ? ' ex' : '') + (lead ? ' lead' : '')} onDragOver={(ev) => ev.preventDefault()} onDrop={() => dropOn(e, code, start)}>
-      <span className="ds-role">{lead ? <b>{isBar(e) ? 'Bar manager' : 'MD'}</b> : extra ? <b>Extras <em>{e.extras == null ? '10%' : ''}</em></b>
-        : <select value={code} disabled={busy || idx == null} onChange={(ev) => idx != null && setRole(e, idx, ev.target.value)}>{roles.some((r) => r.code === code) ? null : <option value={code}>{roleName(code)}</option>}{roles.map((r) => <option key={r.code} value={r.code}>{r.code === 'WW' ? 'Wine waiter' : r.label}</option>)}</select>}</span>
-      <span className="ds-time">{tbc ? <span className="ds-tro">TBC</span> : lead ? <span className="ds-tro">{ap(start)}</span> : extra ? <>{tBtn(e, 'x', start)}<TimePop e={e} k="x" start={start} title="Start of the extras" onSet={(t) => setExtrasTime(e, t)} /></>
-        : idx != null ? <>{tBtn(e, String(idx), start)}<TimePop e={e} k={String(idx)} start={start} title="Start of this line" onSet={(t) => setTime(e, idx, t)} people={people} /></> : <span className="ds-tro">{ap(start)}</span>}</span>
-      <span className="ds-end">{idx != null && !lead && !extra ? <input type="time" step={900} value={end ?? ''} disabled={busy} title="End ~ (optional)" onChange={(ev) => setLineField(e, idx, { end: ev.target.value || null }, `end ${ev.target.value ? ap(ev.target.value) : '—'}`)} /> : <span className="muted">—</span>}</span>
-      <span className="ds-hm">{lead ? <Step n={count} on={(n) => setLeads(e, n)} /> : extra ? <Step n={count} on={(n) => setExtras(e, n)} /> : idx != null ? <Step n={count} on={(n) => setCount(e, idx, n)} /> : <b>{count}</b>}</span>
+    <div className={'ds-line2' + (extra ? ' ex' : '') + (lead ? ' lead' : '')} onDragOver={(ev) => ev.preventDefault()} onDrop={() => dropOn(e, code, start)}>
+      {band}
       <span className="ds-cells" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>{people.map((s) => <Chip key={s.id} s={s} at={start} />)}{[...Array(Math.max(0, count - people.length))].map((_, i) => <Slot key={i} e={e} code={code} start={start} />)}{[...Array(pad)].map((_, i) => <i key={'p' + i} className="ds-off" />)}</span>
-      <span className={'ds-n' + (people.length >= count ? ' ok' : '')}>{people.length}/{count}</span>
     </div>); };
 
   return (
@@ -384,17 +398,16 @@ export function DaySheet() {
                 <Details e={e} open={detOpen(e.id)} onToggle={() => togDet(e.id)} venues={ctx?.venues ?? []} clients={ctx?.clients ?? []} types={types} busy={busy}
                   onEv={(row, label) => saveEv(e, row, label)} onVenue={(v) => setVenue(e, v)} onClient={(c) => saveClient(e, c)} />
                 <div className="ds-grid">
-                  <div className="ds-gh"><span>ROLE</span><span>START{noEnd && <button className="ds-ghb" onClick={() => setNoEnd(false)} title="Show the END ~ column">+ end</button>}</span>{!noEnd && <span>END ~ <button className="ds-ghb" onClick={() => setNoEnd(true)} title="Hide the END ~ column">hide</button></span>}<span>HOW MANY</span><span>NAMES · rating colour = tier</span><span /></div>
                   <div className={'ds-grp ' + (isBar(e) ? 'g-bar' : 'g-floor')}><div className="ds-grph"><i />{isBar(e) ? 'BAR' : 'FLOOR'}</div>
                     <Row e={e} lead code={isBar(e) ? 'BM' : 'MD'} start={e.start_time?.slice(0, 5) ?? null} count={L.leadNeed} people={L.leads} />
                     {L.lines.map((l) => <Row key={l.key} idx={l.idx} e={e} code={l.code} start={l.start} end={(e.staffing ?? [])[l.idx] ? ((e.staffing ?? [])[l.idx] as Line & { end?: string | null }).end ?? null : null} count={l.count} people={l.people} />)}
                     {(L.extras.count > 0 || (!isBar(e) && L.lines.length > 0)) && <Row e={e} extra code={L.extras.code} start={L.extras.start} count={L.extras.count} people={L.extras.people} />}
-                    {cx.some((x) => x.event_id === e.id) && <div className="ds-line cxl"><span className="ds-role"><b>Cancelled</b></span><span /><span className="ds-end" /><span />
+                    {cx.some((x) => x.event_id === e.id) && <div className="ds-line2 cxl"><div className="ds-lh"><b className="ds-lname">Cancelled</b></div>
                       <span className="ds-cells" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>{cx.filter((x) => x.event_id === e.id).map((x) => <button key={x.id} className="ds-chip cx" disabled={busy}
                         title={`${byId[x.staff_id]?.full_name ?? ''} · cancelled · ${x.cancel_reason ?? ''}${x.cancel_note ? ` — ${x.cancel_note}` : ''} · ${x.cancel_late ? 'counts as a late cancel' : 'excused (not counted)'} · click to un-cancel`}
                         onClick={() => { if (confirm(`Un-cancel ${byId[x.staff_id]?.full_name ?? ''}? They go back on ${roleName(x.position_code)} ${ap(hm(x.planned_start))}.`)) unCancel(x); }}>
-                        <span className="ds-nm">{short(byId[x.staff_id]?.full_name ?? '…')}</span><small>{x.cancel_reason ?? ''}{x.cancel_late ? ' ⚑' : ''}</small></button>)}</span><span /></div>}
-                    {L.over.length > 0 && <div className="ds-line over"><span className="ds-role"><b>Also placed</b></span><span /><span /><span /><span className="ds-cells" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>{L.over.map((s) => <Chip key={s.id} s={s} />)}</span><span className="ds-n">over</span></div>}
+                        <span className="ds-nm">{short(byId[x.staff_id]?.full_name ?? '…')}</span><small>{x.cancel_reason ?? ''}{x.cancel_late ? ' ⚑' : ''}</small></button>)}</span></div>}
+                    {L.over.length > 0 && <div className="ds-line2 over"><div className="ds-lh"><b className="ds-lname">Also placed</b><span className="grow" /><span className="ds-badge">over</span></div><span className="ds-cells" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>{L.over.map((s) => <Chip key={s.id} s={s} />)}</span></div>}
                   </div>
                   {(() => { const fl = sh.filter((x) => x.event_id === e.id && flagged[x.id]); return fl.length > 0 && <div className="ds-flagbox"><b>⚑ Line lowered · weakest flagged</b>
                     {fl.map((x) => <span key={x.id} className="ds-flagp"><span className="grow">{byId[x.staff_id]?.full_name ?? '…'} <small className="muted">{flagged[x.id]}</small></span>
