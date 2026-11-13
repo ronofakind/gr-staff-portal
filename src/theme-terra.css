@@ -1324,4 +1324,24 @@ html[data-theme="terra"] { --teams: #5B5FC7; --teams-bg: #EEEFFB; --teams-ink: #
 :where(html[data-theme="terra"]) .ds-undofab button { color: var(--ink, #181915); }
 :where(html[data-theme="terra"]) .ds-undofab small { color: #B2B4A8; }
 :where(html[data-theme="terra"]) .ds-new { color: #FBFAF6; }
+:where(html[data-theme="terra"]) .ps-add { background: var(--accent, #C36543); color: #FBFAF6; }
+:where(html[data-theme="terra"]) .ps-q { background: #FBFAF6; }
+:where(html[data-theme="terra"]) .ps-chips button { background: #FBFAF6; }
+:where(html[data-theme="terra"]) .ps-chips button.on { background: var(--ink, #2A2A24); color: #FBFAF6; border-color: var(--ink, #181915); }
+:where(html[data-theme="terra"]) .ps-list { background: #F6F7F5; }
+:where(html[data-theme="terra"]) .ps-letter { color: #969988; }
+:where(html[data-theme="terra"]) .ps-dot.red, :where(html[data-theme="terra"]) em.red { color: #C36543; }
+:where(html[data-theme="terra"]) .ps-dot.red { background: #C36543; }
+:where(html[data-theme="terra"]) .ps-dot.grey, :where(html[data-theme="terra"]) em.grey { color: #878A78; }
+:where(html[data-theme="terra"]) .ps-dot.grey { background: #878A78; }
+:where(html[data-theme="terra"]) .ps-chev { color: #C3C5BA; }
+:where(html[data-theme="terra"]) .ps-check { border: 2px solid #C3C5BA; color: #FBFAF6; }
+:where(html[data-theme="terra"]) .ps-check.on { background: var(--ink, #2A2A24); border-color: var(--ink, #181915); }
+:where(html[data-theme="terra"]) .ps-bulk { background: var(--ink, #3B4A3F); color: #FBFAF6; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+:where(html[data-theme="terra"]) .ps-bulk button.x { color: #B2B4A8; }
+:where(html[data-theme="terra"]) .ps-wrap { background: rgba(59,74,63,0.3); }
+:where(html[data-theme="terra"]) .ps-sheet { background: #FBFAF6; }
+:where(html[data-theme="terra"]) .ps-grab { background: #D6D7D0; }
+:where(html[data-theme="terra"]) .ps-acts > * { background: #FBFAF6; }
+:where(html[data-theme="terra"]) .ps-acts > .dark { background: var(--ink, #3B4A3F); color: #FBFAF6; border-color: var(--ink, #181915); }
 html[data-theme="terra"] body { background: #EEF0E8; color: #2A2A24; }

@@ -88,7 +88,59 @@ export function Staff() {
     const w = o.find((x) => x.every_dow != null); if (w) return `every ${DOWS[w.every_dow!]}`;
     const f = o[0]; return f.from_date === f.to_date ? `off ${dLabel(f.from_date, { month: 'short', day: 'numeric' })}` : `off ${dLabel(f.from_date, { month: 'short', day: 'numeric' })} – ${f.from_date.slice(5, 7) === f.to_date.slice(5, 7) ? Number(f.to_date.slice(8)) : dLabel(f.to_date, { month: 'short', day: 'numeric' })}`;
   };
+  // push 121 · phone: one tidy line per person, no tiers (on the profile), tap = small sheet, checkboxes only in Select
+  const [phone, setPhone] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 700px)').matches);
+  useEffect(() => { const m = window.matchMedia('(max-width: 700px)'); const f = () => setPhone(m.matches); m.addEventListener('change', f); return () => m.removeEventListener('change', f); }, []);
+  const [pf, setPf] = useState<'all' | 'floor' | 'bar' | 'not' | 'noemail'>('all'); const [selMode, setSelMode] = useState(false); const [sheet, setSheet] = useState<AStaff | null>(null);
   const mName = new Date().toLocaleDateString('en-CA', { month: 'short', timeZone: 'America/Toronto' }).replace('.', '').toUpperCase();
+
+  if (phone) {
+    const word = (s: AStaff) => { const k = app(s).key; return k === 'signed' ? ['On the app', 'ok'] : k === 'noemail' ? ['No email', 'red'] : k === 'none' ? ['Not invited', 'grey'] : k === 'expired' ? ['Link expired', 'red'] : ['Invited', 'blue']; };
+    const pr = searched.filter((s) => pf === 'all' || (pf === 'floor' ? s.department !== 'bar' : pf === 'bar' ? doesBar(s) : invRows ? app(s).key === (pf === 'not' ? 'none' : 'noemail') : true))
+      .sort((a, b) => a.full_name.localeCompare(b.full_name, 'fr', { sensitivity: 'base' }));
+    const tog = (id: string) => { const n = new Set(sel); if (n.has(id)) n.delete(id); else n.add(id); setSel(n); };
+    const digits = (p: string | null | undefined) => (p ?? '').replace(/\D/g, '');
+    return (
+      <div className="ps">
+        <div className="ps-top"><span className="serif ps-h">Staff</span><span className="grow" />
+          <button className="ps-lnk" onClick={() => { setSelMode(!selMode); setSel(new Set()); }}>{selMode ? 'Done' : 'Select'}</button>
+          <button className="ps-add" onClick={() => setOpen('new')} aria-label="Add staff">+</button></div>
+        <input className="ps-q" placeholder="🔍 Search a name, nickname, phone" value={q} onChange={(e) => setQ(e.target.value)} />
+        <div className="ps-chips">{([['all', 'All'], ['floor', 'Floor'], ['bar', 'Bar'], ['not', 'Not invited'], ['noemail', 'No email']] as const).map(([k, l]) => <button key={k} className={pf === k ? 'on' : ''} onClick={() => setPf(k)}>{l}</button>)}
+          <label className="ps-inact"><input type="checkbox" checked={inactive} onChange={(e) => setInactive(e.target.checked)} /> inactive</label></div>
+        {open === 'new' && <Editor onDone={() => { setOpen(null); load(); }} />}
+        <div className="ps-list">
+          {pr.map((s, k) => { const L = k === 0 || firstName(pr[k - 1]).charAt(0).toUpperCase() !== firstName(s).charAt(0).toUpperCase() ? firstName(s).charAt(0).toUpperCase() : null; const [w, c] = word(s);
+            return (<Fragment key={s.id}>
+              {L && <div className="ps-letter">{L}</div>}
+              <div className={'ps-row' + (s.active ? '' : ' inactive')} onClick={() => selMode ? tog(s.id) : setSheet(s)}>
+                {selMode && <span className={'ps-check' + (sel.has(s.id) ? ' on' : '')}>{sel.has(s.id) ? '✓' : ''}</span>}
+                <Avatar name={s.full_name} url={s.photo_url} size={40} />
+                <span className="ps-mid"><span className="ps-name"><b>{s.full_name}</b><RuleIcons sid={s.id} links={rules.links} conds={rules.conds} /></span>
+                  <small>{invRows && <><i className={'ps-dot ' + c} /><em className={c}>{w}</em> · </>}{s.positions.map((p) => p.toLowerCase()).join(', ') || s.role}</small></span>
+                {!selMode && <span className="ps-chev">›</span>}
+              </div>
+              {open === s.id && <div style={{ padding: '0 12px 12px' }}><Editor s={s} onDone={() => { setOpen(null); load(); }} /></div>}
+            </Fragment>); })}
+          {list && !pr.length && <div className="muted sm" style={{ padding: 18 }}>Nobody matches.</div>}
+          {!list && <div className="muted" style={{ padding: 18 }}>Loading…</div>}
+        </div>
+        {selMode && sel.size > 0 && <div className="ps-bulk"><b>{sel.size} selected</b><span className="grow" /><button onClick={() => setInviteQ(pr.filter((x) => sel.has(x.id) && app(x).key !== 'signed'))}>Invite {pr.filter((x) => sel.has(x.id) && app(x).key !== 'signed').length}</button><button className="x" onClick={() => setSel(new Set())}>✕</button></div>}
+        {sheet && (() => { const ap = app(sheet); const ph = digits(sheet.phone); return (
+          <div className="ps-wrap" onClick={() => setSheet(null)}><div className="ps-sheet" onClick={(e) => e.stopPropagation()}><i className="ps-grab" />
+            <div className="row" style={{ gap: 12, alignItems: 'center' }}><Avatar name={sheet.full_name} url={sheet.photo_url} size={44} /><span><b style={{ fontSize: 17 }}>{sheet.full_name}</b><br /><small className="muted">{sheet.positions.map((p) => p.toLowerCase()).join(', ') || sheet.role} · {word(sheet)[0].toLowerCase()}</small></span></div>
+            <div className="ps-acts">
+              {ap.action && <button className="dark" onClick={() => { const s0 = sheet; setSheet(null); if (ap.action === 'Invite' || ap.action === 'Resend') setInviteQ([s0]); else setOpen(s0.id); }}>{ap.action}</button>}
+              <Link to={`/admin/view/${sheet.id}`}>View as</Link>
+              <button onClick={() => { const s0 = sheet; setSheet(null); setProf(s0); }}>Profile ›</button>
+              {ph && <a href={`sms:${sheet.phone}`}>Text</a>}
+              {ph && <a href={`https://wa.me/${ph.length === 10 ? '1' + ph : ph}`} target="_blank" rel="noreferrer">WhatsApp</a>}
+            </div></div></div>); })()}
+        {prof && <StaffProfile s={prof} all={list ?? undefined} onClose={() => { setProf(null); load(); }} onEdit={() => { setOpen(prof.id); setProf(null); }} />}
+        {inviteQ && inviteQ.length > 0 && <InviteModal queue={inviteQ} onClose={() => { setInviteQ(null); setSel(new Set()); setSelMode(false); loadInv(); }} onChanged={loadInv}
+          onFix={(s) => { setInviteQ(null); setProf(null); setOpen(s.id); }} />}
+      </div>);
+  }
 
   return (
     <div className="stack-lg">
