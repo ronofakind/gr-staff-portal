@@ -4591,3 +4591,8 @@ a.ch-name-link { display: block; text-decoration: none; color: inherit; } a.ch-n
   .ds-card .ds-line .ds-cells { grid-column: 1 / -1; order: 5; }
   .ds-card .ds-line .ds-n { display: none; }
 }
+.ds-blocks.narrow .ds-gh { display: none; }
+.ds-blocks.narrow .ds-card .ds-line { grid-template-columns: 1fr auto auto; row-gap: 6px; }
+.ds-blocks.narrow .ds-card .ds-line .ds-end, .ds-blocks.narrow .ds-card .ds-line .ds-n { display: none; }
+.ds-blocks.narrow .ds-card .ds-line .ds-cells { grid-column: 1 / -1; order: 5; }
+.ds-blocks.narrow .ds-detg { grid-template-columns: 1fr 1fr; }

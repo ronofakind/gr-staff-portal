@@ -40,7 +40,7 @@ export function DaySheet() {
   useEffect(() => { supabase.from('event_types').select('name,sort').order('sort').then(({ data }) => setTypes(((data ?? []) as { name: string }[]).map((x) => x.name))); }, []);
   const detOpen = (id: string) => { void detTick; try { return localStorage.getItem('gr_ds_det_' + id) !== '0'; } catch { return true; } };
   const togDet = (id: string) => { try { localStorage.setItem('gr_ds_det_' + id, detOpen(id) ? '0' : '1'); } catch { /* */ } setDetTick((t) => t + 1); };
-  const blocksR = useRef<HTMLDivElement | null>(null); const [cols, setCols] = useState(4); const [repl, setRepl] = useState<{ s: AShift; e: AEvent } | null>(null);
+  const blocksR = useRef<HTMLDivElement | null>(null); const [cols, setCols] = useState(4); const [narrow, setNarrow] = useState(false); const [repl, setRepl] = useState<{ s: AShift; e: AEvent } | null>(null);
   useEffect(() => { loadCtx().then((c) => { setCtx(c); setStaff(c.staff); }).catch((x) => setErr((x as Error).message)); }, []);
   useEffect(() => { try { localStorage.setItem('gr_ds_dept', dept); } catch { /* */ } }, [dept]);
   const wk0 = monday(date);
@@ -51,7 +51,7 @@ export function DaySheet() {
   useEffect(() => { weekCounts(wk0, addDays(wk0, 6)).then(setWn); }, [wk0, tick]);
   useEffect(() => { const ids = evs.map((e) => e.id); if (!ids.length) { setPend(0); return; } pendingCount(ids).then(setPend); }, [evs, tick]);
   // C · as many equal cells across as fit (Ronnie, Nov 12): one count for the whole sheet so every block lines up
-  useEffect(() => { const el = blocksR.current; if (!el) return; const f = () => { const w = el.clientWidth; const phone = window.innerWidth <= 700;
+  useEffect(() => { const el = blocksR.current; if (!el) return; const f = () => { const w = el.clientWidth; const phone = window.innerWidth <= 700 || w < 760; setNarrow(w < 760);
       const room = phone ? w - 40 : w - 40 - 140 - 92 - 92 - 112 - 46 - 40; setCols(Math.max(2, Math.floor((room + 6) / ((phone ? 128 : 142) + 6)))); };
     f(); const ro = new ResizeObserver(f); ro.observe(el); return () => ro.disconnect(); }, [evs.length]);
 
@@ -338,11 +338,11 @@ export function DaySheet() {
       {sendOpen && <SendBox events={evs.map((e) => e.id)} onClose={() => { setSendOpen(false); setTick((t) => t + 1); }} onSent={() => { setMsg('Sent.'); setTick((t) => t + 1); }} />}
       {msg && <div className="adm-card okc sm">{msg}</div>}{err && <div className="adm-card err sm">{err}</div>}
       <div className="ds-cols">
-        <div className="ds-blocks" ref={blocksR} onClick={() => ed && setEd(null)}>
+        <div className={'ds-blocks' + (narrow ? ' narrow' : '')} ref={blocksR} onClick={() => ed && setEd(null)}>
           {!shown.length && <div className="adm-card muted">No {dept === 'both' ? '' : dept + ' '}events this day.</div>}
           {shown.map((e) => { const L = lays[e.id]; const have = sh.filter((s) => s.event_id === e.id).length; const need = L.client + L.extras.count;
             return (
-              <section key={e.id} className={'ds-card' + (isBar(e) ? ' bar' : '')}>
+              <section key={e.id} className={'ds-card' + (isBar(e) ? ' ds-barev' : '')}>
                 <div className="ds-ch"><span className="serif ds-title">{e.venues?.name ?? e.title}{isBar(e) ? ' · bar' : ''}</span>{isFar(e) && <span className="ds-far" title="Far venue: ✦ puts drivers first, with the people they're linked to">🚗 far</span>}
                   <small className="muted">{dLabel(date, { weekday: 'short', month: 'short', day: 'numeric' })} · client {L.client}{L.extras.count ? ` · +${L.extras.count} extra${L.extras.count > 1 ? 's' : ''} = ${need}` : ''}</small>
                   <span className="grow" />
