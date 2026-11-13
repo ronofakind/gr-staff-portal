@@ -349,8 +349,10 @@ export function DaySheet() {
         {lineEd === k && <div className="ds-led">{!lead && !extra && <label><small>Position</small>{roleC}</label>}<label><small>How many</small>{stepC}</label>{!lead && <label><small>Start</small><span className="ds-time">{timeC}</span></label>}
           {plain && <label><small>End (optional)</small><span className="ds-end">{endC}</span></label>}
           {plain && <button className="lnk sm ds-ldel" disabled={busy} onClick={() => { setLineEd(null); setCount(e, idx!, 0); }}>🗑 Remove line</button>}<button className="abtn sm dark" onClick={() => setLineEd(null)}>Done</button></div>}</>
-      : <div className="ds-lh">{roleC}{stepC}<span className="ds-time">{timeC}</span>{endC && <span className="ds-end">{endC}</span>}<span className="grow" />{badge}
-          {plain && <button className="ds-ldots" disabled={busy} onClick={() => setCount(e, idx!, 0)} title="Remove this line">⋯</button>}</div>;
+      : <div className="ds-lh al">{roleC}{stepC}
+          <span className="ds-fill" title={ok ? 'Full' : `${count - people.length} open`}><i><b style={{ width: `${count ? Math.min(100, Math.round(100 * people.length / count)) : 0}%` }} /></i><em>{people.length} of {count}</em></span>
+          <span className="ds-time">{timeC}</span><span className="ds-end">{endC}</span>
+          {plain ? <button className="ds-ldots" disabled={busy} onClick={() => setCount(e, idx!, 0)} title="Remove this line">⋯</button> : <span />}</div>;
     return (
     <div className={'ds-line2' + (extra ? ' ex' : '') + (lead ? ' lead' : '') + (ok ? ' full' : ' short')} onDragOver={(ev) => ev.preventDefault()} onDrop={() => dropOn(e, code, start)}>
       {band}

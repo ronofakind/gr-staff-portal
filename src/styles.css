@@ -4705,3 +4705,13 @@ a.ch-name-link { display: block; text-decoration: none; color: inherit; } a.ch-n
 .ds-line2.ex > .ds-lh { background: #F3E6C8; } .ds-line2.lead > .ds-lh { background: #EAE1D7; } .ds-line2.cxl > .ds-lh { background: #F8E3E3; }
 .ds-line2 > .ds-led { border-bottom: 2px solid #DDD0C1; }
 @media (max-width: 700px) { .ds-line2 { margin: 0 6px 10px; } }
+/* Nov 13 · desktop band, option A: same columns on every line · fill bar in the middle · start + end lined up on the right */
+.ds-lh.al { display: grid; grid-template-columns: 190px 112px minmax(0, 1fr) 96px 96px 24px; gap: 8px; flex-wrap: nowrap; }
+.ds-lh.al .ds-lsel, .ds-lh.al .ds-lname { width: 100%; min-width: 0; box-sizing: border-box; }
+.ds-lh.al .ds-step { width: 100%; justify-content: space-between; box-sizing: border-box; } .ds-lh.al .ds-step b { flex: 1; }
+.ds-lh.al .ds-time, .ds-lh.al .ds-end { width: 100%; } .ds-lh.al .ds-time > .ds-tbtn, .ds-lh.al .ds-end > input, .ds-lh.al .ds-end > .ds-endb { width: 100%; box-sizing: border-box; }
+.ds-lh.al .ds-tro { display: block; text-align: center; }
+.ds-fill { display: flex; align-items: center; gap: 10px; padding: 0 10px; min-width: 0; }
+.ds-fill i { flex: 1; height: 8px; border-radius: 5px; background: #E2D7CA; overflow: hidden; } .ds-fill i b { display: block; height: 100%; background: #B4452F; }
+.ds-fill em { font-style: normal; font-size: 12.5px; font-weight: 800; color: #B4452F; white-space: nowrap; min-width: 52px; text-align: right; }
+.ds-line2.full .ds-fill i b { background: #1F7A55; } .ds-line2.full .ds-fill em { color: #1F7A55; }
