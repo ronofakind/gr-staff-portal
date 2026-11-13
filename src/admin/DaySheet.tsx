@@ -352,7 +352,7 @@ export function DaySheet() {
       : <div className="ds-lh">{roleC}{stepC}<span className="ds-time">{timeC}</span>{endC && <span className="ds-end">{endC}</span>}<span className="grow" />{badge}
           {plain && <button className="ds-ldots" disabled={busy} onClick={() => setCount(e, idx!, 0)} title="Remove this line">⋯</button>}</div>;
     return (
-    <div className={'ds-line2' + (extra ? ' ex' : '') + (lead ? ' lead' : '')} onDragOver={(ev) => ev.preventDefault()} onDrop={() => dropOn(e, code, start)}>
+    <div className={'ds-line2' + (extra ? ' ex' : '') + (lead ? ' lead' : '') + (ok ? ' full' : ' short')} onDragOver={(ev) => ev.preventDefault()} onDrop={() => dropOn(e, code, start)}>
       {band}
       <span className="ds-cells" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>{people.map((s) => <Chip key={s.id} s={s} at={start} />)}{[...Array(Math.max(0, count - people.length))].map((_, i) => <Slot key={i} e={e} code={code} start={start} />)}{[...Array(pad)].map((_, i) => <i key={'p' + i} className="ds-off" />)}</span>
     </div>); };

@@ -4696,3 +4696,12 @@ a.ch-name-link { display: block; text-decoration: none; color: inherit; } a.ch-n
 .ds-led label { display: flex; flex-direction: column; gap: 4px; } .ds-led small { color: var(--muted); font-size: 11.5px; font-weight: 600; }
 .ds-led .ds-lsel { min-width: 0; width: 100%; } .ds-led .ds-time, .ds-led .ds-end { padding-top: 0 !important; position: relative; }
 .ds-ldel { color: #9B2226 !important; justify-self: start; } .ds-led .abtn { justify-self: end; }
+/* push 124 · lines A+B: each position its own card, darker band, gap between, green / red edge */
+.ds-grp:has(.ds-line2) { padding-bottom: 6px; }
+.ds-line2 { margin: 0 10px 12px; border: 1px solid #DDD0C1; border-left: 6px solid #B4452F; border-radius: 12px; overflow: hidden; background: #fff; box-shadow: 0 2px 6px rgba(0,0,0,.05); border-top-width: 1px; }
+.ds-line2.full { border-left-color: #1F7A55; }
+.ds-line2.cxl { border-left-color: #9B2226; } .ds-line2.over { border-left-color: #8A8076; }
+.ds-line2 > .ds-lh { background: #EFE3D6; border-bottom: 2px solid #DDD0C1; }
+.ds-line2.ex > .ds-lh { background: #F3E6C8; } .ds-line2.lead > .ds-lh { background: #EAE1D7; } .ds-line2.cxl > .ds-lh { background: #F8E3E3; }
+.ds-line2 > .ds-led { border-bottom: 2px solid #DDD0C1; }
+@media (max-width: 700px) { .ds-line2 { margin: 0 6px 10px; } }

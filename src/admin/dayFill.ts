@@ -41,7 +41,7 @@ export async function loadDay(date: string): Promise<Day> {
     for (const l of x.staffing as (Line & { end?: string | null })[]) { const m = !l.end && out.find((o) => !o.end && o.code === l.code && (o.start ?? '') === (l.start ?? ''));
       if (m) m.count += l.count; else out.push({ ...l }); }
     x.staffing = out; }
-  const s = await supabase.from('shifts').select('id,event_id,staff_id,position_code,position_detail,status,pool_hold,locked,notified_at,planned_start,time_tbc,attendance,booking_note,cancel_reason,cancel_note,cancel_late,cancelled_at')
+  const s = await supabase.from('shifts').select('id,event_id,staff_id,position_code,position_detail,status,pool_hold,locked,notified_at,planned_start,planned_end,time_tbc,attendance,booking_note,cancel_reason,cancel_note,cancel_late,cancelled_at')
     .in('event_id', evs.length ? evs.map((x) => x.id) : NONE).neq('status', 'declined');
   const all = (s.data ?? []) as (Cx & { attendance?: string | null })[];
   const sh = all.filter((x) => x.attendance !== 'cancelled'); const cx = all.filter((x) => x.attendance === 'cancelled');
@@ -83,6 +83,11 @@ export function layout(e: Ev, shifts: Sh[], rk?: (sid: string) => number) {
   const rest = shifts.filter((s) => !LEAD.includes(s.position_code ?? '')).sort((a, b) => (a.planned_start ?? '').localeCompare(b.planned_start ?? '') || (rk ? rk(a.staff_id) - rk(b.staff_id) : 0));
   const left: Sh[] = [];
   const odd: Sh[] = [];
+  // Nov 13 · a line with an end time (e.g. 12 PM → 5 PM) takes the people whose shift ends then first
+  const ends = (e.staffing ?? []).map((l) => (l as Line & { end?: string | null }).end ?? null);
+  for (const s of [...rest]) { const pe = (s as Sh & { planned_end?: string | null }).planned_end; if (!pe) continue; const t = hm(s.planned_start); const te = hm(pe);
+    const L = lines.find((l) => ends[l.idx] === te && l.code === (s.position_code ?? 'W') && l.start === t && l.people.length < l.count);
+    if (L) { L.people.push(s); rest.splice(rest.indexOf(s), 1); } }
   for (const s of rest) { const t = hm(s.planned_start); const L = lines.find((l) => l.code === (s.position_code ?? 'W') && l.start === t && l.people.length < l.count)
       ?? lines.find((l) => l.start === t && l.people.length < l.count); if (L) L.people.push(s); else odd.push(s); }
   // Nov 12 · someone given their own start (e.g. 4:30 on a 4 PM line) stays on their line: same role, the closest line that starts before them
