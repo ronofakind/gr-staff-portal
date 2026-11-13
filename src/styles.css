@@ -4596,3 +4596,14 @@ a.ch-name-link { display: block; text-decoration: none; color: inherit; } a.ch-n
 .ds-blocks.narrow .ds-card .ds-line .ds-end, .ds-blocks.narrow .ds-card .ds-line .ds-n { display: none; }
 .ds-blocks.narrow .ds-card .ds-line .ds-cells { grid-column: 1 / -1; order: 5; }
 .ds-blocks.narrow .ds-detg { grid-template-columns: 1fr 1fr; }
+/* push 119 · fold Free this day · hide END ~ */
+.ds-cols.ffold { grid-template-columns: minmax(0, 1fr) 46px; }
+.ds-free.fold { padding: 12px 0; align-items: center; cursor: pointer; gap: 10px; }
+.ds-free.fold b { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 13px; white-space: nowrap; }
+.ds-free.fold span { font-weight: 800; color: #6B64D8; }
+.ds-free.fold:hover { background: #F6F2EC; }
+.ds-ghb { border: 0; background: none; font: 700 10px Inter, sans-serif; color: #6B64D8; cursor: pointer; letter-spacing: .02em; margin-left: 4px; padding: 0; }
+.ds-blocks.noend .ds-gh, .ds-blocks.noend .ds-card .ds-line { grid-template-columns: 140px 92px 112px minmax(0, 1fr) 46px; }
+.ds-blocks.noend .ds-card .ds-line .ds-end { display: none; }
+.ds-blocks.narrow.noend .ds-card .ds-line { grid-template-columns: 1fr auto auto; }
+@media (max-width: 900px) { .ds-cols.ffold { grid-template-columns: 1fr; } .ds-free.fold { flex-direction: row; justify-content: center; } .ds-free.fold b { writing-mode: horizontal-tb; transform: none; } }

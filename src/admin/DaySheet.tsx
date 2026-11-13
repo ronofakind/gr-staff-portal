@@ -40,7 +40,11 @@ export function DaySheet() {
   useEffect(() => { supabase.from('event_types').select('name,sort').order('sort').then(({ data }) => setTypes(((data ?? []) as { name: string }[]).map((x) => x.name))); }, []);
   const detOpen = (id: string) => { void detTick; try { return localStorage.getItem('gr_ds_det_' + id) !== '0'; } catch { return true; } };
   const togDet = (id: string) => { try { localStorage.setItem('gr_ds_det_' + id, detOpen(id) ? '0' : '1'); } catch { /* */ } setDetTick((t) => t + 1); };
-  const blocksR = useRef<HTMLDivElement | null>(null); const [cols, setCols] = useState(4); const [narrow, setNarrow] = useState(false); const [repl, setRepl] = useState<{ s: AShift; e: AEvent } | null>(null);
+  const blocksR = useRef<HTMLDivElement | null>(null); const [cols, setCols] = useState(4); const [narrow, setNarrow] = useState(false);
+  // push 119 · Ronnie: "a little squished" → Free this day folds to a thin tab, END ~ column can be hidden (both remembered)
+  const ls0 = (k: string) => { try { return localStorage.getItem(k) === '1'; } catch { return false; } };
+  const [freeFold, setFreeFold] = useState(() => ls0('gr_ds_freefold')); const [noEnd, setNoEnd] = useState(() => ls0('gr_ds_noend'));
+  useEffect(() => { try { localStorage.setItem('gr_ds_freefold', freeFold ? '1' : '0'); localStorage.setItem('gr_ds_noend', noEnd ? '1' : '0'); } catch { /* */ } }, [freeFold, noEnd]); const [repl, setRepl] = useState<{ s: AShift; e: AEvent } | null>(null);
   useEffect(() => { loadCtx().then((c) => { setCtx(c); setStaff(c.staff); }).catch((x) => setErr((x as Error).message)); }, []);
   useEffect(() => { try { localStorage.setItem('gr_ds_dept', dept); } catch { /* */ } }, [dept]);
   const wk0 = monday(date);
@@ -50,10 +54,11 @@ export function DaySheet() {
   })(); }, [date, tick]);
   useEffect(() => { weekCounts(wk0, addDays(wk0, 6)).then(setWn); }, [wk0, tick]);
   useEffect(() => { const ids = evs.map((e) => e.id); if (!ids.length) { setPend(0); return; } pendingCount(ids).then(setPend); }, [evs, tick]);
+  const noEndR = useRef(noEnd); noEndR.current = noEnd;
   // C · as many equal cells across as fit (Ronnie, Nov 12): one count for the whole sheet so every block lines up
   useEffect(() => { const el = blocksR.current; if (!el) return; const f = () => { const w = el.clientWidth; const phone = window.innerWidth <= 700 || w < 760; setNarrow(w < 760);
-      const room = phone ? w - 40 : w - 40 - 140 - 92 - 92 - 112 - 46 - 40; setCols(Math.max(2, Math.floor((room + 6) / ((phone ? 128 : 142) + 6)))); };
-    f(); const ro = new ResizeObserver(f); ro.observe(el); return () => ro.disconnect(); }, [evs.length]);
+      const room = phone ? w - 40 : w - 40 - 140 - 92 - (noEndR.current ? 0 : 100) - 112 - 46 - 32; setCols(Math.max(2, Math.floor((room + 6) / ((phone ? 128 : 142) + 6)))); };
+    f(); const ro = new ResizeObserver(f); ro.observe(el); return () => ro.disconnect(); }, [evs.length, noEnd, freeFold]);
 
   // week strip
   useEffect(() => { (async () => {
@@ -337,8 +342,8 @@ export function DaySheet() {
       {pend > 0 && <div className="ds-pend"><b>✉ {pend} change{pend > 1 ? 's' : ''} not sent yet</b><span className="muted">staff who were already sent a shift that changed · they're told when you press Send</span><span className="grow" /><button className="abtn sm dark" onClick={() => setSendOpen(true)}>Review &amp; send ›</button></div>}
       {sendOpen && <SendBox events={evs.map((e) => e.id)} onClose={() => { setSendOpen(false); setTick((t) => t + 1); }} onSent={() => { setMsg('Sent.'); setTick((t) => t + 1); }} />}
       {msg && <div className="adm-card okc sm">{msg}</div>}{err && <div className="adm-card err sm">{err}</div>}
-      <div className="ds-cols">
-        <div className={'ds-blocks' + (narrow ? ' narrow' : '')} ref={blocksR} onClick={() => ed && setEd(null)}>
+      <div className={'ds-cols' + (freeFold ? ' ffold' : '')}>
+        <div className={'ds-blocks' + (narrow ? ' narrow' : '') + (noEnd ? ' noend' : '')} ref={blocksR} onClick={() => ed && setEd(null)}>
           {!shown.length && <div className="adm-card muted">No {dept === 'both' ? '' : dept + ' '}events this day.</div>}
           {shown.map((e) => { const L = lays[e.id]; const have = sh.filter((s) => s.event_id === e.id).length; const need = L.client + L.extras.count;
             return (
@@ -352,7 +357,7 @@ export function DaySheet() {
                 <Details e={e} open={detOpen(e.id)} onToggle={() => togDet(e.id)} venues={ctx?.venues ?? []} clients={ctx?.clients ?? []} types={types} busy={busy}
                   onEv={(row, label) => saveEv(e, row, label)} onVenue={(v) => setVenue(e, v)} onClient={(c) => saveClient(e, c)} />
                 <div className="ds-grid">
-                  <div className="ds-gh"><span>ROLE</span><span>START</span><span>END ~</span><span>HOW MANY</span><span>NAMES · rating colour = tier</span><span /></div>
+                  <div className="ds-gh"><span>ROLE</span><span>START{noEnd && <button className="ds-ghb" onClick={() => setNoEnd(false)} title="Show the END ~ column">+ end</button>}</span>{!noEnd && <span>END ~ <button className="ds-ghb" onClick={() => setNoEnd(true)} title="Hide the END ~ column">hide</button></span>}<span>HOW MANY</span><span>NAMES · rating colour = tier</span><span /></div>
                   <div className={'ds-grp ' + (isBar(e) ? 'g-bar' : 'g-floor')}><div className="ds-grph"><i />{isBar(e) ? 'BAR' : 'FLOOR'}</div>
                     <Row e={e} lead code={isBar(e) ? 'BM' : 'MD'} start={e.start_time?.slice(0, 5) ?? null} count={L.leadNeed} people={L.leads} />
                     {L.lines.map((l) => <Row key={l.key} idx={l.idx} e={e} code={l.code} start={l.start} end={(e.staffing ?? [])[l.idx] ? ((e.staffing ?? [])[l.idx] as Line & { end?: string | null }).end ?? null : null} count={l.count} people={l.people} />)}
@@ -370,8 +375,9 @@ export function DaySheet() {
                   return <div className="ds-tot"><span><b>{need}</b> {isBar(e) ? 'bar' : 'floor'} <small>({[L.leadNeed ? `${L.leadNeed} ${isBar(e) ? 'BM' : 'MD'}` : '', ...lines, L.extras.count ? `${L.extras.count} extras` : ''].filter(Boolean).join(' · ')})</small></span><span className="grow" /><span><b>{have}</b> placed · {conf} confirmed{need > have ? <em> · {need - have} open</em> : ''}</span></div>; })()}
               </section>); })}
         </div>
-        <aside className="ds-free" onDragOver={(ev) => ev.preventDefault()} onDrop={() => { const d = dragR.current; setDrag(null); if (d && 'id' in d) remove(d); }}>
-          <b className="serif">Free this day · {nYes}</b>
+        {freeFold ? <aside className="ds-free fold" onClick={() => setFreeFold(false)} title="Show Free this day (you can still drop a name here = back to Free)" onDragOver={(ev) => ev.preventDefault()} onDrop={() => { const d = dragR.current; setDrag(null); if (d && 'id' in d) remove(d); }}>
+          <span>‹</span><b>Free · {nYes}</b></aside> : <aside className="ds-free" onDragOver={(ev) => ev.preventDefault()} onDrop={() => { const d = dragR.current; setDrag(null); if (d && 'id' in d) remove(d); }}>
+          <span className="row" style={{ alignItems: 'baseline' }}><b className="serif grow">Free this day · {nYes}</b><button className="ds-dett" onClick={() => setFreeFold(true)} title="Fold to make room">Hide ›</button></span>
           <small className="muted">said yes, not placed · best first · drag onto a slot, or tap a slot · drop a name here = back to free</small>
           <span className="seg3"><button className={tab === 'yes' ? 'on' : ''} onClick={() => setTab('yes')}>Yes {nYes}</button><button className={tab === 'maybe' ? 'on' : ''} onClick={() => setTab('maybe')}>Maybe {nMaybe}</button></span>
           {!free.length && <span className="muted sm">{tab === 'yes' ? 'Nobody left. Ask more from Bookings → Ask more people.' : 'No maybes.'}</span>}
@@ -379,7 +385,7 @@ export function DaySheet() {
             <i className={'ds-t ' + (tier(a.staff_id) ?? '')} /><b className="grow">{byId[a.staff_id]?.full_name ?? '…'}{ctx?.cars.has(a.staff_id) ? ' 🚗' : ''}</b>{(wn[a.staff_id] ?? 0) >= 3 && <small className="ds-flag" title={`Already ${wn[a.staff_id]} shifts this week`}>⚑{wn[a.staff_id]}</small>}<small className="muted">{a.from_time ? `from ${ap(a.from_time)}` : 'any time'}</small></div>)}
           {(() => { const open = shown.reduce((n, e) => { const L = lays[e.id]; return n + Math.max(0, L.client + L.extras.count - sh.filter((s) => s.event_id === e.id).length); }, 0);
             return <div className="ds-after">{open > 0 ? <><b>{open} open</b> slot{open > 1 ? 's' : ''} · {nYes} free</> : <><b>All slots filled.</b> {nYes} left = backups (not booked, released when you confirm)</>}</div>; })()}
-        </aside>
+        </aside>}
       </div>
       {card && (() => { const c = sh.find((x) => x.id === card.id); if (!c) return null; const e = evs.find((x) => x.id === c.event_id); if (!e) return null;
         return <PersonCard s={c} e={e} date={date} evs={evs} lays={lays} byId={byId} av={av} onDay={onDay} off={off} sortP={sortP} tier={tier} busy={busy} wn={wn[c.staff_id] ?? 0}
