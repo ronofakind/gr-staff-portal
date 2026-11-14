@@ -1,4 +1,3 @@
-import { Bottles } from './admin/Bottles';
 import { loadTheme } from './lib/theme';
 import { ConnectClaude } from './pages/ConnectClaude';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
@@ -33,7 +32,6 @@ import { Profile } from './pages/Profile';
 import { MyDates } from './pages/MyDates';
 import { Availability as StaffAvail } from './pages/Availability';
 import { EventPlan } from './pages/EventPlan';
-import { BarCount } from './pages/BarCount';
 import { Availability as AdminAvail } from './admin/Availability';
 import { TiersRanking } from './admin/TiersRanking';
 import { ClientChange } from './admin/ClientChange';
@@ -157,7 +155,6 @@ export function App() {
             <Route path="ranking" element={<TiersRanking tab="ranking" />} />
             <Route path="extras/:id" element={<Extras />} />
             <Route path="venues" element={<Venues />} />
-            <Route path="bottles" element={<Bottles />} />
             <Route path="settings" element={<Settings />} />
             <Route path="meetings" element={<Meetings />} />
             <Route path="meeting/new" element={<MeetingForm />} />
@@ -171,7 +168,7 @@ export function App() {
         <Route path="/schedule" element={<Navigate to="/my-dates" replace />} />{/* push 35a · old Schedule tab */}
         <Route path="/shift/:id" element={<Shift />} />
         <Route path="/shift/:id/plan" element={<EventPlan />} />
-        <Route path="/bar/:eventId" element={<BarCount />} />
+        <Route path="/bar/:eventId" element={<Navigate to="/" replace />} />{/* Nov 14 · bar count removed */}
         <Route path="/meeting/:id" element={<Meeting />} />
         <Route path="/hours" element={<HoursPage me={me} />} />
         <Route path="/availability" element={<StaffAvail me={me} />} />

@@ -21,7 +21,6 @@ import { shiftNotes, noteSeen, type ShiftNote } from '../lib/staffNotes';
 import { PinMap, pinDirections } from '../components/VenuePin';
 import { StaffLinks, mergeLinks } from '../components/Links';
 import { FirstCut } from '../components/FirstCut';
-import { BarCountCard } from '../components/BarCountCard';
 
 export function Shift({ backTo = '/' }: { backTo?: string }) {
   const { id } = useParams();
@@ -233,8 +232,6 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team, past }
       {!gone && req && <ChangeCard r={req} s={s} preview={preview} onChanged={chg.reload} />}
       {sheet === 'cancel' && <CancelSheet s={s} preview={preview} onClose={() => setSheet(null)} onDone={(late) => { setGone({ late }); setSheet(null); }} />}
       {sheet === 'change' && <ChangeSheet s={s} preview={preview} onClose={() => setSheet(null)} onSent={() => { setSheet(null); chg.reload(); }} />}
-
-      {!gone && ev.department === 'bar' && <BarCountCard eventId={ev.id} preview={preview} />}{/* push 69 */}
       {!gone && <FromTheMeeting eventId={ev.id} meetingBase={preview ? '/admin' : ''} />}{/* push 38 · pinned meeting notes */}
       {ev.rides && <GettingThere eventId={ev.id} eventDate={ev.event_date} firstStart={s.planned_start} travelMin={ev.travel_min ?? 60} paidMin={ev.paid_travel_min ?? 0} transport={!!ev.transport} preview={preview} />}{/* push 68 · carpool on any event with rides on */}
       </>}

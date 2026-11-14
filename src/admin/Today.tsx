@@ -28,8 +28,6 @@ import { needsSend, hoursBetween } from './api';
 import { LateEnds } from './LateEnds';
 import { useNewStaffRatings, RatingsToday, TAG_LABEL, BAD_TAGS } from './NewStaffRatings';
 import { supabase } from '../lib/supabase';
-import { barFlags } from '../lib/barFlags';
-import type { BMove } from '../lib/barCount';
 import { eventsBetween, addDays, isoDay, flagsOf, flagText, loadLateDecisions, LATE_DECISION, periodOf, dLabel, tTime, type AEvent, type AShift } from './api';
 
 type Need = { key: string; title: string; sub: string; action: string; to: string; red?: boolean; onAct?: () => Promise<void>; alt?: { label: string; to: string } };
@@ -273,14 +271,6 @@ export function Today() {
       // push 36d · staff messages waiting on Ronnie (no email: the count lives here + on the Messages nav item)
       const { data: nr, error: nrErr } = await supabase.rpc('inbox_count');
       if (!nrErr && typeof nr === 'number' && nr > 0) n.unshift({ key: 'msgs', red: true, title: `${nr} staff message${nr > 1 ? 's' : ''} need${nr > 1 ? '' : 's'} a reply`, sub: 'Messages · Needs reply', action: 'Open', to: '/admin/messages' });
-      // push 69 · bar counts: not submitted after the night, or submitted with red flags → the event page (Bar count)
-      { const { data: bc, error: bcErr } = await supabase.from('bar_moves').select('event_id,step,items,undone_at,at,events!inner(title,event_date,department)').gte('events.event_date', addDays(today, -3)).lte('events.event_date', today);
-        if (!bcErr && bc?.length) { const ids = [...new Set((bc as unknown as { event_id: string }[]).map((m) => m.event_id))];
-          const { data: cs } = await supabase.from('bar_counts').select('event_id,submitted_at').in('event_id', ids);
-          for (const id of ids) { const ms = (bc as unknown as (BMove & { event_id: string; events: { title: string; event_date: string } })[]).filter((m) => m.event_id === id); const ev = ms[0].events; const sub = (cs ?? []).find((x) => x.event_id === id)?.submitted_at ?? null;
-            const red = barFlags([], ms, [], sub).filter((f) => f.level === 'red');
-            if (!sub && ev.event_date < today) n.push({ key: 'bcs' + id, title: `🍸 Bar count not submitted · ${ev.title}`, sub: dLabel(ev.event_date, { weekday: 'short', month: 'short', day: 'numeric' }), action: 'Open', to: `/admin/event/${id}` });
-            else if (red.length) n.unshift({ key: 'bcf' + id, red: true, title: `🍸 Bar count looks off · ${ev.title}`, sub: red[0].text + (red.length > 1 ? ` (+${red.length - 1})` : ''), action: 'Check', to: `/admin/event/${id}` }); } } }
       // push 68 · carpools: running late (tonight) and people who lost their carpool
       const { data: rl, error: rlErr } = await supabase.from('ride_offers').select('kind,late_eta,lost_at,car_driver_id,event_id,staff:staff!ride_offers_staff_id_fkey(full_name),events!inner(title,event_date)').gte('events.event_date', today).or('late_eta.not.is.null,lost_at.not.is.null');
       if (!rlErr) for (const r of (rl ?? []) as unknown as { kind: string; late_eta: string | null; lost_at: string | null; car_driver_id: string | null; event_id: string; staff: { full_name: string } | null; events: { title: string; event_date: string } }[]) {
