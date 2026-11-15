@@ -159,6 +159,9 @@ type Pick = { id: string; full_name: string; nickname: string | null; department
 const ROLE_OF: Record<string, string> = { waiter: 'W', w: 'W', md: 'MD', manager: 'MD', bt: 'BT', bartender: 'BT', barmaid: 'BT', bb: 'BB', barback: 'BB', bm: 'BM', 'bar manager': 'BM', bus: 'BUS', busboy: 'BUS' };
 const ROLE_NAME: Record<string, string> = { W: 'Waiter', MD: 'MD', BT: 'Bartender', BB: 'Barback', BM: 'Bar manager', BUS: 'Busboy' };
 const rolesOf = (p: Pick) => { const r = [...new Set(p.positions.map((x) => ROLE_OF[x.toLowerCase()]).filter(Boolean))]; return r.length ? r : [p.department === 'bar' ? 'BT' : 'W']; };
+/** Nov 15 · the role is what they work on THIS team (an MD switching to the bar works as a barback): bar team → bar roles, floor team → floor roles; their profile role is picked first when it fits */
+const TEAM_ROLES = (dept: string | null | undefined) => (dept === 'bar' ? ['BB', 'BT', 'BM'] : ['W', 'MD', 'BUS']);
+const rolesFor = (p: Pick, dept: string | null | undefined) => { const t = TEAM_ROLES(dept); const mine = rolesOf(p).filter((r) => t.includes(r)); return mine.length === 1 ? [mine[0], ...t.filter((r) => r !== mine[0])] : t; };
 const norm = (x: string) => x.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 
 /** "+ Add staff": search everyone, flag who is booked elsewhere tonight, pick role (only if 2), start time, notes. */
@@ -172,7 +175,7 @@ function AddStaff({ ev, onClose, onDone, lang }: { ev: EvFull; onClose: () => vo
   const list = q.trim().length < 2 || !all ? [] : all.filter((p) => words.every((w) => norm(p.full_name + ' ' + (p.nickname ?? '')).includes(w)))
     .sort((a, b) => Number(a.here) - Number(b.here) || Number(!norm(a.full_name).startsWith(words[0])) - Number(!norm(b.full_name).startsWith(words[0])) || a.full_name.localeCompare(b.full_name)).slice(0, 8);
   const choose = (p: Pick) => {
-    setErr(''); setRole(rolesOf(p).length === 1 ? rolesOf(p)[0] : ''); setNote('');
+    setErr(''); setRole(rolesOf(p).filter((r) => TEAM_ROLES(ev.department).includes(r)).length === 1 ? rolesOf(p).filter((r) => TEAM_ROLES(ev.department).includes(r))[0] : ''); setNote('');
     setStart(hm(new Date(Math.round(Date.now() / 900000) * 900000).toISOString()));
     if (p.elsewhere_shift) setMove(p); else setPick(p);
   };
@@ -207,9 +210,9 @@ function AddStaff({ ev, onClose, onDone, lang }: { ev: EvFull; onClose: () => vo
         </> : <>
           <div className="row" style={{ gap: 12 }}><Avatar name={pick.full_name} url={null} size={48} />
             <div><div className="serif" style={{ fontSize: 22 }}>{pick.full_name}</div>
-              <div className="muted sm">{rolesOf(pick).length > 1 ? 'Their profile has 2 roles, pick one' : ROLE_NAME[role] ?? role}{pick.elsewhere_title ? ` · moving from ${pick.elsewhere_title}` : ''}</div></div></div>
-          {rolesOf(pick).length > 1 && <div><span className="kicker">Role tonight</span>
-            <div className="row" style={{ gap: 8, marginTop: 6 }}>{rolesOf(pick).map((r) => <button key={r} className={'rchip' + (role === r ? ' on' : '')} style={{ padding: '0 16px' }} onClick={() => setRole(r)}>{ROLE_NAME[r] ?? r}</button>)}</div></div>}
+              <div className="muted sm">{role ? ROLE_NAME[role] ?? role : 'Pick their role on this team'}{pick.elsewhere_title ? ` · moving from ${pick.elsewhere_title}` : ''}</div></div></div>
+          {<div><span className="kicker">Role on this team</span>
+            <div className="row" style={{ gap: 8, marginTop: 6 }}>{rolesFor(pick, ev.department).map((r) => <button key={r} className={'rchip' + (role === r ? ' on' : '')} style={{ padding: '0 16px' }} onClick={() => setRole(r)}>{ROLE_NAME[r] ?? r}</button>)}</div></div>}
           <div className="times-box"><label>Started at<QuarterTime value={start} onChange={setStart} label="Start time" /></label></div>
           <label className="as-note"><span className="kicker">Notes (optional)</span><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. client asked for one more on the bar…" /></label>
           {err && <p className="error">{err}</p>}
@@ -581,13 +584,13 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
               const inf = infoOf(r); const isNew = !!inf?.is_new && inf.done_before < newUnder;
               return (
                 <SwipeRow key={r.id} on={canUndo(r)} label={pout ? 'Undo end' : 'Undo start'} onAct={() => (pout ? undoEnd(r) : undoStart(r))}>
-                <div className={'crew' + (r.attendance ? ' flagged' : '') + (r.left_early ? ' left' : '')}>
+                <div className={'crew' + (r.attendance ? ' flagged' : '') + (r.left_early ? ' left' : '') + (r.adder ? ' has-add' : '')}>
                   <button className={'ring tap ' + ring + (isNew && !pin ? ' newp' : '')} aria-label={`Options for ${r.staff?.full_name}`} onClick={() => openRow(r, isNew)}>
                     <Avatar name={r.staff?.full_name ?? '?'} url={r.staff?.photo_url} size={44} />
                     {isNew && <i className="new-badge">NEW</i>}
                   </button>
                   <button className="who" aria-label={`Options for ${r.staff?.full_name}`} onClick={() => openRow(r, isNew)}>
-                    <span className="nm">{r.staff ? teamName(r.staff) : ''}{(r.staff_id === ev.manager_id || (ev.co_manager_ids ?? []).includes(r.staff_id ?? '')) && <i className="mgr-tag">MANAGER</i>}{r.ends_own && !r.punches?.late_entry_at && <i className="own-tag">ENDS OWN</i>}{r.punches?.late_entry_at && <i className="late-tag">{r.punches.late_ok_at ? '✓ ' : ''}ENTERED LATER</i>}{xIds.has(r.id) && !r.attendance && <i className="x-tag">EXTRA</i>}{r.adder && <i className="added-tag">ADDED BY {r.adder.full_name.split(' ')[0].toUpperCase()}</i>}{r.cut_first_at && !r.attendance && !r.punches?.punch_out && <i className="fc-tag" title={`Asked ${time(r.cut_first_at, lang)} · cut first if you can`}>FIRST CUT ✋</i>}</span>
+                    <span className="nm">{r.staff ? teamName(r.staff) : ''}{(r.staff_id === ev.manager_id || (ev.co_manager_ids ?? []).includes(r.staff_id ?? '')) && <i className="mgr-tag">MANAGER</i>}{r.ends_own && !r.punches?.late_entry_at && <i className="own-tag">ENDS OWN</i>}{r.punches?.late_entry_at && <i className="late-tag">{r.punches.late_ok_at ? '✓ ' : ''}ENTERED LATER</i>}{xIds.has(r.id) && !r.attendance && <i className="x-tag">EXTRA</i>}{r.cut_first_at && !r.attendance && !r.punches?.punch_out && <i className="fc-tag" title={`Asked ${time(r.cut_first_at, lang)} · cut first if you can`}>FIRST CUT ✋</i>}</span>
                     {fromRonnie && <span><i className="p28-tag red">CANCELLED{r.attendance === 'no_show' ? ' · NO-SHOW' : ''} · FROM RONNIE</i></span>}
                     {r.replacement_for && !r.attendance && <span><i className="p28-tag blue">REPLACEMENT · {fullT(r.planned_start)}</i></span>}
                     {ln && !pin && !lnPassed && <span><i className="p28-tag gold">LATE ~{shortT(ln.eta)}{ln.reason ? ` · ${ln.reason.toUpperCase()}` : ''}{ln.seen_at ? ' · ✓ SEEN' : ''}</i></span>}
@@ -627,7 +630,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
                       : !pin ? (gate(r).kind === 'locked' ? <button className="act locked" disabled title={gate(r).label}>{t.start}</button> : <button className="act start" onClick={() => startRows([r])}>{t.start}</button>)
                       : !ended ? <button className="act end" onClick={() => endRow(r, pin)}>{t.end}</button> : <span className="act done-mark">✓</span>}
                   </div>
-                </div>
+                {r.adder && <div className="crew-add">＋ Added by {r.adder.full_name.split(' ')[0]}</div>}{/* Nov 15 · own line at the bottom (Ronnie: option D) */}</div>
                 </SwipeRow>
               );
             })}

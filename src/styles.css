@@ -4737,3 +4737,6 @@ a.ch-name-link { display: block; text-decoration: none; color: inherit; } a.ch-n
 .crew .who { overflow: hidden; }
 .crew .nm { overflow-wrap: anywhere; }
 .crew .nm > i { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: 1px; margin-top: 2px; box-sizing: border-box; }
+/* Nov 15 · "added by" on its own line across the bottom of the person's card (option D) */
+.crew.has-add { flex-wrap: wrap; padding-bottom: 0; overflow: hidden; }
+.crew-add { flex: 0 0 calc(100% + 22px); margin: 10px -10px 0 -12px; padding: 7px 14px; border-top: 1px solid #F0EAE2; background: #FAF7F3; font-size: 12.5px; font-weight: 600; color: #4A443D; box-sizing: border-box; }
