@@ -4727,3 +4727,9 @@ a.ch-name-link { display: block; text-decoration: none; color: inherit; } a.ch-n
 .dbr-miss .dbr-top { display: flex; align-items: center; gap: 10px; }
 .dbr-miss .dbr-top > b { flex: 1; min-width: 0; line-height: 1.3; }
 .dbr-miss .dbr-top > .dbm { flex: none; width: auto; white-space: nowrap; }
+/* Nov 15 · phone admin tab bar: sticky at the end of the page instead of fixed, so iOS can't leave it floating mid-screen while scrolling */
+@media (max-width: 700px) {
+  .adm { padding-bottom: 0 !important; }
+  .adm-tabs { position: sticky !important; bottom: 0; transform: translateZ(0); }
+  .adm-main { min-height: calc(100dvh - 76px); }
+}
