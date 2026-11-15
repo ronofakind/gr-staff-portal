@@ -114,7 +114,7 @@ const fullT = (iso: string) => new Date(iso).toLocaleTimeString('en-US', { hour:
 const shortT = (iso: string) => fullT(iso).replace(/\s?[AP]M$/, '');
 type Ev = { id: string; title: string; event_date: string };
 type EvFull = Ev & { department?: string; staffing?: { start: string; end?: string | null }[] | null; drive_folder_url?: string | null; address: string | null; start_time: string | null; end_time: string | null; description: string | null;
-  dress_code: string | null; hours_submitted_at: string | null; venues: { address: string | null; staff_notes: string | null; no_outside_food?: boolean } | null;
+  dress_code: string | null; hours_submitted_at: string | null; hours_submitted_by?: string | null; sub_by?: { full_name: string } | null; venues: { address: string | null; staff_notes: string | null; no_outside_food?: boolean } | null;
   /** push 39 · lead + co-managers (migration 037) for the "Benjamin · Isaac" line */
   manager_id?: string | null; co_manager_ids?: string[] | null; manager?: { full_name: string; nickname?: string | null } | null };
 
@@ -289,14 +289,16 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
 
   const load = async () => {
     const [e, s] = await Promise.all([
-      supabase.from('events').select('id,title,event_date,department,address,start_time,end_time,description,dress_code,hours_submitted_at,drive_folder_url,staffing,venues(address,staff_notes,no_outside_food),manager_id,co_manager_ids,manager:staff!events_manager_id_fkey(full_name,nickname)').eq('id', eventId!).single(),
+      supabase.from('events').select('id,title,event_date,department,address,start_time,end_time,description,dress_code,hours_submitted_at,hours_submitted_by,drive_folder_url,staffing,venues(address,staff_notes,no_outside_food),manager_id,co_manager_ids,manager:staff!events_manager_id_fkey(full_name,nickname)').eq('id', eventId!).single(),
       (async () => {
         const q = (cols: string) => supabase.from('shifts').select(cols).eq('event_id', eventId!).neq('status', 'declined').order('planned_start');
         const r = await q(ROW_COLS + ',cancel_self,cancel_sent_to_manager,replacement_for');
         return r.error ? q(ROW_COLS) : r; // migration 034 not applied yet
       })(),
     ]);
-    setEv(e.data as unknown as EvFull);
+    const ed = e.data as unknown as EvFull | null; // Nov 15 · who submitted (no FK on hours_submitted_by, so a second small read)
+    if (ed?.hours_submitted_by) { const { data: w } = await supabase.from('staff').select('full_name').eq('id', ed.hours_submitted_by).maybeSingle(); ed.sub_by = (w as { full_name: string } | null) ?? null; }
+    setEv(ed);
     supabase.from('incidents').select('id,kind,involved_staff,involved_other,happened_at,body,audio_path,audio_sec,photos,created_at').eq('event_id', eventId!).order('created_at', { ascending: false }).then(({ data }) => setIncidents((data ?? []) as Incident[]));
     supabase.rpc('manager_team_info', { p_event: eventId! }).then(({ data }) => {
       const m: Record<string, Info> = {};
@@ -343,7 +345,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
       if (q.length) { setRateQ(q.slice(1)); setFb({ row: rows.find((r) => r.id === q[0])!, back: 'queue' }); }
     } else if (sub) {
       asked.current = true;
-      if (!ev.hours_submitted_at) setReview(true);
+      if (!ev.hours_submitted_at) setReview(true); // (another manager's submission closes it: see otherSent)
     }
   }, [ev, rows, info, fbOn]); // eslint-disable-line react-hooks/exhaustive-deps
   const nextInQueue = () => {
@@ -451,6 +453,9 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
   const doneN = active.filter((r) => r.punches?.punch_out && !isWorking(r)).length;
   const outstanding = active.filter((r) => r.punches?.punch_in && !r.punches.punch_out && !r.ends_own);
   const ownOpen = active.filter((r) => r.ends_own && r.punches?.punch_in && !r.punches.punch_out); // Nov 6 · still working, ending their own
+  // Nov 15 · one submission per team: once another manager sent it, it's closed here (only they or Ronnie can resubmit)
+  const otherSent = !!ev.hours_submitted_at && !!ev.hours_submitted_by && ev.hours_submitted_by !== me?.id;
+  const sentBy = ev.sub_by?.full_name?.split(' ')[0] ?? 'another manager';
   const changedSince = ev.hours_submitted_at ? rows.some((r) => r.punches?.updated_at && r.punches.updated_at > ev.hours_submitted_at!) : false;
   const endsAt = scheduled.length ? scheduled.map((r) => r.punches!.punch_out!).sort()[0] : null;
   const late = active.filter((r) => !r.punches?.punch_in && new Date(r.planned_start).getTime() < Date.now());
@@ -659,10 +664,10 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
       <div className="submit-bar">
         <div className="grow">
           {ownPick && ownOpen.length > 0 && !ev.hours_submitted_at && <small className="own-wait">🔑 {ownOpen.map((r) => first(r.staff?.full_name)).join(', ')} {ownOpen.length === 1 ? 'is' : 'are'} ending their own · their time is added when they do</small>}
-          <b className={changedSince ? 'gold' : ''}>{changedSince ? '↻ Times changed since you submitted' : ev.hours_submitted_at ? '✓ Hours submitted' : endsAt ? `Submit now with ${time(endsAt, lang)} as the end` : 'End of night'}</b>
-          <span>{ev.hours_submitted_at ? `Submitted ${new Date(ev.hours_submitted_at).toLocaleString('en-CA', { weekday: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' })}${changedSince ? ' · Ronnie has the older version' : ' · you can still edit'}` : endsAt ? 'Change anything after? You can resubmit.' : "Check everyone's times, then send"}</span>
+          <b className={changedSince && !otherSent ? 'gold' : ''}>{otherSent ? `✓ Submitted by ${sentBy}` : changedSince ? '↻ Times changed since you submitted' : ev.hours_submitted_at ? '✓ Hours submitted' : endsAt ? `Submit now with ${time(endsAt, lang)} as the end` : 'End of night'}</b>
+          <span>{otherSent ? `${new Date(ev.hours_submitted_at!).toLocaleString('en-CA', { weekday: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' })} · this team is closed` : ev.hours_submitted_at ? `Submitted ${new Date(ev.hours_submitted_at).toLocaleString('en-CA', { weekday: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' })}${changedSince ? ' · Ronnie has the older version' : ' · you can still edit'}` : endsAt ? 'Change anything after? You can resubmit.' : "Check everyone's times, then send"}</span>
         </div>
-        <button className="btn-ink" style={{ height: 46, padding: '0 18px', borderRadius: 23 }} onClick={() => (fbOn && !checkDone && newWorked.length ? setCheck(true) : setReview(true))}>{ev.hours_submitted_at ? 'Resubmit ›' : 'Submit hours ›'}</button>
+        {!otherSent && <button className="btn-ink" style={{ height: 46, padding: '0 18px', borderRadius: 23 }} onClick={() => (fbOn && !checkDone && newWorked.length ? setCheck(true) : setReview(true))}>{ev.hours_submitted_at ? 'Resubmit ›' : 'Submit hours ›'}</button>}
       </div>)}
       {ev.hours_submitted_at && dbDone !== true && Date.now() < new Date(ev.event_date + 'T12:00:00-05:00').getTime() + 864e5 && (
         <button className="db-entry" onClick={() => setDbOpen(true)}>📝 How did tonight go? <span>Debrief ›</span></button>)}
@@ -696,7 +701,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
           setBusy(true); setErr('');
           const { error } = await supabase.rpc('manager_submit_hours', { p_event: ev.id });
           setBusy(false);
-          if (error) { setErr(error.message); return; }
+          if (error) { setErr(/already submitted/i.test(error.message) ? error.message.replace(/^.*?(Already)/i, '$1') : error.message); if (/already submitted/i.test(error.message)) { setReview(false); await load(); } return; }
           const wasFirst = !ev.hours_submitted_at;
           setReview(false); await load();
           if (wasFirst && dbDone !== true) setDbOpen(true); // push 60 · also when the check failed to load
