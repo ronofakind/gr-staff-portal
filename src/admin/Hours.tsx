@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import type { MeetingHours } from '../lib/meetings';
 import { loadRates, byStaff, rateOn } from './pay';
-import { eventsBetween, addDays, isoDay, endIso, startIso, periodOf, hoursBetween, tTime, dLabel, flagsOf, flagText, type AEvent, type AShift } from './api';
+import { eventsBetween, addDays, isoDay, endIso, startIso, periodOf, hoursBetween, chainHours, tTime, dLabel, flagsOf, flagText, type AEvent, type AShift } from './api';
 
 type Row = { e: AEvent; s: AShift };
 const hm24 = (iso: string | null) => iso ? new Date(iso).toLocaleTimeString('en-GB', { timeZone: 'America/Toronto', hour: '2-digit', minute: '2-digit' }) : '';
@@ -36,7 +36,9 @@ export function Hours() {
   const missing = past.filter((r) => !r.s.attendance && (!r.s.punches?.punch_in || !r.s.punches?.punch_out) && r.e.event_date < today);
   const worked = rows.filter((r) => r.s.punches?.punch_in && r.s.punches?.punch_out);
   const mtgHours = mh.filter((x) => x.ended).reduce((n, x) => n + Number(x.hours), 0);
-  const hours = worked.reduce((n, r) => n + hoursBetween(r.s.punches!.punch_in, r.s.punches!.punch_out, r.s.left_early), 0) + mtgHours;
+  const ch = useMemo(() => chainHours(rows.filter((r) => !r.s.attendance).map((r) => ({ id: r.s.id, staff_id: r.s.staff_id, in: r.s.punches?.punch_in, out: r.s.punches?.punch_out, left: r.s.left_early }))), [rows]); // Nov 15
+  const hb = (r: Row) => ch.get(r.s.id) ?? hoursBetween(r.s.punches?.punch_in ?? null, r.s.punches?.punch_out ?? null, r.s.left_early);
+  const hours = worked.reduce((n, r) => n + hb(r), 0) + mtgHours;
   const flagged = rows.filter((r) => flagsOf(r.s).some((f) => f.flag === 'early' || f.flag === 'late'));
   const noShows = rows.filter((r) => r.s.attendance === 'no_show');
   const notes = rows.filter((r) => r.s.manager_note && !r.s.note_archived_at);
@@ -52,9 +54,9 @@ export function Hours() {
   const people = useMemo(() => {
     const m = new Map<string, { name: string; rows: Row[] }>();
     for (const r of rows) { const k = r.s.staff_id; if (!m.has(k)) m.set(k, { name: r.s.staff?.full_name ?? '?', rows: [] }); m.get(k)!.rows.push(r); }
-    return [...m.entries()].map(([id, v]) => ({ id, ...v, hours: v.rows.reduce((n, r) => n + hoursBetween(r.s.punches?.punch_in ?? null, r.s.punches?.punch_out ?? null, r.s.left_early), 0) }))
+    return [...m.entries()].map(([id, v]) => ({ id, ...v, hours: v.rows.reduce((n, r) => n + hb(r), 0) }))
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [rows]);
+  }, [rows, ch]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const save = async (r: Row) => {
     setErr('');
@@ -89,7 +91,7 @@ export function Hours() {
     const lines = [['Name', 'Date', 'Event', 'Start', 'End', 'Hours', 'Flag'].join(',')];
     for (const r of [...rows].sort((a, b) => (a.s.staff?.full_name ?? '').localeCompare(b.s.staff?.full_name ?? '') || a.e.event_date.localeCompare(b.e.event_date)))
       lines.push([r.s.staff?.full_name, r.e.event_date, r.e.title, tTime(r.s.punches?.punch_in ?? null), tTime(r.s.punches?.punch_out ?? null),
-        hoursBetween(r.s.punches?.punch_in ?? null, r.s.punches?.punch_out ?? null, r.s.left_early), flagsOf(r.s).map(flagText).join(' ')].map((x) => `"${String(x ?? '').replace(/"/g, '""')}"`).join(','));
+        hb(r), flagsOf(r.s).map(flagText).join(' ')].map((x) => `"${String(x ?? '').replace(/"/g, '""')}"`).join(','));
     for (const x of mh.filter((y) => y.ended)) lines.push([x.full_name, x.meeting_date, `MEETING · ${x.title}`, tTime(x.paid_in), tTime(x.paid_out), Number(x.hours), 'MEETING'].map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(','));
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv' })); a.download = `hours-${p.start}-to-${p.end}.csv`; a.click();
   };
@@ -222,7 +224,7 @@ export function Hours() {
                     </tr>
                     {open === x.id && x.rows.map((r) => (
                       <tr key={r.s.id} className="sub"><td>{dLabel(r.e.event_date)} · {r.e.title}</td><td colSpan={2}>{times(r)}</td>
-                        <td>{hoursBetween(r.s.punches?.punch_in ?? null, r.s.punches?.punch_out ?? null, r.s.left_early) || ''} {flagsOf(r.s).map((f) => <span key={f.flag} className="ftag">{flagText(f)}</span>)}</td></tr>
+                        <td>{hb(r) || ''} {flagsOf(r.s).map((f) => <span key={f.flag} className="ftag">{flagText(f)}</span>)}</td></tr>
                     ))}
                   </Fragment>
                 );

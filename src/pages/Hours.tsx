@@ -1,3 +1,4 @@
+import { chainHours } from '../admin/api';
 import { MyExpenses } from '../components/Expense';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -64,7 +65,9 @@ export function Hours({ me }: { me: Staff }) {
 
   const done = (r: Row) => !r.attendance && !!r.punches?.punch_in && !!r.punches.punch_out && new Date(r.punches.punch_out).getTime() <= Date.now();
   const travelOf = (r: Row) => (r.events.transport ? (r.events.paid_travel_min ?? 0) / 60 : 0);
-  const hoursOf = (r: Row) => paidHours(r.punches!.punch_in!, r.punches!.punch_out!, !!r.left_early) + travelOf(r);
+  // Nov 15 · back-to-back shifts the same night (floor → bar switch): one 4 h minimum for the run, same as payroll
+  const ch = useMemo(() => chainHours((rows ?? []).filter((r) => !r.attendance).map((r) => ({ id: r.id, staff_id: me.id, in: r.punches?.punch_in, out: r.punches?.punch_out, left: r.left_early }))), [rows, me.id]);
+  const hoursOf = (r: Row) => (ch.get(r.id) ?? paidHours(r.punches!.punch_in!, r.punches!.punch_out!, !!r.left_early)) + travelOf(r);
   const inPer = (p: { start: string; end: string }) => (rows ?? []).filter((r) => r.events.event_date >= p.start && r.events.event_date <= p.end && done(r)).sort((a, b) => b.planned_start.localeCompare(a.planned_start));
   const shifts = inPer(per);
   const mIn = (p: { start: string; end: string }) => mh.filter((x) => x.meeting_date >= p.start && x.meeting_date <= p.end).sort((a, b) => b.starts_at.localeCompare(a.starts_at));

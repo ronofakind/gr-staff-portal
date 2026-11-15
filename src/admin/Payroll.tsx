@@ -5,7 +5,7 @@ import { zipSync } from 'fflate';
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { eventsBetween, addDays, isoDay, periodOf, hoursBetween, dLabel, type AEvent } from './api';
+import { eventsBetween, addDays, isoDay, periodOf, hoursBetween, chainHours, dLabel, type AEvent } from './api';
 import { loadRates, byStaff, rateOn, money2, type RateRow } from './pay';
 import { loadNewHires, missingFor, missingText, type NewHire } from '../lib/newHires';
 import { payDayLabel } from '../lib/hours';
@@ -80,12 +80,13 @@ export function Payroll() {
   const people: Person[] = useMemo(() => {
     const m = new Map<string, Person>();
     const get = (id: string, name: string) => { if (!m.has(id)) m.set(id, { id, name, shifts: [], mtg: [], lines: [], hours: 0, base: 0, total: 0, noRate: false, noEnd: 0, salary: isSal(id) }); return m.get(id)!; };
+    const ch = chainHours((evs ?? []).flatMap((e) => e.shifts.filter((s) => s.status !== 'declined' && !s.attendance).map((s) => ({ id: s.id, staff_id: s.staff_id, in: s.punches?.punch_in, out: s.punches?.punch_out, left: s.left_early })))); // Nov 15 · one minimum per back-to-back run
     for (const e of evs ?? []) for (const s of e.shifts) {
       if (s.status === 'declined' || s.attendance || !s.punches?.punch_in) continue;
       const x = get(s.staff_id, s.staff?.full_name ?? '?');
       const rate = rateOn(rates[s.staff_id], e.event_date);
       const noEnd = !s.punches.punch_out;
-      const h = noEnd ? 0 : hoursBetween(s.punches.punch_in, s.punches.punch_out, !!s.left_early);
+      const h = noEnd ? 0 : ch.get(s.id) ?? hoursBetween(s.punches.punch_in, s.punches.punch_out, !!s.left_early);
       const travel = e.transport && e.paid_travel_min && rate != null ? r2((e.paid_travel_min / 60) * rate) : 0;
       const gas = e.transport && e.gas_per_car && drivers.has(e.id + '|' + s.staff_id) ? Number(e.gas_per_car) : 0;
       const raw = rate == null ? 0 : h * rate; const pay = r2(raw); // Nov 12 · round the total, not each shift (sheet: 17 h × $21.50 = $365.50, not $365.51)

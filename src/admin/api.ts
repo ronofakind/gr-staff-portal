@@ -127,6 +127,22 @@ export function periodOf(iso: string) {
 export const MIN_HOURS = 4;
 /** Paid/billed hours: rounding + minimum from Settings (15 min · 4 h), except left early (emergency) = real hours. */
 export const hoursBetween = (a: string | null, b: string | null, exact = false) => { if (!a || !b) return 0; const h = roundTo(new Date(b).getTime() - new Date(a).getTime()); return exact ? h : Math.max(setting('hours.min'), h); };
+/** Nov 15 · back-to-back shifts the same night (e.g. floor → bar switch, next one starts when the first ends): ONE minimum for the run, not per shift.
+ *  Later shifts = real time (rounded); the first one tops the run up to the minimum if the whole run is short. Shifts with a gap keep their own minimum. */
+export type PRow = { id: string; staff_id: string; in: string | null | undefined; out: string | null | undefined; left?: boolean | null };
+export const chainHours = (rows: PRow[]) => {
+  const res = new Map<string, number>(); const by = new Map<string, PRow[]>();
+  for (const r of rows) { if (!r.in || !r.out) continue; if (!by.has(r.staff_id)) by.set(r.staff_id, []); by.get(r.staff_id)!.push(r); }
+  const t = (x: string | null | undefined) => new Date(x!).getTime();
+  for (const list of by.values()) { list.sort((a, b) => t(a.in) - t(b.in)); let i = 0;
+    while (i < list.length) { let j = i; while (j + 1 < list.length && Math.abs(t(list[j + 1].in) - t(list[j].out)) <= 15 * 60000) j++;
+      const run = list.slice(i, j + 1);
+      if (run.length === 1) res.set(run[0].id, hoursBetween(run[0].in!, run[0].out!, !!run[0].left));
+      else { const real = run.map((r) => hoursBetween(r.in!, r.out!, true)); const sum = real.reduce((a, b) => a + b, 0);
+        const total = run.some((r) => r.left) ? sum : Math.max(setting('hours.min'), sum);
+        run.forEach((r, k) => res.set(r.id, k === 0 ? Math.round((real[0] + total - sum) * 100) / 100 : real[k])); }
+      i = j + 1; } }
+  return res; };
 export const tTime = (iso: string | null) => iso ? new Date(iso).toLocaleTimeString('en-CA', { timeZone: 'America/Toronto', hour: 'numeric', minute: '2-digit' }).replace(/\./g, '') : '';
 export const dLabel = (iso: string, o: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric' }) => new Date(iso + 'T12:00:00').toLocaleDateString('en-CA', o).replace(/\./g, '');
 
