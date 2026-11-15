@@ -58,17 +58,20 @@ export function Today() {
   const [asks, setAsks] = useState<AdminAsk[]>([]);
   const [rep, setRep] = useState<{ s: AShift; e: AEvent } | null>(null); const [toast, setToast] = useState<string | null>(null);
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 5000); return () => clearTimeout(t); }, [toast]);
+  const [lastNight, setLastNight] = useState<AEvent[] | null>(null);
   const loadArch = () => supabase.from('admin_archive').select('key,sig,label,archived_at').order('archived_at', { ascending: false }).then(({ data }) => setArch((data ?? []) as Arch[]));
 
   useEffect(() => {
     loadArch();
     (async () => {
       const mon = addDays(today, -((new Date(today + 'T12:00:00').getDay() + 6) % 7));
-      const [evs, ahead, ans] = await Promise.all([
+      const [evs, ahead, ans, ln] = await Promise.all([
         eventsBetween(mon, addDays(mon, 6)),
         eventsBetween(today, addDays(today, 14)),
         supabase.from('availability').select('id', { count: 'exact', head: true }).eq('status', 'yes').not('ask_id', 'is', null).gte('for_date', today),
+        eventsBetween(addDays(today, -1), addDays(today, -1)), // Nov 15 · last night's events stay on Tonight past midnight
       ]);
+      setLastNight(ln);
       setWeek(evs); setAhead(ahead); setAnswers(ans.count ?? 0);
       // Missing end times in this + last pay period
       const cur = periodOf(today); const prev = periodOf(addDays(cur.start, -1));
@@ -317,7 +320,10 @@ export function Today() {
   const nApps = useNewApplicationsCount(tick);
   const { lay, save: saveLay, sorted, hidden: hiddenSecs } = useTodayLayout();
   const askNeeds = useAskNeeds(addDays(today, -1), addDays(today, 90), tick); // push 40 · No / no answer / nobody took the spot
-  const tonight = (week ?? []).filter((e) => e.event_date === today);
+  // Nov 15 · after midnight, last night's events stay here until 8 AM (and after that while someone is still clocked in)
+  const early = new Date().getHours() < 8;
+  const stillOn = (e: AEvent) => e.shifts.some((x) => !x.attendance && x.punches?.punch_in && !x.punches.punch_out);
+  const tonight = [...(lastNight ?? []).filter((e) => early || stillOn(e)), ...(week ?? []).filter((e) => e.event_date === today)];
   const hidden = (n: Need) => arch.some((a) => a.key === n.key && a.sig === sigOf(n));
   const shown = needs.filter((n) => !hidden(n));
   const archivedToday = arch.filter((a) => isoDay(new Date(a.archived_at)) === today);
