@@ -4733,3 +4733,7 @@ a.ch-name-link { display: block; text-decoration: none; color: inherit; } a.ch-n
   .adm-tabs { position: sticky !important; bottom: 0; transform: translateZ(0); }
   .adm-main { min-height: calc(100dvh - 76px); }
 }
+/* Nov 15 · manager list: name tags (MANAGER, ADDED BY …) wrap under the name instead of running under the call / text buttons */
+.crew .who { overflow: hidden; }
+.crew .nm { overflow-wrap: anywhere; }
+.crew .nm > i { display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; vertical-align: 1px; margin-top: 2px; box-sizing: border-box; }
