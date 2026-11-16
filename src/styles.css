@@ -4740,3 +4740,50 @@ a.ch-name-link { display: block; text-decoration: none; color: inherit; } a.ch-n
 /* Nov 15 · "added by" on its own line across the bottom of the person's card (option D) */
 .crew.has-add { flex-wrap: wrap; padding-bottom: 0; overflow: hidden; }
 .crew-add { flex: 0 0 calc(100% + 22px); margin: 10px -10px 0 -12px; padding: 7px 14px; border-top: 1px solid #F0EAE2; background: #FAF7F3; font-size: 12.5px; font-weight: 600; color: #4A443D; box-sizing: border-box; }
+
+/* Nov 16 · Day sheet like the Events sheet, modern: one row per line = amount + position · time (→ end) · names in 3 columns. Red = short, purple = full. */
+.ds-line2.sh { display: grid; grid-template-columns: 210px 150px minmax(0, 1fr); gap: 12px; align-items: start; margin: 0; border: 0; border-top: 1px solid #F0EAE2; border-left: 4px solid #C2412D; border-radius: 0; box-shadow: none; padding: 10px 12px; background: #fff; overflow: visible; }
+.ds-line2.sh.full { border-left-color: #6D4BC4; }
+.ds-line2.sh.ex { background: #FCF8F0; } .ds-line2.sh.lead { background: #FAF7F3; }
+.ds-line2.sh > .ds-cells { padding: 0 !important; }
+.ds-rmeta { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding-top: 2px; }
+.ds-ramt { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.ds-ramt .ds-step b { color: #C2412D; font-size: 15px; } .ds-line2.full .ds-ramt .ds-step b { color: #6D4BC4; }
+.ds-ramt .ds-lsel { flex: 1; min-width: 0; border: 0; background: transparent; font: 700 14.5px Inter, sans-serif; color: #C2412D; padding: 4px 2px; cursor: pointer; }
+.ds-ramt .ds-lname { font: 700 14.5px Inter, sans-serif; color: #C2412D; }
+.ds-line2.full .ds-ramt .ds-lsel, .ds-line2.full .ds-ramt .ds-lname { color: #6D4BC4; }
+.ds-rcnt { font-size: 11.5px; font-weight: 700; color: #C2412D; display: flex; gap: 8px; align-items: center; } .ds-line2.full .ds-rcnt { color: #6D4BC4; }
+.ds-rdel { border: 0; background: none; font: 600 11px Inter, sans-serif; color: #9A9187; cursor: pointer; padding: 0; opacity: 0; } .ds-line2.sh:hover .ds-rdel { opacity: 1; }
+.ds-rtime { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; position: relative; }
+.ds-rtime .ds-time, .ds-rtime .ds-end { position: relative; display: inline-flex; align-items: center; padding: 0 !important; min-height: 0; opacity: 1; }
+.ds-rtime .ds-tbtn { height: 34px; border: 1px solid #E2D7CA; border-radius: 9px; background: #fff; font: 700 14px Inter, sans-serif; padding: 0 12px; cursor: pointer; color: var(--ink); }
+.ds-rtime .ds-tro { font: 700 14px Inter, sans-serif; padding: 8px 2px; }
+.ds-rtime .ds-endb { border: 0; background: none; font: 600 12px Inter, sans-serif; color: #9A9187; cursor: pointer; padding: 0 2px; }
+.ds-rtime .ds-tsel { height: 30px; font: 600 12.5px Inter, sans-serif; }
+.ds-sd { width: 8px; height: 8px; border-radius: 50%; flex: none; display: inline-block; box-shadow: inset 0 0 0 1.5px #B8AFA4; }
+.ds-sd.ok { background: #1F7A55; box-shadow: none; } .ds-sd.sent { background: #C2412D; box-shadow: none; }
+.ds-legend { display: inline-flex; align-items: center; gap: 6px; } .ds-legend .ds-sd + * { margin-right: 6px; }
+.ds-chip .ds-lk { font-size: 10px; font-weight: 700; color: #7A7268; }
+.ds-chip { height: 36px; gap: 7px; font-size: 13.5px; }
+.ds-chip.fixed { background: #fff; border-color: #E6DED3; }
+.ds-slot { height: 36px !important; font-size: 12.5px; }
+.ds-dept { font-size: 11px; font-weight: 800; letter-spacing: .06em; color: #fff; border-radius: 6px; padding: 3px 8px; align-self: center; } .ds-dept.floor { background: #1F4D3A; } .ds-dept.bar { background: #B4532E; }
+.ds-open { font-size: 12.5px; font-weight: 800; color: #C2412D; align-self: center; } .ds-open.ok { color: #1F7A55; }
+.ds-ch { align-items: center; }
+.ds-ch .ds-far { font-size: 11px; font-weight: 700; color: #7A7268; border: 1px solid #E2D7CA; border-radius: 6px; padding: 2px 6px; }
+.ds-card .ds-grp { padding: 0; border: 0; background: none; }
+.ds-card .ds-addrow { padding: 8px 12px 12px; border-top: 1px solid #F0EAE2; }
+.ds-detg { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+.ds-detg label small { font-weight: 600; letter-spacing: 0; color: #9A9187; }
+.ds-uni { display: flex; gap: 8px; } .ds-uni > span { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; } .ds-uni small { font-size: 10.5px; }
+.ds-blocks.narrow .ds-detg { grid-template-columns: 1fr 1fr !important; }
+.ds-newev { display: block; width: 100%; border: 2px dashed #CFC4B6; border-radius: 16px; padding: 16px; background: none; text-align: center; font: 800 15px Inter, sans-serif; color: #4A443D; cursor: pointer; }
+.ds-newev:hover { border-color: var(--ink); color: var(--ink); }
+span.ds-newev.ds-newq, span.abtn.ds-newq { display: flex; gap: 8px; justify-content: center; align-items: center; cursor: default; }
+span.abtn.ds-newq { background: none; border: 0; padding: 0; }
+.ds-more { position: relative; }
+.ds-morel { position: absolute; right: 0; top: calc(100% + 4px); z-index: 30; background: #fff; border: 1px solid #E2D7CA; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.12); display: flex; flex-direction: column; padding: 6px; min-width: 170px; }
+.ds-morel button { border: 0; background: none; text-align: left; padding: 9px 10px; border-radius: 8px; font: 600 13.5px Inter, sans-serif; cursor: pointer; color: var(--ink); }
+.ds-morel button:hover { background: #F6F2EC; } .ds-morel button:disabled { opacity: .4; cursor: default; }
+.ds-line2.full .ds-badge { background: #6D4BC4; }
+.ds-line2:not(.sh).full { border-left-color: #6D4BC4; } .ds-line2:not(.sh).short { border-left-color: #C2412D; }
