@@ -46,8 +46,11 @@ export function useInviteReady() {
 }
 
 /** The text Ronnie pastes in WhatsApp / iMessage. No dates, no 🙏. Greeting = nickname, else first name. */
-export const inviteText = (s: AStaff, token: string) =>
-  `Hey ${callName(s)}! Ronnie added you to the G&R staff app.\n\nTap to set up your account (2 min) 👉 https://${window.location.host}/go/${token}\nYour sign-in email: ${s.email}`;
+// Nov 16 · during the transition: November in the app isn't 100% accurate, texts stay the source for confirmations (in their language)
+export const inviteText = (s: AStaff, token: string) => { const link = `https://${window.location.host}/go/${token}`;
+  return s.language === 'fr'
+    ? `Salut ${callName(s)}! Ronnie t’a ajouté à l’app G&R.\n\nTouche le lien pour créer ton compte (2 min) 👉 ${link}\nTon courriel de connexion : ${s.email}\n\nImportant : on est en transition, donc les événements de novembre ne seront pas 100 % exacts dans l’app. Pour novembre, les textos que je t’envoie restent la source officielle pour tes confirmations. À partir de décembre, tout se fera dans l’app.`
+    : `Hey ${callName(s)}! Ronnie added you to the G&R staff app.\n\nTap to set up your account (2 min) 👉 ${link}\nYour sign-in email: ${s.email}\n\nImportant: we’re in transition, so November events won’t be 100% accurate in the app. For November, the texts I send you are still the official source for your confirmations. Starting in December, everything will be in the app.`; };
 
 /**
  * Invite pop-up (AdminInviteV1 · B). One person, or one after the other for a group ("Next: Juliette ›" after each copy).
