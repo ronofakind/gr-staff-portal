@@ -31,7 +31,6 @@ import { Manage } from './pages/Manage';
 import { Profile } from './pages/Profile';
 import { MyDates } from './pages/MyDates';
 import { Availability as StaffAvail } from './pages/Availability';
-import { EventPlan } from './pages/EventPlan';
 import { Availability as AdminAvail } from './admin/Availability';
 import { TiersRanking } from './admin/TiersRanking';
 import { ClientChange } from './admin/ClientChange';
@@ -52,7 +51,6 @@ import { Messages as StaffMessages } from './pages/Messages';
 import { MgrMessages } from './pages/MgrMessages';
 import { Meeting } from './pages/Meeting';
 import { Meetings, MeetingForm, MeetingAdmin } from './admin/Meetings';
-import { AdminTeamChat } from './admin/TeamChatCard';
 import { AlertLayer } from './components/Alerts';
 import { startAlerts } from './lib/alerts';
 
@@ -160,14 +158,14 @@ export function App() {
             <Route path="meeting/new" element={<MeetingForm />} />
             <Route path="meeting/:id" element={<MeetingAdmin />} />
             <Route path="meeting/:id/edit" element={<MeetingForm />} />
-            <Route path="team-chat/:id" element={<AdminTeamChat />} />
+            <Route path="team-chat/:id" element={<Navigate to="/admin/messages" replace />} />{/* Nov 15 · group chat removed */}
           </Route>
         )}
         {me.role === 'admin' && <Route path="/admin/view/:staffId/*" element={<ViewAs />} />}
         <Route path="/my-dates" element={<MyDates me={me} />} />
         <Route path="/schedule" element={<Navigate to="/my-dates" replace />} />{/* push 35a · old Schedule tab */}
         <Route path="/shift/:id" element={<Shift />} />
-        <Route path="/shift/:id/plan" element={<EventPlan />} />
+        <Route path="/shift/:id/plan" element={<Navigate to="/" replace />} />{/* Nov 15 · plan page removed */}
         <Route path="/bar/:eventId" element={<Navigate to="/" replace />} />{/* Nov 14 · bar count removed */}
         <Route path="/meeting/:id" element={<Meeting />} />
         <Route path="/hours" element={<HoursPage me={me} />} />

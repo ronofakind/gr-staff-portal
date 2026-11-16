@@ -10,6 +10,7 @@ import {
   LENGTHS, PLACES, canMeet, dayOfMtl, dayShort, hm24, isOver, lengthLabel, mtlIso, placeName, safeLink, t12, todayMtl,
   type MeetingPage, type MeetingRow, type MeetingHours, type PlaceKind,
 } from '../lib/meetings';
+const OFF = false as boolean; // Nov 15 · meeting live notes removed (kept in code, hidden)
 import { allStaff, addDays, dLabel, type AStaff } from './api';
 
 /* Push 38 · admin: Meetings list, New / Edit meeting, the meeting page (who's coming, notes to the event, paid hours). Migration 043. */
@@ -264,7 +265,7 @@ export function MeetingAdmin() {
         </section>
 
         <section className="stack">
-          <div className="sec"><span className="serif">Save notes to the event</span></div>
+          <div className="sec"><span className="serif">Linked event</span></div>
           <div className="adm-card stack" style={{ gap: 10 }}>
             {p.events.map((e) => (
               <div key={e.id} className="mtg-ev"><span className="mtg-ev-ic" aria-hidden="true">🗓</span>
@@ -275,7 +276,7 @@ export function MeetingAdmin() {
               {events.filter((e) => !p.events.some((x) => x.id === e.id)).map((e) => <option key={e.id} value={e.id}>{evLabel(e)}</option>)}
             </select>
 
-            <div className="mtg-pinhead"><b>Show on the event page</b><span className="muted sm">{pinned} of {live.length}</span></div>
+            {OFF && <>{/* Nov 15 · notes removed */}<div className="mtg-pinhead"><b>Show on the event page</b><span className="muted sm">{pinned} of {live.length}</span></div>
             {!live.length && <div className="muted sm">No notes yet. Notes added below (by you or anyone invited) show up here.</div>}
             {live.map((n) => (
               <div key={n.id} className="mtg-pinrow">
@@ -286,11 +287,11 @@ export function MeetingAdmin() {
             <div className="mtg-f"><small>WHO SEES THEM ON THE EVENT</small>
               <div className="seg"><button className={m.notes_visibility === 'managers' ? 'on' : ''} onClick={() => run(() => supabase.rpc('admin_meeting_visibility', { p_meeting: m.id, p_visibility: 'managers' }))}>Managers</button>
                 <button className={m.notes_visibility === 'team' ? 'on' : ''} onClick={() => run(() => supabase.rpc('admin_meeting_visibility', { p_meeting: m.id, p_visibility: 'team' }))}>Whole team</button></div></div>
-            <span className="muted sm">Pinned notes show near the top of the event page as “From the meeting”{p.events.length ? '' : ', once the meeting is linked to an event'}. Everyone invited always sees all the notes here.</span>
+            <span className="muted sm">Pinned notes show near the top of the event page as “From the meeting”{p.events.length ? '' : ', once the meeting is linked to an event'}. Everyone invited always sees all the notes here.</span></>}
           </div>
 
-          <div className="sec"><span className="serif">Notes · {live.length}</span></div>
-          <div className="adm-card"><MeetingNotes meetingId={m.id} meetingStart={m.starts_at} notes={p.notes} meId={p.me} onChanged={load} /></div>
+          {OFF && <><div className="sec"><span className="serif">Notes · {live.length}</span></div>
+          <div className="adm-card"><MeetingNotes meetingId={m.id} meetingStart={m.starts_at} notes={p.notes} meId={p.me} onChanged={load} /></div></>}
         </section>
       </div>
       <div><button className="lnk" onClick={() => nav('/admin/meetings')}>‹ All meetings</button></div>

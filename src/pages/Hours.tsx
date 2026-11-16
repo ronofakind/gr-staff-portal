@@ -1,5 +1,4 @@
 import { chainHours } from '../admin/api';
-import { MyExpenses } from '../components/Expense';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase, type Staff } from '../lib/supabase';
@@ -145,7 +144,6 @@ export function Hours({ me }: { me: Staff }) {
           ))}
         </section>
         <PayNotes per={per} />
-        <MyExpenses me={me.id} fr={me.language === 'fr'} />
         <p className="muted sm" style={{ margin: '4px 6px' }}>Hours are rounded to 15 min · minimum 4 h per shift (except left early) · paid start = call time · paid on the 1st and the 16th.</p>
         <button className="link-btn" style={{ alignSelf: 'flex-start', margin: '0 6px' }} onClick={() => setView('past')}>Past pay periods ›</button>
       </> : view === 'past' ? <>

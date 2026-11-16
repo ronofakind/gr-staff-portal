@@ -6,6 +6,7 @@ import { JoinButton, MeetingNotes, PlaceBadge } from '../components/Meeting';
 import { SecTitle } from './Shift';
 import { useMyCalendar, addCalendar, defaultCalOs } from '../lib/calendar';
 import { answerMeeting, dayCaps, isOver, lengthLabel, placeName, t12, whenWord, dayShort, type MeetingPage } from '../lib/meetings';
+const OFF = false as boolean; // Nov 15 · meeting live notes removed (kept in code, hidden)
 import { Brand } from '../components/Brand';
 
 /** Push 38 · staff meeting page: top card (Teams colour), Join, linked event, what it's about, who's invited, answer, notes. */
@@ -21,7 +22,7 @@ export function Meeting({ backTo = '/' }: { backTo?: string }) {
   useEffect(() => {
     if (!st) return; const t0 = +new Date(st);
     const live = () => Date.now() > t0 - 30 * 60e3 && Date.now() < t0 + 3 * 3600e3;
-    const iv = window.setInterval(() => { if (live() && !document.hidden) load(); }, 5000);
+    const iv = window.setInterval(() => { if (live() && !document.hidden) load(); }, 30000); // Nov 15 · notes gone: 30 s is enough for who's in
     return () => window.clearInterval(iv);
   }, [st]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -95,9 +96,9 @@ export function Meeting({ backTo = '/' }: { backTo?: string }) {
         {p.my_answer !== 'coming' && <p className="muted sm mtg-center">Say Coming and it goes in your <Brand /> calendar with the link. Meetings are paid like a shift.</p>}
       </>}
 
-      <SecTitle>{`Notes${p.notes.filter((n) => !n.deleted_at).length ? ` · ${p.notes.filter((n) => !n.deleted_at).length}` : ''}`}</SecTitle>
+      {OFF && <>{/* Nov 15 · meeting live notes removed */}<SecTitle>{`Notes${p.notes.filter((n) => !n.deleted_at).length ? ` · ${p.notes.filter((n) => !n.deleted_at).length}` : ''}`}</SecTitle>
       <MeetingNotes meetingId={m.id} meetingStart={m.starts_at} notes={p.notes} meId={p.me} onChanged={load} myName={(() => { const me = p.invites.find((i) => i.staff_id === p.me); return me ? (me.nickname || me.full_name.split(' ')[0]) : ''; })()} />
-      <p className="muted sm mtg-center">One shared list: everyone sees notes as they’re written. Tap ✓ Same or Add to it instead of writing the same thing twice. Ronnie gets them after the meeting.</p>
+      <p className="muted sm mtg-center">One shared list: everyone sees notes as they’re written. Tap ✓ Same or Add to it instead of writing the same thing twice. Ronnie gets them after the meeting.</p></>}
       <div style={{ height: 24 }} />
     </main>
   );

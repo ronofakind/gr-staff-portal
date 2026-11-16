@@ -13,6 +13,7 @@ export const currentTheme = read;
 export async function loadTheme(staffId: string, admin = false) {
   const { data, error } = await supabase.from('staff').select('theme').eq('id', staffId).maybeSingle();
   const t = !error && data ? (data as { theme: Theme | null }).theme : null;
+  if (!admin) { applyTheme('classic'); return; } // Nov 15 · staff: one look only (themes removed)
   if (t === 'terra' && !admin) applyTheme('classic');
   else if (t) applyTheme(t);
   else if (admin) applyTheme('terra'); // push 81 · admin default look, still choosable in Settings

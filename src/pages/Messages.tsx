@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase, type Staff } from '../lib/supabase';
 import { TabBar } from '../components/TabBar';
 import { PageHead } from '../components/ProfileMenu';
@@ -39,7 +39,7 @@ export function Messages({ me }: { me: Staff }) {
   if (hours) return <MyHours me={me} pick={hours} />;
   if (c === 'ronnie' || nw) return <RonnieThread me={me} compose={!!nw} topicInit={(sp.get('topic') as Topic | null) ?? null} shiftInit={sp.get('shift')} />;
   if (c?.startsWith('mgr:')) return <MgrThread me={me} eventId={c.slice(4)} />;
-  if (c?.startsWith('team:')) return <main className="page v2 ch-page"><TeamChat eventId={c.slice(5)} meId={me.id} /></main>;
+  if (c?.startsWith('team:')) return <Navigate to="/messages" replace />; void TeamChat; // Nov 15 · group chat removed
   return <Inbox me={me} />;
 }
 
@@ -68,7 +68,7 @@ function Inbox({ me }: { me: Staff }) {
       let rLast: Msg | null = null;
       if (rc) { const { data } = await supabase.from('messages').select(MSG_COLS).eq('conversation_id', (rc as Conv).id).neq('kind', 'system').order('created_at', { ascending: false }).limit(1); rLast = ((data ?? []) as Msg[])[0] ?? null; }
       setRon({ conv: (rc as Conv | null) ?? null, last: rLast });
-      myTeamChats().then(setTeams);
+      void myTeamChats; setTeams([]); // Nov 15 · staff group chat removed
 
       // announcements to me (90 days)
       const reads = async (cols: string) => supabase.from('announcement_reads').select(`opened_at,ack_at,announcements!inner(${cols})`).eq('staff_id', me.id).gte('announcements.created_at', cut);

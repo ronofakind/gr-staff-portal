@@ -136,8 +136,8 @@ export function Profile({ me }: { me: Staff }) {
         {me.role !== 'admin' && <AlertsProfileRow me={me} bare />}
         <div className="size-row"><span className="row-l">{fr ? 'Langue' : 'Language'}</span>
           <span className="row-v"><span className="pf-seg">{(['en', 'fr'] as const).map((l) => <button key={l} className={(me.language ?? 'en') === l ? 'on' : ''} onClick={() => setLang(l)}>{l === 'en' ? 'English' : 'Français'}</button>)}</span></span></div>
-        <button className="size-row edit-row" onClick={() => setColOpen(!colOpen)}><span className="row-l">{fr ? 'Couleurs' : 'Colours'}</span><span className="row-v">{themeName}</span><span className="row-a">{colOpen ? 'Done' : 'Change ›'}</span></button>
-        {colOpen && <div className="pf-inset"><ThemePicker staffId={me.id} fr={fr} /></div>}
+        {me.role === 'admin' && <><button className="size-row edit-row" onClick={() => setColOpen(!colOpen)}><span className="row-l">{fr ? 'Couleurs' : 'Colours'}</span><span className="row-v">{themeName}</span><span className="row-a">{colOpen ? 'Done' : 'Change ›'}</span></button>
+        {colOpen && <div className="pf-inset"><ThemePicker staffId={me.id} fr={fr} /></div>}</>}{/* Nov 15 · colours: staff have one look */}
       </section>
 
       <div className="sec-head"><span className="serif">G&amp;R</span></div>

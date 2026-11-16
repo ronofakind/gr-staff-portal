@@ -23,6 +23,8 @@ type Extra = { uniform_items: UniItemsMap | null; venue: { name: string; address
   client: { name: string; rate_sets: { key: string; label: string }[] } | null; md: { full_name: string; photo_url: string | null; phone: string | null } | null };
 
 /** Event detail (push 20): read-only summary. Team building lives in the Day view. */
+const OFF_RIDES = false as boolean; // Nov 15 · carpool hidden
+
 export function EventDetail() {
   const { id } = useParams();
   const [evs, setEvs] = useState<AEvent[] | null>(null);
@@ -126,7 +128,7 @@ export function EventDetail() {
         {e.event_date >= new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' }) && <Sec k="confirm" title="Confirmations" open={isOpen('confirm')} setOpen={setFold} summary="who confirmed · who to text">
           <ConfirmTracker evs={evs} venue={x?.venue?.name ?? e.title} />
           {evs.map((v) => <SeenLine key={v.id} eventId={v.id} />)}{/* push 72 */}
-          {evs.map((v) => <RidesSeen key={'r' + v.id} eventId={v.id} />)}{/* push 73 */}
+          {OFF_RIDES && evs.map((v) => <RidesSeen key={'r' + v.id} eventId={v.id} />)}{/* push 73 · hidden Nov 15 */}
         </Sec>}
 
         <Sec k="locks" title="Team" open={isOpen('locks')} setOpen={setFold} summary="who's booked · 🔒 locked never move">
@@ -154,7 +156,7 @@ export function EventDetail() {
         </Sec>
 
         <Sec k="team" title="Team chat" open={isOpen('team')} setOpen={setFold} summary="off by default · this event only">
-          <TeamChatCard eventId={e.id} />
+          {false && <TeamChatCard eventId={e.id} />}{/* Nov 15 · group chat removed */}
         </Sec>
 
         <Sec k="uniforms" title="Uniforms" open={isOpen('uniforms')} setOpen={setFold} summary={[floor ? 'Floor' : null, bar ? 'Bar' : null].filter(Boolean).join(' + ') + ' · men / women'}>
@@ -185,7 +187,7 @@ export function EventDetail() {
           <Billing evs={evs} onChange={load} />
         </Sec>}
 
-        {evs.some((v) => v.transport || v.rides) && <Sec k="rides" title="Rides" wide open={isOpen('rides')} setOpen={setFold} summary={evs.some((v) => v.transport) ? 'Transport · cars and riders' : 'Carpool · cars and riders'}>
+        {evs.some((v) => v.transport || (OFF_RIDES && v.rides)) && <Sec k="rides" title="Rides" wide open={isOpen('rides')} setOpen={setFold} summary={evs.some((v) => v.transport) ? 'Transport · cars and riders' : 'Carpool · cars and riders'}>
           <RidesAdmin evs={evs} />
         </Sec>}
 

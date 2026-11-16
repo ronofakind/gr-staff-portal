@@ -1,4 +1,3 @@
-import { ExpenseShiftButton } from '../components/Expense';
 import { useEffect, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { supabase, SHIFT_SELECT, isSetup, type ShiftRow } from '../lib/supabase';
@@ -21,6 +20,8 @@ import { shiftNotes, noteSeen, type ShiftNote } from '../lib/staffNotes';
 import { PinMap, pinDirections } from '../components/VenuePin';
 import { StaffLinks, mergeLinks } from '../components/Links';
 import { FirstCut } from '../components/FirstCut';
+
+const OFF_RIDES = false as boolean; // Nov 15 · carpool hidden
 
 export function Shift({ backTo = '/' }: { backTo?: string }) {
   const { id } = useParams();
@@ -194,7 +195,6 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team, past }
             <div><small>Ended</small>{s.punches?.punch_out ? <BigTime iso={s.punches.punch_out} small /> : <span className="big serif sm-big">–</span>}</div>
           </div>
         </section>
-        {!preview && past && <ExpenseShiftButton me={past.id} shift={{ id: s.id, title: venueName, date: ev.event_date }} />}{/* push 79 */}
         {past && managesShift(s, past.id) && <PastManager eventId={ev.id} eventDate={ev.event_date} sentAt={ev.hours_submitted_at ?? null} me={past} />}
       </> : <section className="d3-hero">
         <div className="d3-kick">{dayWord.toUpperCase()}{cd ? ` · ${cd.toUpperCase()}` : ''}</div>
@@ -233,7 +233,7 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team, past }
       {sheet === 'cancel' && <CancelSheet s={s} preview={preview} onClose={() => setSheet(null)} onDone={(late) => { setGone({ late }); setSheet(null); }} />}
       {sheet === 'change' && <ChangeSheet s={s} preview={preview} onClose={() => setSheet(null)} onSent={() => { setSheet(null); chg.reload(); }} />}
       {!gone && <FromTheMeeting eventId={ev.id} meetingBase={preview ? '/admin' : ''} />}{/* push 38 · pinned meeting notes */}
-      {ev.rides && <GettingThere eventId={ev.id} eventDate={ev.event_date} firstStart={s.planned_start} travelMin={ev.travel_min ?? 60} paidMin={ev.paid_travel_min ?? 0} transport={!!ev.transport} preview={preview} />}{/* push 68 · carpool on any event with rides on */}
+      {OFF_RIDES && ev.rides && <GettingThere eventId={ev.id} eventDate={ev.event_date} firstStart={s.planned_start} travelMin={ev.travel_min ?? 60} paidMin={ev.paid_travel_min ?? 0} transport={!!ev.transport} preview={preview} />}{/* push 68 · carpool on any event with rides on */}
       </>}
       <SecTitle icon="pin">Where</SecTitle>
       <section className="d3-card d3-where d37-wcard">
@@ -255,7 +255,7 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team, past }
         </div>}
       </section>
 
-      {!isPastV && (s.plan || ev.plan) ? (
+      {OFF_RIDES && !isPastV && (s.plan || ev.plan) ? ( /* Nov 15 · plan page removed (shares the hidden flag) */
         <Link to={`${backTo === '/' ? '' : backTo}/shift/${s.id}/plan`} className="plan-link">
           <span className="ic">📋</span>
           <div className="grow"><b>Your plan tonight</b><span>Your role, side, leads, wine + water, clearing</span></div>

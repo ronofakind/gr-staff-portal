@@ -1,8 +1,6 @@
 import { areaFromPostal } from './rules';
 import { NewHireNeeds } from './NewHireNeeds';
 import { PendingBar, UnseenNeeds, UnseenRides } from './SendBox'; // push 72 · 73
-import { ExpenseNeeds } from './Expenses';
-import { MeetingNotesNeeds } from './MeetingNotesNeeds';
 import { ReferralNeeds } from './ReferralNeeds'; // push 75
 import { MessagesToday, useInboxToday } from './MessagesToday'; // Nov 11
 import { useEffect, useState } from 'react';
@@ -35,6 +33,8 @@ type DelReq = { id: string; source: 'app' | 'web'; email: string | null; phone: 
 type ResetReq = { id: string; created_at: string; staff: { id: string; full_name: string; email: string | null } | null };
 type Arch = { key: string; sig: string; label: string | null; archived_at: string };
 const sigOf = (n: Need) => n.title + '|' + n.sub;
+
+const OFF_RIDES = true; // Nov 15 · carpool hidden
 
 export function Today() {
   const today = isoDay(new Date());
@@ -275,7 +275,7 @@ export function Today() {
       const { data: nr, error: nrErr } = await supabase.rpc('inbox_count');
       if (!nrErr && typeof nr === 'number' && nr > 0) n.unshift({ key: 'msgs', red: true, title: `${nr} staff message${nr > 1 ? 's' : ''} need${nr > 1 ? '' : 's'} a reply`, sub: 'Messages · Needs reply', action: 'Open', to: '/admin/messages' });
       // push 68 · carpools: running late (tonight) and people who lost their carpool
-      const { data: rl, error: rlErr } = await supabase.from('ride_offers').select('kind,late_eta,lost_at,car_driver_id,event_id,staff:staff!ride_offers_staff_id_fkey(full_name),events!inner(title,event_date)').gte('events.event_date', today).or('late_eta.not.is.null,lost_at.not.is.null');
+      const { data: rl, error: rlErr } = OFF_RIDES ? { data: [], error: null } : await supabase.from('ride_offers').select('kind,late_eta,lost_at,car_driver_id,event_id,staff:staff!ride_offers_staff_id_fkey(full_name),events!inner(title,event_date)').gte('events.event_date', today).or('late_eta.not.is.null,lost_at.not.is.null');
       if (!rlErr) for (const r of (rl ?? []) as unknown as { kind: string; late_eta: string | null; lost_at: string | null; car_driver_id: string | null; event_id: string; staff: { full_name: string } | null; events: { title: string; event_date: string } }[]) {
         const nm = r.staff?.full_name.split(' ')[0] ?? '?';
         if (r.kind === 'driver' && r.late_eta && r.events.event_date === today) n.unshift({ key: 'cl' + r.event_id + nm, red: true, title: `⏱ ${nm}’s carpool to ${r.events.title} is running late`, sub: `New time ${tTime(r.late_eta)} · the whole car is late`, action: 'Open', to: `/admin/event/${r.event_id}` });
@@ -360,10 +360,7 @@ export function Today() {
         <NewHireNeeds tick={tick} onCount={setNhN} />{/* push 71 */}
         <PendingBar tick={tick} onSent={() => setTick((x) => x + 1)} />
         <UnseenNeeds tick={tick} onCount={setUnN} />{/* push 72 */}
-        <UnseenRides tick={tick} onCount={setRdN} />{/* push 73 */}
         <ReferralNeeds tick={tick} onCount={setRfN} />{/* push 75 */}
-        <ExpenseNeeds tick={tick} onCount={setExN} />{/* push 79 */}
-        <MeetingNotesNeeds tick={tick} onCount={setMnN} />{/* push 80 */}
         {lm.map(({ e, s }) => <CantMakeIt key={s.id} e={e} s={s} mgr={e.manager_id ? mgrs[e.manager_id] ?? null : null} ask={asks.find((a) => a.kind === 'fill' && a.status === 'open' && a.replace_for === s.id)} onFind={() => setRep({ s, e })} onChanged={() => setTick((t) => t + 1)} />)}
         <NotConfirmed rows={late} seen={seen} nudged={nudged} asks={asks} onReplace={(r) => setRep({ s: r.s, e: r.e })} onChanged={() => setTick((t) => t + 1)} />
         {askNeeds.map((a) => <AskNeed key={a.id} a={a} onChanged={() => setTick((t) => t + 1)} />)}

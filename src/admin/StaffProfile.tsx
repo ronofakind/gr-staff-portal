@@ -1,5 +1,4 @@
 import { RateCard } from './Rates';
-import { ExpenseSwitch } from './Expenses';
 import { TaxCard } from './Hiring';
 import { useEffect, useState } from 'react';
 import { AvailTab } from './StaffAvail';
@@ -134,7 +133,6 @@ export function StaffProfile({ s, onClose, onEdit, all }: { s: AStaff; onClose: 
                 onTier={() => supabase.from('staff_private').select('tier').eq('staff_id', s.id).maybeSingle().then(({ data }) => setTierNow(((data as { tier?: 'A' | 'B' | 'C' | null } | null)?.tier) ?? null))} /></div>}
             {sd && <MgrFeedback sid={s.id} d={sd} />}
             <RateCard s={s} />
-            <ExpenseSwitch staffId={s.id} />{/* push 79 */}
             <TaxCard staffId={s.id} />
             <CvCard staffId={s.id} />{/* push 103 */}
             <TextViaCard staffId={s.id} />{/* push 107 */}

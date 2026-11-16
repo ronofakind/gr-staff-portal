@@ -17,6 +17,8 @@ import { AlsoWorking, type OtherShift } from './alsoWorking';
 import { loadNewHires, juniorClash } from '../lib/newHires'; // push 71
 import { takeAiApply, endLabelFor, hhmm, AI_APPLY_KEY, type AApply } from './EmailReview';
 
+const OFF_RIDES = false as boolean; // Nov 15 · carpool hidden until the simpler version
+
 export const MEN: [string, string][] = [['white_shirt', 'White dress shirt'], ['black_shirt', 'Black dress shirt'], ['black_tshirt', 'Black T-shirt']];
 export const WOMEN: [string, string][] = [['white_shirt', 'White dress shirt'], ['black_shirt', 'Black dress shirt'], ['dress', 'Black cocktail dress'], ['black_tshirt', 'Black T-shirt']];
 export const uniName = (k: string) => (k.startsWith('custom:') ? k.slice(7) : [...MEN, ...WOMEN].find(([u]) => u === k)?.[1].replace('dress shirt', 'shirt').replace('Black cocktail dress', 'dress') ?? k).toLowerCase();
@@ -776,7 +778,7 @@ export function EventForm() {
             </div>
           </div>
         </div>
-        {!trOn && <div className="tr-card"><div className="sw-row"><button type="button" role="switch" aria-checked={carpool} className={'sw' + (carpool ? ' on' : '')} onClick={() => { setCarpool(!carpool); setTr({ ...tr, rides: !carpool }); }}><span className="sw-track"><span className="sw-knob" /></span><span className="sw-lbl">{carpool ? 'ON' : 'OFF'}</span></button><b>Carpool</b><span className="muted sm">staff offer seats and carpool between themselves · no paid travel, no gas</span></div></div>}
+        {!trOn && OFF_RIDES && <div className="tr-card"><div className="sw-row"><button type="button" role="switch" aria-checked={carpool} className={'sw' + (carpool ? ' on' : '')} onClick={() => { setCarpool(!carpool); setTr({ ...tr, rides: !carpool }); }}><span className="sw-track"><span className="sw-knob" /></span><span className="sw-lbl">{carpool ? 'ON' : 'OFF'}</span></button><b>Carpool</b><span className="muted sm">staff offer seats and carpool between themselves · no paid travel, no gas</span></div></div>}
         <div className={'tr-card' + (trOn ? ' on' : '')}>
           <div className="sw-row">
             <button type="button" role="switch" aria-checked={trOn} className={'sw' + (trOn ? ' on' : '')} onClick={() => setTr({ ...tr, on: !trOn })}><span className="sw-track"><span className="sw-knob" /></span><span className="sw-lbl">{trOn ? 'ON' : 'OFF'}</span></button>

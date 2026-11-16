@@ -26,7 +26,7 @@ export function Messages() {
   useEffect(() => {
     supabase.rpc('inbox').then(({ data, error }) => { if (error) { setErr(/inbox/.test(error.message) ? 'Messages need migration 042 (apply it in the Supabase SQL editor).' : error.message); setRows([]); } else setRows((data ?? []) as InboxRow[]); });
   }, [tick, cId]);
-  useEffect(() => { adminTeamChats().then(setTeams).catch(() => setTeams([])); }, [tick, cId, tab]);
+  useEffect(() => { void adminTeamChats; setTeams([]); }, [tick, cId, tab]); // Nov 15 · group chat removed
   // ✉ Message from a staff profile / team list → their conversation (created if needed)
   useEffect(() => {
     if (!staffId) return;
@@ -49,10 +49,10 @@ export function Messages() {
         <button className={tab === 'needs' ? 'on' : ''} onClick={() => go({ tab: null })}>Needs reply{needs.length ? <b className="accent"> {needs.length}</b> : ''}</button>
         <button className={tab === 'all' ? 'on' : ''} onClick={() => go({ tab: 'all' })}>All</button>
         <button className={tab === 'sent' ? 'on' : ''} onClick={() => go({ tab: 'sent' })}>Sent</button>
-        <button className={tab === 'team' ? 'on' : ''} onClick={() => go({ tab: 'team' })}>Team chats{teamNew ? <b className="accent"> {teamNew}</b> : ''}</button>
+{/* Nov 15 · Team chats tab removed (staff group chat) */}
       </div>
       {err && <p className="error">{err}</p>}
-      {tab === 'team' ? <TeamChatsTab list={teams} /> : tab === 'sent' ? <div className="adm-card" style={{ maxWidth: 760, padding: '6px 16px' }}><AnnounceSent reload={tick} /></div> : (
+      {tab === 'team' && false ? <TeamChatsTab list={teams} /> : tab === 'sent' ? <div className="adm-card" style={{ maxWidth: 760, padding: '6px 16px' }}><AnnounceSent reload={tick} /></div> : (
         <div className="adm-card ib-list" style={{ maxWidth: 760, padding: 0 }}>
           {rows === null ? <div className="muted" style={{ padding: 16 }}>Loading…</div>
             : !list.length ? <div className="muted sm" style={{ padding: 16 }}>{tab === 'needs' ? 'Nothing waiting on you. ✓' : 'No conversations yet.'}</div>
