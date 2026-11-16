@@ -32,6 +32,23 @@ export default async function handler(req, res) {
     const token = req.method === 'POST' ? body.token : req.query.token;
     if (!(await okToken(token))) return res.status(401).json({ error: 'bad token' });
 
+    // Nov 16 · migration 129 · invites sent from the Mac mini (scheduled Claude task on the Mac mini, every ~15 min)
+    //   GET  ?invites=1 → { invites: [{ id, channel: imessage|whatsapp, phone, name, lang, test, body }] }  (approved by Ronnie's "Send" in the app)
+    //   POST { token, invites: [{ id, ok: true|false, error }] } → marks each row; a real (non-test) sent invite = "Invited" on the Staff page
+    if (req.method === 'GET' && req.query.invites) {
+      const rows = await get(`text_outbox?kind=eq.invite&status=eq.queued&expires_at=gt.${encodeURIComponent(new Date().toISOString())}&select=id,channel,phone,for_name,lang,test,body,created_at&order=created_at&limit=40`);
+      return res.json({ invites: rows.map((r) => ({ id: r.id, channel: r.channel, phone: r.phone, name: r.for_name, lang: r.lang, test: r.test, body: r.body })) });
+    }
+    if (req.method === 'POST' && Array.isArray(body.invites)) {
+      const out = [];
+      for (const v of body.invites.slice(0, 40)) {
+        if (!/^[0-9a-f-]{36}$/i.test(v?.id || '')) continue;
+        const r = await fetch(`${URL_}/rest/v1/rpc/outbox_invite_done`, { method: 'POST', headers: H(), body: JSON.stringify({ p_id: v.id, p_ok: v.ok === true, p_error: v.ok === true ? null : s(v.error || 'failed', 300) }) });
+        out.push({ id: v.id, result: r.ok ? await r.json() : `error ${r.status}` });
+      }
+      return res.json({ invites: out });
+    }
+
     // Nov 9 · push 58 · new suppliers for QuickBooks: Ronnie clicked "Add to QuickBooks" (staff_tax.qb_status = 'sending').
     // Full fields incl. SIN (the task puts it straight into QuickBooks and never prints it).
     if (req.method === 'GET' && req.query.vendors) {
