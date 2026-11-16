@@ -52,7 +52,7 @@ function CheckupInner({ me, info, onFinish }: { me: Staff; info: CheckupInfo; on
   // push 55 · new hires already gave their languages on the application (Hiring → Accept saves them) → no Languages step.
   // Decided once, so finishing the step mid-flow doesn't renumber the steps.
   const [langsDone] = useState(() => !!(info.languages?.fr && info.languages?.en));
-  const ids = [1, 2, 3, ...(langsDone ? [] : [4]), 5, ...(homeStepApplies() ? [6] : []), ...(calOn ? [8] : []), 9];
+  const ids = [1, 2, 3, ...(langsDone ? [] : [4]), 5, ...(homeStepApplies() ? [6] : []), ...(calOn ? [8] : [])]; // Nov 16 · no 9 (Ronnie's note removed) → last step goes straight to Done
   const startAt = (s: number) => (s === 7 ? 7 : ids.includes(s) ? s : ORDER.includes(s) ? ORDER.slice(ORDER.indexOf(s) + 1).find((x) => ids.includes(x)) ?? 7 : 1);
   const [step, setStep] = useState<number | null>(null);
   useEffect(() => { if (calOn !== null && step === null) setStep(startAt(info.step)); }, [calOn]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -77,7 +77,7 @@ function CheckupInner({ me, info, onFinish }: { me: Staff; info: CheckupInfo; on
       <div className="cu-foot"><button className="cu-btn green" onClick={onFinish}>{L('Go to Home', 'Aller à l’accueil')}</button></div>
     </main>
   );
-  if (step === 9) return <RonnieNote name={first} welcome={isNew} onNext={() => go(7)} />;
+  if (step === 9) return <RonnieNote name={first} welcome={isNew} onNext={() => go(7)} />; // only someone already parked on step 9 (one tap to Done)
 
   const counted = ids.filter((x) => x !== 9);
   const n = counted.indexOf(step) + 1;
@@ -112,15 +112,14 @@ export function CalendarAgain(props: { me: Staff; cal: MyCal; onClose: () => voi
 }
 function CalendarAgainInner({ me, cal, onClose }: { me: Staff; cal: MyCal; onClose: () => void }) {
   const L = useL();
-  const [c, setC] = useState(cal); const [note, setNote] = useState(false);
-  if (note) return <RonnieNote name={callName(me)} onNext={onClose} />;
+  const [c, setC] = useState(cal);
   const head = (
     <div className="cu-head">
       <div className="spread" style={{ alignItems: 'center' }}><span className="cu-kick">{L('ONE MORE THING', 'UNE DERNIÈRE CHOSE')}</span><span className="row" style={{ gap: 8, alignItems: 'center' }}><LangSwitch /><span className="cu-req">{L('can skip', 'facultatif')}</span></span></div>
       <div className="serif cu-title">{L('Your', 'Ton calendrier')} <Brand />{L(' calendar', '')}</div><div className="cu-sub">{L('Confirmed shifts show up on their own, with reminders', 'Tes quarts confirmés s’ajoutent seuls, avec des rappels')}</div>
     </div>
   );
-  return <main className="v2 cu"><CalendarStep me={me} cal={c} onCal={setC} head={head} onDone={() => { window.scrollTo(0, 0); setNote(true); }} /></main>;
+  return <main className="v2 cu"><CalendarStep me={me} cal={c} onCal={setC} head={head} onDone={() => { window.scrollTo(0, 0); onClose(); }} />{/* Nov 16 · no note from Ronnie after */}</main>;
 }
 
 /** Shown on its own (not the whole check-up) when they chose "Skip for now" on step 6 and open the app from the browser again. */
