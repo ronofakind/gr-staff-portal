@@ -1397,6 +1397,4 @@ html[data-theme="terra"] { --teams: #5B5FC7; --teams-bg: #EEEFFB; --teams-ink: #
 :where(html[data-theme="terra"]) .ds-newev { border: 2px dashed #C6C7BE; color: #47493E; }
 :where(html[data-theme="terra"]) .ds-morel { background: #FBFAF6; box-shadow: 0 10px 30px rgba(0,0,0,0.12); }
 :where(html[data-theme="terra"]) .ds-line2:not(.sh).short { border-left-color: #B65B39; }
-:where(html[data-theme="terra"]) .inv-mrow { background: #FBFAF6; }
-:where(html[data-theme="terra"]) .inv-mrow select { background: #FBFAF6; }
 html[data-theme="terra"] body { background: #EEF0E8; color: #2A2A24; }
