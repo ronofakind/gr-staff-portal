@@ -132,7 +132,7 @@ export function InviteModal({ queue, onClose, onChanged, onFix, textFor, title }
 
 type OutRow = { id: string; staff_id: string; status: string; channel: string | null; test: boolean; sent_at: string | null; error: string | null; created_at: string };
 const hm = (iso: string) => new Date(iso).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit' });
-/** Nov 16 · migration 129 · invites sent from the Mac mini (only invites). Send = Ronnie's approval; a scheduled task on the Mac mini sends within ~15 min.
+/** Nov 16 · migration 129 · invites sent from the Mac mini (only invites). Send = Ronnie's approval; a scheduled task on the Mac mini sends within the hour.
  *  Test mode (on until Ronnie turns it off): texts go to his own phone, "[TEST → name]", link hidden. */
 function MacPanel({ queue, cur, curToken, curText, textFor, onChanged }: { queue: AStaff[]; cur: AStaff; curToken: string | null; curText: string; textFor?: (s: AStaff, token: string) => string; onChanged: () => void }) {
   const [via, setVia] = useState<Record<string, string | null>>({}); const [test, setTest] = useState<boolean | null>(null);
@@ -160,7 +160,7 @@ function MacPanel({ queue, cur, curToken, curText, textFor, onChanged }: { queue
   const send = async (both: boolean) => { setBusy(true); setErr(''); setMsg('');
     try { const list = both ? [cur] : todo; const its = await items(list);
       const { data, error } = await supabase.rpc('admin_queue_invites', { p_items: its, p_test_both: both }); if (error) throw error;
-      setMsg(both ? 'Test queued: one iMessage + one WhatsApp to your phone · the Mac mini sends within ~15 min.' : `${data} invite${data === 1 ? '' : 's'} queued${test ? ' (test: to your phone)' : ''} · the Mac mini sends within ~15 min.`); await loadRows();
+      setMsg(both ? 'Test queued: one iMessage + one WhatsApp to your phone · the Mac mini sends within the hour.' : `${data} invite${data === 1 ? '' : 's'} queued${test ? ' (test: to your phone)' : ''} · the Mac mini sends within the hour.`); await loadRows();
     } catch (x) { setErr((x as Error).message); } setBusy(false); };
   const chip = (p: AStaff) => { const r = last(p); if (!ok(p)) return <i className="app-chip red">{!p.email ? 'NO EMAIL' : 'NO PHONE'}</i>;
     if (!r) return null; const t = r.test ? ' · test' : '';
@@ -175,7 +175,7 @@ function MacPanel({ queue, cur, curToken, curText, textFor, onChanged }: { queue
       <div className="row wrap" style={{ gap: 8 }}>
         <button className="abtn dark" disabled={busy || !todo.length || test === null} onClick={() => send(false)}>Send {todo.length} from Mac mini{test ? ' (test)' : ''}</button>
         {test && <button className="abtn" disabled={busy || !ok(cur) || !curToken} onClick={() => send(true)}>Send me a test · iMessage + WhatsApp</button>}</div>
-      <span className="muted sm">Same text as below, each person’s own link and language. Pressing Send = your OK for these. The Mac mini sends within ~15 min; status updates here. {test ? 'Test: link hidden, nobody else gets anything.' : 'They show “Invited” once sent.'}</span>
+      <span className="muted sm">Same text as below, each person’s own link and language. Pressing Send = your OK for these. The Mac mini sends at the top of the next hour (8 AM–10 PM); status updates here. {test ? 'Test: link hidden, nobody else gets anything.' : 'They show “Invited” once sent.'}</span>
       {msg && <span className="okc sm">{msg}</span>}{err && <p className="error">{err}</p>}
     </div>);
 }

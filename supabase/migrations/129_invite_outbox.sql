@@ -1,6 +1,6 @@
 -- 129 · Nov 16 2026 · invites sent from the Mac mini (Ronnie: "only for invitees").
 -- Ronnie presses "Send N from Mac mini" in the Invite window → one text_outbox row per person (kind 'invite').
--- A scheduled Claude task on the Mac mini (every ~15 min) reads them through /api/ai?invites=1, sends in Messages (iMessage)
+-- A scheduled Claude task on the Mac mini (hourly, 8 AM–10 PM) reads them through /api/ai?invites=1, sends in Messages (iMessage)
 -- or WhatsApp Desktop, then reports back → outbox_invite_done marks the row and the invite link as sent (= "Invited").
 -- Test mode (app_settings 'mac.invite_test', on by default): every text goes to Ronnie's own phone, "[TEST → name]" in front, link hidden.
 alter table public.text_outbox add column if not exists channel text check (channel in ('imessage', 'whatsapp'));
@@ -27,7 +27,7 @@ begin
     if not tst and nullif(regexp_replace(coalesce(st.phone, ''), '\D', '', 'g'), '') is null then raise exception '% has no phone', st.full_name; end if;
     chans := case when p_test_both then array['imessage', 'whatsapp'] else array[it->>'channel'] end;
     foreach ch in array chans loop
-      if ch not in ('imessage', 'whatsapp') then raise exception 'Pick iMessage or WhatsApp for %', st.full_name; end if;
+      if ch is null or ch not in ('imessage', 'whatsapp') then raise exception 'Pick iMessage or WhatsApp for %', st.full_name; end if;
       bdy := left(coalesce(it->>'body', ''), 2000);
       if tst then bdy := '[TEST → ' || st.full_name || ' · ' || ch || '] ' || regexp_replace(bdy, '/go/[A-Za-z0-9_-]+', '/go/(link hidden in test)', 'g'); end if;
       if not tst then update text_outbox set status = 'skipped', error = 'replaced by a newer invite' where kind = 'invite' and staff_id = st.id and status = 'queued'; end if;

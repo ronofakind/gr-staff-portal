@@ -32,7 +32,7 @@ export default async function handler(req, res) {
     const token = req.method === 'POST' ? body.token : req.query.token;
     if (!(await okToken(token))) return res.status(401).json({ error: 'bad token' });
 
-    // Nov 16 · migration 129 · invites sent from the Mac mini (scheduled Claude task on the Mac mini, every ~15 min)
+    // Nov 16 · migration 129 · invites sent from the Mac mini (scheduled Claude task on the Mac mini, hourly)
     //   GET  ?invites=1 → { invites: [{ id, channel: imessage|whatsapp, phone, name, lang, test, body }] }  (approved by Ronnie's "Send" in the app)
     //   POST { token, invites: [{ id, ok: true|false, error }] } → marks each row; a real (non-test) sent invite = "Invited" on the Staff page
     if (req.method === 'GET' && req.query.invites) {
