@@ -4787,3 +4787,6 @@ span.abtn.ds-newq { background: none; border: 0; padding: 0; }
 .ds-morel button:hover { background: #F6F2EC; } .ds-morel button:disabled { opacity: .4; cursor: default; }
 .ds-line2.full .ds-badge { background: #6D4BC4; }
 .ds-line2:not(.sh).full { border-left-color: #6D4BC4; } .ds-line2:not(.sh).short { border-left-color: #C2412D; }
+/* Nov 16 · details fields line up: same label height, same field height */
+.ds-detg label { justify-content: flex-start; }
+.ds-detg select, .ds-detg input { height: 38px; padding-top: 0; padding-bottom: 0; }
