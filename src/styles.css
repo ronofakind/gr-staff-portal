@@ -4791,7 +4791,10 @@ span.abtn.ds-newq { background: none; border: 0; padding: 0; }
 .ds-detg label { justify-content: flex-start; }
 .ds-detg select, .ds-detg input { height: 38px; padding-top: 0; padding-bottom: 0; }
 
-/* Nov 19 · Today live card buttons fit on phones: Delete drops below instead of spilling off the card */
-.live-acts { flex-wrap: wrap-reverse; row-gap: 10px; }
-.live-acts-main { flex-wrap: wrap; justify-content: flex-end; row-gap: 10px; margin-left: auto; }
+/* Nov 19 · Today live card: Delete as quiet red text on the same line as Message / Team / Check-in; the confirm box takes the full width */
+.live-acts { flex-wrap: wrap; row-gap: 10px; }
+.live-acts-main { flex-wrap: nowrap; justify-content: flex-end; margin-left: auto; }
+.live-acts-main > .abtn { white-space: nowrap; }
 @media (max-width: 480px) { .live-acts .abtn.sm { padding: 0 10px; } }
+.live-acts .del-ev { flex: 1 1 100%; max-width: none; order: 9; }
+.lnk.del-lnk { color: var(--accent, #9B2226); text-decoration: none; font-size: 13px; padding: 8px 4px 8px 0; }
