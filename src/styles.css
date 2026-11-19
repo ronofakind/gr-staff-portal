@@ -4790,3 +4790,8 @@ span.abtn.ds-newq { background: none; border: 0; padding: 0; }
 /* Nov 16 · details fields line up: same label height, same field height */
 .ds-detg label { justify-content: flex-start; }
 .ds-detg select, .ds-detg input { height: 38px; padding-top: 0; padding-bottom: 0; }
+
+/* Nov 19 · Today live card buttons fit on phones: Delete drops below instead of spilling off the card */
+.live-acts { flex-wrap: wrap-reverse; row-gap: 10px; }
+.live-acts-main { flex-wrap: wrap; justify-content: flex-end; row-gap: 10px; margin-left: auto; }
+@media (max-width: 480px) { .live-acts .abtn.sm { padding: 0 10px; } }
