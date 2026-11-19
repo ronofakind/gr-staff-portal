@@ -14,9 +14,10 @@ export const SEC_LABEL: Record<SecKey, string> = {
 /** Full width on desktop (the rest fill 2 columns in order). */
 export const WIDE: SecKey[] = ['sheet']; // Nov 8 · Tonight is half width (push 60: beside This month; Next 7 days dropped)
 export const DEFAULT_LAYOUT: Layout = {
-  order: ['needs', 'messages', 'ai', 'tonight', 'month', 'hiring', 'debriefs', 'ratings', 'pay', 'late', 'meetings', 'sheet'],
-  pinned: ['needs', 'messages', 'ai'],
-  mode: { late: 'folded', meetings: 'folded', sheet: 'folded' },
+  // Nov 19 · Ronnie: "AI · to review" and "Sheet changes" removed (everyone on the app Jan 1). Keys stay in SecKey, never shown.
+  order: ['needs', 'messages', 'tonight', 'month', 'hiring', 'debriefs', 'ratings', 'pay', 'late', 'meetings'],
+  pinned: ['needs', 'messages'],
+  mode: { late: 'folded', meetings: 'folded' },
 };
 const KEY = 'today_layout'; const LS = 'gr_today_layout';
 function clean(v: unknown): Layout {
