@@ -550,7 +550,6 @@ function Live({ e, q = 0, inBlock = false, compact = false, onDeleted, lateBy = 
       <div className="row live-acts" style={{ justifyContent: 'flex-end', gap: 8, borderTop: '1px solid var(--line)', paddingTop: 12 }}>
         {/* Nov 19 · Ronnie: Delete was wrapping onto its own line on the phone → quiet red text on the same line as the buttons */}
         <DeleteEvent id={e.id} label="Delete" link onDone={onDeleted} />
-        <span className="grow" />
         <div className="row live-acts-main" style={{ gap: 8 }}>
         <a className="abtn sm" href={phones.length ? `sms:/open?addresses=${phones.join(',')}` : undefined}>Message</a>
         <Link className="abtn sm" to={completed ? `/manage/${e.id}` : `/admin/event/${e.id}`}>Team ›</Link>
