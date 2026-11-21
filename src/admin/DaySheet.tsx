@@ -410,7 +410,7 @@ export function DaySheet() {
       </div>
       <div className="ds-sum"><b>{evs.length} event{evs.length === 1 ? '' : 's'}</b><span>Floor <b className={fl[0] >= fl[1] ? 'okc' : 'accent'}>{fl[0]}/{fl[1]}</b></span><span>Bar <b className={br[0] >= br[1] ? 'okc' : 'accent'}>{br[0]}/{br[1]}</b></span><span>Free <b>{nYes}</b></span>
         <span className="muted ds-legend"><i className="ds-sd ok" /> confirmed <i className="ds-sd sent" /> sent, not confirmed <i className="ds-sd" /> placed, not sent</span></div>
-      {pend > 0 && <div className="ds-pend"><b>✉ {pend} change{pend > 1 ? 's' : ''} not sent yet</b><span className="muted">staff who were already sent a shift that changed · they're told when you press Send</span><span className="grow" /><button className="abtn sm dark" onClick={() => setSendOpen(true)}>Review &amp; send ›</button></div>}
+      {false && pend > 0 && <div className="ds-pend"><b>✉ {pend} change{pend > 1 ? 's' : ''} not sent yet</b><span className="muted">staff who were already sent a shift that changed · they're told when you press Send</span><span className="grow" /><button className="abtn sm dark" onClick={() => setSendOpen(true)}>Review &amp; send ›</button></div>}
       {sendOpen && <SendBox events={evs.map((e) => e.id)} onClose={() => { setSendOpen(false); setTick((t) => t + 1); }} onSent={() => { setMsg('Sent.'); setTick((t) => t + 1); }} />}
       {ops.length > 0 && <div className="ds-undofab"><span className="grow">{ops[ops.length - 1].label}</span><button disabled={busy} onClick={undo}>↶ Undo</button>{ops.length > 1 && <small>{ops.length} steps</small>}</div>}{/* push 120 · always in reach */}
       {msg && <div className="adm-card okc sm">{msg}</div>}{err && <div className="adm-card err sm">{err}</div>}

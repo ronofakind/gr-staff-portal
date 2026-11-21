@@ -62,7 +62,10 @@ export function SendBox({ events, onClose, onSent }: { events?: string[] | null;
 }
 
 /** "3 changes not sent yet · Review & send" for these events (or all). Hidden when nothing waits. */
-export function PendingBar({ events, tick = 0, onSent, label }: { events?: string[] | null; tick?: number; onSent?: () => void; label?: string }) {
+// Nov 20 · Ronnie: "remove the changes not sent yet, let's get rid of that feature" → the bar is off everywhere (Today, Day, Bookings, event page).
+// Changes still show in the staff app right away (the data is live); only the "shift changed" alert step is gone. Old code kept below, unreachable.
+export function PendingBar(_p: { events?: string[] | null; tick?: number; onSent?: () => void; label?: string }) { return null; }
+export function PendingBarOld({ events, tick = 0, onSent, label }: { events?: string[] | null; tick?: number; onSent?: () => void; label?: string }) {
   const [n, setN] = useState(0); const [box, setBox] = useState(false); const [t, setT] = useState(0);
   const key = (events ?? []).join(',');
   useEffect(() => { pendingCount(events).then(setN); }, [key, tick, t]); // eslint-disable-line react-hooks/exhaustive-deps
