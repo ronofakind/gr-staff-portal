@@ -4804,7 +4804,7 @@ span.abtn.ds-newq { background: none; border: 0; padding: 0; }
 
 /* Nov 21 · Sections (managers) */
 .mgr-btns { display: flex; gap: 8px; align-items: stretch; margin-top: 8px; }
-.mgr-btns > .mm-entry { flex: 1 1 0; min-width: 0; margin-top: 0; white-space: nowrap; overflow: hidden; box-sizing: border-box; }
+.mgr-btns > .mm-entry { justify-content: center; text-align: center; flex: 1 1 0; min-width: 0; margin-top: 0; white-space: nowrap; overflow: hidden; box-sizing: border-box; }
 .sec-page { display: flex; flex-direction: column; gap: 10px; padding-bottom: 60px; }
 .sec-title { font-size: 26px; line-height: 1.08; padding: 0 6px; }
 .sec-link { font-size: 13px; font-weight: 700; color: #6B64D8; text-decoration: none; }
