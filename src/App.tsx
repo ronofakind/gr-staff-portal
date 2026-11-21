@@ -48,6 +48,7 @@ import { Venues } from './admin/Venues';
 import { Settings } from './admin/Settings';
 import { Go } from './pages/Go';
 import { Messages as StaffMessages } from './pages/Messages';
+import { MgrSections } from './pages/MgrSections';
 import { MgrMessages } from './pages/MgrMessages';
 import { Meeting } from './pages/Meeting';
 import { Meetings, MeetingForm, MeetingAdmin } from './admin/Meetings';
@@ -172,6 +173,7 @@ export function App() {
         <Route path="/availability" element={<StaffAvail me={me} />} />
         <Route path="/manage/:eventId" element={<Manage me={me} />} />
         <Route path="/manage/:eventId/messages" element={<MgrMessages me={me} />} />
+        <Route path="/manage/:eventId/sections" element={<MgrSections />} />
         <Route path="/messages" element={<StaffMessages me={me} />} />
         <Route path="/profile" element={<Profile me={me} />} />
         <Route path="/handbook" element={<Handbook me={me} />} />

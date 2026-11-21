@@ -496,7 +496,8 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
         {ev.venues?.no_outside_food && <div className="venue-rule"><img src="/rules/no-outside-food.png" alt="" width={40} height={40} /><b>No outside food or drinks at this venue</b></div>}
         {/* Nov 5 · Event Folder lives on Home only (Ronnie: too messy here) */}
         {/* push 36e · Messages: 📣 Message my team, what he sent (Seen n of N), replies (REPLY / ✓ DONE) */}
-        <MgrMessagesEntry eventId={ev.id} />
+        {/* Nov 21 · Ronnie: Sections button next to Messages (migration 131) */}
+        <div className="mm-row"><MgrMessagesEntry eventId={ev.id} /><Link className="ann-open mm-entry sec-entry" to={`/manage/${ev.id}/sections`}>▦ Sections<span className="grow" />›</Link></div>
         <MgrCars eventId={ev.id} />{/* push 68 · carpools: a late car = a late group */}
       </div>
 
