@@ -137,9 +137,9 @@ export function MgrSections() {
                 <button className="sec-chip" onClick={() => { setOne(null); setStEdit({ old: null, name: '', note: '' }); }}>+ New station</button>
               </div>
             </>)}
-            <div className="row" style={{ gap: 8, marginTop: 6 }}>
-              {one.section && <button className="light-btn" style={{ flex: 1 }} onClick={() => { set([one.shift_id], null); setOne(null); }}>No section</button>}
-              <button className="btn-ink" style={{ flex: 2 }} onClick={() => setOne(null)}>Done</button>
+            <div className="sec-acts">
+              {one.section && <button className="sec-clear" onClick={() => { set([one.shift_id], null); setOne(null); }}>No section</button>}
+              <button className="sec-done" onClick={() => setOne(null)}>Done</button>
             </div>
           </div>
         </SwipeSheet>

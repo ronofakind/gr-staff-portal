@@ -4832,3 +4832,8 @@ span.abtn.ds-newq { background: none; border: 0; padding: 0; }
 .sec-tick { display: flex; align-items: center; gap: 10px; padding: 9px 6px; border-bottom: 1px solid #F0EBE4; font-size: 14px; }
 .sec-tick input { width: 18px; height: 18px; }
 .sec-in { width: 100%; box-sizing: border-box; border: 1px solid #D9D0C4; border-radius: 10px; padding: 10px; font: 400 15px Inter, sans-serif; }
+
+.sec-acts { display: flex; gap: 8px; align-items: stretch; margin-top: 6px; }
+.sec-acts > button { height: 52px; border-radius: 26px; font: 700 15px Inter, sans-serif; cursor: pointer; margin: 0; box-sizing: border-box; }
+.sec-clear { flex: 1 1 0; background: #fff; color: var(--ink); border: 1.5px solid #E2DAD0; }
+.sec-done { flex: 2 1 0; background: var(--ink); color: #fff; border: 0; }
