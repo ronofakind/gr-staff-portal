@@ -16,7 +16,7 @@ import { useInboxCount } from '../lib/messages';
 /** push 36e · event screen entry to the manager's Messages (replaces the push-25e inline composer, which was switched off). */
 function MgrMessagesEntry({ eventId }: { eventId: string }) {
   const n = useInboxCount(eventId);
-  return <Link className="ann-open mm-entry" to={`/manage/${eventId}/messages`}>💬 Messages{n > 0 ? <i className="msg-n">{n}</i> : <span className="muted"> · message my team</span>}<span className="grow" />›</Link>;
+  return <Link className="ann-open mm-entry" to={`/manage/${eventId}/messages`}>Messages{n > 0 ? <i className="msg-n">{n}</i> : null}<span className="grow" />›</Link>;
 }
 /** Push 27 rollout: manager feedback (★ tile + new-staff check) only for these managers (full name or staff id) while Settings → Managers
  *  says "Benjamin only" (default); "All managers" turns it on for everyone who manages an event (push 32). */
@@ -497,7 +497,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
         {/* Nov 5 · Event Folder lives on Home only (Ronnie: too messy here) */}
         {/* push 36e · Messages: 📣 Message my team, what he sent (Seen n of N), replies (REPLY / ✓ DONE) */}
         {/* Nov 21 · Ronnie: Sections button next to Messages (migration 131) */}
-        <div className="mm-row"><MgrMessagesEntry eventId={ev.id} /><Link className="ann-open mm-entry sec-entry" to={`/manage/${ev.id}/sections`}>▦ Sections<span className="grow" />›</Link></div>
+        <div className="mgr-btns"><MgrMessagesEntry eventId={ev.id} /><Link className="ann-open mm-entry" to={`/manage/${ev.id}/sections`}>Sections<span className="grow" />›</Link></div>
         <MgrCars eventId={ev.id} />{/* push 68 · carpools: a late car = a late group */}
       </div>
 

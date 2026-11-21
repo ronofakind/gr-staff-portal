@@ -2357,7 +2357,6 @@ html[data-theme="dark"] { --teams: #8487CC; --teams-bg: #1F2137; --teams-ink: #8
 :where(html[data-theme="dark"]) .ds-line2:not(.sh).full { border-left-color: #7051BE; }
 :where(html[data-theme="dark"]) .ds-line2:not(.sh).short { border-left-color: #BB4634; }
 :where(html[data-theme="dark"]) .lnk.del-lnk { color: var(--accent, #D7797C); }
-:where(html[data-theme="dark"]) .sec-entry { border-color: #D4B671; }
 :where(html[data-theme="dark"]) .sec-link { color: #827CD4; }
 :where(html[data-theme="dark"]) .sec-card { background: #1F1D1A; border-left: 4px solid #B0A9A2; }
 :where(html[data-theme="dark"]) .sec-card.none { border: 1px dashed #45403B; }

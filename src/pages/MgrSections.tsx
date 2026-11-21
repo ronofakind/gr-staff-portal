@@ -94,9 +94,9 @@ export function MgrSections() {
                     <div key={st.name} className="sec-st">
                       <div className="sec-h"><b>{st.name}</b><span className="muted">{on.length}</span><span className="grow" />
                         <button className="sec-add" onClick={() => openPick('Station', st.name)}>+ add</button>
-                        <button className="sec-edit" onClick={() => setStEdit({ old: st.name, name: st.name, note: st.note ?? '' })}>✎</button></div>
+                        <button className="sec-edit" onClick={() => setStEdit({ old: st.name, name: st.name, note: st.note ?? '' })}>Edit</button></div>
                       {on.length ? <div className="sec-names">{on.map((m) => <button key={m.shift_id} className="sec-name" onClick={() => setOne(m)}>{short(m.full_name)}</button>)}</div> : <div className="muted sm">Nobody yet</div>}
-                      {st.note ? <div className="sec-note" onClick={() => setStEdit({ old: st.name, name: st.name, note: st.note })}>✎ {st.note}</div>
+                      {st.note ? <div className="sec-note" onClick={() => setStEdit({ old: st.name, name: st.name, note: st.note })}>{st.note}</div>
                         : <button className="sec-note add" onClick={() => setStEdit({ old: st.name, name: st.name, note: '' })}>+ note</button>}
                     </div>
                   );
