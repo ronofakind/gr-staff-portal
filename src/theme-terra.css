@@ -1411,4 +1411,5 @@ html[data-theme="terra"] { --teams: #5B5FC7; --teams-bg: #EEEFFB; --teams-ink: #
 :where(html[data-theme="terra"]) .sec-in { border: 1px solid #D1D2CB; }
 :where(html[data-theme="terra"]) .sec-clear { background: #FBFAF6; }
 :where(html[data-theme="terra"]) .sec-done { color: #FBFAF6; background: #3B4A3F; }
+:where(html[data-theme="terra"]) .sec-chip.run.on { background: rgba(122,79,214,0.078); }
 html[data-theme="terra"] body { background: #EEF0E8; color: #2A2A24; }

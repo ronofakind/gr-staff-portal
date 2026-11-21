@@ -4837,3 +4837,8 @@ span.abtn.ds-newq { background: none; border: 0; padding: 0; }
 .sec-acts > button { height: 52px; border-radius: 26px; font: 700 15px Inter, sans-serif; cursor: pointer; margin: 0; box-sizing: border-box; }
 .sec-clear { flex: 1 1 0; background: #fff; color: var(--ink); border: 1.5px solid #E2DAD0; }
 .sec-done { flex: 2 1 0; background: var(--ink); color: #fff; border: 0; }
+
+.sec-runs { color: #7A4FD6; font-weight: 700; font-size: 12px; }
+.sec-runline { font-size: 13px; line-height: 1.4; } .sec-runline b { color: #7A4FD6; }
+.sec-lbl-sub { font-weight: 500; letter-spacing: 0; margin-left: 6px; text-transform: none; }
+.sec-chip.run.on { border-color: #7A4FD6; color: #7A4FD6; background: #7A4FD614; font-weight: 700; }

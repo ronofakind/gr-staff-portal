@@ -2376,6 +2376,9 @@ html[data-theme="dark"] { --teams: #8487CC; --teams-bg: #1F2137; --teams-ink: #8
 :where(html[data-theme="dark"]) .sec-in { border: 1px solid #413D38; }
 :where(html[data-theme="dark"]) .sec-clear { background: #1F1D1A; border: 1.5px solid #49433B; }
 :where(html[data-theme="dark"]) .sec-done { color: #F1ECE4; background: #2A2622; }
+:where(html[data-theme="dark"]) .sec-runs { color: #987AD6; }
+:where(html[data-theme="dark"]) .sec-runline b { color: #987AD6; }
+:where(html[data-theme="dark"]) .sec-chip.run.on { border-color: #7C56CF; color: #987AD6; background: rgba(124,86,207,0.078); }
 html[data-theme="dark"] { color-scheme: dark; }
 html[data-theme="dark"] body { background: #121110; color: #F1ECE4; }
 html[data-theme="dark"] img[src$="logo-mark.png"]:not(.adm-side img):not(.side-logo), html[data-theme="dark"] img[src$="logo-full.png"] { filter: invert(1) hue-rotate(180deg); mix-blend-mode: normal !important; }

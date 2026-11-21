@@ -6,7 +6,7 @@ import { SwipeSheet } from '../components/SwipeSheet';
 /* Nov 21 2026 · Sections (migration 131). Managers of the event split the team into Passing · Runner · Station · Clean-up (+ other).
    Opened from My team, next to Messages. Staff don't see it yet. Nothing is sent. Saves on every tap. */
 
-type Member = { shift_id: string; staff_id: string; full_name: string; planned_start: string; position: string; section: string | null; station: string | null };
+type Member = { shift_id: string; staff_id: string; full_name: string; planned_start: string; position: string; section: string | null; station: string | null; runs?: string[] | null };
 type Station = { name: string; note: string };
 const BASE = ['Passing', 'Runner', 'Station', 'Clean-up'];
 const COLOR: Record<string, string> = { Passing: '#2F6FDB', Runner: '#7A4FD6', Station: '#B26A00', 'Clean-up': '#3F7D4E' };
@@ -21,6 +21,7 @@ export function MgrSections() {
   const [one, setOne] = useState<Member | null>(null);            // tap a name
   const [pick, setPick] = useState<string | null>(null);         // + add on a section (tick list)
   const [ticked, setTicked] = useState<Set<string>>(new Set()); const [pickStation, setPickStation] = useState<string | null>(null);
+  const [pickRuns, setPickRuns] = useState<string[]>([]);
   const [stEdit, setStEdit] = useState<{ old: string | null; name: string; note: string } | null>(null);
   const [other, setOther] = useState<string | null>(null);
 
@@ -40,10 +41,12 @@ export function MgrSections() {
     return [...BASE, ...Array.from(new Set([...used, ...extra]))];
   }, [team, extra]);
 
-  const set = async (ids: string[], section: string | null, station: string | null = null) => {
+  // runs (migration 132): only for Runner · null = keep, [] = no station, [..] = the stations he runs for
+  const set = async (ids: string[], section: string | null, station: string | null = null, runs: string[] | null = null) => {
     setErr('');
-    setTeam((t) => (t ?? []).map((m) => (ids.includes(m.shift_id) ? { ...m, section, station: section === 'Station' ? station : null } : m))); // instant
-    const { error } = await supabase.rpc('mgr_set_section', { p_event: eventId, p_shifts: ids, p_section: section, p_station: station });
+    setTeam((t) => (t ?? []).map((m) => (ids.includes(m.shift_id) ? { ...m, section, station: section === 'Station' ? station : null,
+      runs: section !== 'Runner' ? [] : runs ?? m.runs ?? [] } : m))); // instant
+    const { error } = await supabase.rpc('mgr_set_section', { p_event: eventId, p_shifts: ids, p_section: section, p_station: station, p_runs: section === 'Runner' ? runs : null });
     if (error) setErr(error.message);
     load();
   };
@@ -62,8 +65,11 @@ export function MgrSections() {
   if (!team) return <div className="loading" />;
   const none = team.filter((m) => !m.section);
   const inSec = (s: string) => team.filter((m) => m.section === s);
+  const runsOf = (m: Member) => (m.runs ?? []).filter((r) => stations.some((x) => x.name === r));
+  const runnersOf = (st: string) => team.filter((m) => m.section === 'Runner' && runsOf(m).includes(st));
+  const toggle = (arr: string[], v: string) => (arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
   const setCount = team.length - none.length;
-  const openPick = (s: string, station: string | null = null) => { setPick(s); setPickStation(station); setTicked(new Set()); };
+  const openPick = (s: string, station: string | null = null) => { setPick(s); setPickStation(station); setPickRuns([]); setTicked(new Set()); };
   const pickList = pick ? [...none, ...team.filter((m) => m.section && !(m.section === pick && (pick !== 'Station' || m.station === pickStation)))] : [];
 
   return (
@@ -84,7 +90,8 @@ export function MgrSections() {
             <div className="sec-h"><b style={{ color: col(s) }}>{s}</b><span className="muted">{ppl.length}</span><span className="grow" />
               {s !== 'Station' && <button className="sec-add" onClick={() => openPick(s)}>+ add</button>}</div>
             {s !== 'Station' ? (
-              ppl.length ? <div className="sec-names">{ppl.map((m) => <button key={m.shift_id} className="sec-name" onClick={() => setOne(m)}>{short(m.full_name)}</button>)}</div>
+              ppl.length ? <div className="sec-names">{(s === 'Runner' ? [...ppl.filter((m) => !runsOf(m).length), ...ppl.filter((m) => runsOf(m).length)] : ppl).map((m) =>
+                <button key={m.shift_id} className="sec-name" onClick={() => setOne(m)}>{short(m.full_name)}{s === 'Runner' && runsOf(m).length ? <span className="sec-runs"> · {runsOf(m).join(', ')}</span> : null}</button>)}</div>
                 : <div className="muted sm">Nobody yet</div>
             ) : (
               <>
@@ -96,6 +103,7 @@ export function MgrSections() {
                         <button className="sec-add" onClick={() => openPick('Station', st.name)}>+ add</button>
                         <button className="sec-edit" onClick={() => setStEdit({ old: st.name, name: st.name, note: st.note ?? '' })}>Edit</button></div>
                       {on.length ? <div className="sec-names">{on.map((m) => <button key={m.shift_id} className="sec-name" onClick={() => setOne(m)}>{short(m.full_name)}</button>)}</div> : <div className="muted sm">Nobody yet</div>}
+                      {runnersOf(st.name).length > 0 && <div className="sec-runline"><b>Runners:</b> {runnersOf(st.name).map((m) => short(m.full_name)).join(', ')}</div>}
                       {st.note ? <div className="sec-note" onClick={() => setStEdit({ old: st.name, name: st.name, note: st.note })}>{st.note}</div>
                         : <button className="sec-note add" onClick={() => setStEdit({ old: st.name, name: st.name, note: '' })}>+ note</button>}
                     </div>
@@ -127,7 +135,11 @@ export function MgrSections() {
             <div className="sec-grid">
               {sections.map((s) => (
                 <button key={s} className={'sec-opt' + (one.section === s ? ' on' : '')} style={{ color: col(s), borderColor: one.section === s ? col(s) : undefined }}
-                  onClick={() => { if (s === 'Station') { setOne({ ...one, section: 'Station' }); } else { set([one.shift_id], s); setOne(null); } }}>{s}</button>
+                  onClick={() => {
+                    if (s === 'Station') setOne({ ...one, section: 'Station' });
+                    else if (s === 'Runner') { if (one.section !== 'Runner') set([one.shift_id], 'Runner', null, []); setOne({ ...one, section: 'Runner', station: null, runs: one.section === 'Runner' ? one.runs : [] }); }
+                    else { set([one.shift_id], s); setOne(null); }
+                  }}>{s}</button>
               ))}
             </div>
             {one.section === 'Station' && (<>
@@ -136,6 +148,15 @@ export function MgrSections() {
                 {stations.map((st) => <button key={st.name} className={'sec-chip' + (one.station === st.name ? ' on' : '')} onClick={() => { set([one.shift_id], 'Station', st.name); setOne(null); }}>{st.name}</button>)}
                 <button className="sec-chip" onClick={() => { setOne(null); setStEdit({ old: null, name: '', note: '' }); }}>+ New station</button>
               </div>
+            </>)}
+            {one.section === 'Runner' && (<>
+              <div className="sec-lbl">RUNS FOR <span className="sec-lbl-sub">optional · one or more</span></div>
+              <div className="sec-chips">
+                {stations.map((st) => { const on = runsOf(one).includes(st.name); return (
+                  <button key={st.name} className={'sec-chip run' + (on ? ' on' : '')} onClick={() => { const r = toggle(runsOf(one), st.name); setOne({ ...one, runs: r }); set([one.shift_id], 'Runner', null, r); }}>{st.name}</button>); })}
+                <button className="sec-chip" onClick={() => { setOne(null); setStEdit({ old: null, name: '', note: '' }); }}>+ New station</button>
+              </div>
+              {!stations.length && <div className="muted sm">No stations yet tonight. Add one first.</div>}
             </>)}
             <div className="sec-acts">
               {one.section && <button className="sec-clear" onClick={() => { set([one.shift_id], null); setOne(null); }}>No section</button>}
@@ -156,11 +177,16 @@ export function MgrSections() {
                 <label key={m.shift_id} className="sec-tick">
                   <input type="checkbox" checked={ticked.has(m.shift_id)} onChange={(e) => { const n = new Set(ticked); if (e.target.checked) n.add(m.shift_id); else n.delete(m.shift_id); setTicked(n); }} />
                   <span className="grow">{m.full_name}</span>
-                  <small className="muted">{m.section ? (m.section === 'Station' && m.station ? m.station : m.section) : t12(m.planned_start)}</small>
+                  <small className="muted">{m.section ? (m.section === 'Station' && m.station ? m.station : m.section === 'Runner' && runsOf(m).length ? `Runner · ${runsOf(m).join(', ')}` : m.section) : t12(m.planned_start)}</small>
                 </label>
               ))}
             </div>
-            <button className="btn-ink" disabled={!ticked.size} onClick={() => { set([...ticked], pick, pickStation); setPick(null); }}>Add {ticked.size || ''}</button>
+            {pick === 'Runner' && stations.length > 0 && (<>
+              <div className="sec-lbl">RUN FOR <span className="sec-lbl-sub">optional · one or more · for everyone ticked</span></div>
+              <div className="sec-chips">{stations.map((st) => <button key={st.name} className={'sec-chip run' + (pickRuns.includes(st.name) ? ' on' : '')} onClick={() => setPickRuns(toggle(pickRuns, st.name))}>{st.name}</button>)}</div>
+            </>)}
+            <button className="btn-ink" disabled={!ticked.size} onClick={() => { set([...ticked], pick, pickStation, pick === 'Runner' ? pickRuns : null); setPick(null); }}>
+              Add {ticked.size || ''}{pick === 'Runner' && pickRuns.length ? ` to Runner · ${pickRuns.join(', ')}` : ''}</button>
           </div>
         </SwipeSheet>
       </>)}
