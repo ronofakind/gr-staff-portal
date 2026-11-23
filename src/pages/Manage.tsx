@@ -660,8 +660,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
               if (error) { alert(error.message); return; } setAddMgr(false); await load(); }}>{pick ? `Make ${first(pick.staff?.full_name)} a manager tonight` : 'Pick someone'}</button>
           </SwipeSheet></>;
       })()}
-      <p className="hint" style={{ textAlign: 'center' }}>Tap a name or photo for times, {fbOn ? 'feedback, ' : ''}note, problems · swipe left on a started person to undo</p>
-      <div className="inc-entry"><button onClick={() => setIncOpen(true)}>⚠ Incident report</button><small>Emergencies only</small></div>
+      <div className="inc-entry"><button onClick={() => setIncOpen(true)}>⚠ Incident report</button></div>
 
       {!endsAt && outstanding.length > 0 && !ev.hours_submitted_at ? (
       <div className="submit-bar">
@@ -670,8 +669,8 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
       <div className="submit-bar">
         <div className="grow">
           {ownPick && ownOpen.length > 0 && !ev.hours_submitted_at && <small className="own-wait">🔑 {ownOpen.map((r) => first(r.staff?.full_name)).join(', ')} {ownOpen.length === 1 ? 'is' : 'are'} ending their own · their time is added when they do</small>}
-          <b className={changedSince && !otherSent ? 'gold' : ''}>{otherSent ? `✓ Submitted by ${sentBy}` : changedSince ? '↻ Times changed since you submitted' : ev.hours_submitted_at ? '✓ Hours submitted' : endsAt && outstanding.length === 0 ? `Submit now with ${time(endsAt, lang)} as the end` : 'End of night'}</b>
-          <span>{otherSent ? `${new Date(ev.hours_submitted_at!).toLocaleString('en-CA', { weekday: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' })} · this team is closed` : ev.hours_submitted_at ? `Submitted ${new Date(ev.hours_submitted_at).toLocaleString('en-CA', { weekday: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' })}${changedSince ? ' · Ronnie has the older version' : ' · you can still edit'}` : endsAt && outstanding.length === 0 ? 'Change anything after? You can resubmit.' : "Check everyone's times, then send"}</span>
+          <b className={changedSince && !otherSent ? 'gold' : ''}>{otherSent ? `✓ Submitted by ${sentBy}` : changedSince ? '↻ Times changed since you submitted' : ev.hours_submitted_at ? '✓ Hours submitted' : endsAt && outstanding.length === 0 ? `Submit now with ${time(endsAt, lang)} as the end` : ''}</b>
+          <span>{otherSent ? `${new Date(ev.hours_submitted_at!).toLocaleString('en-CA', { weekday: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' })} · this team is closed` : ev.hours_submitted_at ? `Submitted ${new Date(ev.hours_submitted_at).toLocaleString('en-CA', { weekday: 'short', hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' })}${changedSince ? ' · Ronnie has the older version' : ' · you can still edit'}` : endsAt && outstanding.length === 0 ? 'Change anything after? You can resubmit.' : ''}</span>
         </div>
         {!otherSent && <button className="btn-ink" style={{ height: 46, padding: '0 18px', borderRadius: 23 }} onClick={() => (fbOn && !checkDone && newWorked.length ? setCheck(true) : setReview(true))}>{ev.hours_submitted_at ? 'Resubmit ›' : 'Submit hours ›'}</button>}
       </div>)}
