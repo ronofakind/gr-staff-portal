@@ -7,13 +7,14 @@ import { SwipeSheet } from '../components/SwipeSheet';
    Opened from My team, next to Messages. Staff don't see it yet. Nothing is sent. Saves on every tap. */
 
 type Member = { shift_id: string; staff_id: string; full_name: string; planned_start: string; position: string; section: string | null; station: string | null; runs?: string[] | null;
-  svc_role?: string | null; svc_side?: string | null; svc_lead?: string | null };
+  svc_role?: string | null; svc_side?: string | null; svc_lead?: string | null; svc_coffee?: boolean };
 type SvcRole = { name: string; note: string; custom?: boolean };
 /* Nov 23 · migration 133 · Service tab: roles (+ added roles), optional sides, wave lead teams. A role person can also be on a team. */
 const DEF_ROLES = ['Wave lead', 'Allergies', 'Kitchen', 'Closer', 'Bread'];
-const RCOL: Record<string, string> = { 'Wave lead': '#9B2226', Allergies: '#C26A00', Kitchen: '#2F6FDB', Closer: '#3F7D4E', Bread: '#8A5A2B' };
+const RCOL: Record<string, string> = { 'Wave lead': '#9B2226', Allergies: '#C26A00', Kitchen: '#2F6FDB', Closer: '#3F7D4E', Bread: '#8A5A2B', Coffee: '#6B4A2E' };
 const rcol = (r: string) => RCOL[r] ?? '#5B544C';
-const SIDES = ['Kitchen side', 'Cocktail side'];
+const SIDES_DEFAULT = ['Kitchen side', 'Cocktail side'];
+const COFFEE = 'Coffee'; /* Nov 23 · migration 134 · on top of any role, last card */
 const SIDE_ROLES = ['Wave lead', 'Allergies', 'Closer'];
 type Station = { name: string; note: string };
 const BASE = ['Passing', 'Runner', 'Station', 'Clean-up'];
@@ -34,6 +35,8 @@ export function MgrSections() {
   const [other, setOther] = useState<string | null>(null);
   const [sp, setSp] = useSearchParams(); const tab = sp.get('tab') === 'service' ? 'service' : 'cocktail';
   const [svcRoles, setSvcRoles] = useState<SvcRole[]>([]); const [sides, setSides] = useState(false);
+  const [SIDES, setSideNames] = useState<string[]>(SIDES_DEFAULT); const [sideEdit, setSideEdit] = useState<string[] | null>(null);
+  const [coffeePick, setCoffeePick] = useState(false);
   const [teamEdit, setTeamEdit] = useState<Member | null>(null); const [teamTicks, setTeamTicks] = useState<Set<string>>(new Set());
   const [rolePick, setRolePick] = useState<string | null>(null);
   const [roleEdit, setRoleEdit] = useState<{ old: string | null; name: string; note: string; def: boolean } | null>(null);
@@ -41,8 +44,8 @@ export function MgrSections() {
   const load = async () => {
     const { data, error } = await supabase.rpc('mgr_sections', { p_event: eventId });
     if (error) { setErr(error.message); setTeam([]); return; }
-    const d = data as { team: Member[]; stations: Station[]; svc_roles?: SvcRole[]; svc_sides?: boolean };
-    setTeam(d.team ?? []); setStations(d.stations ?? []); setSvcRoles(d.svc_roles ?? []); setSides(!!d.svc_sides);
+    const d = data as { team: Member[]; stations: Station[]; svc_roles?: SvcRole[]; svc_sides?: boolean; svc_side_names?: string[] };
+    setTeam(d.team ?? []); setStations(d.stations ?? []); setSvcRoles(d.svc_roles ?? []); setSides(!!d.svc_sides); setSideNames(d.svc_side_names?.length === 2 ? d.svc_side_names : SIDES_DEFAULT);
   };
   useEffect(() => {
     supabase.from('events').select('title').eq('id', eventId!).maybeSingle().then(({ data }) => setTitle((data as { title: string } | null)?.title ?? ''));
@@ -84,6 +87,13 @@ export function MgrSections() {
   const setSide = (ids: string[], side: string | null) => { setTeam((t) => (t ?? []).map((m) => (ids.includes(m.shift_id) ? { ...m, svc_side: side } : m))); return rpc('mgr_set_svc_side', { p_shifts: ids, p_side: side }); };
   const setLead = (id: string, lead: string | null) => { setTeam((t) => (t ?? []).map((m) => (m.shift_id === id ? { ...m, svc_lead: lead } : m))); return rpc('mgr_set_lead', { p_shift: id, p_lead: lead }); };
   const saveTeam = (lead: string, members: string[]) => rpc('mgr_set_team', { p_lead: lead, p_members: members });
+  const setCoffee = (ids: string[], on: boolean) => { setTeam((t) => (t ?? []).map((m) => (ids.includes(m.shift_id) ? { ...m, svc_coffee: on } : m))); return rpc('mgr_set_coffee', { p_shifts: ids, p_on: on }); };
+  const saveSides = async () => {
+    if (!sideEdit) return; setErr('');
+    const { error } = await supabase.rpc('mgr_side_names_save', { p_event: eventId, p_a: sideEdit[0], p_b: sideEdit[1] });
+    if (error) { setErr(error.message); return; }
+    setSideEdit(null); load();
+  };
   const saveRole = async () => {
     if (!roleEdit) return; setErr('');
     const { error } = await supabase.rpc('mgr_svc_role_save', { p_event: eventId, p_name: roleEdit.name, p_note: roleEdit.note, p_old: roleEdit.old });
@@ -93,13 +103,15 @@ export function MgrSections() {
   const delRole = async (name: string) => { const { error } = await supabase.rpc('mgr_svc_role_delete', { p_event: eventId, p_name: name }); if (error) { setErr(error.message); return; } setRoleEdit(null); load(); };
 
   if (!team) return <div className="loading" />;
-  const roles = [...DEF_ROLES, ...svcRoles.filter((r) => r.custom && !DEF_ROLES.includes(r.name)).map((r) => r.name)];
+  const roles = [...DEF_ROLES, ...svcRoles.filter((r) => r.custom && !DEF_ROLES.includes(r.name) && r.name !== COFFEE).map((r) => r.name)];
   for (const m of team) if (m.svc_role && !roles.includes(m.svc_role)) roles.push(m.svc_role);
   const noteOf = (r: string) => svcRoles.find((x) => x.name === r)?.note ?? '';
   const leads = team.filter((m) => m.svc_role === 'Wave lead');
   const teamOf = (l: Member) => team.filter((m) => m.svc_lead === l.shift_id);
   const leadOf = (m: Member) => (m.svc_lead ? team.find((x) => x.shift_id === m.svc_lead) ?? null : null);
   const noTeam = team.filter((m) => m.svc_role !== 'Wave lead' && !leadOf(m));
+  const subOf = (m: Member, base?: string | null) => [base, m.svc_coffee ? COFFEE : null].filter(Boolean).join(' · ') || null;
+  const coffee = team.filter((m) => m.svc_coffee);
   const openTeam = (l: Member) => { setTeamEdit(l); setTeamTicks(new Set(teamOf(l).map((m) => m.shift_id))); };
   const openRolePick = (r: string) => { setRolePick(r); setTicked(new Set()); };
   const nm = (m: Member, sub?: string | null) => <button key={m.shift_id} className="sec-name" onClick={() => setOne(m)}>{short(m.full_name)}{sub ? <span className="sec-sub"> · {sub}</span> : null}</button>;
@@ -107,7 +119,7 @@ export function MgrSections() {
     <div key={l.shift_id} className="sec-st">
       <div className="sec-h"><button className="sec-lead" onClick={() => setOne(l)}>{l.full_name}</button><span className="muted">team of {teamOf(l).length}</span><span className="grow" />
         <button className="sec-add" onClick={() => openTeam(l)}>Edit team</button></div>
-      {teamOf(l).length ? <div className="sec-names">{teamOf(l).map((m) => nm(m, m.svc_role))}</div> : <div className="muted sm">Nobody on the team yet</div>}
+      {teamOf(l).length ? <div className="sec-names">{teamOf(l).map((m) => nm(m, subOf(m, m.svc_role)))}</div> : <div className="muted sm">Nobody on the team yet</div>}
     </div>
   );
   const roleCard = (r: string, ppl: Member[], key?: string) => (
@@ -116,7 +128,7 @@ export function MgrSections() {
         <button className="sec-add" onClick={() => openRolePick(r)}>+ add</button>
         <button className="sec-edit" onClick={() => setRoleEdit({ old: r, name: r, note: noteOf(r), def: DEF_ROLES.includes(r) })}>Edit</button></div>
       {r === 'Wave lead' ? (ppl.length ? ppl.map(leadBlock) : <div className="muted sm">Nobody yet · add a wave lead, then Edit team</div>)
-        : ppl.length ? <div className="sec-names">{ppl.map((m) => nm(m, leadOf(m) ? `${short(leadOf(m)!.full_name)}'s team` : null))}</div> : <div className="muted sm">Nobody yet</div>}
+        : ppl.length ? <div className="sec-names">{ppl.map((m) => nm(m, subOf(m, leadOf(m) ? `${short(leadOf(m)!.full_name)}'s team` : null)))}</div> : <div className="muted sm">Nobody yet</div>}
       {noteOf(r) ? <div className="sec-note" onClick={() => setRoleEdit({ old: r, name: r, note: noteOf(r), def: DEF_ROLES.includes(r) })}>{noteOf(r)}</div>
         : <button className="sec-note add" onClick={() => setRoleEdit({ old: r, name: r, note: '', def: DEF_ROLES.includes(r) })}>+ note</button>}
     </section>
@@ -124,7 +136,8 @@ export function MgrSections() {
   const inRole = (r: string, side?: string | null) => team.filter((m) => m.svc_role === r && (side === undefined || (side === null ? !m.svc_side || !SIDES.includes(m.svc_side) : m.svc_side === side)));
   const serviceView = (
     <>
-      <div className="sec-sw"><b>Sides</b><span className="muted sm">Kitchen side / Cocktail side</span><span className="grow" />
+      <div className="sec-sw"><b>Sides</b><span className="muted sm">{SIDES[0]} / {SIDES[1]}</span><span className="grow" />
+        <button className="sec-edit" onClick={() => setSideEdit([...SIDES])}>Edit</button>
         <button className={'sec-toggle' + (sides ? ' on' : '')} aria-label="Sides" onClick={() => { setSides(!sides); rpc('mgr_set_sides', { p_on: !sides }); }}><i /></button></div>
       {!sides ? roles.map((r) => roleCard(r, inRole(r))) : (<>
         {SIDES.map((sd) => (
@@ -139,10 +152,18 @@ export function MgrSections() {
           {roles.filter((r) => !SIDE_ROLES.includes(r)).map((r) => roleCard(r, inRole(r)))}
         </div>
       </>)}
+      <section className="sec-card" style={{ borderLeftColor: rcol(COFFEE) }}>
+        <div className="sec-h"><b style={{ color: rcol(COFFEE) }}>{COFFEE}</b><span className="muted">{coffee.length}</span><span className="grow" />
+          <button className="sec-add" onClick={() => { setCoffeePick(true); setTicked(new Set()); }}>+ add</button>
+          <button className="sec-edit" onClick={() => setRoleEdit({ old: COFFEE, name: COFFEE, note: noteOf(COFFEE), def: true })}>Edit</button></div>
+        {coffee.length ? <div className="sec-names">{coffee.map((m) => nm(m, m.svc_role))}</div> : <div className="muted sm">Nobody yet · anyone can also be on coffee</div>}
+        {noteOf(COFFEE) ? <div className="sec-note" onClick={() => setRoleEdit({ old: COFFEE, name: COFFEE, note: noteOf(COFFEE), def: true })}>{noteOf(COFFEE)}</div>
+          : <button className="sec-note add" onClick={() => setRoleEdit({ old: COFFEE, name: COFFEE, note: '', def: true })}>+ note</button>}
+      </section>
       <button className="sec-add" style={{ alignSelf: 'flex-start', marginLeft: 6 }} onClick={() => setRoleEdit({ old: null, name: '', note: '', def: false })}>+ New role</button>
       <section className="sec-card none">
         <div className="sec-h"><b style={{ color: '#B26A00' }}>Not on a team yet</b><span className="muted">{noTeam.length}</span></div>
-        {noTeam.length ? <div className="sec-names">{noTeam.map((m) => nm(m, m.svc_role))}</div> : <div className="muted sm">Everyone is on a wave lead's team.</div>}
+        {noTeam.length ? <div className="sec-names">{noTeam.map((m) => nm(m, subOf(m, m.svc_role)))}</div> : <div className="muted sm">Everyone is on a wave lead's team.</div>}
         <div className="muted sm">Tap a name to give a role or a team.</div>
       </section>
     </>
@@ -250,6 +271,8 @@ export function MgrSections() {
                 onClick={() => { const v = one.svc_role === r ? null : r; setRole([one.shift_id], v); setOne({ ...one, svc_role: v, svc_lead: v === 'Wave lead' ? null : one.svc_lead }); }}>{r}</button>)}
               <button className="sec-chip" onClick={() => { setOne(null); setRoleEdit({ old: null, name: '', note: '', def: false }); }}>+ New role</button>
             </div>
+            <div className="sec-chips"><button className={'sec-chip' + (one.svc_coffee ? ' on' : '')} style={one.svc_coffee ? { borderColor: rcol(COFFEE), color: rcol(COFFEE), background: rcol(COFFEE) + '14' } : undefined}
+              onClick={() => { const v = !one.svc_coffee; setCoffee([one.shift_id], v); setOne({ ...one, svc_coffee: v }); }}>{one.svc_coffee ? 'On coffee' : '+ Coffee'}</button><span className="muted sm" style={{ alignSelf: 'center' }}>on top of the role</span></div>
             {sides && (<>
               <div className="sec-lbl">SIDE</div>
               <div className="sec-chips">{SIDES.map((sd) => <button key={sd} className={'sec-chip' + (one.svc_side === sd ? ' on' : '')} onClick={() => { const v = one.svc_side === sd ? null : sd; setSide([one.shift_id], v); setOne({ ...one, svc_side: v }); }}>{sd}</button>)}</div>
@@ -369,7 +392,7 @@ export function MgrSections() {
             {!roleEdit.def && (<>
               <div className="sec-lbl">NAME</div>
               <input className="sec-in" value={roleEdit.name} maxLength={40} placeholder="e.g. Wine, Water" onChange={(e) => setRoleEdit({ ...roleEdit, name: e.target.value })} />
-              {!roleEdit.old && <div className="sec-chips">{['Wine', 'Water', 'Runner', 'Coffee'].filter((x) => !roles.includes(x)).map((x) => <button key={x} className="sec-chip" onClick={() => setRoleEdit({ ...roleEdit, name: x })}>{x}</button>)}</div>}
+              {!roleEdit.old && <div className="sec-chips">{['Wine', 'Water', 'Runner'].filter((x) => !roles.includes(x)).map((x) => <button key={x} className="sec-chip" onClick={() => setRoleEdit({ ...roleEdit, name: x })}>{x}</button>)}</div>}
             </>)}
             <div className="sec-lbl">NOTE (optional)</div>
             <textarea className="sec-in" rows={3} maxLength={500} value={roleEdit.note} placeholder="e.g. allergy tables, timing, what to bring" onChange={(e) => setRoleEdit({ ...roleEdit, note: e.target.value })} />
@@ -377,6 +400,41 @@ export function MgrSections() {
               {roleEdit.old && !roleEdit.def && <button className="light-btn" style={{ flex: 1, color: '#9B2226' }} onClick={() => delRole(roleEdit.old!)}>Delete</button>}
               <button className="btn-ink" style={{ flex: 2 }} disabled={!roleEdit.name.trim()} onClick={saveRole}>{roleEdit.old ? 'Save' : 'Add role'}</button>
             </div>
+          </div>
+        </SwipeSheet>
+      </>)}
+      {coffeePick && (<>
+        <div className="scrim" onClick={() => setCoffeePick(false)} />
+        <SwipeSheet onClose={() => setCoffeePick(false)} label="Coffee" x={false}>
+          <div className="sec-sheet">
+            <b style={{ fontSize: 17, color: rcol(COFFEE) }}>{COFFEE}</b>
+            <div className="muted sm">Tick anyone · they keep their role and team</div>
+            <div className="sec-ticks">
+              {team.filter((m) => !m.svc_coffee).map((m) => (
+                <label key={m.shift_id} className="sec-tick">
+                  <input type="checkbox" checked={ticked.has(m.shift_id)} onChange={(e) => { const n = new Set(ticked); if (e.target.checked) n.add(m.shift_id); else n.delete(m.shift_id); setTicked(n); }} />
+                  <span className="grow">{m.full_name}</span>
+                  <small className="muted">{m.svc_role ?? t12(m.planned_start)}</small>
+                </label>
+              ))}
+            </div>
+            <button className="btn-ink" disabled={!ticked.size} onClick={() => { setCoffee([...ticked], true); setCoffeePick(false); }}>Add {ticked.size || ''}</button>
+          </div>
+        </SwipeSheet>
+      </>)}
+
+      {sideEdit && (<>
+        <div className="scrim" onClick={() => setSideEdit(null)} />
+        <SwipeSheet onClose={() => setSideEdit(null)} label="Sides" x={false}>
+          <div className="sec-sheet">
+            <b style={{ fontSize: 17 }}>Side names</b>
+            <div className="muted sm">For this event only · people already on a side move with the name</div>
+            {[0, 1].map((i) => (<div key={i}>
+              <div className="sec-lbl">SIDE {i + 1}</div>
+              <input className="sec-in" value={sideEdit[i]} maxLength={30} onChange={(e) => { const n = [...sideEdit]; n[i] = e.target.value; setSideEdit(n); }} />
+            </div>))}
+            <div className="sec-chips">{[['Kitchen side', 'Cocktail side'], ['Window side', 'Curtain side']].map((pr) => <button key={pr[0]} className="sec-chip" onClick={() => setSideEdit([...pr])}>{pr[0]} / {pr[1]}</button>)}</div>
+            <button className="btn-ink" disabled={!sideEdit[0].trim() || !sideEdit[1].trim() || sideEdit[0].trim() === sideEdit[1].trim()} onClick={saveSides}>Save</button>
           </div>
         </SwipeSheet>
       </>)}
