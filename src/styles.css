@@ -4855,3 +4855,7 @@ span.abtn.ds-newq { background: none; border: 0; padding: 0; }
 .sec-side-h { font-size: 11px; font-weight: 800; letter-spacing: .12em; color: #8A8177; padding: 6px 6px 0; }
 .sec-lead { border: 0; background: none; padding: 0; font: 700 15px Inter, sans-serif; color: var(--ink); cursor: pointer; text-align: left; }
 .sec-sub { color: #8A8177; font-size: 12px; font-weight: 600; }
+
+/* Nov 23 · submit bar with no text: the button takes the whole bar */
+.submit-bar.solo > .grow { display: none; }
+.submit-bar.solo > .btn-ink { flex: 1; height: 52px !important; border-radius: 26px !important; font-size: 16px; }

@@ -666,7 +666,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
       <div className="submit-bar">
         <button className="endall-red" onClick={() => { setEndPick('next'); setEndTime(''); setEndSkip(new Set()); setOwnPick(new Set()); setEndSheet(outstanding); }}>{t.endAll} <span>· {outstanding.length} still working</span></button>
       </div>) : (
-      <div className="submit-bar">
+      <div className={'submit-bar' + (!ev.hours_submitted_at && !otherSent && !changedSince && !(endsAt && outstanding.length === 0) && !(ownPick && ownOpen.length > 0) ? ' solo' : '')}>
         <div className="grow">
           {ownPick && ownOpen.length > 0 && !ev.hours_submitted_at && <small className="own-wait">🔑 {ownOpen.map((r) => first(r.staff?.full_name)).join(', ')} {ownOpen.length === 1 ? 'is' : 'are'} ending their own · their time is added when they do</small>}
           <b className={changedSince && !otherSent ? 'gold' : ''}>{otherSent ? `✓ Submitted by ${sentBy}` : changedSince ? '↻ Times changed since you submitted' : ev.hours_submitted_at ? '✓ Hours submitted' : endsAt && outstanding.length === 0 ? `Submit now with ${time(endsAt, lang)} as the end` : ''}</b>
