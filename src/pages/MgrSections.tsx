@@ -152,7 +152,6 @@ export function MgrSections() {
   const runsOf = (m: Member) => (m.runs ?? []).filter((r) => stations.some((x) => x.name === r));
   const runnersOf = (st: string) => team.filter((m) => m.section === 'Runner' && runsOf(m).includes(st));
   const toggle = (arr: string[], v: string) => (arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
-  const setCount = team.length - none.length;
   const openPick = (s: string, station: string | null = null) => { setPick(s); setPickStation(station); setPickRuns([]); setTicked(new Set()); };
   const pickList = pick ? [...none, ...team.filter((m) => m.section && !(m.section === pick && (pick !== 'Station' || m.station === pickStation)))] : [];
 
@@ -164,7 +163,6 @@ export function MgrSections() {
         <Link to={`/manage/${eventId}`} className="sec-link">My team ›</Link>
       </header>
       <div className="serif sec-title">{title}</div>
-      <div className="muted sm" style={{ padding: '0 6px' }}>{team.length} staff · {setCount} in a section · only you and the other managers see this</div>
       {err && <p className="error">{err}</p>}
       <div className="sec-tabs">{(['cocktail', 'service'] as const).map((t) => <button key={t} className={tab === t ? 'on' : ''} onClick={() => setSp(t === 'service' ? { tab: 'service' } : {}, { replace: true })}>{t === 'cocktail' ? 'Cocktail' : 'Service'}</button>)}</div>
 
