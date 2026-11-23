@@ -4842,3 +4842,16 @@ span.abtn.ds-newq { background: none; border: 0; padding: 0; }
 .sec-runline { font-size: 13px; line-height: 1.4; } .sec-runline b { color: #7A4FD6; }
 .sec-lbl-sub { font-weight: 500; letter-spacing: 0; margin-left: 6px; text-transform: none; }
 .sec-chip.run.on { border-color: #7A4FD6; color: #7A4FD6; background: #7A4FD614; font-weight: 700; }
+
+/* Nov 23 · Sections · Cocktail / Service tabs (migration 133) */
+.sec-tabs { display: flex; gap: 3px; background: #E9E2D8; border-radius: 12px; padding: 3px; margin: 4px 0 2px; }
+.sec-tabs button { flex: 1; border: 0; background: none; padding: 9px 6px; border-radius: 10px; font: 600 14px Inter, sans-serif; color: #6E665C; cursor: pointer; }
+.sec-tabs button.on { background: #fff; color: var(--ink); font-weight: 800; box-shadow: 0 1px 0 rgba(0,0,0,.06); }
+.sec-sw { display: flex; align-items: center; gap: 8px; background: #fff; border-radius: 14px; padding: 10px 14px; }
+.sec-toggle { width: 44px; height: 26px; border-radius: 13px; border: 0; background: #D5CCC0; position: relative; cursor: pointer; padding: 0; }
+.sec-toggle i { position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: left .15s; }
+.sec-toggle.on { background: #3F7D4E; } .sec-toggle.on i { left: 21px; }
+.sec-side { display: flex; flex-direction: column; gap: 10px; }
+.sec-side-h { font-size: 11px; font-weight: 800; letter-spacing: .12em; color: #8A8177; padding: 6px 6px 0; }
+.sec-lead { border: 0; background: none; padding: 0; font: 700 15px Inter, sans-serif; color: var(--ink); cursor: pointer; text-align: left; }
+.sec-sub { color: #8A8177; font-size: 12px; font-weight: 600; }
