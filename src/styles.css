@@ -4859,3 +4859,6 @@ span.abtn.ds-newq { background: none; border: 0; padding: 0; }
 /* Nov 23 · submit bar with no text: the button takes the whole bar */
 .submit-bar.solo > .grow { display: none; }
 .submit-bar.solo > .btn-ink { flex: 1; height: 52px !important; border-radius: 26px !important; font-size: 16px; }
+
+/* Nov 23 · locked time group: one row (time + "Opens Tue 3:30 AM" on the right, no people count / line) */
+.grp-st.lock { margin-left: auto; text-transform: none; letter-spacing: 0; font-size: 12.5px; font-weight: 700; }
