@@ -4862,3 +4862,19 @@ span.abtn.ds-newq { background: none; border: 0; padding: 0; }
 
 /* Nov 23 · locked time group: one row (time + "Opens Tue 3:30 AM" on the right, no people count / line) */
 .grp-st.lock { margin-left: auto; text-transform: none; letter-spacing: 0; font-size: 12.5px; font-weight: 700; }
+
+/* Nov 23 · Day sheet staff card V2 */
+.ds-pcard.pc2 { display: flex; flex-direction: column; gap: 12px; max-width: 480px; }
+.pc2 .pc-av { width: 44px; height: 44px; border-radius: 50%; background: #E9E2D8; color: #9B2226; font-weight: 800; display: flex; align-items: center; justify-content: center; flex: none; }
+.pc-chip { font-size: 11.5px; font-weight: 700; border-radius: 999px; padding: 3px 9px; white-space: nowrap; background: #EFE9E1; color: #8A8177; }
+.pc-chip.ok { background: #E6F1EA; color: #3F7D4E; } .pc-chip.sent { background: #E8EFFC; color: #2F6FDB; }
+.pc-sent { font-size: 12.5px; color: #8A5A00; background: #FFF6E3; border-radius: 8px; padding: 7px 10px; }
+.pc-f { display: flex; flex-direction: column; gap: 5px; font-size: 11px; font-weight: 800; letter-spacing: .08em; color: var(--muted); flex: 1; min-width: 0; }
+.pc-f select, .pc-f input { font: 600 14px Inter, sans-serif; letter-spacing: 0; color: var(--ink); padding: 9px 10px; border: 1.5px solid #E2DAD0; border-radius: 10px; background: #fff; width: 100%; box-sizing: border-box; }
+.pc-row { display: flex; gap: 10px; }
+.pc-btns { display: flex; gap: 8px; }
+.pc-b { flex: 1; height: 44px; border-radius: 22px; font: 700 14px Inter, sans-serif; cursor: pointer; border: 0; }
+.pc-b.ok { background: #3F7D4E; color: #fff; } .pc-b.ink { background: var(--ink); color: #fff; } .pc-b.line { background: #fff; color: var(--ink); box-shadow: inset 0 0 0 1.5px #E2DAD0; }
+.pc-b:disabled { opacity: .35; cursor: default; }
+.pc-lock { border: 0; background: none; font-size: 20px; cursor: pointer; padding: 2px; opacity: .5; } .pc-lock.on { opacity: 1; }
+.lnk.red { color: #9B2226; font-weight: 700; }

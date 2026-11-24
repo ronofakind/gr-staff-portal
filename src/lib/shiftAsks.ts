@@ -8,7 +8,8 @@ const TZ = 'America/Toronto';
 export type AskKind = 'earlier_start' | 'move' | 'position' | 'fill';
 /** One shift as the card shows it (snapshot taken when Ronnie asked). */
 export type Card = { event_id: string; date: string; venue: string; address: string | null; start: string; code: string | null; position: string; dept: string; uniform: string | null; client?: string | null };
-export type AskMeta = { old?: Card; new: Card };
+/** 135 · ask: per person on a fill ask · move = work this instead · earlier = same event, new time · also = a second shift */
+export type AskMeta = { old?: Card; new: Card; ask?: 'move' | 'earlier' | 'also' };
 /** state: open · yes · no · expired · cancelled · booked · gone */
 export type AskState = 'open' | 'yes' | 'no' | 'expired' | 'cancelled' | 'booked' | 'gone';
 export type MyAsk = { ask_id: string; kind: AskKind; meta: AskMeta; asked_at: string | null; due_at: string | null; answer: 'yes' | 'no' | 'expired' | null; answered_at: string | null; note: string | null; message_id: string | null; state: AskState; staff_name?: string | null };

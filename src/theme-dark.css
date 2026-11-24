@@ -2388,6 +2388,16 @@ html[data-theme="dark"] { --teams: #8487CC; --teams-bg: #1F2137; --teams-ink: #8
 :where(html[data-theme="dark"]) .sec-toggle.on { background: #427A50; }
 :where(html[data-theme="dark"]) .sec-side-h { color: #8A8076; }
 :where(html[data-theme="dark"]) .sec-sub { color: #8A8076; }
+:where(html[data-theme="dark"]) .pc2 .pc-av { background: #312C26; color: #D7797C; }
+:where(html[data-theme="dark"]) .pc-chip { background: #312C25; color: #8A8076; }
+:where(html[data-theme="dark"]) .pc-chip.ok { background: #26312A; color: #90C19C; }
+:where(html[data-theme="dark"]) .pc-chip.sent { background: #1C273A; color: #749BDC; }
+:where(html[data-theme="dark"]) .pc-sent { color: #F2BF5F; background: #3F3218; }
+:where(html[data-theme="dark"]) .pc-f select, :where(html[data-theme="dark"]) .pc-f input { border: 1.5px solid #49433B; background: #1F1D1A; }
+:where(html[data-theme="dark"]) .pc-b.ok { background: #427A50; color: #F1ECE4; }
+:where(html[data-theme="dark"]) .pc-b.ink { color: #F1ECE4; background: #2A2622; }
+:where(html[data-theme="dark"]) .pc-b.line { background: #1F1D1A; box-shadow: inset 0 0 0 1.5px #302C27; }
+:where(html[data-theme="dark"]) .lnk.red { color: #D7797C; }
 html[data-theme="dark"] { color-scheme: dark; }
 html[data-theme="dark"] body { background: #121110; color: #F1ECE4; }
 html[data-theme="dark"] img[src$="logo-mark.png"]:not(.adm-side img):not(.side-logo), html[data-theme="dark"] img[src$="logo-full.png"] { filter: invert(1) hue-rotate(180deg); mix-blend-mode: normal !important; }

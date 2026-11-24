@@ -39,12 +39,19 @@ export function AskCard({ a, preview = false, onAnswered, home = false }: { a: M
   const state = done === 'gone' ? 'gone' : done === 'booked' ? 'booked' : done === 'accepted' ? 'yes' : done === 'declined' || done === 'no' ? 'no' : done ?? a.state;
   if (state === 'gone') return <div className="sn sn-muted"><b>This shift is no longer available.</b><span>Nothing was booked. Thanks for answering!</span></div>;
   const open = state === 'open';
-  const yesLbl = a.kind === 'fill' ? '✓ Yes, I’ll take it' : a.kind === 'move' ? '✓ Yes, move me' : '✓ Yes, that works';
-  const noLbl = a.kind === 'fill' ? 'No, thanks' : a.kind === 'move' ? `No, keep ${o?.venue ?? 'my shift'}` : 'No, I can’t';
+  const mv = a.kind === 'fill' ? a.meta.ask : undefined; // 135 · asked to move / change time / also work it
+  const yesLbl = mv === 'move' || mv === 'earlier' ? '✓ Yes, move me' : mv === 'also' ? '✓ Yes, I can' : a.kind === 'fill' ? '✓ Yes, I’ll take it' : a.kind === 'move' ? '✓ Yes, move me' : '✓ Yes, that works';
+  const noLbl = mv === 'move' || mv === 'earlier' ? `No, keep ${mv === 'earlier' && o ? t12(o.start) : o?.venue ?? 'my shift'}` : a.kind === 'fill' ? 'No, thanks' : a.kind === 'move' ? `No, keep ${o?.venue ?? 'my shift'}` : 'No, I can’t';
+  const kick = mv === 'move' ? '🗓 CAN YOU WORK THIS INSTEAD?' : mv === 'earlier' ? '🗓 CAN YOU CHANGE YOUR START?' : mv === 'also' ? '🙋 CAN YOU ALSO WORK THIS SHIFT?' : KICKER[a.kind];
   return (
     <div className={'sn sn-ask' + (home ? ' home' : '') + (open ? '' : ' closed')}>
-      <small className="sn-k gold">{KICKER[a.kind]}</small>
-      {a.kind === 'fill' ? <>
+      <small className="sn-k gold">{kick}</small>
+      {mv ? <>
+        <b>{dayShort(n.date)}</b>
+        {o && <div className="sn-box old"><small>{mv === 'also' ? 'YOU KEEP' : 'INSTEAD OF'}</small>{mv === 'also' ? <b className="serif">{o.venue}</b> : <s className="serif">{o.venue}</s>}<span>{o.position} · {t12(o.start)}</span></div>}
+        <div className="sn-box new"><small>{mv === 'also' ? 'ALSO' : 'NEW'}</small><b className="serif">{n.venue}</b><span>{n.position} · <b>{t12(n.start)}</b></span><span className="sn-dim">{[n.address, n.uniform ? `👔 ${uniformText(n.uniform)}` : ''].filter(Boolean).join(' · ')}</span></div>
+        {mv !== 'also' && o && <div className="sn-gold">{whatChanges(o, n)}</div>}
+      </> : a.kind === 'fill' ? <>
         <div className="serif sn-venue">{n.venue}</div>
         <span className="sn-sub">{dayShort(n.date)} · <b>{n.position} · {t12(n.start)}</b>{n.client ? ` · ${n.client}` : ''}</span>
         <span className="sn-dim">{[n.address, n.uniform ? `👔 ${uniformText(n.uniform)}` : ''].filter(Boolean).join(' · ')}</span>
@@ -65,7 +72,7 @@ export function AskCard({ a, preview = false, onAnswered, home = false }: { a: M
         {state === 'yes' || state === 'booked' ? '✓ You said yes' : state === 'no' ? 'You said no' : state === 'expired' ? 'The answer time passed · Ronnie will get back to you' : state === 'cancelled' ? 'No longer needed · nothing changes' : ''}
       </span>}
       {err && <p className="error">{err}</p>}
-      {open && a.kind !== 'fill' && <span className="sn-dim">Your shift stays as it is until you say yes.</span>}
+      {open && (a.kind !== 'fill' || mv === 'move' || mv === 'earlier') && <span className="sn-dim">Your shift stays as it is until you say yes.</span>}
     </div>
   );
 }

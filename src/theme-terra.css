@@ -1419,4 +1419,11 @@ html[data-theme="terra"] { --teams: #5B5FC7; --teams-bg: #EEEFFB; --teams-ink: #
 :where(html[data-theme="terra"]) .sec-toggle i { background: #FBFAF6; }
 :where(html[data-theme="terra"]) .sec-side-h { color: #878A77; }
 :where(html[data-theme="terra"]) .sec-sub { color: #878A77; }
+:where(html[data-theme="terra"]) .pc2 .pc-av { color: #9B4D31; }
+:where(html[data-theme="terra"]) .pc-chip { color: #878A77; }
+:where(html[data-theme="terra"]) .pc-f select, :where(html[data-theme="terra"]) .pc-f input { background: #FBFAF6; }
+:where(html[data-theme="terra"]) .pc-b.ok { color: #FBFAF6; }
+:where(html[data-theme="terra"]) .pc-b.ink { color: #FBFAF6; background: #3B4A3F; }
+:where(html[data-theme="terra"]) .pc-b.line { background: #FBFAF6; }
+:where(html[data-theme="terra"]) .lnk.red { color: #9B4D31; }
 html[data-theme="terra"] body { background: #EEF0E8; color: #2A2A24; }

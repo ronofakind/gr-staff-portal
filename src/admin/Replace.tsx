@@ -74,17 +74,51 @@ export const isTired = (nth: number) => nth >= 4;
 /* ───────── Find replacement sheet ───────── */
 const ALL_H: [number, string][] = [[2, '2 h'], [12, '12 h'], [24, '24 h']];
 const WAITS: [number, string][] = [[30, '30 min'], [60, '1 h'], [120, '2 h']];
+/* 135 · Nov 23 · tab "On other events": ask people already working that day. Add this shift (they keep theirs) or
+   Move them here (a complete change: same event at another time, or another event). First yes gets it; a move leaves their old spot open.
+   shift.id '' = an open spot (no one is being replaced). */
+type Other = { s: AStaff; tier: string | null; sh: AShift; e: AEvent; same: boolean; overlap: boolean };
 export function ReplaceSheet({ shift, ev, onClose, onDone }: { shift: AShift; ev: AEvent; onClose: () => void; onDone: (msg: string) => void }) {
   const [pool, setPool] = useState<Pool | null>(null);
+  const [tab, setTab] = useState<'free' | 'others'>('free'); const [kind, setKind] = useState<'move' | 'also'>('move'); const [oPicked, setOPicked] = useState<string[]>([]);
+  const openSpot = !shift.id;
   const [picked, setPicked] = useState<string[]>([]);
   const [mode, setMode] = useState<'all' | 'chain'>('all'); const [hours, setHours] = useState(2); const [wait, setWait] = useState(60);
   const [busy, setBusy] = useState(false); const [err, setErr] = useState('');
   const bar = ev.department === 'bar' || isBarCode(shift.position_code);
-  const name = shortName(shift.staff?.full_name);
+  const name = openSpot ? 'this spot' : shortName(shift.staff?.full_name);
   useEffect(() => { loadPool(ev.event_date).then(setPool).catch((e) => setErr((e as Error).message)); }, [ev.event_date]);
   // push 50 · replacing someone locked: only ever by hand (suggestions never move them); they stay on until someone says yes
   const [locked, setLocked] = useState(false);
-  useEffect(() => { locksBetween(ev.event_date, ev.event_date, [ev]).then((l) => setLocked(l.ids.has(shift.id))); }, [ev.id, shift.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!openSpot) locksBetween(ev.event_date, ev.event_date, [ev]).then((l) => setLocked(l.ids.has(shift.id))); }, [ev.id, shift.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const others = useMemo<Other[]>(() => {
+    if (!pool) return [];
+    const st = new Date(shift.planned_start).getTime(); const byStaff = new Map(pool.staff.map((x) => [x.id, x]));
+    const out: Other[] = []; const seen = new Set<string>();
+    const rows = pool.evs.flatMap((e) => e.shifts.filter((x) => x.status !== 'declined' && !x.attendance && x.id !== shift.id && x.staff_id !== shift.staff_id).map((x) => ({ e, x })))
+      .sort((a, b) => Math.abs(new Date(a.x.planned_start).getTime() - st) - Math.abs(new Date(b.x.planned_start).getTime() - st));
+    for (const { e, x } of rows) {
+      const p = byStaff.get(x.staff_id); if (!p || seen.has(p.id) || !p.active || p.role === 'admin') continue;
+      if (['MD', 'BM'].includes(x.position_code ?? '')) continue;
+      if (bar ? !doesBar(p) : p.department === 'bar') continue;
+      const same = e.id === ev.id; if (same && new Date(x.planned_start).getTime() === st) continue;
+      const xs = new Date(x.planned_start).getTime(); const xe = x.planned_end ? new Date(x.planned_end).getTime() : xs + 6 * 3600e3;
+      seen.add(p.id); out.push({ s: p, tier: p.staff_private?.tier ?? null, sh: x, e, same, overlap: same || (xs < st + 5 * 3600e3 && xe > st) });
+    }
+    return out.sort((a, b) => Number(a.overlap) - Number(b.overlap) || (TIER_ORDER[a.tier ?? ''] ?? 3) - (TIER_ORDER[b.tier ?? ''] ?? 3));
+  }, [pool, shift.id, shift.staff_id, shift.planned_start, ev.id, bar]);
+  const canAsk = (o: Other) => kind === 'move' || !o.overlap;
+  const oOrdered = others.filter((o) => oPicked.includes(o.s.id) && canAsk(o)).map((o) => o.s.id);
+  const sendOthers = async () => {
+    setBusy(true); setErr('');
+    const { error } = await supabase.rpc('admin_fill_spot_moves', {
+      p_event: ev.id, p_start: shift.planned_start, p_code: shift.position_code ?? 'W', p_detail: shift.position_detail ?? (bar ? null : roleName(roleOfShift(shift.position_code))),
+      p_staff: oOrdered, p_move: kind === 'move', p_mode: mode, p_wait_min: wait, p_hours: hours, p_replace_for: openSpot ? null : shift.id,
+    });
+    setBusy(false);
+    if (error) { setErr(/admin_fill_spot_moves|function/.test(error.message) && !/started|Tick|already|shift that day/.test(error.message) ? 'Asking people on other events needs migration 135.' : error.message); return; }
+    onDone(`Asked ${oOrdered.length} ${oOrdered.length === 1 ? 'person' : 'people'} ${kind === 'move' ? 'to move' : 'to also work'} ${openSpot ? 'this spot' : `for ${name}`} · first yes gets it.`);
+  };
   const res = useMemo(() => (pool ? candidatesFor(pool, { eventId: ev.id, start: shift.planned_start, bar }) : null), [pool, ev.id, shift.planned_start, bar]);
   useEffect(() => { if (res) setPicked(res.list.filter((c) => !isTired(c.nth) && !c.also.length).slice(0, 2).map((c) => c.s.id)); }, [res]);
   const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
@@ -95,7 +129,7 @@ export function ReplaceSheet({ shift, ev, onClose, onDone }: { shift: AShift; ev
     setBusy(true); setErr('');
     const { error } = await supabase.rpc('admin_fill_spot', {
       p_event: ev.id, p_start: shift.planned_start, p_code: shift.position_code ?? 'W', p_detail: shift.position_detail ?? (bar ? null : roleName(roleOfShift(shift.position_code))),
-      p_staff: ordered, p_mode: mode, p_wait_min: wait, p_hours: hours, p_replace_for: shift.id,
+      p_staff: ordered, p_mode: mode, p_wait_min: wait, p_hours: hours, p_replace_for: openSpot ? null : shift.id,
     });
     setBusy(false);
     if (error) { setErr(/admin_fill_spot|function/.test(error.message) && !/started|Tick|already/.test(error.message) ? 'Asking several people needs migration 044.' : error.message); return; }
@@ -104,10 +138,25 @@ export function ReplaceSheet({ shift, ev, onClose, onDone }: { shift: AShift; ev
   const at = ap12(hmOf(shift.planned_start)).replace(':00', '');
   return (
     <div className="bk-modal" onClick={onClose}><div className="adm-card ask-sheet rp-sheet" onClick={(x) => x.stopPropagation()} role="dialog" aria-label={`Replace ${name}`}>
-      <div className="spread"><div><div className="kick">YOUR ADMIN · FIND REPLACEMENT</div><div className="serif ca-h">Replace {name}</div>
+      <div className="spread"><div><div className="kick">YOUR ADMIN · {openSpot ? 'FILL A SPOT' : 'FIND REPLACEMENT'}</div><div className="serif ca-h">{openSpot ? 'Ask people for this spot' : `Replace ${name}`}</div>
         <div className="muted sm">{dayShort(ev.event_date)} · {ev.title} · {roleName(roleOfShift(shift.position_code))} {t12(shift.planned_start)}</div></div>
         <button className="abtn sm" aria-label="Close" onClick={onClose}>✕</button></div>
       {locked && <div className="sc-locked" role="note">🔒 {name} is locked on {ev.title}. They stay on until someone says yes.</div>}
+      <div className="seg3"><button className={tab === 'free' ? 'on' : ''} onClick={() => setTab('free')}>Free today</button><button className={tab === 'others' ? 'on' : ''} onClick={() => setTab('others')}>On other events{others.length ? ` · ${others.length}` : ''}</button></div>
+      {tab === 'others' ? <>
+        <small className="as-lbl">WHAT YOU'RE ASKING</small>
+        <div className="seg3"><button className={kind === 'move' ? 'on' : ''} onClick={() => setKind('move')}>Move them here</button><button className={kind === 'also' ? 'on' : ''} onClick={() => setKind('also')}>Add this shift</button></div>
+        <small className="muted">{kind === 'move' ? 'A complete change: this replaces their shift (same event at another time, or another event). If they say yes, their old spot is left open for you.' : 'They keep their shift and also work this one. Only people whose shift doesn’t overlap.'}</small>
+        <div className="as-people">
+          {!pool ? <div className="muted sm">{err || 'Loading…'}</div> : !others.length ? <div className="muted sm">Nobody else is working that day.</div>
+            : others.slice(0, 40).map((o) => { const on = oPicked.includes(o.s.id) && canAsk(o); return (
+              <button key={o.s.id} className={'as-person' + (on ? ' on' : '')} disabled={!canAsk(o)} onClick={() => setOPicked((p) => (p.includes(o.s.id) ? p.filter((x) => x !== o.s.id) : [...p, o.s.id]))} aria-pressed={on}>
+                <span className="rp-av" aria-hidden="true">{initials(o.s.full_name)}</span>
+                <span className="grow"><b>{o.s.full_name}</b><small>{o.same ? 'Same event' : o.e.title} · {roleName(roleOfShift(o.sh.position_code))} {t12(o.sh.planned_start)} · <span className={o.overlap ? 'tired' : ''}>{o.same ? 'new time' : o.overlap ? 'leaves a gap' : 'fits, no overlap'}</span></small></span>
+                <i aria-hidden="true">{on ? '✓' : ''}</i>
+              </button>); })}
+        </div>
+      </> : <>
       <small className="as-lbl">SAID YES OR MAYBE · FREE AT {at.toUpperCase()}</small>
       <div className="as-people">
         {!res ? <div className="muted sm">{err || 'Loading…'}</div> : !res.list.length
@@ -121,6 +170,7 @@ export function ReplaceSheet({ shift, ev, onClose, onDone }: { shift: AShift; ev
             </button>))}
       </div>
       {res && res.notFree > 0 && <div className="rp-more">{res.notFree} more said Yes or Maybe but aren’t free at {at} (another shift then, or their time doesn’t fit).</div>}
+      </>}
       <small className="as-lbl">HOW TO ASK</small>
       <div className="seg3"><button className={mode === 'all' ? 'on' : ''} onClick={() => setMode('all')}>All at once</button><button className={mode === 'chain' ? 'on' : ''} onClick={() => setMode('chain')}>One by one</button></div>
       {mode === 'all' ? <>
@@ -132,8 +182,10 @@ export function ReplaceSheet({ shift, ev, onClose, onDone }: { shift: AShift; ev
       </>}
       {started && <div className="accent sm">This shift has started. Call the manager instead.</div>}
       {err && res && <div className="accent sm">{err}</div>}
-      <button className="abtn dark as-big" disabled={busy || !ordered.length || started} onClick={send}>{busy ? 'Asking…' : `Ask ${ordered.length} ${ordered.length === 1 ? 'person' : 'people'}`}</button>
-      <small className="muted as-foot">{mode === 'all' ? 'First yes gets it; the ask quietly disappears for the others.' : 'A no, or no answer in time, asks the next person. Nights (10 PM – 8 AM) don’t count.'} {name} comes off when someone says yes.</small>
+      {tab === 'others'
+        ? <button className="abtn dark as-big" disabled={busy || !oOrdered.length || started} onClick={sendOthers}>{busy ? 'Asking…' : `Ask ${oOrdered.length} ${oOrdered.length === 1 ? 'person' : 'people'} ${kind === 'move' ? 'to move' : 'to also work it'}`}</button>
+        : <button className="abtn dark as-big" disabled={busy || !ordered.length || started} onClick={send}>{busy ? 'Asking…' : `Ask ${ordered.length} ${ordered.length === 1 ? 'person' : 'people'}`}</button>}
+      <small className="muted as-foot">{mode === 'all' ? 'First yes gets it; the ask quietly disappears for the others.' : 'A no, or no answer in time, asks the next person. Nights (10 PM – 8 AM) don’t count.'} {openSpot ? 'In the app only.' : `${name} comes off when someone says yes.`}</small>
     </div></div>
   );
 }

@@ -466,27 +466,29 @@ export function DaySheet() {
         return <PersonCard s={c} e={e} date={date} evs={evs} lays={lays} byId={byId} av={av} onDay={onDay} off={off} sortP={sortP} tier={tier} busy={busy} wn={wn[c.staff_id] ?? 0}
           why={[why[c.id] ? `✦ ${why[c.id]}` : null, ctx ? whyText(c.staff_id, e, ctx, sh.filter((x) => x.event_id === c.event_id && x.staff_id !== c.staff_id).map((x) => x.staff_id), wn[c.staff_id] ?? 0, av.find((x) => x.staff_id === c.staff_id)) : null].filter(Boolean).join(' · ')}
           onClose={() => setCard(null)}
-          onMove={(e2, code, start) => { setCard(null); move(c, e2, code, start); }}
-          onStart={(t) => patch(c, { planned_start: startIso(date, t) }, `start ${ap(t)}`)}
-          onRole={(code) => patch(c, { position_code: code, position_detail: roleName(code) }, roleName(code))}
+          onSave={(row, label) => { setCard(null); patch(c, row, label); }}
           onConfirm={() => markConfirmed(c)}
           onLock={() => patch(c, { locked: c.locked ? false : true, locked_at: new Date().toISOString() }, c.locked ? 'unlocked' : 'locked')}
           onSwap={(id) => patch(c, { staff_id: id }, `swapped for ${byId[id]?.full_name ?? ''}`)}
           onReplace={() => run(async () => { const all = await eventsBetween(date, date); const fe = all.find((x) => x.id === c.event_id); const fs = fe?.shifts.find((x) => x.id === c.id);
             if (!fe || !fs) throw new Error('Could not open the replacement list.'); setCard(null); setRepl({ s: fs, e: fe }); })}
-          onRemove={() => { setCard(null); remove(c); }} onCancel={() => setCancelQ(c)} onNote={(t) => patch(c, { booking_note: t.trim() || null }, t.trim() ? 'note' : 'note removed')} />; })()}
+          onRemove={() => { setCard(null); remove(c); }} onCancel={() => setCancelQ(c)} />; })()}
       {cancelQ && <CancelBox s={cancelQ} name={byId[cancelQ.staff_id]?.full_name ?? '…'} where={(() => { const e = evs.find((x) => x.id === cancelQ.event_id); return `${e?.venues?.name ?? e?.title ?? ''} · ${roleName(cancelQ.position_code)} ${ap(hm(cancelQ.planned_start))} · ${sentTxt(cancelQ)}`; })()}
         onClose={() => setCancelQ(null)} onSave={(r, n, c, rep) => doCancel(cancelQ, r, n, c, rep)} />}
       {tellQ && <TellBox q={tellQ} names={tellQ.who.map((x) => byId[x.staff_id]?.full_name ?? '…')} states={tellQ.who.map((x) => sentTxt(x))} />}
       {repl && <ReplaceSheet shift={repl.s} ev={repl.e} onClose={() => setRepl(null)} onDone={(m) => { setRepl(null); setMsg(m); setTick((t) => t + 1); }} />}
       {pick && <PickSheet date={date} e={pick.e} code={pick.code} start={pick.start} staff={staff} av={av} onDay={onDay} off={off} sortP={sortP} tier={tier}
-        onClose={() => setPick(null)} onPick={(id) => { const p = pick; setPick(null); place(id, p.e, p.code, p.start); }} onAsk={() => nav(`/admin/bookings?date=${date}&view=list&ask=1`)} />}
+        onClose={() => setPick(null)} onPick={(id) => { const p = pick; setPick(null); place(id, p.e, p.code, p.start); }} onAsk={() => nav(`/admin/bookings?date=${date}&view=list&ask=1`)}
+        onAskSpot={() => { const p = pick; run(async () => { const all = await eventsBetween(date, date); const fe = all.find((x) => x.id === p.e.id); if (!fe) throw new Error('Could not open the ask list.');
+          const t = p.start ?? p.e.start_time?.slice(0, 5) ?? '17:00';
+          const fs = { id: '', event_id: fe.id, staff_id: '', position_code: p.code, position_detail: roleName(p.code), planned_start: startIso(date, t), status: 'booked', changed_at: '', notified_at: null, attendance: null, leave_by: null, punches: null, staff: null } as unknown as AShift;
+          setPick(null); setRepl({ s: fs, e: fe }); }); }} />}
     </div>
   );
 }
 
-function PickSheet({ date, e, code, start, staff, av, onDay, off, sortP, tier, onClose, onPick, onAsk }: { date: string; e: Ev; code: string; start: string | null; staff: AStaff[]; av: Av[]; onDay: Set<string>; off: Set<string>;
-  sortP: (a: string, b: string) => number; tier: (id: string) => string | null; onClose: () => void; onPick: (id: string) => void; onAsk: () => void }) {
+function PickSheet({ date, e, code, start, staff, av, onDay, off, sortP, tier, onClose, onPick, onAsk, onAskSpot }: { date: string; e: Ev; code: string; start: string | null; staff: AStaff[]; av: Av[]; onDay: Set<string>; off: Set<string>;
+  sortP: (a: string, b: string) => number; tier: (id: string) => string | null; onClose: () => void; onPick: (id: string) => void; onAsk: () => void; onAskSpot: () => void }) {
   const [q, setQ] = useState('');
   const ql = q.trim().toLowerCase();
   const fits = (a: Av) => !a.from_time || !start || a.from_time.slice(0, 5) <= start;
@@ -508,59 +510,79 @@ function PickSheet({ date, e, code, start, staff, av, onDay, off, sortP, tier, o
         <i className={'ds-t ' + (tier(a.staff_id) ?? '')} /><b className="grow">{nm(a.staff_id)}</b><small className="gold">maybe</small></button>)}</>}
       {others.length > 0 && <><small className="kick">OTHERS · NOT ASKED FOR THIS DAY</small>{others.map((s) => <button key={s.id} className="ds-pp" onClick={() => onPick(s.id)}>
         <i className={'ds-t ' + (s.staff_private?.tier ?? '')} /><b className="grow">{s.full_name}</b><small className="gold">not asked · placing = you’ll ask them</small></button>)}</>}
+      <button className="abtn sm dark" onClick={onAskSpot} title="Ask free people or people on other events · first yes gets it">Ask people for this spot ›</button>
       <button className="lnk sm" onClick={onAsk}>Ask more people for this day ›</button>
     </div></div>);
 }
 
-/** push 110 · click a name: move, start later, role, lock, swap, profile, back to Free. Sent / confirmed shifts: lock + profile only (change them from the event). */
-function PersonCard({ s, e, date, evs, lays, byId, av, onDay, off, sortP, tier, busy, wn, why, onClose, onMove, onStart, onRole, onLock, onConfirm, onSwap, onRemove, onNote, onReplace, onCancel }: {
+/** Nov 23 · staff card V2 (Ronnie): Move to (the day's events + lines, or a custom time) · Start · Role · Note → one Save.
+ *  Mark confirmed · Replace (not sent = swap with a free person · sent = ask people) · lock bottom left · Back to Free / Cancel bottom right. */
+function PersonCard({ s, e, date, evs, lays, byId, av, onDay, off, sortP, tier, busy, onClose, onSave, onLock, onConfirm, onSwap, onRemove, onReplace, onCancel }: {
   s: Sh; e: Ev; date: string; evs: Ev[]; lays: Record<string, ReturnType<typeof layout>>; byId: Record<string, AStaff>; av: Av[]; onDay: Set<string>; off: Set<string>;
-  sortP: (a: string, b: string) => number; tier: (id: string) => string | null; busy: boolean; wn: number; why: string; onClose: () => void;
-  onMove: (e: Ev, code: string, start: string | null) => void; onStart: (t: string) => void; onRole: (code: string) => void; onLock: () => void; onConfirm: () => void; onSwap: (id: string) => void; onRemove: () => void; onNote: (t: string) => void; onReplace: () => void; onCancel: () => void }) {
-  const [tab, setTab] = useState<'main' | 'swap'>('main'); const [t, setT] = useState(hm(s.planned_start)); const [q, setQ] = useState(''); const [nt, setNt] = useState(s.booking_note ?? '');
+  sortP: (a: string, b: string) => number; tier: (id: string) => string | null; busy: boolean; wn?: number; why?: string; onClose: () => void;
+  onSave: (row: Record<string, unknown>, label: string) => void; onLock: () => void; onConfirm: () => void; onSwap: (id: string) => void; onRemove: () => void; onReplace: () => void; onCancel: () => void }) {
   const p = byId[s.staff_id]; const can = !LEAD.includes(s.position_code ?? '');
-  const a = av.find((x) => x.staff_id === s.staff_id);
   const dept = isBar(e) ? 'bar' : 'floor';
   const slots = evs.filter((x) => isBar(x) === isBar(e)).flatMap((x) => { const L = lays[x.id]; const ls = [...L.lines.map((l) => ({ ...l, extra: false })), ...(L.extras.count ? [{ ...L.extras, extra: true }] : [])];
     return ls.map((l) => ({ v: `${x.id}|${l.code}|${l.start ?? ''}`, e: x, code: l.code, start: l.start, label: `${x.venues?.name ?? x.title} · ${l.extra ? 'Extras' : plural(l.code, 2)} ${ap(l.start)} (${l.people.length}/${l.count})`, here: x.id === s.event_id && hm(s.planned_start) === l.start })); });
-  const ql = q.trim().toLowerCase();
+  const hereV = slots.find((x) => x.here)?.v ?? '';
+  const [view, setView] = useState<'main' | 'swap'>('main'); const [q, setQ] = useState('');
+  const [mv, setMv] = useState(hereV); const [cEv, setCEv] = useState(s.event_id); const [cT, setCT] = useState(hm(s.planned_start));
+  const [t, setT] = useState(hm(s.planned_start)); const [role, setRole] = useState(s.position_code ?? ''); const [nt, setNt] = useState(s.booking_note ?? '');
+  const slot = slots.find((x) => x.v === mv);
+  const moving = can && mv !== hereV && (mv === 'custom' ? (cEv !== s.event_id || cT !== hm(s.planned_start)) : !!slot);
+  const row: Record<string, unknown> = {}; const what: string[] = [];
+  if (moving) {
+    if (mv === 'custom') { const x = evs.find((y) => y.id === cEv); row.event_id = cEv; row.planned_start = startIso(date, cT); what.push(`→ ${x?.venues?.name ?? x?.title ?? ''} ${ap(cT)}`); }
+    else if (slot) { row.event_id = slot.e.id; row.position_code = slot.code; row.position_detail = roleName(slot.code); row.planned_start = startIso(date, slot.start ?? slot.e.start_time?.slice(0, 5) ?? '17:00'); what.push(`→ ${slot.e.venues?.name ?? slot.e.title} ${ap(slot.start)}`); }
+  } else if (t && t !== hm(s.planned_start)) { row.planned_start = startIso(date, t); what.push(`start ${ap(t)}`); }
+  if (can && role && role !== (s.position_code ?? '') && !(moving && mv !== 'custom')) { row.position_code = role; row.position_detail = roleName(role); what.push(roleName(role)); }
+  if (nt.trim() !== (s.booking_note ?? '')) { row.booking_note = nt.trim() || null; what.push('note'); }
+  const n = what.length;
+  const gold = (on: boolean) => (on ? { boxShadow: 'inset 0 0 0 1.5px #C9A227', borderRadius: 8 } : undefined);
   const st = hm(s.planned_start); const fitT = (x: Av) => !x.from_time || !st || x.from_time.slice(0, 5) <= st;
   const sameDept = (x: Av) => ((x.avail_asks?.department ?? byId[x.staff_id]?.department ?? 'floor') === 'bar') === isBar(e);
+  const ql = q.trim().toLowerCase();
   const swaps = av.filter((x) => x.status === 'yes' && !x.released_at && !onDay.has(x.staff_id) && !off.has(x.staff_id) && sameDept(x) && (!ql || (byId[x.staff_id]?.full_name ?? '').toLowerCase().includes(ql)))
     .sort((x, y) => Number(!fitT(x)) - Number(!fitT(y)) || sortP(x.staff_id, y.staff_id)).slice(0, 12);
-  const state = s.pool_hold ? (s.locked ? 'placed · locked' : 'placed · not sent') : s.status === 'confirmed' ? 'confirmed' : s.notified_at ? 'sent · waiting for confirm' : 'booked';
+  const chip = s.pool_hold ? <span className="pc-chip">Not sent</span> : s.status === 'confirmed' ? <span className="pc-chip ok">✓ Confirmed</span> : <span className="pc-chip sent">◷ Sent · waiting</span>;
+  const tms = (cur: string) => <>{!Q15.includes(cur) && <option value={cur}>{cur ? ap(cur) : '—'}</option>}{Q15.map((x) => <option key={x} value={x}>{ap(x)}</option>)}</>;
   return (
-    <div className="ds-pick-wrap" onClick={onClose}><div className="ds-pick ds-pcard" onClick={(ev) => ev.stopPropagation()}>
-      <div className="row" style={{ gap: 8, alignItems: 'center' }}><i className={'ds-t ' + (tier(s.staff_id) ?? '')} /><b className="grow serif" style={{ fontSize: 18 }}>{p?.full_name ?? '…'}</b><button className="lnk muted" onClick={onClose}>✕</button></div>
-      <small className="muted">{e.venues?.name ?? e.title} · {roleName(s.position_code)} · {e.start_tbc || e.details_pending ? 'time TBC' : ap(hm(s.planned_start))} · {state}{a?.from_time ? ` · free from ${ap(a.from_time)}` : ''}{wn > 3 ? ` · ⚑ ${wn} shifts this week` : ''}</small>
-      {why && <small className="ds-why">{why}</small>}
-      {!can ? <small className="gold">MD / bar manager: start time can be changed here · drag them to move.</small> : !s.pool_hold ? <small className="gold">Already {s.status === 'confirmed' ? 'confirmed' : 'sent'}: any change here asks you first, then “Your shift changed” waits in About to send.</small> : <small className="muted">Placed, not sent: changes here send nothing.</small>}
-      <div className="seg3"><button className={tab === 'main' ? 'on' : ''} onClick={() => setTab('main')}>Change</button><button className={tab === 'swap' ? 'on' : ''} disabled={!can || !s.pool_hold} onClick={() => setTab('swap')}>{can && s.pool_hold ? 'Swap' : 'Swap (placed only)'}</button></div>
-      {tab === 'main' ? <div className="ds-cardgrid">
-        <label>Move to<select disabled={!can || busy} value={slots.find((x) => x.here)?.v ?? ''} onChange={(ev) => { const x = slots.find((y) => y.v === ev.target.value); if (x) onMove(x.e, x.code, x.start); }}>
-          {!slots.some((x) => x.here) && <option value="">—</option>}{slots.map((x) => <option key={x.v} value={x.v}>{x.label}</option>)}</select></label>
-        <label>Start<span className="row" style={{ gap: 6 }}><select className="ds-tsel" value={t} disabled={busy} onChange={(ev) => setT(ev.target.value)}>{!Q15.includes(t) && <option value={t}>{t ? ap(t) : '—'}</option>}{Q15.map((q) => <option key={q} value={q}>{ap(q)}</option>)}</select>
-          <button className="abtn sm" disabled={busy || !t || t === hm(s.planned_start)} onClick={() => onStart(t)}>Set</button></span></label>
-        <label>Role<select disabled={!can || busy} value={s.position_code ?? ''} onChange={(ev) => onRole(ev.target.value)}>
-          {(dept === 'bar' ? ['BT', 'BB', 'WW'] : ['W', 'BUS']).map((c) => <option key={c} value={c}>{roleName(c)}</option>)}</select></label>
-        <label style={{ gridColumn: '1 / -1' }}>Note for this shift <small className="muted" style={{ fontWeight: 400 }}>(you + the MD see it, not them)</small>
-          <span className="row" style={{ gap: 6 }}><input className="grow" placeholder="e.g. from 4:00 PM · brings the truck" value={nt} onChange={(ev) => setNt(ev.target.value)} />
-          <button className="abtn sm" disabled={busy || nt.trim() === (s.booking_note ?? '')} onClick={() => onNote(nt)}>Save</button></span></label>
-        <div className="row wrap" style={{ gap: 8, gridColumn: '1 / -1' }}>
-          {s.status !== 'confirmed' && <button className="abtn sm ok" disabled={busy} onClick={onConfirm} title="They told you yes (text, call): marked confirmed, no message sent">✓ Mark confirmed · no message</button>}
-          <button className="abtn sm" disabled={busy} onClick={onLock}>{s.locked ? '🔓 Unlock' : '🔒 Lock'}</button>
-          {can && <button className="abtn sm" disabled={busy} onClick={onRemove} title="It never happened: no record">× Back to Free</button>}
-          {can && <button className="abtn sm ds-cxbtn" disabled={busy} onClick={onCancel} title="They cancelled: kept on their record with a reason">Cancel…</button>}
-          {!s.pool_hold && !LEAD.includes(s.position_code ?? '') && <button className="abtn sm dark" disabled={busy} onClick={onReplace} title="Asks the best free people; they stay on until someone says yes">Can't make it · find a replacement</button>}
-          <span className="grow" /><a className="lnk sm" href={`/admin/staff?open=${s.staff_id}`}>Profile ›</a></div>
-        <small className="muted" style={{ gridColumn: '1 / -1' }}>🔒 locked = ✦ Fill and Clear leave them where they are · every change here is one ↶ Undo</small>
-      </div> : <>
-        <input autoFocus placeholder="🔍 Search a free name…" value={q} onChange={(ev) => setQ(ev.target.value)} />
-        <small className="kick">FREE · SAID YES · PUT IN THEIR PLACE</small>
+    <div className="ds-pick-wrap" onClick={onClose}><div className="ds-pick ds-pcard pc2" onClick={(ev) => ev.stopPropagation()}>
+      <div className="row" style={{ gap: 10, alignItems: 'center' }}>
+        <span className="pc-av">{(p?.full_name ?? '?').split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase()}</span>
+        <span className="grow"><b className="serif" style={{ fontSize: 19, display: 'block', lineHeight: 1.15 }}>{p?.full_name ?? '…'}</b><a className="lnk sm" href={`/admin/staff?open=${s.staff_id}`}>Profile ›</a></span>
+        {chip}<button className="lnk muted" onClick={onClose} aria-label="Close">✕</button></div>
+      {view === 'swap' ? <>
+        <div className="row" style={{ gap: 8, alignItems: 'center' }}><button className="lnk sm" onClick={() => setView('main')}>‹ Back</button><b>Swap with a free person</b></div>
+        <input autoFocus placeholder="Search a free name…" value={q} onChange={(ev) => setQ(ev.target.value)} />
         {!swaps.length && <span className="muted sm">Nobody free{ql ? ' with that name' : ''}.</span>}
         {swaps.map((x) => <button key={x.staff_id} className="ds-pp" disabled={busy} onClick={() => { onSwap(x.staff_id); onClose(); }}>
           <i className={'ds-t ' + (tier(x.staff_id) ?? '')} /><b className="grow">{byId[x.staff_id]?.full_name ?? '…'}</b><small className={fitT(x) ? 'muted' : 'gold'}>{x.from_time ? `from ${ap(x.from_time)}${fitT(x) ? '' : ' · after the start'}` : 'any time'}</small><span className="ds-putin">Put in</span></button>)}
-        <small className="muted">{p?.full_name ?? 'They'} go{p?.full_name ? 'es' : ''} back to Free · {dLabel(date, { weekday: 'short', month: 'short', day: 'numeric' })}</small>
+        <small className="muted">{p?.full_name?.split(' ')[0] ?? 'They'} go{p ? 'es' : ''} back to Free.</small>
+      </> : <>
+        {!s.pool_hold && <small className="pc-sent">Already sent · after Save, a change goes out as “Your shift changed”</small>}
+        {can && <label className="pc-f">MOVE TO<select style={gold(moving)} disabled={busy} value={mv} onChange={(ev) => setMv(ev.target.value)}>
+          {!hereV && <option value="">—</option>}{slots.map((x) => <option key={x.v} value={x.v}>{x.label}{x.here ? ' · here' : ''}</option>)}<option value="custom">+ Custom time…</option></select></label>}
+        {can && mv === 'custom' && <div className="pc-row">
+          <label className="pc-f">EVENT<select value={cEv} onChange={(ev) => setCEv(ev.target.value)}>{evs.filter((x) => isBar(x) === isBar(e)).map((x) => <option key={x.id} value={x.id}>{x.venues?.name ?? x.title}</option>)}</select></label>
+          <label className="pc-f">START<select className="ds-tsel" value={cT} onChange={(ev) => setCT(ev.target.value)}>{tms(cT)}</select></label></div>}
+        <div className="pc-row">
+          {!(moving) && <label className="pc-f">START<select className="ds-tsel" style={gold(!!t && t !== hm(s.planned_start))} value={t} disabled={busy} onChange={(ev) => setT(ev.target.value)}>{tms(t)}</select></label>}
+          {can && <label className="pc-f">ROLE<select style={gold(role !== (s.position_code ?? ''))} disabled={busy} value={role} onChange={(ev) => setRole(ev.target.value)}>
+            {(dept === 'bar' ? ['BT', 'BB', 'WW'] : ['W', 'BUS']).map((c) => <option key={c} value={c}>{roleName(c)}</option>)}</select></label>}
+        </div>
+        <label className="pc-f">NOTE · YOU + THE MD<input style={gold(nt.trim() !== (s.booking_note ?? ''))} placeholder="e.g. from 4 PM · brings the truck" value={nt} onChange={(ev) => setNt(ev.target.value)} /></label>
+        <div className="pc-btns">
+          {s.status !== 'confirmed' && <button className="pc-b ok" disabled={busy} onClick={onConfirm} title="They told you yes (text, call): marked confirmed, no message sent">Mark confirmed</button>}
+          {can && <button className="pc-b line" disabled={busy} onClick={() => (s.pool_hold ? setView('swap') : onReplace())}>Replace</button>}
+          <button className="pc-b ink" disabled={busy || !n} onClick={() => onSave(row, what.join(' · '))}>{n ? `Save · ${n} change${n > 1 ? 's' : ''}` : 'Save'}</button>
+        </div>
+        <div className="row" style={{ alignItems: 'center', gap: 8 }}>
+          <button className={'pc-lock' + (s.locked ? ' on' : '')} disabled={busy} onClick={onLock} title={s.locked ? 'Locked · Fill and Clear leave them here · tap to unlock' : 'Lock · Fill and Clear leave them here'}>{s.locked ? '🔒' : '🔓'}</button>
+          {s.locked && <small className="muted">Locked</small>}<span className="grow" />
+          {can && (s.pool_hold ? <button className="lnk sm red" disabled={busy} onClick={onRemove}>Back to Free</button> : <button className="lnk sm red" disabled={busy} onClick={onCancel}>Cancel with a reason…</button>)}
+        </div>
       </>}
     </div></div>);
 }
