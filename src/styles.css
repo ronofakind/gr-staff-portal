@@ -4878,3 +4878,25 @@ span.abtn.ds-newq { background: none; border: 0; padding: 0; }
 .pc-b:disabled { opacity: .35; cursor: default; }
 .pc-lock { border: 0; background: none; font-size: 20px; cursor: pointer; padding: 2px; opacity: .5; } .pc-lock.on { opacity: 1; }
 .lnk.red { color: #9B2226; font-weight: 700; }
+
+/* Nov 23 · Bookings V6 (side by side with the Day sheet) */
+.v6-head, .v6-row { display: grid; grid-template-columns: 62px 150px 96px 96px minmax(0, 1fr) 150px 26px; gap: 8px; align-items: start; }
+.v6-head { font-size: 10.5px; font-weight: 800; letter-spacing: .1em; color: var(--muted); padding: 8px 10px 2px; }
+.v6-row { padding: 8px 10px; border-top: 1px solid #ECE6DE; }
+.v6-row.lead { background: #FBF9F6; } .v6-row.ex { background: #FFFBF2; }
+.v6-n { font: 700 14px Inter, sans-serif; padding: 6px 6px; border: 1.5px solid #E2DAD0; border-radius: 8px; background: #fff; }
+.v6-role select, .v6-role .ds-lsel { width: 100%; }
+.v6-role .ds-lname { font-size: 13.5px; }
+.v6-t { display: flex; align-items: center; min-height: 32px; }
+.v6-cells { gap: 6px; }
+.v6-note { font: 13px Inter, sans-serif; padding: 6px 8px; border: 1px solid #E2DAD0; border-radius: 8px; width: 100%; box-sizing: border-box; }
+.v6-x { border: 0; background: none; color: #B9AFA2; font-size: 18px; cursor: pointer; line-height: 1; padding: 6px 0; }
+.v6-x:hover { color: #9B2226; }
+.v6m { font-style: normal; font-weight: 800; font-size: 12px; margin-right: 4px; }
+.v6m.ok { color: #3F7D4E; } .v6m.sent { color: #2F6FDB; }
+.ds-slot.v6 { border: 1.5px dashed #D5CCC0; background: transparent; color: #B9AFA2; font-weight: 600; }
+.v6-dash { border: 1.5px dashed #D5CCC0; border-radius: 6px; padding: 0 6px; }
+.v6det .v6g { display: block; font-size: 10.5px; font-weight: 800; letter-spacing: .12em; color: var(--muted); margin-top: 8px; }
+.v6det .ds-detg { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.v6tabs { max-width: 300px; margin-top: 4px; }
+.v6-notes { width: 100%; box-sizing: border-box; font: 13.5px Inter, sans-serif; padding: 8px 10px; border: 1px solid #E2DAD0; border-radius: 8px; margin-top: 6px; resize: vertical; }

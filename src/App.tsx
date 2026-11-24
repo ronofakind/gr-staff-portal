@@ -145,6 +145,7 @@ export function App() {
             <Route path="event/:id" element={<EventDetail />} />
             <Route path="pool/:date" element={<PoolToSheet />} />{/* push 97 → push 112: the Day sheet */}
             <Route path="day-sheet" element={<DaySheet />} /><Route path="day-sheet/:date" element={<DaySheet />} />{/* push 108 */}
+            <Route path="bookings-v6" element={<DaySheet v6 />} /><Route path="bookings-v6/:date" element={<DaySheet v6 />} />{/* Nov 23 · V6 side by side */}
             <Route path="event/:id/edit" element={<EventForm />} />
             <Route path="event/:id/change" element={<ClientChange />} />
             <Route path="free" element={<Free />} />

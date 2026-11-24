@@ -25,8 +25,13 @@ const monday = (d: string) => { const x = new Date(d + 'T12:00:00'); const k = (
 /** push 112 · old Day pool links land on the Day sheet. */
 export function PoolToSheet() { const { date = isoDay(new Date()) } = useParams(); return <Navigate to={`/admin/day-sheet/${date}`} replace />; }
 
-export function DaySheet() {
-  const { date = isoDay(new Date()) } = useParams(); const nav = useNavigate();
+/** Nov 23 · v6 = Bookings V6 (boards AdminBookingsDayV6 + AdminBookingsEventDetailsV6), side by side with the Day sheet:
+ *  staffing as a table (STAFF 0–50 · ROLE · START · END · NAMES · NOTES · ×), ✓ / ◷ marks, dashed open spots, no counts on rows,
+ *  details in 4 groups with Estimate # and notes (Staff · MDs · Billing, migration 136), Free list with Floor / Bar tabs. */
+export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
+  const { date = isoDay(new Date()) } = useParams(); const nav = useNavigate(); const base = v6 ? '/admin/bookings-v6' : '/admin/day-sheet';
+  const [priv, setPriv] = useState<Record<string, { estimate_no?: string | null; md_note?: string | null; billing_note?: string | null }>>({});
+  const [fdept, setFdept] = useState<'floor' | 'bar'>('floor');
   const [dept, setDept] = useState<'floor' | 'bar' | 'both'>(() => { try { return (localStorage.getItem('gr_ds_dept') as 'floor' | 'bar' | 'both') || 'both'; } catch { return 'both'; } });
   const [evs, setEvs] = useState<Ev[]>([]); const [sh, setSh] = useState<Sh[]>([]); const [av, setAv] = useState<Av[]>([]); const [off, setOff] = useState<Set<string>>(new Set());
   const [staff, setStaff] = useState<AStaff[]>([]); const [week, setWeek] = useState<{ d: string; need: number; have: number; n: number; free: number }[]>([]);
@@ -57,6 +62,8 @@ export function DaySheet() {
     try { const d = await loadDay(date); setEvs(d.evs); setSh(d.sh); setAv(d.av); setOff(d.off); setCx(d.cx); } catch (x) { setErr((x as Error).message); }
   })(); }, [date, tick]);
   useEffect(() => { weekCounts(wk0, addDays(wk0, 6)).then(setWn); }, [wk0, tick]);
+  useEffect(() => { if (!v6 || !evs.length) return; supabase.from('event_private').select('event_id,estimate_no,md_note,billing_note').in('event_id', evs.map((e) => e.id))
+    .then(({ data, error }) => { if (error) return; setPriv(Object.fromEntries(((data ?? []) as { event_id: string; estimate_no: string | null; md_note: string | null; billing_note: string | null }[]).map((r) => [r.event_id, r]))); }); }, [v6, evs, tick]);
   useEffect(() => { const ids = evs.map((e) => e.id); if (!ids.length) { setPend(0); return; } pendingCount(ids).then(setPend); }, [evs, tick]);
   const noEndR = useRef(noEnd); noEndR.current = noEnd;
   // C · as many equal cells across as fit (Ronnie, Nov 12): one count for the whole sheet so every block lines up
@@ -88,7 +95,8 @@ export function DaySheet() {
   const shown = evs.filter((e) => dept === 'both' || (dept === 'bar') === isBar(e));
   const aDept = (a: Av) => a.avail_asks?.department ?? byId[a.staff_id]?.department ?? 'floor';
   const inDept = (a: Av) => dept === 'both' || (aDept(a) === 'bar') === (dept === 'bar');
-  const free = av.filter((a) => inDept(a) && a.status === tab && !a.released_at && !onDay.has(a.staff_id) && !off.has(a.staff_id)).sort((a, b) => sortP(a.staff_id, b.staff_id));
+  const inFree = (a: Av) => (v6 && dept === 'both' ? (aDept(a) === 'bar') === (fdept === 'bar') : inDept(a));
+  const free = av.filter((a) => inFree(a) && a.status === tab && !a.released_at && !onDay.has(a.staff_id) && !off.has(a.staff_id)).sort((a, b) => sortP(a.staff_id, b.staff_id));
   const nYes = av.filter((a) => inDept(a) && a.status === 'yes' && !a.released_at && !onDay.has(a.staff_id) && !off.has(a.staff_id)).length;
   const nMaybe = av.filter((a) => inDept(a) && a.status === 'maybe' && !a.released_at && !onDay.has(a.staff_id)).length;
   const lays = useMemo(() => Object.fromEntries(evs.map((e) => [e.id, layout(e, sh.filter((s) => s.event_id === e.id), rkOf)])), [evs, sh, staff]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -300,6 +308,11 @@ export function DaySheet() {
     const { error } = await supabase.from('events').update(row).eq('id', e.id); if (error) throw error;
     return { label: `${label} · ${e.venues?.name ?? e.title}`, undo: () => supabase.from('events').update(before).eq('id', e.id).then() };
   });
+  const savePriv = (e: Ev, row: Record<string, string | null>, label: string) => run(async () => {
+    const b = Object.fromEntries(Object.keys(row).map((k) => [k, (priv[e.id] as Record<string, string | null> | undefined)?.[k] ?? null]));
+    const { error } = await supabase.from('event_private').upsert({ event_id: e.id, ...row }, { onConflict: 'event_id' }); if (error) throw new Error(/column/.test(error.message) ? 'Estimate # and notes need migration 136.' : error.message);
+    return { label: `${label} · ${e.venues?.name ?? e.title}`, undo: () => supabase.from('event_private').upsert({ event_id: e.id, ...b }, { onConflict: 'event_id' }).then() };
+  });
   const saveClient = (e: Ev, cid: string) => run(async () => {
     const c = ctx?.clients.find((x) => x.id === cid); const b = { client_id: e.event_private?.client_id ?? null, client: e.event_private?.client ?? null };
     const { error } = await supabase.from('event_private').upsert({ event_id: e.id, client_id: cid || null, client: c?.name ?? null }, { onConflict: 'event_id' }); if (error) throw error;
@@ -344,10 +357,11 @@ export function DaySheet() {
     const w = [why[s.id] ? `✦ ${why[s.id]}` : null, e && ctx ? whyText(s.staff_id, e, ctx, sh.filter((x) => x.event_id === s.event_id && x.staff_id !== s.staff_id).map((x) => x.staff_id), n, a) : null,
       s.locked ? 'locked' : null, !s.pool_hold ? (s.status === 'confirmed' ? 'confirmed' : s.notified_at ? 'sent' : 'booked') : null].filter(Boolean).join(' · ');
     return <span data-sid={s.staff_id} className={'ds-chip' + (can ? '' : ' fixed') + (n > 3 ? ' flag' : '') + (flagged[s.id] ? ' over' : '') + (hl === s.staff_id ? ' hl' : '')} draggable onDragStart={(ev) => { ev.dataTransfer.setData('text/plain', s.id); ev.dataTransfer.effectAllowed = 'move'; setDrag(s); }} onDragEnd={() => setDrag(null)} title={`${nm} · ${w}${s.booking_note ? ` · 📌 ${s.booking_note}` : ''}${s.pool_hold ? ' · moving them sends nothing' : ' · already sent: moving them sends "Your shift changed" (asked first)'} · click = options`} onClick={() => setCard(s)}>
-      <i className={'ds-sd' + (s.status === 'confirmed' ? ' ok' : !s.pool_hold && s.notified_at ? ' sent' : '')} title={s.status === 'confirmed' ? 'Confirmed' : !s.pool_hold && s.notified_at ? 'Sent, not confirmed yet' : 'Placed, not sent yet'} /><span className="ds-nm">{nm}</span>{ctx && isNewStaff(ctx, s.staff_id) ? <small className="ds-new" title="New: came through onboarding">NEW</small> : null}{s.locked ? <small className="ds-lk" title="Locked">locked</small> : null}{own ? <small className="ds-own" title={`Starts at ${ap(own)} (line ${ap(at)})`}>{ap(own)}</small> : late ? <small className="gold"> from {ap(a!.from_time)}</small> : null}{n > 3 ? <small className="ds-flag" title={`${n} shifts this week`}>⚑{n}</small> : null}
+      {v6 ? (s.status === 'confirmed' ? <i className="v6m ok" title="Confirmed">✓</i> : !s.pool_hold && s.notified_at ? <i className="v6m sent" title="Sent, waiting for a reply">◷</i> : null)
+        : <i className={'ds-sd' + (s.status === 'confirmed' ? ' ok' : !s.pool_hold && s.notified_at ? ' sent' : '')} title={s.status === 'confirmed' ? 'Confirmed' : !s.pool_hold && s.notified_at ? 'Sent, not confirmed yet' : 'Placed, not sent yet'} />}<span className="ds-nm">{nm}</span>{ctx && isNewStaff(ctx, s.staff_id) ? <small className="ds-new" title="New: came through onboarding">NEW</small> : null}{s.locked ? <small className="ds-lk" title="Locked">locked</small> : null}{own ? <small className="ds-own" title={`Starts at ${ap(own)} (line ${ap(at)})`}>{ap(own)}</small> : late ? <small className="gold"> from {ap(a!.from_time)}</small> : null}{n > 3 ? <small className="ds-flag" title={`${n} shifts this week`}>⚑{n}</small> : null}
       {!LEAD.includes(s.position_code ?? '') && <button className="ds-x" disabled={busy} onClick={(ev) => { ev.stopPropagation(); remove(s); }} aria-label={`Back to free: ${nm}`}>×</button>}</span>; };
   const Slot = ({ e, code, start }: { e: Ev; code: string; start: string | null }) =>
-    <button className="ds-slot" onClick={() => setPick({ e, code, start })} onDragOver={(ev) => ev.preventDefault()} onDrop={() => dropOn(e, code, start)}>+ add</button>;
+    <button className={'ds-slot' + (v6 ? ' v6' : '')} onClick={() => setPick({ e, code, start })} onDragOver={(ev) => ev.preventDefault()} onDrop={() => dropOn(e, code, start)}>{v6 ? 'open' : '+ add'}</button>;
   const Step = ({ n, on }: { n: number; on: (n: number) => void }) => <span className="ds-step"><button disabled={busy} onClick={() => on(n - 1)} aria-label="One less">−</button><b>{n}</b><button disabled={busy} onClick={() => on(n + 1)} aria-label="One more">+</button></span>;
   const TimePop = ({ e, k, start, title, onSet, people }: { e: Ev; k: string; start: string | null; title: string; onSet: (t: string) => void; people?: Sh[] }) => (
     ed?.eid === e.id && ed.key === k ? <span className="ds-tpop" onClick={(ev) => ev.stopPropagation()}><b>{title}</b>
@@ -370,6 +384,19 @@ export function DaySheet() {
         onChange={(ev) => { setEndK(null); setLineField(e, idx!, { end: ev.target.value || null }, `end ${ev.target.value ? ap(ev.target.value) : '—'}`); }}><option value="">— no end</option>{end && !Q15.includes(end) && <option value={end}>{ap(end)}</option>}{Q15.map((q) => <option key={q} value={q}>{ap(q)}</option>)}</select>
       : <button className="ds-endb" disabled={busy} onClick={() => setEndK(k)} title="Add an end time (optional)">→ end</button>;
     const ok = people.length >= count;
+    if (v6 && !narrow) {
+      const setN = (n: number) => (lead ? setLeads(e, n) : extra ? setExtras(e, n) : idx != null ? setCount(e, idx, n) : undefined);
+      const note = plain ? (((e.staffing ?? [])[idx!] as Line & { note?: string | null }) ?? {}).note ?? '' : '';
+      return (
+        <div className={'v6-row' + (extra ? ' ex' : '') + (lead ? ' lead' : '')} onDragOver={(ev) => ev.preventDefault()} onDrop={() => dropOn(e, code, start)}>
+          <select className="v6-n" value={count} disabled={busy} onChange={(ev) => setN(Number(ev.target.value))}>{[...Array(51)].map((_, i) => <option key={i} value={i}>{i}</option>)}</select>
+          <span className="v6-role">{roleC}</span>
+          <span className="v6-t">{timeC}</span>
+          <span className="v6-t">{plain ? endC : null}</span>
+          <span className="ds-cells v6-cells" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>{people.map((s) => <Chip key={s.id} s={s} at={start} />)}{[...Array(Math.max(0, count - people.length))].map((_, i) => <Slot key={i} e={e} code={code} start={start} />)}</span>
+          {plain ? <input className="v6-note" defaultValue={note} placeholder="note" disabled={busy} onBlur={(ev) => { const v = ev.target.value.trim(); if (v !== (note ?? '')) setLineField(e, idx!, { note: v || null } as Partial<Line>, 'line note'); }} onKeyDown={(ev) => { if (ev.key === 'Enter') (ev.target as HTMLInputElement).blur(); }} /> : <span />}
+          {plain ? <button className="v6-x" disabled={busy} onClick={() => setCount(e, idx!, 0)} title="Remove this row">×</button> : <span />}
+        </div>); }
     const badge = <span className={'ds-badge' + (ok ? ' ok' : '')}>{people.length}/{count} {ok ? 'full' : `${count - people.length} open`}</span>;
     const band = narrow
       ? <><div className="ds-lh ph"><span className="serif ds-lt">{lead || extra ? name : `${count} ${plural(code, count)}`}</span><span className="ds-lt2">{tbc ? 'TBC' : ap(start)}{end ? ` → ${ap(end)}` : ''}</span><span className="grow" />{badge}
@@ -388,11 +415,11 @@ export function DaySheet() {
 
   return (
     <div className="stack-lg ds">
-      <div className="kick"><Link to={`/admin/bookings?date=${date}&view=sheet`}>Bookings · week</Link> · DAY SHEET</div>
-      <div className="ds-weekw"><Link className="ds-warr" to={`/admin/day-sheet/${addDays(date, -7)}`} title="Week before">‹</Link><div className="ds-week">{week.map((w) => <Link key={w.d} to={`/admin/day-sheet/${w.d}`} className={'ds-wd' + (w.d === date ? ' on' : '') + (!w.n ? ' none' : w.have >= w.need ? ' done' : ' short')}>
-        <small>{dLabel(w.d, { weekday: 'short', day: 'numeric' })}</small><b>{w.n ? `${w.have}/${w.need}` : '—'}</b><small>{w.n ? `${w.n} event${w.n > 1 ? 's' : ''}${w.free ? ` · ${w.free} free` : ''}` : 'no events'}</small></Link>)}</div><Link className="ds-warr" to={`/admin/day-sheet/${addDays(date, 7)}`} title="Next week">›</Link></div>
+      <div className="kick"><Link to={`/admin/bookings?date=${date}&view=sheet`}>Bookings · week</Link> · {v6 ? 'BOOKINGS V6 (NEW LAYOUT)' : 'DAY SHEET'}</div>
+      <div className="ds-weekw"><Link className="ds-warr" to={`${base}/${addDays(date, -7)}`} title="Week before">‹</Link><div className="ds-week">{week.map((w) => <Link key={w.d} to={`${base}/${w.d}`} className={'ds-wd' + (w.d === date ? ' on' : '') + (!w.n ? ' none' : w.have >= w.need ? ' done' : ' short')}>
+        <small>{dLabel(w.d, { weekday: 'short', day: 'numeric' })}</small><b>{w.n ? `${w.have}/${w.need}` : '—'}</b><small>{w.n ? `${w.n} event${w.n > 1 ? 's' : ''}${w.free ? ` · ${w.free} free` : ''}` : 'no events'}</small></Link>)}</div><Link className="ds-warr" to={`${base}/${addDays(date, 7)}`} title="Next week">›</Link></div>
       <div className="ds-top">
-        <span className="serif-h ds-day"><Link to={`/admin/day-sheet/${addDays(date, -1)}`}>‹</Link> {dLabel(date, { weekday: 'short', month: 'short', day: 'numeric' })} <Link to={`/admin/day-sheet/${addDays(date, 1)}`}>›</Link></span>
+        <span className="serif-h ds-day"><Link to={`${base}/${addDays(date, -1)}`}>‹</Link> {dLabel(date, { weekday: 'short', month: 'short', day: 'numeric' })} <Link to={`${base}/${addDays(date, 1)}`}>›</Link></span>
         <span className="ds-find"><input placeholder="Find a name" value={find} onChange={(ev) => { setFind(ev.target.value); setHl(null); }}
           onKeyDown={(ev) => { if (ev.key === 'Enter' && findRes[0]) goTo(findRes[0].id); if (ev.key === 'Escape') { setFind(''); setHl(null); } }} />
           {find.trim().length >= 2 && !hl && <span className="ds-findl">{findRes.length ? findRes.map((r) => <button key={r.id} onClick={() => goTo(r.id)}><b>{r.name}</b> <small>{r.where}</small></button>) : <small className="muted">Nobody by that name</small>}</span>}</span>
@@ -409,7 +436,9 @@ export function DaySheet() {
           return <button className={'abtn' + (due && n ? ' dark' : '')} disabled={busy || !n} onClick={confirmDay} title={`Confirmations usually go ~4 days out (${dLabel(out, { weekday: 'short', month: 'short', day: 'numeric' })})`}>Confirm {n}{dept !== 'both' ? ` ${dept}` : ''} ›</button>; })()}
       </div>
       <div className="ds-sum"><b>{evs.length} event{evs.length === 1 ? '' : 's'}</b><span>Floor <b className={fl[0] >= fl[1] ? 'okc' : 'accent'}>{fl[0]}/{fl[1]}</b></span><span>Bar <b className={br[0] >= br[1] ? 'okc' : 'accent'}>{br[0]}/{br[1]}</b></span><span>Free <b>{nYes}</b></span>
-        <span className="muted ds-legend"><i className="ds-sd ok" /> confirmed <i className="ds-sd sent" /> sent, not confirmed <i className="ds-sd" /> placed, not sent</span></div>
+        {v6 ? <span className="muted ds-legend"><i className="v6m ok">✓</i> confirmed <i className="v6m sent">◷</i> sent, waiting · no mark = not sent · <span className="v6-dash">open</span> = open spot</span>
+          : <span className="muted ds-legend"><i className="ds-sd ok" /> confirmed <i className="ds-sd sent" /> sent, not confirmed <i className="ds-sd" /> placed, not sent</span>}
+        <Link className="lnk sm" to={`${v6 ? '/admin/day-sheet' : '/admin/bookings-v6'}/${date}`}>{v6 ? '← Old layout' : 'Try the new layout (V6) ›'}</Link></div>
       {false && pend > 0 && <div className="ds-pend"><b>✉ {pend} change{pend > 1 ? 's' : ''} not sent yet</b><span className="muted">staff who were already sent a shift that changed · they're told when you press Send</span><span className="grow" /><button className="abtn sm dark" onClick={() => setSendOpen(true)}>Review &amp; send ›</button></div>}
       {sendOpen && <SendBox events={evs.map((e) => e.id)} onClose={() => { setSendOpen(false); setTick((t) => t + 1); }} onSent={() => { setMsg('Sent.'); setTick((t) => t + 1); }} />}
       {ops.length > 0 && <div className="ds-undofab"><span className="grow">{ops[ops.length - 1].label}</span><button disabled={busy} onClick={undo}>↶ Undo</button>{ops.length > 1 && <small>{ops.length} steps</small>}</div>}{/* push 120 · always in reach */}
@@ -425,9 +454,12 @@ export function DaySheet() {
                   <span className="grow" />
                   {need > have && <button className="lnk sm" disabled={busy || !ctx} onClick={() => fillDay(e)} title="Fill this event only">Fill</button>}
                   {sh.some((x) => x.event_id === e.id && x.pool_hold && !x.locked && !LEAD.includes(x.position_code ?? '')) && <button className="lnk sm muted" disabled={busy} onClick={() => clear(e)}>Clear</button>}
-                  <Link className="lnk sm" to={`/admin/event/${e.id}`}>Event ›</Link></div>
-                <Details e={e} open={detOpen(e.id)} onToggle={() => togDet(e.id)} venues={ctx?.venues ?? []} clients={ctx?.clients ?? []} types={types} busy={busy}
-                  onEv={(row, label) => saveEv(e, row, label)} onVenue={(v) => setVenue(e, v)} onClient={(c) => saveClient(e, c)} onType={(t) => setType(e, t)} />
+                  <Link className="lnk sm" to={`/admin/event/${e.id}`}>{v6 ? 'Full event ›' : 'Event ›'}</Link></div>
+                {v6 ? <DetailsV6 e={e} pv={priv[e.id]} open={detOpen(e.id)} onToggle={() => togDet(e.id)} venues={ctx?.venues ?? []} clients={ctx?.clients ?? []} types={types} busy={busy}
+                  onEv={(row, label) => saveEv(e, row, label)} onPriv={(row, label) => savePriv(e, row, label)} onVenue={(v) => setVenue(e, v)} onClient={(c) => saveClient(e, c)} onType={(t) => setType(e, t)} />
+                : <Details e={e} open={detOpen(e.id)} onToggle={() => togDet(e.id)} venues={ctx?.venues ?? []} clients={ctx?.clients ?? []} types={types} busy={busy}
+                  onEv={(row, label) => saveEv(e, row, label)} onVenue={(v) => setVenue(e, v)} onClient={(c) => saveClient(e, c)} onType={(t) => setType(e, t)} />}
+                {v6 && !narrow && <div className="v6-head"><span>STAFF</span><span>ROLE</span><span>START</span><span>END</span><span>NAMES</span><span>NOTES</span><span /></div>}
                 <div className="ds-grid">
                   <div className={'ds-grp ' + (isBar(e) ? 'g-bar' : 'g-floor')}>
                     <Row e={e} lead code={isBar(e) ? 'BM' : 'MD'} start={(e.staffing ?? []).find((l) => LEAD.includes(l.code))?.start ?? e.start_time?.slice(0, 5) ?? null} count={L.leadNeed} people={L.leads} />
@@ -454,6 +486,7 @@ export function DaySheet() {
           <span>‹</span><b>Free · {nYes}</b></aside> : <aside className="ds-free" onDragOver={(ev) => ev.preventDefault()} onDrop={() => { const d = dragR.current; setDrag(null); if (d && 'id' in d) remove(d); }}>
           <span className="row" style={{ alignItems: 'baseline' }}><b className="serif grow">Free this day · {nYes}</b><button className="ds-dett" onClick={() => setFreeFold(true)} title="Fold to make room">Hide ›</button></span>
           <small className="muted">said yes, not placed · best first · drag onto a slot, or tap a slot · drop a name here = back to free</small>
+          {v6 && dept === 'both' && <span className="seg3"><button className={fdept === 'floor' ? 'on' : ''} onClick={() => setFdept('floor')}>Floor</button><button className={fdept === 'bar' ? 'on' : ''} onClick={() => setFdept('bar')}>Bar</button></span>}
           <span className="seg3"><button className={tab === 'yes' ? 'on' : ''} onClick={() => setTab('yes')}>Yes {nYes}</button><button className={tab === 'maybe' ? 'on' : ''} onClick={() => setTab('maybe')}>Maybe {nMaybe}</button></span>
           {!free.length && <span className="muted sm">{tab === 'yes' ? 'Nobody left. Ask more from Bookings → Ask more people.' : 'No maybes.'}</span>}
           {free.map((a) => <div key={a.staff_id} data-sid={a.staff_id} className={'ds-fp' + (hl === a.staff_id ? ' hl' : '')} draggable onDragStart={(ev) => { ev.dataTransfer.setData('text/plain', a.staff_id); ev.dataTransfer.effectAllowed = 'move'; setDrag({ staff_id: a.staff_id }); }} onDragEnd={() => setDrag(null)}>
@@ -635,6 +668,55 @@ function Details({ e, open, onToggle, venues, clients, types, busy, onEv, onVenu
         <label className="wide2">NOTES FOR STAFF<input value={nt} disabled={busy} placeholder="e.g. enter by the side door · parking at the back" onChange={(ev) => setNt(ev.target.value)} onBlur={() => { if (nt.trim() !== (e.notes ?? '')) onEv({ notes: nt.trim() || null }, 'notes for staff'); }} /></label>
       </div>
       <small className="muted">Saves as you go, like the event form · ↶ Undo · staff see it in the app (no message) · on-site contact = the MD</small>
+    </div>);
+}
+
+/** Nov 23 · V6 details: folded = one line; open = 4 groups · What & who (+ Estimate #) · Where & when · For the staff (+ Drive folder) · Notes (Staff / MDs / Billing). */
+function DetailsV6({ e, pv, open, onToggle, venues, clients, types, busy, onEv, onPriv, onVenue, onClient, onType }: { e: Ev; pv?: { estimate_no?: string | null; md_note?: string | null; billing_note?: string | null }; open: boolean; onToggle: () => void;
+  venues: { id: string; name: string }[]; clients: { id: string; name: string }[]; types: string[]; busy: boolean;
+  onEv: (row: Record<string, unknown>, label: string) => void; onPriv: (row: Record<string, string | null>, label: string) => void; onVenue: (id: string) => void; onClient: (id: string) => void; onType: (t: string) => void }) {
+  const [ti, setTi] = useState(e.title ?? ''); const [g, setG] = useState(e.guests ? String(e.guests) : ''); const [est, setEst] = useState(pv?.estimate_no ?? ''); const [dr, setDr] = useState(e.drive_folder_url ?? '');
+  const [nt, setNt] = useState<'staff' | 'md' | 'bill'>('staff'); const [nv, setNv] = useState({ staff: e.notes ?? '', md: pv?.md_note ?? '', bill: pv?.billing_note ?? '' });
+  useEffect(() => { setTi(e.title ?? ''); setG(e.guests ? String(e.guests) : ''); setDr(e.drive_folder_url ?? ''); }, [e.title, e.guests, e.drive_folder_url]);
+  useEffect(() => { setEst(pv?.estimate_no ?? ''); setNv({ staff: e.notes ?? '', md: pv?.md_note ?? '', bill: pv?.billing_note ?? '' }); }, [pv?.estimate_no, pv?.md_note, pv?.billing_note, e.notes]);
+  const uKey = isBar(e) ? 'uniform_bar' : 'uniform_floor'; const uVal = (isBar(e) ? e.uniform_bar : e.uniform_floor) ?? '';
+  const wKey = uKey + '_w'; const wVal = (isBar(e) ? e.uniform_bar_w : e.uniform_floor_w) ?? '';
+  const uL = (k: string) => UNIFORMS.find(([x]) => x === k)?.[1]; const MEN = UNIFORMS.filter(([k]) => k !== 'dress');
+  const tm = (t?: string | null) => (t ? ap(t.slice(0, 5)) : '');
+  const sum = [e.event_private?.client, e.guests ? `${e.guests} guests` : null, e.start_time ? `start ${tm(e.start_time)}` : null, pv?.estimate_no ? `est. #${pv.estimate_no}` : null].filter(Boolean).join(' · ');
+  if (!open) return <button className="ds-det fold" onClick={onToggle}><b>Details</b><span className="grow">{sum || 'nothing filled in yet'}</span><span className="ds-dett">Show details ▾</span></button>;
+  const vs = [...venues].sort((a, b) => a.name.localeCompare(b.name)); const cs = [...clients].sort((a, b) => a.name.localeCompare(b.name));
+  const saveNote = () => { const cur = nt === 'staff' ? e.notes ?? '' : nt === 'md' ? pv?.md_note ?? '' : pv?.billing_note ?? ''; const v = nv[nt].trim(); if (v === cur) return;
+    if (nt === 'staff') onEv({ notes: v || null }, 'notes for staff'); else onPriv(nt === 'md' ? { md_note: v || null } : { billing_note: v || null }, nt === 'md' ? 'notes for MDs' : 'billing notes'); };
+  const tabB = (k: 'staff' | 'md' | 'bill', l: string, has: boolean) => <button className={nt === k ? 'on' : ''} onClick={() => { saveNote(); setNt(k); }}>{l}{has ? ' ·' : ''}</button>;
+  return (
+    <div className="ds-det v6det">
+      <div className="row" style={{ alignItems: 'center' }}><b>EVENT DETAILS</b><small className="muted" style={{ marginLeft: 10 }}>saves as you go · staff see the title, place, times, uniform, staff notes, folder</small><span className="grow" /><button className="ds-dett" onClick={onToggle}>Hide ▴</button></div>
+      <small className="v6g">1 · WHAT &amp; WHO</small>
+      <div className="ds-detg">
+        <label>EVENT NAME<input value={ti} disabled={busy} onChange={(ev) => setTi(ev.target.value)} onBlur={() => { if (ti.trim() && ti.trim() !== (e.title ?? '')) onEv({ title: ti.trim() }, `name → ${ti.trim()}`); else setTi(e.title ?? ''); }} /></label>
+        <label>CLIENT · ONLY YOU<select value={e.event_private?.client_id ?? ''} disabled={busy} onChange={(ev) => onClient(ev.target.value)}><option value="">{e.event_private?.client ?? '—'}</option>{cs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+        <label>ESTIMATE # · ONLY YOU<input value={est} disabled={busy} placeholder="e.g. 3325" onChange={(ev) => setEst(ev.target.value)} onBlur={() => { if (est.trim() !== (pv?.estimate_no ?? '')) onPriv({ estimate_no: est.trim() || null }, `estimate # ${est.trim() || '—'}`); }} /></label>
+        <label>EVENT TYPE<select value={e.event_type ?? ''} disabled={busy} onChange={(ev) => onType(ev.target.value)}><option value="">—</option>{[...new Set([...(e.event_type ? [e.event_type] : []), ...types])].map((t) => <option key={t} value={t}>{t}</option>)}</select></label>
+      </div>
+      <small className="v6g">2 · WHERE &amp; WHEN</small>
+      <div className="ds-detg">
+        <label>VENUE<select value={e.venue_id ?? ''} disabled={busy} onChange={(ev) => onVenue(ev.target.value)}><option value="">—</option>{vs.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}</select></label>
+        <label>GUESTS<input inputMode="numeric" value={g} disabled={busy} onChange={(ev) => setG(ev.target.value.replace(/\D/g, ''))} onBlur={() => { const n = g ? Number(g) : null; if (n !== (e.guests ?? null)) onEv({ guests: n }, `guests → ${n ?? '—'}`); }} /></label>
+        <label>STARTS<select className="ds-tsel" value={e.start_time?.slice(0, 5) ?? ''} disabled={busy} onChange={(ev) => onEv({ start_time: ev.target.value || null }, `start → ${tm(ev.target.value) || '—'}`)}><option value="">—</option>{Q15.map((q) => <option key={q} value={q}>{ap(q)}</option>)}</select></label>
+        <label>ENDS<select className="ds-tsel" value={e.end_time?.slice(0, 5) ?? ''} disabled={busy} onChange={(ev) => onEv({ end_time: ev.target.value || null }, `end → ${tm(ev.target.value) || '—'}`)}><option value="">—</option>{Q15.map((q) => <option key={q} value={q}>{ap(q)}</option>)}</select></label>
+      </div>
+      <small className="v6g">3 · FOR THE STAFF</small>
+      <div className="ds-detg">
+        <label>UNIFORM · MEN<select value={uVal} disabled={busy} onChange={(ev) => onEv({ [uKey]: ev.target.value || null }, `men's uniform → ${uL(ev.target.value) ?? '—'}`)}><option value="">—</option>{MEN.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></label>
+        <label>UNIFORM · WOMEN<select value={wVal} disabled={busy} onChange={(ev) => onEv({ [wKey]: ev.target.value || null }, `women's uniform → ${uL(ev.target.value) ?? '—'}`)}><option value="">—</option>{UNIFORMS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></label>
+        <label>FOOD BY<select value={e.caterer_id ?? ''} disabled={busy} onChange={(ev) => onEv({ caterer_id: ev.target.value || null }, `food by → ${cs.find((c) => c.id === ev.target.value)?.name ?? '—'}`)}><option value="">—</option>{cs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+        <label>DRIVE FOLDER<input value={dr} disabled={busy} placeholder="Paste a link…" onChange={(ev) => setDr(ev.target.value)} onBlur={() => { if (dr.trim() !== (e.drive_folder_url ?? '')) onEv({ drive_folder_url: dr.trim() || null }, 'Drive folder'); }} /></label>
+      </div>
+      <small className="v6g">4 · NOTES</small>
+      <span className="seg3 v6tabs">{tabB('staff', 'Staff', !!e.notes)}{tabB('md', 'MDs', !!pv?.md_note)}{tabB('bill', 'Billing', !!pv?.billing_note)}</span>
+      <textarea className="v6-notes" rows={2} disabled={busy} value={nv[nt]} placeholder={nt === 'staff' ? 'Everyone on the event sees it · e.g. enter by the side door' : nt === 'md' ? 'Only the MD / bar manager and co-managers' : 'Only you · goes with the invoice: extras, overtime, transport…'}
+        onChange={(ev) => setNv({ ...nv, [nt]: ev.target.value })} onBlur={saveNote} />
     </div>);
 }
 
