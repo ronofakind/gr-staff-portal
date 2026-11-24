@@ -4880,11 +4880,11 @@ span.abtn.ds-newq { background: none; border: 0; padding: 0; }
 .lnk.red { color: #9B2226; font-weight: 700; }
 
 /* Nov 23 · Bookings V6 (side by side with the Day sheet) */
-.v6-head, .v6-row { display: grid; grid-template-columns: 62px 150px 96px 96px minmax(0, 1fr) 150px 26px; gap: 8px; align-items: start; }
+.v6-head, .v6-row { display: grid; grid-template-columns: 50px 108px 84px 84px minmax(0, 1fr) 22px; gap: 8px; align-items: start; }
 .v6-head { font-size: 10.5px; font-weight: 800; letter-spacing: .1em; color: var(--muted); padding: 8px 10px 2px; }
 .v6-row { padding: 8px 10px; border-top: 1px solid #ECE6DE; }
 .v6-row.lead { background: #FBF9F6; } .v6-row.ex { background: #FFFBF2; }
-.v6-n { font: 700 14px Inter, sans-serif; padding: 6px 6px; border: 1.5px solid #E2DAD0; border-radius: 8px; background: #fff; }
+.v6-n { font: 700 13px Inter, sans-serif; padding: 5px 2px; width: 50px; border: 1.5px solid #E2DAD0; border-radius: 8px; background: #fff; }
 .v6-role select, .v6-role .ds-lsel { width: 100%; }
 .v6-role .ds-lname { font-size: 13.5px; }
 .v6-t { display: flex; align-items: center; min-height: 32px; }
@@ -4900,3 +4900,5 @@ span.abtn.ds-newq { background: none; border: 0; padding: 0; }
 .v6det .ds-detg { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .v6tabs { max-width: 300px; margin-top: 4px; }
 .v6-notes { width: 100%; box-sizing: border-box; font: 13.5px Inter, sans-serif; padding: 8px 10px; border: 1px solid #E2DAD0; border-radius: 8px; margin-top: 6px; resize: vertical; }
+
+.v6-role select, .v6-role .ds-lsel { font-size: 12.5px; padding-left: 4px; padding-right: 2px; }

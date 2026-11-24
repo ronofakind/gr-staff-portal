@@ -16,7 +16,7 @@ type Op = { label: string; undo: () => PromiseLike<unknown> };
 const TORD: Record<string, number> = { A: 0, B: 1, C: 2 };
 /** Nov 13 · every 15 minutes, 6 AM → 3:45 AM (next day) */
 const Q15 = Array.from({ length: 88 }, (_, k) => { const m = 6 * 60 + k * 15; return `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`; });
-const ap = (t: string | null | undefined) => { if (!t) return 'TBC'; const h = Number(t.slice(0, 2)); return `${h % 12 || 12}${t.slice(2, 5) !== ':00' ? t.slice(2, 5) : ''} ${h < 12 ? 'AM' : 'PM'}`; };
+const ap = (t: string | null | undefined) => { if (!t) return 'TBC'; const h = Number(t.slice(0, 2)); return `${h % 12 || 12}${t.slice(2, 5)} ${h < 12 ? 'AM' : 'PM'}`; }; // Nov 23 · always 1:00 PM
 const roleShort = (c: string) => ({ W: 'W', WW: 'WW', BT: 'BT', BB: 'BB', BUS: 'Bus', MD: 'MD', BM: 'BM' } as Record<string, string>)[c] ?? c;
 const plural = (code: string, n: number) => { const r = roleName(code) || code; return n === 1 ? r : r.endsWith('s') ? r : r + 's'; };
 const short = (n: string) => { const p = n.trim().split(/\s+/); return p.length > 1 ? `${p[0]} ${p[p.length - 1][0]}.` : n; };
@@ -386,7 +386,6 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
     const ok = people.length >= count;
     if (v6 && !narrow) {
       const setN = (n: number) => (lead ? setLeads(e, n) : extra ? setExtras(e, n) : idx != null ? setCount(e, idx, n) : undefined);
-      const note = plain ? (((e.staffing ?? [])[idx!] as Line & { note?: string | null }) ?? {}).note ?? '' : '';
       return (
         <div className={'v6-row' + (extra ? ' ex' : '') + (lead ? ' lead' : '')} onDragOver={(ev) => ev.preventDefault()} onDrop={() => dropOn(e, code, start)}>
           <select className="v6-n" value={count} disabled={busy} onChange={(ev) => setN(Number(ev.target.value))}>{[...Array(51)].map((_, i) => <option key={i} value={i}>{i}</option>)}</select>
@@ -394,8 +393,7 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
           <span className="v6-t">{timeC}</span>
           <span className="v6-t">{plain ? endC : null}</span>
           <span className="ds-cells v6-cells" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>{people.map((s) => <Chip key={s.id} s={s} at={start} />)}{[...Array(Math.max(0, count - people.length))].map((_, i) => <Slot key={i} e={e} code={code} start={start} />)}</span>
-          {plain ? <input className="v6-note" defaultValue={note} placeholder="note" disabled={busy} onBlur={(ev) => { const v = ev.target.value.trim(); if (v !== (note ?? '')) setLineField(e, idx!, { note: v || null } as Partial<Line>, 'line note'); }} onKeyDown={(ev) => { if (ev.key === 'Enter') (ev.target as HTMLInputElement).blur(); }} /> : <span />}
-          {plain ? <button className="v6-x" disabled={busy} onClick={() => setCount(e, idx!, 0)} title="Remove this row">×</button> : <span />}
+          <button className="v6-x" disabled={busy} onClick={() => (lead ? setLeads(e, 0) : extra ? setExtras(e, 0) : setCount(e, idx!, 0))} title="Remove this row">×</button>
         </div>); }
     const badge = <span className={'ds-badge' + (ok ? ' ok' : '')}>{people.length}/{count} {ok ? 'full' : `${count - people.length} open`}</span>;
     const band = narrow
@@ -459,7 +457,7 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
                   onEv={(row, label) => saveEv(e, row, label)} onPriv={(row, label) => savePriv(e, row, label)} onVenue={(v) => setVenue(e, v)} onClient={(c) => saveClient(e, c)} onType={(t) => setType(e, t)} />
                 : <Details e={e} open={detOpen(e.id)} onToggle={() => togDet(e.id)} venues={ctx?.venues ?? []} clients={ctx?.clients ?? []} types={types} busy={busy}
                   onEv={(row, label) => saveEv(e, row, label)} onVenue={(v) => setVenue(e, v)} onClient={(c) => saveClient(e, c)} onType={(t) => setType(e, t)} />}
-                {v6 && !narrow && <div className="v6-head"><span>STAFF</span><span>ROLE</span><span>START</span><span>END</span><span>NAMES</span><span>NOTES</span><span /></div>}
+                {v6 && !narrow && <div className="v6-head"><span>STAFF</span><span>ROLE</span><span>START</span><span>END</span><span>NAMES</span><span /></div>}
                 <div className="ds-grid">
                   <div className={'ds-grp ' + (isBar(e) ? 'g-bar' : 'g-floor')}>
                     <Row e={e} lead code={isBar(e) ? 'BM' : 'MD'} start={(e.staffing ?? []).find((l) => LEAD.includes(l.code))?.start ?? e.start_time?.slice(0, 5) ?? null} count={L.leadNeed} people={L.leads} />
