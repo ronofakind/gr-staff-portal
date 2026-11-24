@@ -4902,3 +4902,24 @@ span.abtn.ds-newq { background: none; border: 0; padding: 0; }
 .v6-notes { width: 100%; box-sizing: border-box; font: 13.5px Inter, sans-serif; padding: 8px 10px; border: 1px solid #E2DAD0; border-radius: 8px; margin-top: 6px; resize: vertical; }
 
 .v6-role select, .v6-role .ds-lsel { font-size: 12.5px; padding-left: 4px; padding-right: 2px; }
+
+/* Nov 23 · V6 tidy (Ronnie: "a little messy … keep it structured") · every column the same box, same height, one font */
+.v6-head, .v6-row { grid-template-columns: 58px 132px 104px 104px minmax(0, 1fr) 24px !important; column-gap: 10px; }
+.v6-row { align-items: center; min-height: 52px; }
+.v6-row > * { min-width: 0; }
+.v6-row .v6-n, .v6-row .ds-lsel, .v6-row .ds-tbtn, .v6-row .ds-endb, .v6-row .ds-tsel, .v6-row .ds-lname, .v6-row .ds-tro {
+  width: 100%; min-width: 0; max-width: 100%; height: 36px; box-sizing: border-box; border: 1px solid #E2DAD0; border-radius: 9px; background: #fff;
+  font: 600 13px Inter, sans-serif; color: var(--ink); padding: 0 8px; display: flex; align-items: center; margin: 0; }
+.v6-row .ds-lsel, .v6-row .ds-tsel, .v6-row .v6-n { display: block; }
+.v6-row .ds-endb { border-style: dashed; color: #B9AFA2; font-weight: 500; justify-content: center; }
+.v6-row .ds-lname em { margin-left: 4px; }
+.v6-row .v6-t { min-height: 0; } .v6-row .ds-time, .v6-row .ds-end { width: 100%; display: block; }
+.v6-row .v6-cells { padding-top: 0 !important; gap: 6px; }
+.v6-row .ds-chip { height: 36px; border-radius: 9px; font: 600 13px Inter, sans-serif; letter-spacing: 0; box-shadow: none; border: 1px solid #E2DAD0; }
+.v6-row .ds-chip.flag, .v6-row .ds-chip.over { box-shadow: none; border-color: #E2DAD0; }
+.v6-row .ds-chip .ds-flag { color: #B9AFA2; font-weight: 600; }
+.v6-row .ds-slot.v6 { height: 36px; border-radius: 9px; }
+.v6-row .v6-x { width: 24px; height: 36px; display: flex; align-items: center; justify-content: center; color: #C9C0B4; }
+.v6-row .v6-x:hover { color: #9B2226; }
+.v6-row.lead { background: transparent; } .v6-row.ex { background: transparent; }
+.v6-head { border-bottom: 1px solid #ECE6DE; }

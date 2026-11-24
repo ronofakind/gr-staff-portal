@@ -2410,6 +2410,14 @@ html[data-theme="dark"] { --teams: #8487CC; --teams-bg: #1F2137; --teams-ink: #8
 :where(html[data-theme="dark"]) .ds-slot.v6 { border: 1.5px dashed #45403B; color: #9B9289; }
 :where(html[data-theme="dark"]) .v6-dash { border: 1.5px dashed #45403B; }
 :where(html[data-theme="dark"]) .v6-notes { border: 1px solid #49433B; }
+:where(html[data-theme="dark"]) .v6-row .v6-n, :where(html[data-theme="dark"]) .v6-row .ds-lsel, :where(html[data-theme="dark"]) .v6-row .ds-tbtn, :where(html[data-theme="dark"]) .v6-row .ds-endb, :where(html[data-theme="dark"]) .v6-row .ds-tsel, :where(html[data-theme="dark"]) .v6-row .ds-lname, :where(html[data-theme="dark"]) .v6-row .ds-tro { border: 1px solid #49433B; background: #1F1D1A; }
+:where(html[data-theme="dark"]) .v6-row .ds-endb { color: #9B9289; }
+:where(html[data-theme="dark"]) .v6-row .ds-chip { border: 1px solid #49433B; }
+:where(html[data-theme="dark"]) .v6-row .ds-chip.flag, :where(html[data-theme="dark"]) .v6-row .ds-chip.over { border-color: #49433B; }
+:where(html[data-theme="dark"]) .v6-row .ds-chip .ds-flag { color: #9B9289; }
+:where(html[data-theme="dark"]) .v6-row .v6-x { color: #A19991; }
+:where(html[data-theme="dark"]) .v6-row .v6-x:hover { color: #D7797C; }
+:where(html[data-theme="dark"]) .v6-head { border-bottom: 1px solid #4A433A; }
 html[data-theme="dark"] { color-scheme: dark; }
 html[data-theme="dark"] body { background: #121110; color: #F1ECE4; }
 html[data-theme="dark"] img[src$="logo-mark.png"]:not(.adm-side img):not(.side-logo), html[data-theme="dark"] img[src$="logo-full.png"] { filter: invert(1) hue-rotate(180deg); mix-blend-mode: normal !important; }

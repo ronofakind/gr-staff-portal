@@ -1433,4 +1433,9 @@ html[data-theme="terra"] { --teams: #5B5FC7; --teams-bg: #EEEFFB; --teams-ink: #
 :where(html[data-theme="terra"]) .v6-x:hover { color: #9B4D31; }
 :where(html[data-theme="terra"]) .ds-slot.v6 { border: 1.5px dashed #CDCFC6; color: #B2B4A7; }
 :where(html[data-theme="terra"]) .v6-dash { border: 1.5px dashed #CDCFC6; }
+:where(html[data-theme="terra"]) .v6-row .v6-n, :where(html[data-theme="terra"]) .v6-row .ds-lsel, :where(html[data-theme="terra"]) .v6-row .ds-tbtn, :where(html[data-theme="terra"]) .v6-row .ds-endb, :where(html[data-theme="terra"]) .v6-row .ds-tsel, :where(html[data-theme="terra"]) .v6-row .ds-lname, :where(html[data-theme="terra"]) .v6-row .ds-tro { background: #FBFAF6; }
+:where(html[data-theme="terra"]) .v6-row .ds-endb { color: #B2B4A7; }
+:where(html[data-theme="terra"]) .v6-row .ds-chip .ds-flag { color: #B2B4A7; }
+:where(html[data-theme="terra"]) .v6-row .v6-x { color: #C2C4B9; }
+:where(html[data-theme="terra"]) .v6-row .v6-x:hover { color: #9B4D31; }
 html[data-theme="terra"] body { background: #EEF0E8; color: #2A2A24; }
