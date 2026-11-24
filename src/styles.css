@@ -4948,3 +4948,8 @@ span.abtn.ds-newq { background: none; border: 0; padding: 0; }
 .v6-row .ds-chip small { font-size: 9.5px !important; }
 .v6-row .v6-x, .v6-row .v6-t:empty::before { height: 30px !important; }
 .v6-row .v6-x { font-size: 15px !important; }
+/* V6 · option C: different start time → sub-line under the row */
+.v6-row.hassub { border-bottom: 0; }
+.v6-row.v6-sub { border-top: 1px dashed #ECE6DE !important; background: #FBF9F6; padding-top: 4px !important; padding-bottom: 4px !important; }
+.v6-row.v6-sub .v6-subl { font-size: 11px; color: #8A8177; line-height: 30px; padding-left: 4px; white-space: nowrap; }
+.v6-row.v6-sub .ds-tro { color: #4B44A8; font-weight: 700; }

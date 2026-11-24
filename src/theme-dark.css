@@ -2420,6 +2420,9 @@ html[data-theme="dark"] { --teams: #8487CC; --teams-bg: #1F2137; --teams-ink: #8
 :where(html[data-theme="dark"]) .v6-head { border-bottom: 1px solid #4A433A; }
 :where(html[data-theme="dark"]) .v6-row .ds-chip .ds-x { color: #A19991; }
 :where(html[data-theme="dark"]) .v6-row .v6-t:empty::before { color: #A59D95; }
+:where(html[data-theme="dark"]) .v6-row.v6-sub { border-top: 1px dashed #4A433A !important; background: #22201D; }
+:where(html[data-theme="dark"]) .v6-row.v6-sub .v6-subl { color: #8A8076; }
+:where(html[data-theme="dark"]) .v6-row.v6-sub .ds-tro { color: #8D89C8; }
 html[data-theme="dark"] { color-scheme: dark; }
 html[data-theme="dark"] body { background: #121110; color: #F1ECE4; }
 html[data-theme="dark"] img[src$="logo-mark.png"]:not(.adm-side img):not(.side-logo), html[data-theme="dark"] img[src$="logo-full.png"] { filter: invert(1) hue-rotate(180deg); mix-blend-mode: normal !important; }

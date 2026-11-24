@@ -356,7 +356,7 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
     const e = evs.find((x) => x.id === s.event_id); const n = wn[s.staff_id] ?? 0;
     const w = [why[s.id] ? `✦ ${why[s.id]}` : null, e && ctx ? whyText(s.staff_id, e, ctx, sh.filter((x) => x.event_id === s.event_id && x.staff_id !== s.staff_id).map((x) => x.staff_id), n, a) : null,
       s.locked ? 'locked' : null, !s.pool_hold ? (s.status === 'confirmed' ? 'confirmed' : s.notified_at ? 'sent' : 'booked') : null].filter(Boolean).join(' · ');
-    return <span data-sid={s.staff_id} className={'ds-chip' + (can ? '' : ' fixed') + (n > 3 ? ' flag' : '') + (flagged[s.id] ? ' over' : '') + (hl === s.staff_id ? ' hl' : '')} draggable onDragStart={(ev) => { ev.dataTransfer.setData('text/plain', s.id); ev.dataTransfer.effectAllowed = 'move'; setDrag(s); }} onDragEnd={() => setDrag(null)} title={`${nm} · ${w}${s.booking_note ? ` · 📌 ${s.booking_note}` : ''}${s.pool_hold ? ' · moving them sends nothing' : ' · already sent: moving them sends "Your shift changed" (asked first)'} · click = options`} onClick={() => setCard(s)}>
+    return <span data-sid={s.staff_id} className={'ds-chip' + (can ? '' : ' fixed') + (n > 3 ? ' flag' : '') + (flagged[s.id] ? ' over' : '') + (hl === s.staff_id ? ' hl' : '')} draggable onDragStart={(ev) => { ev.dataTransfer.setData('text/plain', s.id); ev.dataTransfer.effectAllowed = 'move'; setDrag(s); }} onDragEnd={() => setDrag(null)} title={v6 ? `${nm}${s.planned_start ? ` · from ${ap(hm(s.planned_start))}` : ''}${s.locked ? ' · locked' : ''}` : `${nm} · ${w}${s.booking_note ? ` · 📌 ${s.booking_note}` : ''}${s.pool_hold ? ' · moving them sends nothing' : ' · already sent: moving them sends "Your shift changed" (asked first)'} · click = options`} onClick={() => setCard(s)}>
       {v6 ? (s.status === 'confirmed' ? <i className="v6m ok" title="Confirmed">✓</i> : !s.pool_hold && s.notified_at ? <i className="v6m sent" title="Sent, waiting for a reply">◷</i> : null)
         : <i className={'ds-sd' + (s.status === 'confirmed' ? ' ok' : !s.pool_hold && s.notified_at ? ' sent' : '')} title={s.status === 'confirmed' ? 'Confirmed' : !s.pool_hold && s.notified_at ? 'Sent, not confirmed yet' : 'Placed, not sent yet'} />}<span className="ds-nm">{nm}</span>{ctx && isNewStaff(ctx, s.staff_id) ? <small className="ds-new" title="New: came through onboarding">NEW</small> : null}{s.locked ? <small className="ds-lk" title="Locked">locked</small> : null}{own ? <small className="ds-own" title={`Starts at ${ap(own)} (line ${ap(at)})`}>{ap(own)}</small> : late ? <small className="gold"> from {ap(a!.from_time)}</small> : null}{n > 3 ? <small className="ds-flag" title={`${n} shifts this week`}>⚑{n}</small> : null}
       {!LEAD.includes(s.position_code ?? '') && <button className="ds-x" disabled={busy} onClick={(ev) => { ev.stopPropagation(); remove(s); }} aria-label={`Back to free: ${nm}`}>×</button>}</span>; };
@@ -386,15 +386,22 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
     const ok = people.length >= count;
     if (v6 && !narrow) {
       const setN = (n: number) => (lead ? setLeads(e, n) : extra ? setExtras(e, n) : idx != null ? setCount(e, idx, n) : undefined);
-      return (
-        <div className={'v6-row' + (extra ? ' ex' : '') + (lead ? ' lead' : '')} onDragOver={(ev) => ev.preventDefault()} onDrop={() => dropOn(e, code, start)}>
+      // Nov 23 · option C: anyone starting at another time drops to a sub-line under the row, with their time in the Start column
+      const ownT = (x: Sh) => (start && x.planned_start && hm(x.planned_start) !== start ? hm(x.planned_start) : null);
+      const main = people.filter((x) => !ownT(x)); const subT = [...new Set(people.map(ownT).filter(Boolean) as string[])].sort();
+      return (<>
+        <div className={'v6-row' + (extra ? ' ex' : '') + (lead ? ' lead' : '') + (subT.length ? ' hassub' : '')} onDragOver={(ev) => ev.preventDefault()} onDrop={() => dropOn(e, code, start)}>
           <select className="v6-n" value={count} disabled={busy} onChange={(ev) => setN(Number(ev.target.value))}>{[...Array(51)].map((_, i) => <option key={i} value={i}>{i}</option>)}</select>
           <span className="v6-role">{roleC}</span>
           <span className="v6-t">{timeC}</span>
           <span className="v6-t">{plain ? endC : null}</span>
-          <span className="ds-cells v6-cells" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>{people.map((s) => <Chip key={s.id} s={s} at={start} />)}{[...Array(Math.max(0, count - people.length))].map((_, i) => <Slot key={i} e={e} code={code} start={start} />)}</span>
+          <span className="ds-cells v6-cells" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>{main.map((s) => <Chip key={s.id} s={s} at={start} />)}{[...Array(Math.max(0, count - people.length))].map((_, i) => <Slot key={i} e={e} code={code} start={start} />)}</span>
           <button className="v6-x" disabled={busy} onClick={() => (lead ? setLeads(e, 0) : extra ? setExtras(e, 0) : setCount(e, idx!, 0))} title="Remove this row">×</button>
-        </div>); }
+        </div>
+        {subT.map((t) => <div key={t} className="v6-row v6-sub">
+          <span /><span className="v6-subl">↳ same line</span><span className="v6-t"><span className="ds-tro">{ap(t)}</span></span><span className="v6-t" />
+          <span className="ds-cells v6-cells" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>{people.filter((x) => ownT(x) === t).map((s) => <Chip key={s.id} s={s} at={t} />)}</span><span />
+        </div>)}</>); }
     const badge = <span className={'ds-badge' + (ok ? ' ok' : '')}>{people.length}/{count} {ok ? 'full' : `${count - people.length} open`}</span>;
     const band = narrow
       ? <><div className="ds-lh ph"><span className="serif ds-lt">{lead || extra ? name : `${count} ${plural(code, count)}`}</span><span className="ds-lt2">{tbc ? 'TBC' : ap(start)}{end ? ` → ${ap(end)}` : ''}</span><span className="grow" />{badge}
