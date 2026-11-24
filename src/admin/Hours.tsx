@@ -1,6 +1,6 @@
 import { QuarterTime } from '../components/QuarterTime';
 import { Fragment, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import type { MeetingHours } from '../lib/meetings';
 import { loadRates, byStaff, rateOn } from './pay';
@@ -10,7 +10,9 @@ type Row = { e: AEvent; s: AShift };
 const hm24 = (iso: string | null) => iso ? new Date(iso).toLocaleTimeString('en-GB', { timeZone: 'America/Toronto', hour: '2-digit', minute: '2-digit' }) : '';
 
 export function Hours() {
-  const [p, setP] = useState(periodOf(isoDay(new Date())));
+  // Nov 24 · Today → event card "Hours ›" opens this page on one event (?d=date&e=event)
+  const [sp, setSp] = useSearchParams(); const onlyEv = sp.get('e'); const dParam = sp.get('d');
+  const [p, setP] = useState(periodOf(dParam && /^\d{4}-\d{2}-\d{2}$/.test(dParam) ? dParam : isoDay(new Date())));
   const [events, setEvents] = useState<AEvent[] | null>(null);
   const [closed, setClosed] = useState<string | null>(null);
   const [locked, setLocked] = useState(false); // push 77 · RBC file made → fixes become a Correction in the next open period
@@ -24,12 +26,12 @@ export function Hours() {
 
   const load = async () => {
     const [evs, pp] = await Promise.all([eventsBetween(p.start, p.end), supabase.from('pay_periods').select('closed_at,locked_at').eq('start_date', p.start).maybeSingle()]);
-    setEvents(evs.filter((e) => e.department !== 'bar')); setClosed((pp.data?.closed_at as string) ?? null); setLocked(!!(pp.data as { locked_at?: string | null } | null)?.locked_at);
+    setEvents(evs.filter((e) => (onlyEv ? e.id === onlyEv : e.department !== 'bar'))); setClosed((pp.data?.closed_at as string) ?? null); setLocked(!!(pp.data as { locked_at?: string | null } | null)?.locked_at);
     supabase.rpc('meeting_hours', { p_from: p.start, p_to: p.end }).then(({ data, error }) => setMh(error ? [] : ((data ?? []) as MeetingHours[]).filter((x) => x.paid)));
     const ids = evs.flatMap((e) => e.shifts.map((x) => x.id));
     if (ids.length) { const { data: q } = await supabase.from('hours_questions').select('id,shift_id,kind,claimed_at,note,created_at').eq('status', 'open').in('shift_id', ids); setQs((q ?? []) as typeof qs); } else setQs([]);
   };
-  useEffect(() => { setEvents(null); load(); }, [p.start]);
+  useEffect(() => { setEvents(null); load(); }, [p.start, onlyEv]);
 
   const rows: Row[] = useMemo(() => (events ?? []).flatMap((e) => e.shifts.filter((s) => s.status !== 'declined').map((s) => ({ e, s }))), [events]);
   const past = rows.filter((r) => r.e.event_date < today || r.s.punches?.punch_out);
@@ -114,12 +116,13 @@ export function Hours() {
           <button className="sq" aria-label="Next period" onClick={() => step(1)}>›</button></div>
         <div className="row wrap">
           <button className="abtn" onClick={exportCsv}>Export hours (.csv)</button>
-          {closed ? <button className="abtn" disabled={busy} onClick={() => close(false)}>Reopen period</button>
+          {onlyEv ? null : closed ? <button className="abtn" disabled={busy} onClick={() => close(false)}>Reopen period</button>
             : <button className={'abtn ' + (missing.length ? '' : 'red')} disabled={busy} onClick={() => (!missing.length || window.confirm(`${missing.length} shifts still have missing times. Close anyway?`)) && close(true)}>
               {missing.length ? `Close pay period · fix ${missing.length} first` : 'Close pay period'}</button>}
         </div>
       </div>
       {err && <p className="error">{err}</p>}
+      {onlyEv && <div className="card row" style={{ gap: 10, alignItems: 'center' }}><b className="grow">{events?.[0] ? `${events[0].title} · ${dLabel(events[0].event_date)} · only this event` : 'One event'}</b><button className="lnk" onClick={() => setSp({})}>All hours ›</button></div>}
 
       <div className="kpi5">
         <div className="k"><small>SHIFTS</small><b>{past.length}</b></div>

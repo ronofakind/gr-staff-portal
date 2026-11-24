@@ -552,8 +552,7 @@ function Live({ e, q = 0, inBlock = false, compact = false, onDeleted, lateBy = 
         <DeleteEvent id={e.id} label="Delete" link onDone={onDeleted} />
         <div className="row live-acts-main" style={{ gap: 8 }}>
         <a className="abtn sm" href={phones.length ? `sms:/open?addresses=${phones.join(',')}` : undefined}>Message</a>
-        <Link className="abtn sm" to={completed ? `/manage/${e.id}` : `/admin/event/${e.id}`}>Team ›</Link>
-        {completed ? <Link className="abtn sm dark" to={`/admin/hours?d=${e.event_date}`}>Hours ›</Link> : <Link className="abtn sm dark" to={`/manage/${e.id}`}>Check-in{started && <i className="live-dot" />}</Link>}
+        {completed ? <Link className="abtn sm dark" to={`/admin/hours?d=${e.event_date}&e=${e.id}`}>Hours ›</Link> : <Link className="abtn sm dark" to={`/manage/${e.id}`}>Check-in{started && <i className="live-dot" />}</Link>}
         </div>
       </div>
     </div>
