@@ -68,8 +68,8 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
   const noEndR = useRef(noEnd); noEndR.current = noEnd;
   // C · as many equal cells across as fit (Ronnie, Nov 12): one count for the whole sheet so every block lines up
   useEffect(() => { const el = blocksR.current; if (!el) return; const f = () => { const w = el.clientWidth; const phone = window.innerWidth <= 700 || w < 760; setNarrow(w < 760);
-      setCols(phone ? 2 : 3); }; // Nov 16 · like the Events sheet: names in 3 columns (E–G), full names · phone 2
-    f(); const ro = new ResizeObserver(f); ro.observe(el); return () => ro.disconnect(); }, [evs.length, noEnd, freeFold]);
+      setCols(phone ? 2 : v6 && w >= 760 ? Math.max(3, Math.min(6, Math.floor((w - 380) / 150))) : 3); }; // Nov 23 · V6: as many name columns as fit (3–6) // Nov 16 · like the Events sheet: names in 3 columns (E–G), full names · phone 2
+    f(); const ro = new ResizeObserver(f); ro.observe(el); return () => ro.disconnect(); }, [evs.length, noEnd, freeFold, v6]);
 
   // week strip
   useEffect(() => { (async () => {

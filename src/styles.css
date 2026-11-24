@@ -4936,3 +4936,15 @@ span.abtn.ds-newq { background: none; border: 0; padding: 0; }
 .v6-row .ds-chip, .v6-row .ds-slot { margin: 0 !important; }
 .v6-row .v6-x { height: 36px; }
 .v6-row .v6-t:empty::before { content: '—'; display: flex; align-items: center; justify-content: center; height: 36px; color: #D3CBC0; font: 500 13px Inter, sans-serif; }
+/* V6 · compact (Ronnie Nov 23: smaller fonts, more names on screen) · Extras row was capped by the old global .ex width */
+.v6-row.ex { max-width: none !important; }
+.v6-head, .v6-row { grid-template-columns: 46px 104px 86px 86px minmax(0, 1fr) 20px !important; column-gap: 8px !important; }
+.v6-head { font-size: 10px !important; }
+.v6-row { min-height: 0 !important; padding: 5px 10px !important; }
+.v6-row .v6-n, .v6-row .ds-lsel, .v6-row .ds-tbtn, .v6-row .ds-endb, .v6-row .ds-tsel, .v6-row .ds-lname, .v6-row .ds-tro { height: 30px !important; font-size: 12px !important; padding-top: 0 !important; padding-bottom: 0 !important; border-radius: 7px !important; }
+.v6-row .v6-cells { gap: 5px !important; }
+.v6-row .ds-chip, .v6-row .ds-slot.v6 { height: 30px !important; border-radius: 7px !important; font-size: 12px !important; font-weight: 500 !important; }
+.v6-row .ds-chip .ds-own { font-size: 10px !important; padding: 1px 4px !important; }
+.v6-row .ds-chip small { font-size: 9.5px !important; }
+.v6-row .v6-x, .v6-row .v6-t:empty::before { height: 30px !important; }
+.v6-row .v6-x { font-size: 15px !important; }
