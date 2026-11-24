@@ -47,8 +47,10 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
   const [flagged, setFlagged] = useState<Record<string, string>>({}); const [pend, setPend] = useState(0); const [sendOpen, setSendOpen] = useState(false);
   const [types, setTypes] = useState<string[]>([]); const [detTick, setDetTick] = useState(0); const [more, setMore] = useState(false); const [newQ, setNewQ] = useState<string | null>(null);
   useEffect(() => { supabase.from('event_types').select('name,sort').order('sort').then(({ data }) => setTypes(((data ?? []) as { name: string }[]).map((x) => x.name))); }, []);
-  const detOpen = (id: string) => { void detTick; try { return localStorage.getItem('gr_ds_det_' + id) !== '0'; } catch { return true; } };
-  const togDet = (id: string) => { try { localStorage.setItem('gr_ds_det_' + id, detOpen(id) ? '0' : '1'); } catch { /* */ } setDetTick((t) => t + 1); };
+  // Nov 23 · V6: event details start hidden (own key, so the old Day sheet keeps its choice)
+  const detK = (id: string) => (v6 ? 'gr_v6_det_' : 'gr_ds_det_') + id;
+  const detOpen = (id: string) => { void detTick; try { const v = localStorage.getItem(detK(id)); return v6 ? v === '1' : v !== '0'; } catch { return !v6; } };
+  const togDet = (id: string) => { try { localStorage.setItem(detK(id), detOpen(id) ? '0' : '1'); } catch { /* */ } setDetTick((t) => t + 1); };
   const blocksR = useRef<HTMLDivElement | null>(null); const [cols, setCols] = useState(4); const [lineEd, setLineEd] = useState<string | null>(null); const [endK, setEndK] = useState<string | null>(null); const [narrow, setNarrow] = useState(false);
   // push 119 · Ronnie: "a little squished" → Free this day folds to a thin tab, END ~ column can be hidden (both remembered)
   const ls0 = (k: string) => { try { return localStorage.getItem(k) === '1'; } catch { return false; } };
@@ -358,7 +360,9 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
       s.locked ? 'locked' : null, !s.pool_hold ? (s.status === 'confirmed' ? 'confirmed' : s.notified_at ? 'sent' : 'booked') : null].filter(Boolean).join(' · ');
     return <span data-sid={s.staff_id} className={'ds-chip' + (can ? '' : ' fixed') + (n > 3 ? ' flag' : '') + (flagged[s.id] ? ' over' : '') + (hl === s.staff_id ? ' hl' : '')} draggable onDragStart={(ev) => { ev.dataTransfer.setData('text/plain', s.id); ev.dataTransfer.effectAllowed = 'move'; setDrag(s); }} onDragEnd={() => setDrag(null)} title={v6 ? `${nm}${s.planned_start ? ` · from ${ap(hm(s.planned_start))}` : ''}${s.locked ? ' · locked' : ''}` : `${nm} · ${w}${s.booking_note ? ` · 📌 ${s.booking_note}` : ''}${s.pool_hold ? ' · moving them sends nothing' : ' · already sent: moving them sends "Your shift changed" (asked first)'} · click = options`} onClick={() => setCard(s)}>
       {v6 ? (s.status === 'confirmed' ? <i className="v6m ok" title="Confirmed">✓</i> : !s.pool_hold && s.notified_at ? <i className="v6m sent" title="Sent, waiting for a reply">◷</i> : null)
-        : <i className={'ds-sd' + (s.status === 'confirmed' ? ' ok' : !s.pool_hold && s.notified_at ? ' sent' : '')} title={s.status === 'confirmed' ? 'Confirmed' : !s.pool_hold && s.notified_at ? 'Sent, not confirmed yet' : 'Placed, not sent yet'} />}<span className="ds-nm">{nm}</span>{ctx && isNewStaff(ctx, s.staff_id) ? <small className="ds-new" title="New: came through onboarding">NEW</small> : null}{s.locked ? <small className="ds-lk" title="Locked">locked</small> : null}{own ? <small className="ds-own" title={`Starts at ${ap(own)} (line ${ap(at)})`}>{ap(own)}</small> : late ? <small className="gold"> from {ap(a!.from_time)}</small> : null}{n > 3 ? <small className="ds-flag" title={`${n} shifts this week`}>⚑{n}</small> : null}
+        : <i className={'ds-sd' + (s.status === 'confirmed' ? ' ok' : !s.pool_hold && s.notified_at ? ' sent' : '')} title={s.status === 'confirmed' ? 'Confirmed' : !s.pool_hold && s.notified_at ? 'Sent, not confirmed yet' : 'Placed, not sent yet'} />}<span className="ds-nm">{nm}</span>{ctx && isNewStaff(ctx, s.staff_id) ? <small className="ds-new" title="New: came through onboarding">NEW</small> : null}{v6 ? <button className={'v6-lk' + (s.locked ? ' on' : '')} disabled={busy} draggable={false} title={s.locked ? 'Locked · Fill and Clear leave them here · click to unlock' : 'Lock · Fill and Clear leave them here'}
+          onClick={(ev) => { ev.stopPropagation(); void patch(s, { locked: s.locked ? false : true, locked_at: new Date().toISOString() }, s.locked ? 'unlocked' : 'locked'); }}>{s.locked ? '🔒' : '🔓'}</button>
+          : s.locked ? <small className="ds-lk" title="Locked">locked</small> : null}{own ? <small className="ds-own" title={`Starts at ${ap(own)} (line ${ap(at)})`}>{ap(own)}</small> : late ? <small className="gold"> from {ap(a!.from_time)}</small> : null}{n > 3 ? <small className="ds-flag" title={`${n} shifts this week`}>⚑{n}</small> : null}
       {!LEAD.includes(s.position_code ?? '') && <button className="ds-x" disabled={busy} onClick={(ev) => { ev.stopPropagation(); remove(s); }} aria-label={`Back to free: ${nm}`}>×</button>}</span>; };
   const Slot = ({ e, code, start }: { e: Ev; code: string; start: string | null }) =>
     <button className={'ds-slot' + (v6 ? ' v6' : '')} onClick={() => setPick({ e, code, start })} onDragOver={(ev) => ev.preventDefault()} onDrop={() => dropOn(e, code, start)}>{v6 ? 'open' : '+ add'}</button>;
@@ -399,7 +403,7 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
           <button className="v6-x" disabled={busy} onClick={() => (lead ? setLeads(e, 0) : extra ? setExtras(e, 0) : setCount(e, idx!, 0))} title="Remove this row">×</button>
         </div>
         {subT.map((t) => <div key={t} className="v6-row v6-sub">
-          <span /><span className="v6-subl">↳ same line</span><span className="v6-t"><span className="ds-tro">{ap(t)}</span></span><span className="v6-t" />
+          <span /><span /><span className="v6-t"><span className="ds-tro">{ap(t)}</span></span><span className="v6-t" />
           <span className="ds-cells v6-cells" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>{people.filter((x) => ownT(x) === t).map((s) => <Chip key={s.id} s={s} at={t} />)}</span><span />
         </div>)}</>); }
     const badge = <span className={'ds-badge' + (ok ? ' ok' : '')}>{people.length}/{count} {ok ? 'full' : `${count - people.length} open`}</span>;

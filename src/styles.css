@@ -4953,3 +4953,18 @@ span.abtn.ds-newq { background: none; border: 0; padding: 0; }
 .v6-row.v6-sub { border-top: 1px dashed #ECE6DE !important; background: #FBF9F6; padding-top: 4px !important; padding-bottom: 4px !important; }
 .v6-row.v6-sub .v6-subl { font-size: 11px; color: #8A8177; line-height: 30px; padding-left: 4px; white-space: nowrap; }
 .v6-row.v6-sub .ds-tro { color: #4B44A8; font-weight: 700; }
+/* V6 · lock in the name box: 🔒 when locked (click = unlock), faint 🔓 on hover to lock */
+.v6-row .v6-lk { border: 0; background: none; padding: 0 2px; font-size: 11px; line-height: 1; cursor: pointer; flex: none; opacity: 0; transition: opacity .12s; }
+.v6-row .v6-lk.on { opacity: 1; }
+.v6-row .ds-chip:hover .v6-lk { opacity: .55; } .v6-row .ds-chip:hover .v6-lk.on, .v6-row .v6-lk:hover { opacity: 1; }
+/* V6 · smaller everywhere (Ronnie Nov 23 8:45 PM: fit more info) */
+.ds-v6 .v6-row .ds-chip, .ds-v6 .v6-row .ds-slot.v6 { height: 28px !important; font-size: 11.5px !important; }
+.ds-v6 .v6-row .v6-n, .ds-v6 .v6-row .ds-lsel, .ds-v6 .v6-row .ds-tbtn, .ds-v6 .v6-row .ds-endb, .ds-v6 .v6-row .ds-tsel, .ds-v6 .v6-row .ds-lname, .ds-v6 .v6-row .ds-tro { height: 28px !important; font-size: 11.5px !important; }
+.ds-v6 .v6-row .v6-x, .ds-v6 .v6-row .v6-t:empty::before { height: 28px !important; line-height: 28px; }
+.ds-v6 .v6-row { padding-top: 4px !important; padding-bottom: 4px !important; }
+.ds-v6 .v6-cells { gap: 4px !important; }
+.ds-v6 .ds-det.fold { font-size: 12px; padding-top: 7px; padding-bottom: 7px; }
+.ds-v6 .v6det { font-size: 12px; }
+.ds-v6 .v6det input, .ds-v6 .v6det select, .ds-v6 .v6det textarea { font-size: 12px !important; min-height: 30px !important; height: auto; padding-top: 5px !important; padding-bottom: 5px !important; }
+.ds-v6 .v6det label, .ds-v6 .v6det small, .ds-v6 .v6det h4 { font-size: 10px !important; }
+.ds-v6 .v6det > * + * { margin-top: 6px !important; }
