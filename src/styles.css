@@ -4931,3 +4931,8 @@ span.abtn.ds-newq { background: none; border: 0; padding: 0; }
 .ds-v6 .ds-line2.over, .ds-v6 .ds-line2.cxl { margin-top: 6px; padding: 8px 10px; border-radius: 10px; }
 .ds-v6 .ds-line2.over .ds-lname, .ds-v6 .ds-line2.cxl .ds-lname { font: 800 10.5px Inter, sans-serif; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
 .ds-v6 .ds-line2.over .ds-cells, .ds-v6 .ds-line2.cxl .ds-cells { padding-top: 6px; }
+/* V6 · alignment: every box lines up with the first row of names (top), no stray offsets, empty END shows a quiet dash */
+.v6-row { align-items: start !important; }
+.v6-row .ds-chip, .v6-row .ds-slot { margin: 0 !important; }
+.v6-row .v6-x { height: 36px; }
+.v6-row .v6-t:empty::before { content: '—'; display: flex; align-items: center; justify-content: center; height: 36px; color: #D3CBC0; font: 500 13px Inter, sans-serif; }

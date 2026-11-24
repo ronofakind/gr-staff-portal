@@ -1439,4 +1439,5 @@ html[data-theme="terra"] { --teams: #5B5FC7; --teams-bg: #EEEFFB; --teams-ink: #
 :where(html[data-theme="terra"]) .v6-row .v6-x { color: #C2C4B9; }
 :where(html[data-theme="terra"]) .v6-row .v6-x:hover { color: #9B4D31; }
 :where(html[data-theme="terra"]) .v6-row .ds-chip .ds-x { color: #C2C4B9; }
+:where(html[data-theme="terra"]) .v6-row .v6-t:empty::before { color: #CCCEC5; }
 html[data-theme="terra"] body { background: #EEF0E8; color: #2A2A24; }
