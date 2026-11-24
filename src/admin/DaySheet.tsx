@@ -412,7 +412,7 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
     </div>); };
 
   return (
-    <div className="stack-lg ds">
+    <div className={'stack-lg ds' + (v6 ? ' ds-v6' : '')}>
       <div className="kick"><Link to={`/admin/bookings?date=${date}&view=sheet`}>Bookings · week</Link> · {v6 ? 'BOOKINGS V6 (NEW LAYOUT)' : 'DAY SHEET'}</div>
       <div className="ds-weekw"><Link className="ds-warr" to={`${base}/${addDays(date, -7)}`} title="Week before">‹</Link><div className="ds-week">{week.map((w) => <Link key={w.d} to={`${base}/${w.d}`} className={'ds-wd' + (w.d === date ? ' on' : '') + (!w.n ? ' none' : w.have >= w.need ? ' done' : ' short')}>
         <small>{dLabel(w.d, { weekday: 'short', day: 'numeric' })}</small><b>{w.n ? `${w.have}/${w.need}` : '—'}</b><small>{w.n ? `${w.n} event${w.n > 1 ? 's' : ''}${w.free ? ` · ${w.free} free` : ''}` : 'no events'}</small></Link>)}</div><Link className="ds-warr" to={`${base}/${addDays(date, 7)}`} title="Next week">›</Link></div>

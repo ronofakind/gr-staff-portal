@@ -4923,3 +4923,11 @@ span.abtn.ds-newq { background: none; border: 0; padding: 0; }
 .v6-row .v6-x:hover { color: #9B2226; }
 .v6-row.lead { background: transparent; } .v6-row.ex { background: transparent; }
 .v6-head { border-bottom: 1px solid #ECE6DE; }
+.v6-row .ds-chip { padding: 0 2px 0 8px; gap: 3px; }
+.v6-row .ds-chip .ds-flag, .v6-row .ds-chip .ds-new { display: none; }
+.v6-row .ds-chip .ds-x { width: 18px; font-size: 13px; color: #C9C0B4; flex: none; }
+.v6-row .ds-chip .ds-own { font-size: 11px; flex: none; }
+.v6-row .ds-nm { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.ds-v6 .ds-line2.over, .ds-v6 .ds-line2.cxl { margin-top: 6px; padding: 8px 10px; border-radius: 10px; }
+.ds-v6 .ds-line2.over .ds-lname, .ds-v6 .ds-line2.cxl .ds-lname { font: 800 10.5px Inter, sans-serif; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.ds-v6 .ds-line2.over .ds-cells, .ds-v6 .ds-line2.cxl .ds-cells { padding-top: 6px; }
