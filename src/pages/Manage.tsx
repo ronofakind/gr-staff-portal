@@ -515,6 +515,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
         {/* push 36e · Messages: 📣 Message my team, what he sent (Seen n of N), replies (REPLY / ✓ DONE) */}
         {/* Nov 21 · Ronnie: Sections button next to Messages (migration 131) */}
         <div className="mgr-btns"><MgrMessagesEntry eventId={ev.id} /><Link className="ann-open mm-entry" to={`/manage/${ev.id}/sections`}>Sections</Link></div>
+        <OtherTeams evId={ev.id} date={ev.event_date} />
         <MgrCars eventId={ev.id} />{/* push 68 · carpools: a late car = a late group */}
       </div>
 
@@ -981,6 +982,18 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
 }
 
 /** Card on the Home screen for whoever manages an event today. */
+/** Nov 25 · a manager who also runs another team the same day (e.g. the bar, as "Also managing") switches to it here. */
+function OtherTeams({ evId, date }: { evId: string; date: string }) {
+  const [list, setList] = useState<{ id: string; title: string; department: string | null }[]>([]);
+  useEffect(() => { (async () => {
+    const { data: me } = await supabase.rpc('me'); if (!me) return;
+    const { data } = await supabase.from('events').select('id,title,department').eq('event_date', date).neq('id', evId).or(`manager_id.eq.${me},co_manager_ids.cs.{${me}}`);
+    setList((data ?? []) as { id: string; title: string; department: string | null }[]);
+  })(); }, [evId, date]);
+  if (!list.length) return null;
+  return <div className="mgr-btns">{list.map((e) => <Link key={e.id} className="ann-open mm-entry" to={`/manage/${e.id}`}>{e.department === 'bar' ? 'Bar team' : e.title} ›</Link>)}</div>;
+}
+
 export function ManagingToday({ meId, isAdmin }: { meId: string; isAdmin: boolean }) {
   const lang = useLang();
   const [evs, setEvs] = useState<Ev[]>([]);
