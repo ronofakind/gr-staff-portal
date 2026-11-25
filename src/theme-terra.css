@@ -1449,4 +1449,5 @@ html[data-theme="terra"] { --teams: #5B5FC7; --teams-bg: #EEEFFB; --teams-ink: #
 :where(html[data-theme="terra"]) .ds-v6 .ds-warr { color: #878A77; }
 :where(html[data-theme="terra"]) .ds-v6 .ds-morel .v6-legend { color: #878A77; }
 :where(html[data-theme="terra"]) .ds-dept.bar { color: #FBFAF6 !important; }
+:where(html[data-theme="terra"]) .ds-v6 .ds-line2.cxl .ds-lname { color: #9B4D31; }
 html[data-theme="terra"] body { background: #EEF0E8; color: #2A2A24; }

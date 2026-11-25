@@ -504,7 +504,7 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
                       <span className="ds-cells" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>{cx.filter((x) => x.event_id === e.id).map((x) => <button key={x.id} className="ds-chip cx" disabled={busy}
                         title={`${byId[x.staff_id]?.full_name ?? ''} · cancelled · ${x.cancel_reason ?? ''}${x.cancel_note ? ` — ${x.cancel_note}` : ''} · ${x.cancel_late ? 'counts as a late cancel' : 'excused (not counted)'} · click to un-cancel`}
                         onClick={() => { if (confirm(`Un-cancel ${byId[x.staff_id]?.full_name ?? ''}? They go back on ${roleName(x.position_code)} ${ap(hm(x.planned_start))}.`)) unCancel(x); }}>
-                        <span className="ds-nm">{short(byId[x.staff_id]?.full_name ?? '…')}</span><small>{x.cancel_reason ?? ''}{x.cancel_late ? ' ⚑' : ''}</small></button>)}</span></div>}
+                        <span className="ds-nm">{short(byId[x.staff_id]?.full_name ?? '…')}</span>{v6 ? (x.cancel_late ? <small>⚑</small> : null) : <small>{x.cancel_reason ?? ''}{x.cancel_late ? ' ⚑' : ''}</small>}</button>)}</span></div>}
                     {L.over.length > 0 && <div className="ds-line2 over"><div className="ds-lh"><b className="ds-lname">Also placed</b><span className="grow" /><span className="ds-badge">over</span></div><span className="ds-cells" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>{L.over.map((s) => <Chip key={s.id} s={s} />)}</span></div>}
                   </div>
                   {(() => { const fl = sh.filter((x) => x.event_id === e.id && flagged[x.id]); return fl.length > 0 && <div className="ds-flagbox"><b>⚑ Line lowered · weakest flagged</b>

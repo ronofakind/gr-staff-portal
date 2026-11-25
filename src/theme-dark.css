@@ -2430,6 +2430,7 @@ html[data-theme="dark"] { --teams: #8487CC; --teams-bg: #1F2137; --teams-ink: #8
 :where(html[data-theme="dark"]) .ds-v6 .ds-warr { color: #8A8076; }
 :where(html[data-theme="dark"]) .ds-v6 .ds-morel .v6-legend { color: #8A8076; border-top: 1px solid #4A433A; }
 :where(html[data-theme="dark"]) .ds-dept.bar { color: #F1ECE4 !important; }
+:where(html[data-theme="dark"]) .ds-v6 .ds-line2.cxl .ds-lname { color: #D7797C; }
 html[data-theme="dark"] { color-scheme: dark; }
 html[data-theme="dark"] body { background: #121110; color: #F1ECE4; }
 html[data-theme="dark"] img[src$="logo-mark.png"]:not(.adm-side img):not(.side-logo), html[data-theme="dark"] img[src$="logo-full.png"] { filter: invert(1) hue-rotate(180deg); mix-blend-mode: normal !important; }

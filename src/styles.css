@@ -4989,3 +4989,8 @@ span.abtn.ds-newq { background: none; border: 0; padding: 0; }
 @media (max-width: 700px) { .ds-v6 .v6-top1, .ds-v6 .v6-top2 { padding: 0 32px; } .ds-v6 .v6-top1 .ds-day { font-size: 22px; width: auto; } }
 /* Nov 25 · the BAR tag was squashed into a line by an old global .bar style; it now reads BAR like FLOOR */
 .ds-dept.bar { height: auto !important; width: auto !important; min-width: 0 !important; display: inline-block !important; font-size: 11px !important; line-height: 1.3 !important; color: #fff !important; padding: 3px 8px !important; overflow: visible !important; }
+/* Nov 25 · V6 cancelled box: one row like the others, the name reads (reason in the hover) */
+.ds-v6 .ds-line2.cxl { border-left: 0 !important; padding: 6px 10px !important; background: transparent !important; box-shadow: none !important; border: 0 !important; display: grid; grid-template-columns: 158px minmax(0,1fr); gap: 8px; align-items: center; }
+.ds-v6 .ds-line2.cxl .ds-lh { background: transparent !important; padding: 0 !important; border: 0 !important; }
+.ds-v6 .ds-line2.cxl .ds-lname { font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: #9B2226; }
+.ds-v6 .ds-chip.cx { height: 28px; font-size: 11.5px; }
