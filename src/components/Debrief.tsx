@@ -133,7 +133,7 @@ export const ARCH_ICON = <svg width="15" height="15" viewBox="0 0 24 24" fill="n
 export function useRecentDebriefs(skip: string[], tick = 0) {
   const [rows, setRows] = useState<Row[]>([]); const [t, setT] = useState(0);
   useEffect(() => {
-    const since = new Date(Date.now() - 36 * 3600e3).toISOString();
+    const since = new Date(Date.now() - 30 * 864e5).toISOString(); // Nov 25 · Ronnie: debriefs stay on Today until archived (was 36 h)
     supabase.from('event_debriefs').select(DEBRIEF_COLS + COLS.slice('id,event_id,'.length)).gte('created_at', since).is('archived_at', null).order('created_at', { ascending: false })
       .then(({ data, error }) => {
         if (!error) { setRows((data ?? []) as unknown as Row[]); return; }
