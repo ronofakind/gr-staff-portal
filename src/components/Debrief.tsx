@@ -165,18 +165,23 @@ export function useRecentDebriefs(skip: string[], tick = 0) {
       }));
     });
   }, [tick, t]);
+  // Nov 25 · "not answered / skipped / never saw it" rows can be archived too (kept in admin_archive, key dbmiss<event>)
+  const [gone, setGone] = useState<string[]>([]);
+  useEffect(() => { supabase.from('admin_archive').select('key').like('key', 'dbmiss%').then(({ data }) => setGone(((data ?? []) as { key: string }[]).map((x) => x.key.slice(6)))); }, [tick, t]);
+  const archiveMiss = async (m: Miss) => { setGone((v) => [...v, m.event_id]); await supabase.from('admin_archive').upsert({ key: 'dbmiss' + m.event_id, sig: 'dbmiss', label: `Debrief not answered · ${m.title} · ${m.who}`, archived_at: new Date().toISOString() }); };
   const show = rows.filter((r) => !skip.includes(r.event_id));
   const archive = async (id: string) => { setRows((v) => v.filter((x) => x.id !== id)); await supabase.from('event_debriefs').update({ archived_at: new Date().toISOString() }).eq('id', id); setT((x) => x + 1); };
-  return { rows: show, archive, miss: miss.filter((m) => !skip.includes(m.event_id)) };
+  return { rows: show, archive, archiveMiss, miss: miss.filter((m) => !skip.includes(m.event_id) && !gone.includes(m.event_id)) };
 }
 type Miss = { event_id: string; title: string; who: string; sent: string; status: 'skipped' | 'open' | 'never'; at: string | null };
 const hm = (iso: string) => new Date(iso).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' });
-export function RecentDebriefs({ rows, archive, miss }: ReturnType<typeof useRecentDebriefs>) {
+export function RecentDebriefs({ rows, archive, archiveMiss, miss }: ReturnType<typeof useRecentDebriefs>) {
   if (!rows.length && !miss.length) return <div className="muted sm" style={{ padding: '10px 4px' }}>No debriefs from last night.</div>;
   return <>{rows.map((r) => <DebriefCard key={r.id} r={r} withEvent onArchive={() => archive(r.id)} />)}
     {miss.map((m) => (
       <div key={m.event_id} className="dbr dbr-miss">
-        <div className="dbr-top"><span aria-hidden="true">📝</span><b>{m.title} · {m.who}</b><span className={'dbm ' + m.status}>{m.status === 'skipped' ? 'SKIPPED' : m.status === 'open' ? 'NOT ANSWERED' : 'NEVER SAW IT'}</span></div>
+        <div className="dbr-top"><span aria-hidden="true">📝</span><b>{m.title} · {m.who}</b><span className={'dbm ' + m.status}>{m.status === 'skipped' ? 'SKIPPED' : m.status === 'open' ? 'NOT ANSWERED' : 'NEVER SAW IT'}</span>
+          <button type="button" className="sq need-arch" aria-label="Archive" title="Archive" onClick={() => archiveMiss(m)}>{ARCH_ICON}</button></div>
         <div className="dbr-txt muted">{m.status === 'skipped' ? `Saw it at ${hm(m.at!)} and tapped Skip` : m.status === 'open' ? `Opened at ${hm(m.at!)} · no answer yet` : `Hours sent ${hm(m.sent)} · the question never opened on their phone`}</div>
       </div>))}</>;
 }
