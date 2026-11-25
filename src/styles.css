@@ -4974,3 +4974,18 @@ span.abtn.ds-newq { background: none; border: 0; padding: 0; }
 /* Nov 25 · V6: the start-time box opens right under the time you clicked (was jumping to the page corner) */
 .v6-row .v6-t { position: relative; }
 .v6-row .v6-t .ds-tpop { top: 32px; left: 0; right: auto; width: 260px; z-index: 80; }
+/* Nov 25 · Bookings V6 top, simpler (board AdminBookingsTopV6): date row → week blocks → search row; lined up with the day blocks, not the arrows */
+.ds-v6 .v6-top1 { order: -2; } .ds-v6 .ds-weekw { order: -1; }
+.ds-v6 .v6-top1, .ds-v6 .v6-top2 { padding: 0 40px; }
+.ds-v6 .v6-top1 .ds-day { font-size: 30px; margin-right: 4px; }
+.ds-v6 .v6-tot { font-size: 13px; color: #8A8177; } .ds-v6 .v6-tot b { font-weight: 800; }
+.ds-v6 .ds-wd { padding: 8px 4px; border-radius: 12px; gap: 2px; }
+.ds-v6 .ds-wd small:first-child { font-size: 12px; font-weight: 600; opacity: 1; }
+.ds-v6 .ds-wd b { font-family: Fraunces, Georgia, serif; font-size: 20px; font-weight: 500; }
+.ds-v6 .ds-wd.on { background: #1A1714; color: #fff; border-color: #1A1714; } .ds-v6 .ds-wd.on b { color: #fff; } .ds-v6 .ds-wd.on small { color: #CFC6BA; opacity: 1; }
+.ds-v6 .ds-warr { width: 34px; border: 0; background: transparent; color: #8A8177; }
+.ds-v6 .ds-morel .v6-legend { display: block; padding: 8px 10px 4px; font-size: 11.5px; color: #8A8177; border-top: 1px solid #ECE6DE; margin-top: 4px; }
+.ds-v6 .ds-morel a { display: block; padding: 8px 10px; color: inherit; text-decoration: none; font-size: 13px; }
+@media (max-width: 700px) { .ds-v6 .v6-top1, .ds-v6 .v6-top2 { padding: 0 32px; } .ds-v6 .v6-top1 .ds-day { font-size: 22px; width: auto; } }
+/* Nov 25 · the BAR tag was squashed into a line by an old global .bar style; it now reads BAR like FLOOR */
+.ds-dept.bar { height: auto !important; width: auto !important; min-width: 0 !important; display: inline-block !important; font-size: 11px !important; line-height: 1.3 !important; color: #fff !important; padding: 3px 8px !important; overflow: visible !important; }

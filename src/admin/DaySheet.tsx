@@ -211,6 +211,9 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
     const { data, error } = await supabase.rpc('admin_day_confirm', { p_date: date, p_dept: dept }); if (error) throw error;
     const r = data as { confirmed: number; released: number }; setOps([]); return `✓ ${r.confirmed} confirmations sent · ${r.released} released (backups).`;
   });
+  // Nov 25 · the Undo bar shows for 5 s after each change, then hides (the steps stay; More → Undo)
+  const [fabOn, setFabOn] = useState(false); const opsN = useRef(0);
+  useEffect(() => { const grew = ops.length > opsN.current; opsN.current = ops.length; if (!grew) return; setFabOn(true); const id = setTimeout(() => setFabOn(false), 5000); return () => clearTimeout(id); }, [ops.length]);
   const undo = () => { const last = ops[ops.length - 1]; if (!last) return; setOps((o) => o.slice(0, -1)); run(async () => { await last.undo(); return `Undone: ${last.label}.`; }); };
   /** ✦ one move: fills the open slots of these events (Floor / Bar switch respected). Undo takes the whole fill back. */
   const insertPlan = async (rows: Row[], w: Record<string, string>, label: string, extra: string): Promise<Op | string> => {
@@ -424,9 +427,31 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
 
   return (
     <div className={'stack-lg ds' + (v6 ? ' ds-v6' : '')}>
-      <div className="kick"><Link to={`/admin/bookings?date=${date}&view=sheet`}>Bookings · week</Link> · {v6 ? 'BOOKINGS V6 (NEW LAYOUT)' : 'DAY SHEET'}</div>
+      {!v6 && <div className="kick"><Link to={`/admin/bookings?date=${date}&view=sheet`}>Bookings · week</Link> · DAY SHEET</div>}
       <div className="ds-weekw"><Link className="ds-warr" to={`${base}/${addDays(date, -7)}`} title="Week before">‹</Link><div className="ds-week">{week.map((w) => <Link key={w.d} to={`${base}/${w.d}`} className={'ds-wd' + (w.d === date ? ' on' : '') + (!w.n ? ' none' : w.have >= w.need ? ' done' : ' short')}>
-        <small>{dLabel(w.d, { weekday: 'short', day: 'numeric' })}</small><b>{w.n ? `${w.have}/${w.need}` : '—'}</b><small>{w.n ? `${w.n} event${w.n > 1 ? 's' : ''}${w.free ? ` · ${w.free} free` : ''}` : 'no events'}</small></Link>)}</div><Link className="ds-warr" to={`${base}/${addDays(date, 7)}`} title="Next week">›</Link></div>
+        <small>{dLabel(w.d, { weekday: 'short', day: 'numeric' })}</small><b>{w.n ? `${w.have}/${w.need}` : '—'}</b><small>{w.n ? `${w.n} event${w.n > 1 ? 's' : ''}${w.free && !v6 ? ` · ${w.free} free` : ''}` : 'no events'}</small></Link>)}</div><Link className="ds-warr" to={`${base}/${addDays(date, 7)}`} title="Next week">›</Link></div>
+      {v6 ? <>
+      <div className="ds-top v6-top1">
+        <span className="serif-h ds-day">{dLabel(date, { weekday: 'short', month: 'short', day: 'numeric' })}</span>
+        <span className="v6-tot">Floor <b className={fl[0] >= fl[1] ? 'okc' : 'accent'}>{fl[0]}/{fl[1]}</b> · Bar <b className={br[0] >= br[1] ? 'okc' : 'accent'}>{br[0]}/{br[1]}</b> · {nYes} free</span>
+        <span className="grow" />
+        <NewEv cls="abtn" label="＋ New event" />
+        <button className="abtn dark" disabled={busy || !ctx || !shown.length} onClick={() => fillDay()}>Fill the day</button>
+        <span className="ds-more"><button className="abtn" onClick={() => setMore(!more)}>More ▾</button>{more && <span className="ds-morel" onClick={() => setMore(false)}>
+          {(() => { const n = sh.filter((x) => x.pool_hold && shown.some((e) => e.id === x.event_id)).length; return <button disabled={busy || !n} onClick={confirmDay}>Confirm people ({n})</button>; })()}
+          <button disabled={busy || !ops.length} onClick={undo}>Undo{ops.length ? ` · ${ops[ops.length - 1].label}` : ''}</button>
+          <button disabled={busy || !ctx} onClick={fillWeek}>Fill the week</button>
+          <button disabled={busy || !sh.some((x) => x.pool_hold && !x.locked && !LEAD.includes(x.position_code ?? ''))} onClick={() => clear()}>Clear unlocked</button>
+          <button disabled={busy || !sh.some((x) => x.pool_hold && !x.locked && !LEAD.includes(x.position_code ?? ''))} onClick={lockAll}>Lock all</button>
+          <Link to={`/admin/day-sheet/${date}`}>Old layout</Link>
+          <span className="v6-legend"><i className="v6m ok">✓</i> confirmed · <i className="v6m sent">◷</i> sent, waiting · no mark = not sent</span></span>}</span>
+      </div>
+      <div className="ds-top v6-top2">
+        <span className="ds-find"><input placeholder="Find a name" value={find} onChange={(ev) => { setFind(ev.target.value); setHl(null); }}
+          onKeyDown={(ev) => { if (ev.key === 'Enter' && findRes[0]) goTo(findRes[0].id); if (ev.key === 'Escape') { setFind(''); setHl(null); } }} />
+          {find.trim().length >= 2 && !hl && <span className="ds-findl">{findRes.length ? findRes.map((r) => <button key={r.id} onClick={() => goTo(r.id)}><b>{r.name}</b> <small>{r.where}</small></button>) : <small className="muted">Nobody by that name</small>}</span>}</span>
+        <span className="seg3">{(['floor', 'bar', 'both'] as const).map((d) => <button key={d} className={dept === d ? 'on' : ''} onClick={() => setDept(d)}>{d === 'both' ? 'Both' : d === 'floor' ? 'Floor' : 'Bar'}</button>)}</span>
+      </div></> :
       <div className="ds-top">
         <span className="serif-h ds-day"><Link to={`${base}/${addDays(date, -1)}`}>‹</Link> {dLabel(date, { weekday: 'short', month: 'short', day: 'numeric' })} <Link to={`${base}/${addDays(date, 1)}`}>›</Link></span>
         <span className="ds-find"><input placeholder="Find a name" value={find} onChange={(ev) => { setFind(ev.target.value); setHl(null); }}
@@ -443,14 +468,14 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
         <button className="abtn" disabled={busy || !ops.length} onClick={undo} title={ops.length ? `Undo: ${ops[ops.length - 1].label}` : 'Nothing to undo'}>↶ Undo{ops.length ? ` (${ops.length})` : ''}</button>
         {(() => { const n = sh.filter((x) => x.pool_hold && shown.some((e) => e.id === x.event_id)).length; const out = addDays(date, -4); const due = isoDay(new Date()) >= out;
           return <button className={'abtn' + (due && n ? ' dark' : '')} disabled={busy || !n} onClick={confirmDay} title={`Confirmations usually go ~4 days out (${dLabel(out, { weekday: 'short', month: 'short', day: 'numeric' })})`}>Confirm {n}{dept !== 'both' ? ` ${dept}` : ''} ›</button>; })()}
-      </div>
-      <div className="ds-sum"><b>{evs.length} event{evs.length === 1 ? '' : 's'}</b><span>Floor <b className={fl[0] >= fl[1] ? 'okc' : 'accent'}>{fl[0]}/{fl[1]}</b></span><span>Bar <b className={br[0] >= br[1] ? 'okc' : 'accent'}>{br[0]}/{br[1]}</b></span><span>Free <b>{nYes}</b></span>
+      </div>}
+      {!v6 && <div className="ds-sum"><b>{evs.length} event{evs.length === 1 ? '' : 's'}</b><span>Floor <b className={fl[0] >= fl[1] ? 'okc' : 'accent'}>{fl[0]}/{fl[1]}</b></span><span>Bar <b className={br[0] >= br[1] ? 'okc' : 'accent'}>{br[0]}/{br[1]}</b></span><span>Free <b>{nYes}</b></span>
         {v6 ? <span className="muted ds-legend"><i className="v6m ok">✓</i> confirmed <i className="v6m sent">◷</i> sent, waiting · no mark = not sent · <span className="v6-dash">open</span> = open spot</span>
           : <span className="muted ds-legend"><i className="ds-sd ok" /> confirmed <i className="ds-sd sent" /> sent, not confirmed <i className="ds-sd" /> placed, not sent</span>}
-        <Link className="lnk sm" to={`${v6 ? '/admin/day-sheet' : '/admin/bookings-v6'}/${date}`}>{v6 ? '← Old layout' : 'Try the new layout (V6) ›'}</Link></div>
+        <Link className="lnk sm" to={`${v6 ? '/admin/day-sheet' : '/admin/bookings-v6'}/${date}`}>{v6 ? '← Old layout' : 'Try the new layout (V6) ›'}</Link></div>}
       {false && pend > 0 && <div className="ds-pend"><b>✉ {pend} change{pend > 1 ? 's' : ''} not sent yet</b><span className="muted">staff who were already sent a shift that changed · they're told when you press Send</span><span className="grow" /><button className="abtn sm dark" onClick={() => setSendOpen(true)}>Review &amp; send ›</button></div>}
       {sendOpen && <SendBox events={evs.map((e) => e.id)} onClose={() => { setSendOpen(false); setTick((t) => t + 1); }} onSent={() => { setMsg('Sent.'); setTick((t) => t + 1); }} />}
-      {ops.length > 0 && <div className="ds-undofab"><span className="grow">{ops[ops.length - 1].label}</span><button disabled={busy} onClick={undo}>↶ Undo</button>{ops.length > 1 && <small>{ops.length} steps</small>}</div>}{/* push 120 · always in reach */}
+      {ops.length > 0 && fabOn && <div className="ds-undofab"><span className="grow">{ops[ops.length - 1].label}</span><button disabled={busy} onClick={undo}>↶ Undo</button>{ops.length > 1 && <small>{ops.length} steps</small>}</div>}{/* push 120 · always in reach */}
       {msg && <div className="adm-card okc sm">{msg}</div>}{err && <div className="adm-card err sm">{err}</div>}
       <div className={'ds-cols' + (freeFold ? ' ffold' : '')}>
         <div className={'ds-blocks' + (narrow ? ' narrow' : '') + (noEnd ? ' noend' : '')} ref={blocksR} onClick={() => ed && setEd(null)}>
