@@ -76,14 +76,15 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
   // week strip
   useEffect(() => { (async () => {
     const to = addDays(wk0, 6);
-    const { data: we } = await supabase.from('events').select('id,event_date,department,staffing,staff_needed').gte('event_date', wk0).lte('event_date', to);
+    const { data: we } = await supabase.from('events').select('id,event_date,department,staffing,staff_needed,extras').gte('event_date', wk0).lte('event_date', to);
     const ids = ((we ?? []) as { id: string }[]).map((x) => x.id);
     const [{ data: ws }, { data: wa }] = await Promise.all([
-      supabase.from('shifts').select('event_id').in('event_id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000']).neq('status', 'declined'),
+      supabase.from('shifts').select('event_id').in('event_id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000']).neq('status', 'declined').is('attendance', null),
       supabase.from('availability').select('for_date,staff_id,status,released_at').gte('for_date', wk0).lte('for_date', to).eq('status', 'yes').is('released_at', null)]);
     const byEv: Record<string, number> = {}; for (const r of (ws ?? []) as { event_id: string }[]) byEv[r.event_id] = (byEv[r.event_id] ?? 0) + 1;
-    const out = [...Array(7)].map((_, i) => { const d = addDays(wk0, i); const de = ((we ?? []) as { id: string; event_date: string; staffing: Line[] | null; staff_needed: number }[]).filter((x) => x.event_date === d);
-      const need = de.reduce((n, x) => n + ((x.staffing ?? []).reduce((m, l) => m + (l.count || 0), 0) || x.staff_needed || 0), 0);
+    const out = [...Array(7)].map((_, i) => { const d = addDays(wk0, i); const de = ((we ?? []) as { id: string; event_date: string; department: string; staffing: Line[] | null; staff_needed: number; extras: number | null }[]).filter((x) => x.event_date === d);
+      // Nov 25 · same count as the day totals: rows + extras (10 % on big floor events when not set)
+      const need = de.reduce((n, x) => { const c = (x.staffing ?? []).reduce((m, l) => m + (l.count || 0), 0); if (!c) return n + (x.staff_needed || 0); const ex = x.extras != null ? Math.max(0, x.extras) : x.department !== 'bar' && c > 7 ? Math.ceil(c * 0.1) : 0; return n + c + ex; }, 0);
       const have = de.reduce((n, x) => n + (byEv[x.id] ?? 0), 0); return { d, need, have, n: de.length, free: ((wa ?? []) as { for_date: string }[]).filter((x) => x.for_date === d).length }; });
     setWeek(out);
   })(); }, [wk0, tick]);
