@@ -4994,3 +4994,11 @@ span.abtn.ds-newq { background: none; border: 0; padding: 0; }
 .ds-v6 .ds-line2.cxl .ds-lh { background: transparent !important; padding: 0 !important; border: 0 !important; }
 .ds-v6 .ds-line2.cxl .ds-lname { font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: #9B2226; }
 .ds-v6 .ds-chip.cx { height: 28px; font-size: 11.5px; }
+/* Nov 25 · V6: one + to add a row (how many · role · start, TBC allowed) */
+.ds-v6 .v6-plus { display: block; width: calc(100% - 20px); margin: 8px 10px 0; height: 30px; border: 1.5px dashed #D9D0C4; border-radius: 8px; background: transparent; color: #8A8177; font-size: 18px; cursor: pointer; }
+.ds-v6 .v6-plus:hover { border-color: #1A1714; color: #1A1714; }
+.ds-v6 .v6-row.v6-new { background: #FBF9F6; border-top: 1px solid #ECE6DE; }
+.ds-v6 .v6-row.v6-new select { border-color: #1A1714 !important; }
+.ds-v6 .v6-newb { display: flex; gap: 6px; } .ds-v6 .v6-newb .abtn { height: 28px; padding: 0 14px; font-size: 12px; }
+.ds-v6 .v6-tbc { color: #4B44A8 !important; font-weight: 800 !important; }
+.ds-tpop .v6-tbcb { margin: 6px 0; width: 100%; font-weight: 800; color: #4B44A8; }

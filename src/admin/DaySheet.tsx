@@ -119,7 +119,7 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
   const place = (staffId: string, e: Ev, code: string, start: string | null) => run(async () => {
     const t = start ?? e.start_time?.slice(0, 5) ?? '17:00';
     const { data, error } = await supabase.from('shifts').insert({ event_id: e.id, staff_id: staffId, position_code: code, position_detail: roleName(code), planned_start: startIso(date, t), status: 'booked', pool_hold: true,
-      time_tbc: !!(e.start_tbc || e.details_pending) }).select('id').single(); if (error) throw error;
+      time_tbc: !!(e.start_tbc || e.details_pending || (e.staffing ?? []).some((l) => l.tbc && l.code === code && l.start === t)) }).select('id').single(); if (error) throw error;
     const id = (data as { id: string }).id; return { label: `placed ${byId[staffId]?.full_name ?? ''}`, undo: () => supabase.from('shifts').delete().eq('id', id).eq('pool_hold', true).then() };
   });
   // push 114 · anyone can be dragged / removed. Placed (not sent) = silent; already sent = asked first, then the notice waits in About to send.
@@ -275,7 +275,14 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
     const st = [...(e.staffing ?? [])]; const l = st[idx]; if (!l || !t) return; setEd(null);
     const line = lays[e.id].lines.find((x) => x.idx === idx);
     const moves = (line?.people ?? []).filter((x) => hm(x.planned_start) === line?.start).map((x) => ({ s: x, t }));
-    st[idx] = { ...l, start: t }; lineSave(e, st, `${plural(l.code, 2)} → ${ap(t)}`, moves);
+    if (l.tbc) { const ids = (line?.people ?? []).map((x) => x.id); if (ids.length) void supabase.from('shifts').update({ time_tbc: false }).in('id', ids); }
+    st[idx] = { ...l, start: t, tbc: false }; lineSave(e, st, `${plural(l.code, 2)} → ${ap(t)}`, moves);
+  };
+  /** Nov 25 · a row's start can be TBC (staff see "Time TBC" until it's set). */
+  const setTbc = (e: Ev, idx: number) => {
+    const st = [...(e.staffing ?? [])]; const l = st[idx]; if (!l) return; setEd(null);
+    const ids = (lays[e.id].lines.find((x) => x.idx === idx)?.people ?? []).map((x) => x.id); if (ids.length) void supabase.from('shifts').update({ time_tbc: true }).in('id', ids);
+    st[idx] = { ...l, tbc: true }; lineSave(e, st, `${plural(l.code, 2)} → TBC`);
   };
   /** Nov 13 · MD / bar manager start: the lead line's time + the leads on it move with it (asked first if already sent). */
   const setLeadTime = (e: Ev, t: string) => { if (!t) return; setEd(null);
@@ -304,10 +311,12 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
   const setExtras = (e: Ev, n: number) => run(async () => { const b = e.extras ?? null; const { error } = await supabase.from('events').update({ extras: Math.max(0, n) }).eq('id', e.id); if (error) throw error;
     return { label: `extras → ${n}`, undo: () => supabase.from('events').update({ extras: b }).eq('id', e.id).then() }; });
   const addLine = () => { if (!add) return; const e = evs.find((x) => x.id === add.eid); const n = parseInt(add.count, 10); if (!e || !(n > 0) || !add.t) return;
+    const isTbc = add.t === 'TBC'; const t0 = isTbc ? ((e.staffing ?? []).slice(-1)[0]?.start ?? e.start_time?.slice(0, 5) ?? '17:00') : add.t;
     if (add.code === 'EX') { const a0 = add; setAdd(null); run(async () => { const b = { extras: e.extras ?? null, extras_start: e.extras_start ?? null };
-      const { error } = await supabase.from('events').update({ extras: n, extras_start: a0.t }).eq('id', e.id); if (error) throw error;
-      return { label: `+ ${n} extras ${ap(a0.t)}`, undo: () => supabase.from('events').update(b).eq('id', e.id).then() }; }); return; }
-    const st = [...(e.staffing ?? []), { dept: isBar(e) ? 'bar' : 'floor', code: add.code, count: n, start: add.t }]; setAdd(null); lineSave(e, st, `+ ${n} ${plural(add.code, n)} ${ap(add.t)}`); };
+      const { error } = await supabase.from('events').update({ extras: n, extras_start: isTbc ? null : a0.t }).eq('id', e.id); if (error) throw error;
+      return { label: `+ ${n} extras ${isTbc ? 'TBC' : ap(a0.t)}`, undo: () => supabase.from('events').update(b).eq('id', e.id).then() }; }); return; }
+    const dept = (ROLES.find((r) => r.code === add.code)?.dept ?? (isBar(e) ? 'bar' : 'floor')) as 'bar' | 'floor';
+    const st = [...(e.staffing ?? []), { dept, code: add.code, count: n, start: t0, ...(isTbc ? { tbc: true } : {}) }]; setAdd(null); lineSave(e, st, `+ ${n} ${plural(add.code, n)} ${isTbc ? 'TBC' : ap(t0)}`); };
   /** push 118 · details right in the card (saves like the event form; staff see it in the app, no message). */
   const saveEv = (e: Ev, row: Record<string, unknown>, label: string) => run(async () => {
     const keys = Object.keys(row); const before = Object.fromEntries(keys.map((k) => [k, (e as unknown as Record<string, unknown>)[k] ?? null]));
@@ -373,6 +382,7 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
   const Step = ({ n, on }: { n: number; on: (n: number) => void }) => <span className="ds-step"><button disabled={busy} onClick={() => on(n - 1)} aria-label="One less">−</button><b>{n}</b><button disabled={busy} onClick={() => on(n + 1)} aria-label="One more">+</button></span>;
   const TimePop = ({ e, k, start, title, onSet, people }: { e: Ev; k: string; start: string | null; title: string; onSet: (t: string) => void; people?: Sh[] }) => (
     ed?.eid === e.id && ed.key === k ? <span className="ds-tpop" onClick={(ev) => ev.stopPropagation()}><b>{title}</b>
+      {/^\d+$/.test(k) && !e.staffing?.[Number(k)]?.tbc && <button className="abtn sm v6-tbcb" onClick={() => setTbc(e, Number(k))}>TBC</button>}
       <span className="ds-tq">{(() => { const [h, m] = (start ?? '17:00').split(':').map(Number); const b0 = h * 60 + m; return [-60, -30, -15, 15, 30, 60].map((d) => { const x = b0 + d; const t = `${String(Math.floor(((x % 1440) + 1440) % 1440 / 60)).padStart(2, '0')}:${String(((x % 60) + 60) % 60).padStart(2, '0')}`; return <button key={d} onClick={() => onSet(t)}>{ap(t)}</button>; }); })()}</span>
       <span className="row" style={{ gap: 6 }}><select className="ds-tsel" value={edT} onChange={(ev) => setEdT(ev.target.value)}>{!Q15.includes(edT) && <option value={edT}>{edT ? ap(edT) : '—'}</option>}{Q15.map((q) => <option key={q} value={q}>{ap(q)}</option>)}</select><button className="abtn sm dark" disabled={!edT || edT === start} onClick={() => onSet(edT)}>Set</button></span>
 </span> : null);
@@ -387,6 +397,7 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
       : <select className="ds-lsel" value={code} disabled={busy || idx == null} onChange={(ev) => idx != null && setRole(e, idx, ev.target.value)}>{roles.some((r) => r.code === code) ? null : <option value={code}>{plural(code, Math.max(2, count))}</option>}{roles.map((r) => <option key={r.code} value={r.code}>{r.code === 'WW' ? (count === 1 ? 'Wine waiter' : 'Wine waiters') : plural(r.code, Math.max(2, count))}</option>)}</select>;
     const stepC = lead ? <Step n={count} on={(n) => setLeads(e, n)} /> : extra ? <Step n={count} on={(n) => setExtras(e, n)} /> : idx != null ? <Step n={count} on={(n) => setCount(e, idx, n)} /> : <b>{count}</b>;
     const timeC = tbc ? <span className="ds-tro">TBC</span> : lead ? <>{tBtn(e, 'L', start)}<TimePop e={e} k="L" start={start} title={isBar(e) ? 'Start of the bar managers' : 'Start of the MD'} onSet={(t) => setLeadTime(e, t)} people={people} /></> : extra ? <>{tBtn(e, 'x', start)}<TimePop e={e} k="x" start={start} title="Start of the extras" onSet={(t) => setExtrasTime(e, t)} /></>
+      : idx != null && e.staffing?.[idx]?.tbc ? <><button className={'ds-tbtn v6-tbc' + (ed?.eid === e.id && ed.key === String(idx) ? ' on' : '')} disabled={busy} onClick={() => { setEdT(''); setEd(ed?.eid === e.id && ed.key === String(idx) ? null : { eid: e.id, key: String(idx) }); }}>TBC</button><TimePop e={e} k={String(idx)} start={start} title="Start of this line" onSet={(t) => setTime(e, idx, t)} people={people} /></>
       : idx != null ? <>{tBtn(e, String(idx), start)}<TimePop e={e} k={String(idx)} start={start} title="Start of this line" onSet={(t) => setTime(e, idx, t)} people={people} /></> : <span className="ds-tro">{ap(start)}</span>;
     const endC = !plain ? null : end || endK === k ? <select className="ds-tsel" value={end ?? ''} disabled={busy} autoFocus={!end} title="End ~ (optional)" onBlur={() => setEndK(null)}
         onChange={(ev) => { setEndK(null); setLineField(e, idx!, { end: ev.target.value || null }, `end ${ev.target.value ? ap(ev.target.value) : '—'}`); }}><option value="">— no end</option>{end && !Q15.includes(end) && <option value={end}>{ap(end)}</option>}{Q15.map((q) => <option key={q} value={q}>{ap(q)}</option>)}</select>
@@ -512,7 +523,14 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
                       <button className="abtn sm" disabled={busy} onClick={() => { unflag(x.id); const ex = L.extras.start; if (ex && hm(x.planned_start) !== ex) patch(x, { planned_start: startIso(date, ex) }, 'to extras'); }}>Make extra</button>
                       <button className="abtn sm" disabled={busy} onClick={() => { unflag(x.id); remove(x); }}>Back to Free</button>
                       <button className="lnk sm muted" onClick={() => unflag(x.id)}>Keep</button></span>)}</div>; })()}
-                  <div className="ds-addrow">{(isBar(e) ? [['BT', '+ Bar row'], ['BB', '+ Barback row'], ['WW', '+ Wine row'], ['EX', '+ Extras']] : [['W', '+ Floor row'], ['EX', '+ Extras']]).map(([c, l]) => <button key={c} disabled={busy} onClick={() => addRow(e, c)}>{l}</button>)}</div>
+                  {v6 ? (add?.eid === e.id ? <div className="v6-row v6-new">
+                      <select className="v6-n" value={add.count} onChange={(ev) => setAdd({ ...add, count: ev.target.value })}>{[...Array(30)].map((_, i) => <option key={i + 1} value={i + 1}>{i + 1}</option>)}</select>
+                      <select className="ds-lsel" value={add.code} onChange={(ev) => setAdd({ ...add, code: ev.target.value })}>{[...ROLES.filter((r) => (isBar(e) ? r.dept === 'bar' : r.dept === 'floor')), ...ROLES.filter((r) => (isBar(e) ? r.dept !== 'bar' : r.dept !== 'floor'))].map((r) => <option key={r.code} value={r.code}>{plural(r.code, 2)}</option>)}<option value="EX">Extras</option></select>
+                      <select className="ds-tsel" value={add.t} onChange={(ev) => setAdd({ ...add, t: ev.target.value })}><option value="TBC">TBC</option>{Q15.map((q) => <option key={q} value={q}>{ap(q)}</option>)}</select>
+                      <span />
+                      <span className="v6-newb"><button className="abtn sm dark" disabled={busy} onClick={addLine}>Add row</button><button className="abtn sm" onClick={() => setAdd(null)}>Cancel</button></span><span />
+                    </div> : <button className="v6-plus" disabled={busy} title="Add a row" onClick={() => setAdd({ eid: e.id, code: isBar(e) ? 'BT' : 'W', count: '1', t: (e.staffing ?? []).slice(-1)[0]?.start ?? e.start_time?.slice(0, 5) ?? 'TBC' })}>+</button>) :
+                  <div className="ds-addrow">{(isBar(e) ? [['BT', '+ Bar row'], ['BB', '+ Barback row'], ['WW', '+ Wine row'], ['EX', '+ Extras']] : [['W', '+ Floor row'], ['EX', '+ Extras']]).map(([c, l]) => <button key={c} disabled={busy} onClick={() => addRow(e, c)}>{l}</button>)}</div>}
                 </div>
               </section>); })}
           <NewEv cls="ds-newev" label={`＋ New event on ${dLabel(date, { weekday: 'short', month: 'short', day: 'numeric' })}`} />

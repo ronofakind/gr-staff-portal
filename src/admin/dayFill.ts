@@ -7,7 +7,7 @@ import { supabase } from '../lib/supabase';
 import { allStaff, startIso, roleName, type AStaff, type Client, type Venue } from './api';
 import { loadRules, misfits, other, type SCond, type SLink } from './rules';
 
-export type Line = { dept?: string; code: string; start: string | null; count: number };
+export type Line = { dept?: string; code: string; start: string | null; count: number; end?: string | null; tbc?: boolean };
 export type Ev = { id: string; title: string; event_date: string; department: string; start_time: string | null; staff_needed: number; guests: number | null; staffing: Line[] | null;
   details_pending: boolean | null; start_tbc: boolean | null; caterer_name?: string | null; caterer_id?: string | null; uniform_floor?: string | null; uniform_bar?: string | null; uniform_floor_w?: string | null; uniform_bar_w?: string | null; notes?: string | null; guests_final?: boolean | null; event_type?: string | null; extras?: number | null; extras_start?: string | null; venue_id: string | null; end_time?: string | null; drive_folder_url?: string | null;
   event_private?: { client: string | null; client_id?: string | null } | null; venues: { name: string; far?: boolean | null; area?: string | null } | null };

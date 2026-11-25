@@ -2431,6 +2431,12 @@ html[data-theme="dark"] { --teams: #8487CC; --teams-bg: #1F2137; --teams-ink: #8
 :where(html[data-theme="dark"]) .ds-v6 .ds-morel .v6-legend { color: #8A8076; border-top: 1px solid #4A433A; }
 :where(html[data-theme="dark"]) .ds-dept.bar { color: #F1ECE4 !important; }
 :where(html[data-theme="dark"]) .ds-v6 .ds-line2.cxl .ds-lname { color: #D7797C; }
+:where(html[data-theme="dark"]) .ds-v6 .v6-plus { border: 1.5px dashed #413D38; color: #8A8076; }
+:where(html[data-theme="dark"]) .ds-v6 .v6-plus:hover { border-color: #E1DEDB; color: #E1DEDB; }
+:where(html[data-theme="dark"]) .ds-v6 .v6-row.v6-new { background: #22201D; border-top: 1px solid #4A433A; }
+:where(html[data-theme="dark"]) .ds-v6 .v6-row.v6-new select { border-color: #E1DEDB !important; }
+:where(html[data-theme="dark"]) .ds-v6 .v6-tbc { color: #8D89C8 !important; }
+:where(html[data-theme="dark"]) .ds-tpop .v6-tbcb { color: #8D89C8; }
 html[data-theme="dark"] { color-scheme: dark; }
 html[data-theme="dark"] body { background: #121110; color: #F1ECE4; }
 html[data-theme="dark"] img[src$="logo-mark.png"]:not(.adm-side img):not(.side-logo), html[data-theme="dark"] img[src$="logo-full.png"] { filter: invert(1) hue-rotate(180deg); mix-blend-mode: normal !important; }
