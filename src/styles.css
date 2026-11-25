@@ -4971,3 +4971,6 @@ span.abtn.ds-newq { background: none; border: 0; padding: 0; }
 /* V6 lock button also in the narrow (card) layout */
 .v6-lk { border: 0; background: none; padding: 0 2px; font-size: 11px; line-height: 1; cursor: pointer; flex: none; opacity: 0; }
 .v6-lk.on { opacity: 1; } .ds-chip:hover .v6-lk { opacity: .55; } .ds-chip:hover .v6-lk.on, .v6-lk:hover { opacity: 1; }
+/* Nov 25 · V6: the start-time box opens right under the time you clicked (was jumping to the page corner) */
+.v6-row .v6-t { position: relative; }
+.v6-row .v6-t .ds-tpop { top: 32px; left: 0; right: auto; width: 260px; z-index: 80; }
