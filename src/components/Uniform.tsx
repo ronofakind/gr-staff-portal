@@ -16,8 +16,10 @@ export function uniformFor(s: { uniform?: string | null; position_code: string |
   const ev = s.events;
   return (s.uniform || (bar ? (w && ev.uniform_bar_w) || ev.uniform_bar : (w && ev.uniform_floor_w) || ev.uniform_floor) || 'black_shirt') as UniformKind; // Nov 10 · no uniform saved = black (the usual)
 }
+/** Nov 25 · "none" (set-ups) → the uniform is not shown to staff. */
+export const noUniform = (s: Parameters<typeof uniformFor>[0]) => (uniformFor(s) as string) === 'none';
 /** Label for any uniform value, including "custom:<text>". */
-export const uniformLabel = (k: string) => (k.startsWith('custom:') ? k.slice(7) || 'See notes' : UNIFORM_LABEL[k as UniformKind] ?? k);
+export const uniformLabel = (k: string) => (k === 'none' ? 'No uniform' : k.startsWith('custom:') ? k.slice(7) || 'See notes' : UNIFORM_LABEL[k as UniformKind] ?? k);
 
 const IMG: Partial<Record<UniformKind, string>> = { white_shirt: '/uniform/shirt_white.png', black_shirt: '/uniform/shirt_black.png', dress: '/uniform/dress.png', black_tshirt: '/uniform/tshirt.png' };
 const pic = (src: string, size: number) => <img src={src} alt="" width={size} height={size} style={{ objectFit: 'contain', display: 'block' }} />;

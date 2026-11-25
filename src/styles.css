@@ -5094,3 +5094,7 @@ span.abtn.ds-newq { background: none; border: 0; padding: 0; }
 .ne-f .vp-btn { justify-content: flex-start; text-align: left; padding: 0 9px; display: flex; align-items: center; gap: 6px; width: 100%; }
 .ne-lists.two { grid-template-columns: minmax(0, 1fr); }
 @media (min-width: 1600px) { .ne-lists.two { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.ne-teams { display: flex; align-items: flex-end; gap: 24px; flex-wrap: wrap; }
+.ne-unirow { display: flex; flex-direction: column; gap: 8px; }
+.ne-newu { display: grid; grid-template-columns: minmax(0, 1fr) 90px 90px; gap: 8px; align-items: end; background: var(--bg, #F4F0EA); border-radius: 10px; padding: 10px; }
+.ne-newu .abtn { height: 32px; justify-content: center; }

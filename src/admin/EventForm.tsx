@@ -21,7 +21,7 @@ const OFF_RIDES = false as boolean; // Nov 15 · carpool hidden until the simple
 
 export const MEN: [string, string][] = [['white_shirt', 'White dress shirt'], ['black_shirt', 'Black dress shirt'], ['black_tshirt', 'Black T-shirt']];
 export const WOMEN: [string, string][] = [['white_shirt', 'White dress shirt'], ['black_shirt', 'Black dress shirt'], ['dress', 'Black cocktail dress'], ['black_tshirt', 'Black T-shirt']];
-export const uniName = (k: string) => (k.startsWith('custom:') ? k.slice(7) : [...MEN, ...WOMEN].find(([u]) => u === k)?.[1].replace('dress shirt', 'shirt').replace('Black cocktail dress', 'dress') ?? k).toLowerCase();
+export const uniName = (k: string) => (k === 'none' ? 'no uniform' : k.startsWith('custom:') ? k.slice(7) : [...MEN, ...WOMEN].find(([u]) => u === k)?.[1].replace('dress shirt', 'shirt').replace('Black cocktail dress', 'dress') ?? k).toLowerCase();
 
 type Mode = 'floor' | 'bar' | 'both';
 const MONTHS = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
@@ -201,6 +201,9 @@ export function EventForm() {
   const [estimate, setEstimate] = useState(false); const [adminNote, setAdminNote] = useState(''); const [adminNote0, setAdminNote0] = useState('');
   const [meId, setMeId] = useState<string | null>(null); useEffect(() => { supabase.rpc('me').then(({ data }) => setMeId((data as string | null) ?? null)); }, []);
   const askRef = useRef<'save' | 'later' | null>(null); const uniTouched = useRef(false);
+  // Nov 25 · migration 139 · uniforms you add are saved for next time (men + women)
+  const [uniList, setUniList] = useState<string[]>([]); const [newUni, setNewUni] = useState<{ key: 'fm' | 'fw' | 'bm' | 'bw'; txt: string } | null>(null);
+  useEffect(() => { supabase.from('uniform_types').select('name').order('name').then(({ data }) => setUniList(((data ?? []) as { name: string }[]).map((x) => x.name))); }, []);
   const oldLayout = !isNew || params.get('old') === '1';
   // push 67 · a reviewed client email → fill the form once loaded (nothing saved until Save)
   const [aiApply, setAiApply] = useState<AApply | null>(null); const [aiSkipped, setAiSkipped] = useState<string[]>([]);
@@ -603,9 +606,22 @@ export function EventForm() {
   // ── Nov 25 · New event page (board AdminNewEventV1Simple): 3 steps + More + summary ──
   if (!oldLayout) {
     const firstStart = lines.filter((l) => l.count > 0 && !l.tbc).map((l) => l.start).filter(Boolean).sort()[0] ?? lines[0]?.start ?? '17:00';
-    const setStart = (v: string) => setLines(lines.map((l) => (l.start === firstStart || l.tbc ? { ...l, start: v, tbc: false } : l)));
-    const uni = (fn: (v: string) => void) => (e: React.ChangeEvent<HTMLSelectElement>) => { uniTouched.current = true; fn(e.target.value); };
-    const opts = (list: [string, string][], cur: string) => <>{list.map(([k, l]) => <option key={k} value={k}>{l}</option>)}{!list.some(([k]) => k === cur) && <option value={cur}>{uniName(cur)}</option>}</>;
+    const opts = (list: [string, string][], cur: string) => {
+      const cust = [...new Set([...uniList, ...(cur.startsWith('custom:') && cur.length > 7 ? [cur.slice(7)] : [])])];
+      return <><option value="none">No uniform</option><optgroup label="Usual">{list.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</optgroup>
+        {cust.length > 0 && <optgroup label="Added">{cust.map((n) => <option key={n} value={'custom:' + n}>{n}</option>)}</optgroup>}
+        {!list.some(([k]) => k === cur) && cur !== 'none' && !cur.startsWith('custom:') && <option value={cur}>{uniName(cur)}</option>}
+        <option value="__new">+ New uniform</option></>;
+    };
+    const SET = { fm: setUFloor, fw: setUFloorW, bm: setUBar, bw: setUBarW } as const;
+    const uniSel = (key: 'fm' | 'fw' | 'bm' | 'bw', val: string, list: [string, string][]) => (
+      <select value={val} onChange={(e) => { const v = e.target.value; if (v === '__new') { setNewUni({ key, txt: '' }); return; } uniTouched.current = true; SET[key](v); }}>{opts(list, val)}</select>);
+    const addUni = async () => {
+      if (!newUni) return; const n = newUni.txt.trim(); if (!n) return;
+      const { error } = await supabase.from('uniform_types').upsert({ name: n }, { onConflict: 'name', ignoreDuplicates: true });
+      if (error) { setErr(error.message); return; }
+      setUniList((l) => [...new Set([...l, n])].sort()); uniTouched.current = true; SET[newUni.key]('custom:' + n); setNewUni(null);
+    };
     const nOf = (d: 'floor' | 'bar') => lines.filter((l) => l.dept === d).reduce((n, l) => n + l.count, 0);
     const go = (a: 'save' | 'later') => { askRef.current = a; void save(); };
     const dupGo = async () => {
@@ -673,20 +689,34 @@ export function EventForm() {
                   {clients.filter((c) => c.is_caterer && !(c as Client & { archived_at?: string | null }).archived_at).map((c) => <option key={c.id} value={c.id}>{c.caterer_label || c.name}</option>)}
                 </select></label>
               <label className="ne-f"><span>GUESTS</span><input type="number" min={0} value={guests} onChange={(e) => setGuests(e.target.value)} /></label>
-              <div className="ne-f"><span>EVENT TIME</span><span className="ne-time"><TimeCell value={firstStart} onChange={setStart} /><em>→</em><select aria-label="Ends" value={ends} onChange={(e) => setEnds(e.target.value)}>{ENDS.map(([l]) => <option key={l} value={l}>{l.replace('~ ', '')}</option>)}</select></span></div>
+              <label className="ne-f"><span>EVENT TYPE</span>
+                <select value={eventType} onChange={(e) => {
+                  const v = e.target.value; setEventType(v);
+                  if (/^set-?up$/i.test(v)) { uniTouched.current = true; setUFloor('none'); setUFloorW('none'); setUBar('none'); setUBarW('none'); }
+                }}>
+                  <option value="" />
+                  {types.filter((t) => t.main).map((t) => <option key={t.name}>{t.name}</option>)}
+                  <optgroup label="More">{types.filter((t) => !t.main).map((t) => <option key={t.name}>{t.name}</option>)}</optgroup>
+                  {eventType && !types.some((t) => t.name === eventType) && <option>{eventType}</option>}
+                </select></label>
             </div>
-            <div className="ne-g2 ne-teams">
+            <div className="ne-teams">
               <div className="ne-f"><span>TEAMS</span><span className="ne-seg">{(['floor', 'bar', 'both'] as const).map((m) => <button type="button" key={m} className={mode === m ? 'on' : ''} onClick={() => setMode(m)}>{m === 'floor' ? 'Floor' : m === 'bar' ? 'Bar' : 'Both'}</button>)}</span></div>
-              <div className="ne-f"><span>&nbsp;</span><Sw on={!tentative} set={(v) => setTentative(!v)} label="Client confirmed" /></div>
+              <Sw on={!tentative} set={(v) => setTentative(!v)} label="Client confirmed" />
             </div>
           </section>
 
           <section className="ne-card"><h2><i>2</i>For the staff</h2>
-            {(mode === 'both' ? (['floor', 'bar'] as const) : ([showBar ? 'bar' : 'floor'] as const)).map((d) => (
-              <div key={d} className="ne-g2">
-                <label className="ne-f"><span>UNIFORM · MEN{mode === 'both' ? (d === 'bar' ? ' · BAR' : ' · FLOOR') : ''}</span><select value={d === 'bar' ? uBar : uFloor} onChange={uni(d === 'bar' ? setUBar : setUFloor)}>{opts(MEN, d === 'bar' ? uBar : uFloor)}</select></label>
-                <label className="ne-f"><span>UNIFORM · WOMEN{mode === 'both' ? (d === 'bar' ? ' · BAR' : ' · FLOOR') : ''}</span><select value={d === 'bar' ? uBarW : uFloorW} onChange={uni(d === 'bar' ? setUBarW : setUFloorW)}>{opts(WOMEN, d === 'bar' ? uBarW : uFloorW)}</select></label>
-              </div>))}
+            {(mode === 'both' ? (['floor', 'bar'] as const) : ([showBar ? 'bar' : 'floor'] as const)).map((d) => (<div key={d} className="ne-unirow">
+              <div className="ne-g2">
+                <label className="ne-f"><span>UNIFORM · MEN{mode === 'both' ? (d === 'bar' ? ' · BAR' : ' · FLOOR') : ''}</span>{uniSel(d === 'bar' ? 'bm' : 'fm', d === 'bar' ? uBar : uFloor, MEN)}</label>
+                <label className="ne-f"><span>UNIFORM · WOMEN{mode === 'both' ? (d === 'bar' ? ' · BAR' : ' · FLOOR') : ''}</span>{uniSel(d === 'bar' ? 'bw' : 'fw', d === 'bar' ? uBarW : uFloorW, WOMEN)}</label>
+              </div>
+              {newUni && newUni.key[0] === d[0] && <div className="ne-newu">
+                <label className="ne-f"><span>NEW UNIFORM</span><input autoFocus value={newUni.txt} onChange={(e) => setNewUni({ ...newUni, txt: e.target.value })} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void addUni(); } if (e.key === 'Escape') setNewUni(null); }} /></label>
+                <button type="button" className="abtn dark" disabled={!newUni.txt.trim()} onClick={addUni}>Add</button>
+                <button type="button" className="abtn" onClick={() => setNewUni(null)}>Cancel</button>
+              </div>}</div>))}
             <div className="ne-g2">
               <label className="ne-f"><span>NOTE FOR STAFF</span><textarea rows={3} value={staffNote} onChange={(e) => setStaffNote(e.target.value)} /></label>
               <label className="ne-f ne-anote"><span>NOTE FOR RONNIE</span><textarea rows={3} value={adminNote} onChange={(e) => setAdminNote(e.target.value)} /></label>

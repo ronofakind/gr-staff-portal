@@ -160,7 +160,7 @@ export function ShiftView({ s, lead, backTo = '/', preview = false, team, past }
   const dayWord = isToday ? 'Today' : ev.event_date === tmr ? 'Tomorrow' : d.toLocaleDateString('en-CA', { weekday: 'long' });
   const mins = Math.round((new Date(s.planned_start).getTime() - Date.now()) / 60000);
   const cd = s.punches?.punch_in ? 'working now' : mins <= 0 ? 'started' : mins < 60 ? `in ${mins} min` : mins < 48 * 60 ? `in ${Math.round(mins / 60)} h` : '';
-  const setup = isSetup(ev);
+  const setup = isSetup(ev) || (kind as string) === 'none'; // Nov 25 · no uniform → no Uniform section
   const facts = [ev.event_type, ev.guests && ev.guests_final && s.status === 'confirmed' ? `${ev.guests} guests` : null].filter(Boolean).join(' · '); // push 74 · only the final count, never a range
   const [street, ...cityParts] = (address || venueName).split(',');
   const city = cityParts.join(',').trim();

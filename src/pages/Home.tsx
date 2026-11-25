@@ -14,7 +14,7 @@ import { KnowsSheet } from './MyDates';
 import { ConfirmThanks, CalIcon } from '../components/ConfirmThanks';
 import { useMyCalendar } from '../lib/calendar';
 import { callName } from '../lib/nickname';
-import { UniformIcon, uniformFor, uniformLabel } from '../components/Uniform';
+import { UniformIcon, uniformFor, uniformLabel, noUniform } from '../components/Uniform';
 import { MessageCard, MessageRonnieLink, MgrRepliesLine } from '../components/MessageCard';
 import { shiftNotes, noteSeen, type ShiftNote } from '../lib/staffNotes';
 import { OwnClose } from '../components/OwnClose';
@@ -407,7 +407,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
                   <div className="venue serif">{next.events.title}</div>
                   {addr && <div className="sub" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{addr.split(',').slice(0, 2).join(' ·')}</div>}
                 </div>
-                {!isSetup(next.events) && <span className="wear-tile" style={{ width: 46, height: 46, borderRadius: 12 }} title={uniformLabel(uniformFor(next))}><UniformIcon kind={uniformFor(next)} size={34} /></span>}
+                {!isSetup(next.events) && !noUniform(next) && <span className="wear-tile" style={{ width: 46, height: 46, borderRadius: 12 }} title={uniformLabel(uniformFor(next))}><UniformIcon kind={uniformFor(next)} size={34} /></span>}
               </div>
               <div className="dbl-times">
                 {working ? <>
@@ -454,7 +454,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
                     <div className="dbl-t">{soon(s) || s.time_tbc ? <b className="tbc">TBC</b> : <><b className="serif">{mm ? mm[1] : tm}</b><small>{mm ? mm[2].toUpperCase() + 'M' : ''}</small></>}</div>
                     <div className="grow"><small>{kick} · {soon(s) ? 'DETAILS COMING' : ok ? '✓ CONFIRMED' : 'TO CONFIRM'}</small><b>{soon(s) ? 'You’re booked' : s.events.title}</b>
                       <span>{pos(s)} · {ofN(s)}</span></div>
-                    {!isSetup(s.events) && <span className="row-wear"><UniformIcon kind={uniformFor(s)} size={30} /></span>}
+                    {!isSetup(s.events) && !noUniform(s) && <span className="row-wear"><UniformIcon kind={uniformFor(s)} size={30} /></span>}
                   </Link>
                 </div>
               );
@@ -475,7 +475,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
                 {addr && <div className="sub" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{addr.split(',').slice(0, 2).join(' ·')}</div>}
                 {confirmed && <div className="you-confirmed">✓ You confirmed</div>}
               </div>
-              {!isSetup(next.events) && <span className="wear-tile" style={{ width: 52, height: 52, borderRadius: 14 }} title={uniformLabel(uniformFor(next))}><UniformIcon kind={uniformFor(next)} size={38} /></span>}
+              {!isSetup(next.events) && !noUniform(next) && <span className="wear-tile" style={{ width: 52, height: 52, borderRadius: 14 }} title={uniformLabel(uniformFor(next))}><UniformIcon kind={uniformFor(next)} size={38} /></span>}
             </div>
             {working ? <>
               <div className="pos-line"><small>Your position</small><span className="pos-pill-lg">{pos(next)}</span></div>
@@ -528,7 +528,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
               <div className="d"><small>{b.dow}</small><b>{b.day}</b></div>
               <div className="grow"><small className={changed(mini) ? 'chg-k' : ''}>NEXT · {changed(mini) ? 'CHANGED' : soon(mini) ? 'DETAILS COMING' : ok ? '✓ CONFIRMED' : 'TO CONFIRM'}</small><b>{soon(mini) ? 'You’re booked' : mini.events.title}</b>
                 <span>{soon(mini) || mini.time_tbc ? 'Time TBC' : time(mini.planned_start, lang)} · {pos(mini)} · {whenLabel(mini).split(' · ')[0].toLowerCase()}</span></div>
-              <span className="row-wear"><UniformIcon kind={uniformFor(mini)} size={30} /></span>
+              {!noUniform(mini) && <span className="row-wear"><UniformIcon kind={uniformFor(mini)} size={30} /></span>}
             </Link>
           ); })()}
           {(list.length > 0 || mtgComing.length > 0) && (
@@ -553,7 +553,7 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
                         <div className="cmg-strip">
                           <div><small>Starts</small>{pend || s.time_tbc ? <b className="tbc">Time TBC</b> : <b>{time(s.planned_start, lang)}</b>}</div>
                           <div><small>Role</small><b className={isLead(s) ? 'lead' : ''}>{isLead(s) || coMgr(s) ? (lang === 'fr' ? 'Gérant' : 'Manager') : pos(s)}</b></div>
-                          <div title={uniformLabel(uniformFor(s))}><small>Uniform</small><span className="cmg-wear"><UniformIcon kind={uniformFor(s)} size={26} /></span></div>
+                          {!noUniform(s) && <div title={uniformLabel(uniformFor(s))}><small>Uniform</small><span className="cmg-wear"><UniformIcon kind={uniformFor(s)} size={26} /></span></div>}
                         </div>
                       </div>
                     </Link>
