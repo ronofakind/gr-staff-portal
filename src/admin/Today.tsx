@@ -92,6 +92,13 @@ export function Today() {
       for (const e of recent) for (const s of e.shifts) {
         if (seen.has(s.id)) continue; seen.add(s.id);
         if (s.cancel_self) continue; // push 28: staff self-cancels have their own cards below
+        if (s.early_reason && s.punches?.punch_in && s.punches?.punch_out) { // Nov 25 · migration 137 · ended before 4 h with a reason · stays until archived
+          const tm = (x: string) => new Date(x).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' });
+          const worked = !!s.left_early; const sid = s.id;
+          n.push({ key: 'early' + s.id, title: `${s.staff?.full_name ?? '?'} · left early · ${s.early_reason}`, sub: `${e.event_date === today ? 'Today' : 'Yesterday'} · ${e.title} · ${tm(s.punches.punch_in)} → ${tm(s.punches.punch_out)} · paid ${worked ? 'hours worked' : '4 h minimum'}${s.early_note ? ` · “${s.early_note}”` : ''}`,
+            action: worked ? 'Pay 4 h min' : 'Pay hours worked', to: `/admin/hours?d=${e.event_date}&e=${e.id}`, alt: { label: 'Hours', to: `/admin/hours?d=${e.event_date}&e=${e.id}` },
+            onAct: async () => { const { error } = await supabase.from('shifts').update({ left_early: !worked, early_seen_at: new Date().toISOString() }).eq('id', sid); if (error) alert(error.message); setTick((t) => t + 1); } });
+        }
         for (const f of flagsOf(s).filter((x) => x.flag !== 'early' && x.flag !== 'late' && !x.free)) n.push({ key: s.id + f.flag, red: true, title: `⚑ ${s.staff?.full_name ?? '?'} · ${flagText(f).toLowerCase()}`, sub: `${e.event_date === today ? 'Today' : 'Yesterday'} · ${e.title}`, action: 'View', to: '/admin/reliability' });
       }
       for (const e of ahead.filter((x) => x.department !== 'bar')) {

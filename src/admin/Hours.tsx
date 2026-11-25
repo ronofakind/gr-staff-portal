@@ -227,7 +227,8 @@ export function Hours() {
                     </tr>
                     {open === x.id && x.rows.map((r) => (
                       <tr key={r.s.id} className="sub"><td>{dLabel(r.e.event_date)} · {r.e.title}</td><td colSpan={2}>{times(r)}</td>
-                        <td>{hb(r) || ''} {flagsOf(r.s).map((f) => <span key={f.flag} className="ftag">{flagText(f)}</span>)}</td></tr>
+                        <td>{hb(r) || ''} {flagsOf(r.s).map((f) => <span key={f.flag} className="ftag">{flagText(f)}</span>)}
+                          {r.s.early_reason && <><span className="ftag" title={r.s.early_note ?? ''}>EARLY · {r.s.early_reason}</span> <button className="lnk sm" onClick={async (ev) => { ev.stopPropagation(); const { error } = await supabase.from('shifts').update({ left_early: !r.s.left_early, early_seen_at: new Date().toISOString() }).eq('id', r.s.id); if (error) setErr(error.message); load(); }}>{r.s.left_early ? 'hours worked → 4 h min' : '4 h min → hours worked'}</button></>}</td></tr>
                     ))}
                   </Fragment>
                 );

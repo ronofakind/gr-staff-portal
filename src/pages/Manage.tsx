@@ -153,6 +153,9 @@ const REASONS: Record<'no_show' | 'cancelled' | 'left_early', string[]> = {
 const hours = (a: string, b: string) => Math.round((new Date(b).getTime() - new Date(a).getTime()) / 900000) / 4;
 
 type Ask = { row: Row; kind: 'no_show' | 'cancelled' | 'left_early' } | null;
+/** Nov 25 · migration 137 · ending someone before 4 h asks why; the reason sets the pay (board AdminCutEarlyV1). */
+const EARLY_REASONS = ['Not feeling well', 'Personal emergency', 'Slow night · not needed', 'Behaviour / dress code', 'Other'];
+const EARLY_MIN_H = 4;
 
 type Pick = { id: string; full_name: string; nickname: string | null; department: string; positions: string[]; here: boolean;
   elsewhere_title: string | null; elsewhere_start: string | null; elsewhere_manager: string | null; elsewhere_shift: string | null; elsewhere_started: boolean | null };
@@ -266,6 +269,8 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
   useEffect(() => { if (!undo) return; const t = setTimeout(() => setUndo(null), 8000); return () => clearTimeout(t); }, [undo]);
   const [draft, setDraft] = useState({ in: '', out: '' });
   const [ask, setAsk] = useState<Ask>(null);
+  const [early, setEarly] = useState<{ row: Row; pin: string } | null>(null); const [earlyAt, setEarlyAt] = useState(''); const [earlyWhy, setEarlyWhy] = useState(''); const [earlyNote, setEarlyNote] = useState('');
+  const [bulkWhy, setBulkWhy] = useState('');
   const [review, setReview] = useState(false);
   // Nov 7 · MD debrief after Submit hours (migration 077 · errors → nothing shown). null = unknown / not available
   const [dbDone, setDbDone] = useState<boolean | null>(null); const [dbOpen, setDbOpen] = useState(false); const [thanks, setThanks] = useState(false);
@@ -413,6 +418,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
   };
   const endRow = async (r: Row, pin: string) => {
     const out = now();
+    if (hours(pin, out) < EARLY_MIN_H) { setErr(''); setEarlyWhy(''); setEarlyNote(''); setEarlyAt(hm(new Date(q15(Date.now())).toISOString())); setEarly({ row: r, pin }); return; }
     await set([{ id: r.id, in: pin, out }]);
     setUndo({ label: `${r.staff?.full_name ?? 'Ended'} ended · ${time(out, lang)}`, prev: [{ id: r.id, in: pin, out: r.punches?.punch_out ?? null }] });
   };
@@ -430,6 +436,14 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
   useEffect(() => { if (!scheduled.length) return; const id = setInterval(() => setTick((x) => x + 1), 1000); return () => clearInterval(id); }, [scheduled.length]);
   const q15 = (ms: number) => Math.round(ms / 900000) * 900000;
   const nextQ = () => Math.ceil((Date.now() + 60000) / 900000) * 900000;
+  const endEarly = async () => {
+    if (!early || !ev) return; setErr('');
+    if (!earlyWhy) return setErr('Pick a reason.'); if (!earlyAt) return setErr('Pick the end time.');
+    const out = toIso(ev.event_date, earlyAt, early.pin);
+    const { error } = await supabase.rpc('manager_end_early', { p_shift: early.row.id, p_out: out, p_reason: earlyWhy, p_note: earlyNote.trim() || null });
+    if (error) { setErr(error.message); return; }
+    setEarly(null); setOpen(null); await load();
+  };
   const endAll = async (list: Row[]) => {
     let at: number;
     if (endPick === 'now') at = Date.now();
@@ -437,10 +451,13 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
     else { if (!endTime) return; at = new Date(toIso(ev!.event_date, endTime, list[0].planned_start)).getTime(); }
     if (at > Date.now() + 30 * 60000) { setErr('Pick a time within 30 minutes.'); return; }
     const go = list.filter((r) => !endSkip.has(r.id));
+    const under = go.filter((r) => hours(r.punches!.punch_in!, new Date(at).toISOString()) < EARLY_MIN_H);
+    if (under.length && !bulkWhy) { setErr('Some people are under 4 h · pick why the night ends early.'); return; }
     for (const id of ownPick) await supabase.rpc('manager_set_ends_own', { p_shift: id, p_on: true });
     if (!go.length) { setEndSheet(null); await load(); return; }
     setEndSheet(null);
     await set(go.map((r) => ({ id: r.id, in: r.punches!.punch_in, out: new Date(at).toISOString() })));
+    if (under.length && bulkWhy === 'Event ended early') { const { error } = await supabase.rpc('manager_early_reason', { p_shifts: under.map((r) => r.id), p_reason: bulkWhy }); if (error) setErr(error.message); await load(); }
   };
 
   if (!ev) return <div className="loading" />;
@@ -664,7 +681,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
 
       {!endsAt && outstanding.length > 0 && !ev.hours_submitted_at ? (
       <div className="submit-bar">
-        <button className="endall-red" onClick={() => { setEndPick('next'); setEndTime(''); setEndSkip(new Set()); setOwnPick(new Set()); setEndSheet(outstanding); }}>{t.endAll} <span>· {outstanding.length} still working</span></button>
+        <button className="endall-red" onClick={() => { setEndPick('next'); setEndTime(''); setEndSkip(new Set()); setOwnPick(new Set()); setBulkWhy(''); setErr(''); setEndSheet(outstanding); }}>{t.endAll} <span>· {outstanding.length} still working</span></button>
       </div>) : (
       <div className={'submit-bar' + (!ev.hours_submitted_at && !otherSent && !changedSince && !(endsAt && outstanding.length === 0) && !(ownPick && ownOpen.length > 0) ? ' solo' : '')}>
         <div className="grow">
@@ -691,6 +708,10 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
               {endSheet.map((r) => <div key={r.id} className="end-skip-r"><label><input type="checkbox" checked={!endSkip.has(r.id)} onChange={(e) => { const s = new Set(endSkip); if (e.target.checked) s.delete(r.id); else s.add(r.id); setEndSkip(s); }} /> {r.staff ? teamName(r.staff) : '?'}</label>
                 <button type="button" className={'own-pick' + (ownPick.has(r.id) ? ' on' : '')} onClick={() => { const o = new Set(ownPick); const s = new Set(endSkip); if (o.has(r.id)) { o.delete(r.id); s.delete(r.id); } else { o.add(r.id); s.add(r.id); } setOwnPick(o); setEndSkip(s); }}>{ownPick.has(r.id) ? 'Ends own ✓' : 'Ends own'}</button></div>)}
             </details>
+            {(() => { const at = endPick === 'now' ? Date.now() : endPick === 'next' ? nextQ() : endTime ? new Date(toIso(ev.event_date, endTime, endSheet[0].planned_start)).getTime() : null;
+              const n = at ? endSheet.filter((r) => !endSkip.has(r.id) && r.punches?.punch_in && hours(r.punches.punch_in, new Date(at).toISOString()) < EARLY_MIN_H).length : 0;
+              return n ? <div className="ask-reason"><span className="kicker">{n} under 4 h · why?</span>
+                <div className="chips">{['Event ended early', 'Normal end'].map((x) => <button key={x} type="button" className={'rchip' + (bulkWhy === x ? ' on' : '')} onClick={() => setBulkWhy(x)}>{x}</button>)}</div></div> : null; })()}
             {doneN > 0 && <div className="muted sm">The {doneN} who already ended keep their own times.</div>}
             {err && <p className="error">{err}</p>}
             <button className="btn-ink end-go" disabled={endSheet.length - endSkip.size < 1 && !ownPick.size} onClick={() => endAll(endSheet)}>{endSheet.length - endSkip.size < 1 && ownPick.size ? `${ownPick.size} end${ownPick.size === 1 ? 's' : ''} their own · save` : `End ${endSheet.length - endSkip.size} ${endSheet.length - endSkip.size === 1 ? 'person' : 'people'}${ownPick.size ? ` · ${ownPick.size} end their own` : ''} at`} {endPick === 'now' ? time(now(), lang) : endPick === 'next' ? time(new Date(nextQ()).toISOString(), lang) : endTime ? fmt12(endTime) : '…'}</button>
@@ -937,6 +958,23 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
           </>
         );
       })()}
+      {early && (() => { const f = first(early.row.staff?.full_name ?? ''); const outIso = earlyAt ? toIso(ev.event_date, earlyAt, early.pin) : null;
+        return (<>
+          <div className="scrim top" onClick={() => setEarly(null)} />
+          <div className="dialog ask" role="alertdialog" aria-label="Leaving early">
+            <div className="serif">Why is {f} leaving early?</div>
+            <div className="ask-time"><b>Out at</b><QuarterTime value={earlyAt} onChange={setEarlyAt} label="End time" /></div>
+            {outIso && outIso <= early.pin && <div className="ask-gold" style={{ color: 'var(--accent)' }}>The end time must be after {time(early.pin, lang)}.</div>}
+            <div className="ask-reason">
+              <div className="chips">{EARLY_REASONS.map((x) => <button key={x} type="button" className={'rchip' + (earlyWhy === x ? ' on' : '')} onClick={() => setEarlyWhy(x)}>{x}</button>)}</div>
+              <input className="ask-note" value={earlyNote} onChange={(e) => setEarlyNote(e.target.value)} placeholder="Note (optional)" />
+            </div>
+            {err && <p className="error">{err}</p>}
+            <div className="btns">
+              <button className="btn-ink" disabled={!earlyWhy || !earlyAt} onClick={endEarly}>End {f} · {earlyAt ? fmt12(earlyAt) : '…'}</button>
+              <button className="btn-ghost" onClick={() => setEarly(null)}>Go back</button>
+            </div>
+          </div></>); })()}
       {undo && <div className="undo-bar" role="status"><span className="grow">{undo.label}</span><button onClick={doUndo}>{undo.btn ?? 'UNDO'}</button></div>}
     </main>
   );
