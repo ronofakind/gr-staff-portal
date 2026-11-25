@@ -498,7 +498,7 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
             return (
               <section key={e.id} className={'ds-card' + (isBar(e) ? ' ds-barev' : '')}>
                 <div className="ds-ch"><span className="serif ds-title">{e.title || e.venues?.name || 'New event'}</span><span className={'ds-dept ' + (isBar(e) ? 'bar' : 'floor')}>{isBar(e) ? 'BAR' : 'FLOOR'}</span>{isFar(e) && <span className="ds-far" title="Far venue: Fill puts drivers first, with the people they're linked to">far</span>}
-                  <span className={'ds-open' + (need > have ? '' : ' ok')}>{need > have ? `${need - have} open` : need ? 'All filled' : 'No lines yet'}</span>
+                  {(e as unknown as { staff_estimate?: boolean }).staff_estimate && <span className="tag est-tag ds-est">ESTIMATE</span>}<span className={'ds-open' + (need > have ? '' : ' ok') + ((e as unknown as { staff_estimate?: boolean }).staff_estimate ? ' est' : '')}>{need > have ? `${need - have} open` : need ? 'All filled' : 'No lines yet'}</span>
                   <span className="grow" />
                   {need > have && <button className="lnk sm" disabled={busy || !ctx} onClick={() => fillDay(e)} title="Fill this event only">Fill</button>}
                   {sh.some((x) => x.event_id === e.id && x.pool_hold && !x.locked && !LEAD.includes(x.position_code ?? '')) && <button className="lnk sm muted" disabled={busy} onClick={() => clear(e)}>Clear</button>}

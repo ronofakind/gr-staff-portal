@@ -2437,6 +2437,40 @@ html[data-theme="dark"] { --teams: #8487CC; --teams-bg: #1F2137; --teams-ink: #8
 :where(html[data-theme="dark"]) .ds-v6 .v6-row.v6-new select { border-color: #E1DEDB !important; }
 :where(html[data-theme="dark"]) .ds-v6 .v6-tbc { color: #8D89C8 !important; }
 :where(html[data-theme="dark"]) .ds-tpop .v6-tbcb { color: #8D89C8; }
+:where(html[data-theme="dark"]) .ne-card { background: var(--card, #1F1D1A); border: 1px solid var(--line, #4A433A); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+:where(html[data-theme="dark"]) .ne-card h2 > i { background: var(--ink, #2A2622); color: var(--bg, #F3F0EB); }
+:where(html[data-theme="dark"]) .ne-f > span:first-child { color: var(--muted, #8A8076); }
+:where(html[data-theme="dark"]) .ne-f input, :where(html[data-theme="dark"]) .ne-f select, :where(html[data-theme="dark"]) .ne-f textarea, :where(html[data-theme="dark"]) .ne-in, :where(html[data-theme="dark"]) .ne-dup input { border: 1px solid #49433B; background: var(--card, #1F1D1A); }
+:where(html[data-theme="dark"]) .ne-newv { background: var(--bg, #312D25); }
+:where(html[data-theme="dark"]) .ne-time em { color: var(--muted, #8A8076); }
+:where(html[data-theme="dark"]) .ne-seg { border: 1px solid #49433B; }
+:where(html[data-theme="dark"]) .ne-seg button + button { border-left: 1px solid #49433B; }
+:where(html[data-theme="dark"]) .ne-seg button.on { background: var(--ink, #E1DEDB); color: var(--bg, #1A1714); }
+:where(html[data-theme="dark"]) .ne-sw > i { background: #433E39; }
+:where(html[data-theme="dark"]) .ne-sw > i::after { background: #1F1D1A; }
+:where(html[data-theme="dark"]) .ne-sw.on > i { background: #427A50; }
+:where(html[data-theme="dark"]) .ne-anote textarea { background: #252136; border-color: #383450; }
+:where(html[data-theme="dark"]) .ne-anote > span:first-child { color: #8D89C8; }
+:where(html[data-theme="dark"]) .ne-rh span { color: var(--muted, #8A8076); }
+:where(html[data-theme="dark"]) .ne-r input, :where(html[data-theme="dark"]) .ne-r select { border: 1px solid #49433B; background: var(--card, #1F1D1A); }
+:where(html[data-theme="dark"]) .ne-t button { border: 1px solid #49433B; color: var(--muted, #8A8076); }
+:where(html[data-theme="dark"]) .ne-t button.on { background: #4F49A3; border-color: #4F49A3; color: #F1ECE4; }
+:where(html[data-theme="dark"]) .ne-t.tbc input { color: var(--muted, #8A8076); }
+:where(html[data-theme="dark"]) .ne-x { color: var(--muted, #8A8076); }
+:where(html[data-theme="dark"]) .ne-plus { border: 1.5px dashed #49433B; color: var(--muted, #8A8076); }
+:where(html[data-theme="dark"]) .ne-plus:hover { border-color: var(--ink, #E1DEDB); color: var(--ink, #E1DEDB); }
+:where(html[data-theme="dark"]) .est, :where(html[data-theme="dark"]) input.est { border: 1.5px dashed #B18D31 !important; background: #3A321D !important; }
+:where(html[data-theme="dark"]) .ne-more summary h2::after { color: var(--muted, #8A8076); }
+:where(html[data-theme="dark"]) .ne-chip { border: 1px solid var(--ink, #E1DEDB); }
+:where(html[data-theme="dark"]) .ne-sum { background: var(--card, #1F1D1A); border: 1px solid var(--line, #4A433A); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+:where(html[data-theme="dark"]) .ne-sum > span { color: var(--muted, #8A8076); }
+:where(html[data-theme="dark"]) .ne-sum > i { background: var(--line, #312C26); }
+:where(html[data-theme="dark"]) .ne-go { background: #95282C !important; border-color: #95282C !important; color: #F1ECE4 !important; }
+:where(html[data-theme="dark"]) .est-tag { border: 1.5px dashed #B18D31; background: #3A321D; color: #E1C370; }
+:where(html[data-theme="dark"]) .ed-anote { background: #252136; }
+:where(html[data-theme="dark"]) .ed-anote b { color: #8D89C8; }
+:where(html[data-theme="dark"]) [data-theme=dark] .ne-anote textarea, :where(html[data-theme="dark"]) [data-theme=dark] .ed-anote { background: #4C496F; border-color: #494672; }
+:where(html[data-theme="dark"]) [data-theme=dark] .est, :where(html[data-theme="dark"]) [data-theme=dark] input.est, :where(html[data-theme="dark"]) [data-theme=dark] .est-tag { background: #746344 !important; }
 html[data-theme="dark"] { color-scheme: dark; }
 html[data-theme="dark"] body { background: #121110; color: #F1ECE4; }
 html[data-theme="dark"] img[src$="logo-mark.png"]:not(.adm-side img):not(.side-logo), html[data-theme="dark"] img[src$="logo-full.png"] { filter: invert(1) hue-rotate(180deg); mix-blend-mode: normal !important; }

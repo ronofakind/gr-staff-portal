@@ -115,6 +115,12 @@ export function Today() {
       { const m: Record<string, number> = {}; for (const x of (hq ?? []) as unknown as { shifts?: { event_id: string } }[]) if (x.shifts?.event_id) m[x.shifts.event_id] = (m[x.shifts.event_id] ?? 0) + 1; setQBy(m); }
       for (const q of (hq ?? []) as unknown as { id: string; kind: string; shifts: { staff: { full_name: string }; events: { title: string } } }[])
         n.unshift({ key: 'q' + q.id, red: true, title: `Hours question · ${q.shifts.staff.full_name}`, sub: `${q.shifts.events.title} · about ${q.kind === 'other' ? 'something else' : q.kind + ' time'}`, action: 'Check', to: '/admin/hours' });
+      { // Nov 25 · migration 138 · a note for Ronnie on an event (written by someone else) stays until archived
+        const me = (await supabase.rpc('me')).data as string | null;
+        const { data: an } = await supabase.from('event_private').select('event_id,admin_note,admin_note_by,admin_note_at,events!inner(title,event_date),by:staff!event_private_admin_note_by_fkey(full_name)').not('admin_note', 'is', null).gte('admin_note_at', addDays(today, -30) + 'T00:00:00Z');
+        for (const r of (an ?? []) as unknown as { event_id: string; admin_note: string; admin_note_by: string | null; admin_note_at: string; events: { title: string; event_date: string }; by: { full_name: string } | null }[])
+          if (r.admin_note_by !== me) n.push({ key: 'anote' + r.event_id + r.admin_note_at, title: `Note from ${r.by?.full_name.split(' ')[0] ?? 'Georges'} · ${r.events.title} · ${dLabel(r.events.event_date)}`, sub: r.admin_note, action: 'View', to: `/admin/event/${r.event_id}` });
+      }
       // Cash paid: the QuickBooks estimate should go
       const { data: qb } = await supabase.from('event_private').select('event_id,qb_doc_number,events!inner(title,event_date)').eq('pay_method', 'cash').eq('qb_doc_type', 'estimate')
         .not('cash_received_at', 'is', null).is('qb_removed_at', null).not('qb_doc_number', 'is', null);

@@ -197,6 +197,11 @@ export function EventForm() {
   const [dup, setDup] = useState<{ dates: string[]; pick: string; names: 'none' | 'leads' | 'all' } | null>(null);
   const [lastAt, setLastAt] = useState<{ date: string; lines: Line[] } | null>(null);
   const [err, setErr] = useState(''); const [busy, setBusy] = useState(false); const [loaded, setLoaded] = useState(isNew);
+  // Nov 25 · migration 138 · new event page: estimate + note for Ronnie
+  const [estimate, setEstimate] = useState(false); const [adminNote, setAdminNote] = useState(''); const [adminNote0, setAdminNote0] = useState('');
+  const [meId, setMeId] = useState<string | null>(null); useEffect(() => { supabase.rpc('me').then(({ data }) => setMeId((data as string | null) ?? null)); }, []);
+  const askRef = useRef<'save' | 'later' | null>(null); const uniTouched = useRef(false);
+  const oldLayout = !isNew || params.get('old') === '1';
   // push 67 · a reviewed client email → fill the form once loaded (nothing saved until Save)
   const [aiApply, setAiApply] = useState<AApply | null>(null); const [aiSkipped, setAiSkipped] = useState<string[]>([]);
   useEffect(() => { setAiApply(null); setAiSkipped([]); if (!isNew) setLoaded(false); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps · next event of a multi-event review
@@ -239,7 +244,7 @@ export function EventForm() {
   useEffect(() => {
     if (isNew) return;
     (async () => {
-      const { data: e } = await supabase.from('events').select('*,event_private(client,client_id,rate_set,pay_method,qb_doc_type,qb_doc_number)').eq('id', id!).single();
+      const { data: e } = await supabase.from('events').select('*,event_private(client,client_id,rate_set,pay_method,qb_doc_type,qb_doc_number,admin_note)').eq('id', id!).single();
       if (!e) return;
       const { data: sib } = await supabase.from('events').select('id,department,staffing,manager_id').eq('event_date', e.event_date).eq('title', e.title);
       // Nov 11 · two floor events at the same place that day (Olympia: one team per floor, each MD has their own) → only edit the one opened,
@@ -251,6 +256,7 @@ export function EventForm() {
       setDate(e.event_date); setTitle(e.title === 'Details to come' ? '' : e.title); setVenueId(e.venue_id); setAddress(e.address ?? '');
       setPendingDetails(!!(e as unknown as { details_pending?: boolean }).details_pending); setWasPending(!!(e as unknown as { details_pending?: boolean }).details_pending);
       { const x = e as unknown as { tentative?: boolean; start_tbc?: boolean }; setTentative(!!x.tentative); setStartTbc(!!x.start_tbc); setWasTbc(!!x.start_tbc); setLinks(asLinks((e as unknown as { links?: unknown }).links)); }
+      { const an = (e.event_private as { admin_note?: string | null } | null)?.admin_note ?? ''; setAdminNote(an); setAdminNote0(an); setEstimate(!!(e as unknown as { staff_estimate?: boolean }).staff_estimate); }
       setClientId(e.event_private?.client_id ?? ''); setRateSet(e.event_private?.rate_set ?? null); setCatererId((e as unknown as { caterer_id?: string | null }).caterer_id ?? '');
       setTr({ on: !!e.transport, travel: e.travel_min ?? 60, gas: String(e.gas_per_car ?? 20), billing: e.transport_billing ?? 'client', rides: e.rides ?? !!e.transport });
       setExtras(e.extras != null ? String(e.extras) : ''); setExtrasBill(e.extras_billing ?? 'gr');
@@ -346,6 +352,23 @@ export function EventForm() {
     setUFloorW(c.uniform_floor_w ?? c.uniform_floor ?? uFloorW); setUBarW(c.uniform_bar_w ?? c.uniform_bar ?? 'dress');
     setItemsMap(c.uniform_items ?? {}); setUniFrom(c.caterer_label || c.name); return true;
   };
+  // Nov 25 · new event: uniforms come from the client's last event (else the venue's last event)
+  useEffect(() => {
+    if (!isNew || uniTouched.current || (!clientId && !venueId)) return;
+    let gone = false;
+    (async () => {
+      const cols = 'event_date,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,uniform_items';
+      type U = { uniform_floor: string | null; uniform_bar: string | null; uniform_floor_w: string | null; uniform_bar_w: string | null; uniform_items: UniItemsMap | null };
+      let r: U | null = null;
+      if (clientId) r = ((await supabase.from('events').select(cols + ',event_private!inner(client_id)').eq('event_private.client_id', clientId).not('uniform_floor', 'is', null).lt('event_date', date).order('event_date', { ascending: false }).limit(1)).data?.[0] ?? null) as unknown as U | null;
+      if (!r && venueId) r = ((await supabase.from('events').select(cols).eq('venue_id', venueId).not('uniform_floor', 'is', null).lt('event_date', date).order('event_date', { ascending: false }).limit(1)).data?.[0] ?? null) as unknown as U | null;
+      if (!r || gone || uniTouched.current) return;
+      if (r.uniform_floor) setUFloor(r.uniform_floor); if (r.uniform_floor_w) setUFloorW(r.uniform_floor_w);
+      if (r.uniform_bar) setUBar(r.uniform_bar); if (r.uniform_bar_w) setUBarW(r.uniform_bar_w);
+      if (r.uniform_items) setItemsMap(r.uniform_items);
+    })();
+    return () => { gone = true; };
+  }, [clientId, venueId]); // eslint-disable-line react-hooks/exhaustive-deps
   const pickVenue = (v: Venue) => {
     setVenueId(v.id); setTitle(v.name); setAddress(v.address ?? '');
     if (v.usual_client_id) setClientId(v.usual_client_id);
@@ -485,12 +508,13 @@ export function EventForm() {
         manager_id: lead ? keep(lead)[0] ?? null : null, description: note || null, notes: staffNote || null,
         caterer_id: catererId || null, // push 95 · Food by (same for floor + bar)
         uniform_floor: uFloor, uniform_bar: uBar, uniform_floor_w: uFloorW, uniform_bar_w: uBarW, uniform_items: lineItems(), drive_folder_url: folder.trim() || null, staffing: ls.map(({ dept: d, code, start: s, end, count, tbc, hold }) => ({ dept: d, code, start: s, end: end || null, count, ...(tbc ? { tbc: true } : {}), ...(hold ? { hold } : {}) })), guests: guests ? Number(guests) : null, guests_max: !gFinal && guestsMax && Number(guestsMax) > Number(guests || 0) ? Number(guestsMax) : null, guests_final: gFinal && !!guests, event_type: eventType || null, extras: extras === '' ? null : Number(extras), extras_billing: 'client', // push 61 · extras always on the invoice for now
+        staff_estimate: estimate,
         transport: trOn, travel_min: trOn ? tr.travel : null, paid_travel_min: trOn ? paidTravel : null, gas_per_car: trOn ? Number(tr.gas) || 0 : null, transport_billing: trOn ? tr.billing : null, rides: tr.rides && (trOn || carpool),
       };
       const res = old ? await supabase.from('events').update(row).eq('id', old.id).select('id').single() : await supabase.from('events').insert(row).select('id').single();
       if (res.error) throw res.error;
       const evId = res.data.id as string; firstId ??= evId;
-      const pv = await supabase.from('event_private').upsert({ event_id: evId, client: client?.name ?? (newClient || null), client_id: cId, rate_set: rateSet, pay_method: payMethod, qb_doc_type: qbNum.trim() ? qbType : null, qb_doc_number: qbNum.trim() || null }, { onConflict: 'event_id' });
+      const pv = await supabase.from('event_private').upsert({ event_id: evId, client: client?.name ?? (newClient || null), client_id: cId, rate_set: rateSet, pay_method: payMethod, qb_doc_type: qbNum.trim() ? qbType : null, qb_doc_number: qbNum.trim() || null, ...(adminNote.trim() !== adminNote0.trim() ? { admin_note: adminNote.trim() || null, admin_note_by: meId, admin_note_at: new Date().toISOString() } : {}) }, { onConflict: 'event_id' });
       if (pv.error) throw pv.error;
 
       // Shifts: book new names, move changed ones, remove dropped ones (never anyone who already punched in).
@@ -519,7 +543,7 @@ export function EventForm() {
       if (!ls.length && old && !have.some((s) => s.punches?.punch_in)) await supabase.from('events').delete().eq('id', old.id);
 
       // Ask availability (staff only see the date)
-      if (askWhen === 'save' && (dept === 'floor' || askBar === 'team')) await ask(forDate, dept, row.staff_needed, start);
+      if ((askRef.current ?? askWhen) === 'save' && (dept === 'floor' || askBar === 'team')) await ask(forDate, dept, row.staff_needed, start);
       { const tb = ls.some((l) => l.tbc); if (pendingDetails || wasPending || tb || wasTbc) await supabase.from('shifts').update({ time_tbc: pendingDetails || tb }).eq('event_id', evId); }
     }
     return firstId;
@@ -546,7 +570,7 @@ export function EventForm() {
 
   const save = async (ev?: React.FormEvent) => {
     ev?.preventDefault(); setErr('');
-    if (!title.trim() && !pendingDetails) return setErr('Pick or type a venue first — or tick “Place and time to come”.');
+    if (!title.trim() && !pendingDetails) return setErr(oldLayout ? 'Pick or type a venue first — or tick “Place and time to come”.' : 'Pick a venue first.');
     if (!lines.some((l) => l.count > 0)) return setErr('Add at least one staffing line.');
     setBusy(true);
     try {
@@ -575,6 +599,153 @@ export function EventForm() {
 
 
   if (!loaded) return <div className="muted">Loading…</div>;
+
+  // ── Nov 25 · New event page (board AdminNewEventV1Simple): 3 steps + More + summary ──
+  if (!oldLayout) {
+    const firstStart = lines.filter((l) => l.count > 0 && !l.tbc).map((l) => l.start).filter(Boolean).sort()[0] ?? lines[0]?.start ?? '17:00';
+    const setStart = (v: string) => setLines(lines.map((l) => (l.start === firstStart || l.tbc ? { ...l, start: v, tbc: false } : l)));
+    const uni = (fn: (v: string) => void) => (e: React.ChangeEvent<HTMLSelectElement>) => { uniTouched.current = true; fn(e.target.value); };
+    const opts = (list: [string, string][], cur: string) => <>{list.map(([k, l]) => <option key={k} value={k}>{l}</option>)}{!list.some(([k]) => k === cur) && <option value={cur}>{uniName(cur)}</option>}</>;
+    const nOf = (d: 'floor' | 'bar') => lines.filter((l) => l.dept === d).reduce((n, l) => n + l.count, 0);
+    const go = (a: 'save' | 'later') => { askRef.current = a; void save(); };
+    const dupGo = async () => {
+      if (!dup?.dates.length) return; setErr('');
+      if (!title.trim()) return setErr('Pick a venue first.');
+      setBusy(true); askRef.current = 'later';
+      try { await saveAll(date, true, 'all'); for (const d of dup.dates) await saveAll(d, true, 'none'); setBusy(false); nav(`/admin/bookings?date=${date}`); }
+      catch (e) { setBusy(false); setErr((e as Error).message); }
+    };
+    const fmtH = (min: number) => `${Math.floor(min / 60)} h${min % 60 ? ` ${min % 60}` : ''}`;
+    const leave = (() => { const [h, m] = firstStart.split(':').map(Number); const x = ((h * 60 + m - tr.travel) % 1440 + 1440) % 1440; return ap12(`${String(Math.floor(x / 60)).padStart(2, '0')}:${String(x % 60).padStart(2, '0')}`); })();
+    const Sw = ({ on, set, label }: { on: boolean; set: (v: boolean) => void; label: string }) => (
+      <button type="button" role="switch" aria-checked={on} className={'ne-sw' + (on ? ' on' : '')} onClick={() => set(!on)}><i /><span>{label}</span></button>);
+    const list = (d: 'floor' | 'bar') => {
+      const lead = d === 'floor' ? 'MD' : 'BM';
+      const idx = lines.map((l, i) => (l.dept === d ? i : -1)).filter((i) => i >= 0)
+        .sort((x, y) => { const a = lines[x], b = lines[y]; return Number(b.code === lead) - Number(a.code === lead) || Number(!!a.tbc) - Number(!!b.tbc) || (a.start ?? '').localeCompare(b.start ?? ''); });
+      const upd = (i: number, p: Partial<Line>) => setLines(lines.map((l, k) => (k === i ? { ...l, ...p } : l)));
+      return (
+        <div className="ne-list">
+          <div className="ne-lh"><b>{d === 'floor' ? 'FLOOR' : 'BAR'}</b><span className={'ne-n' + (estimate ? ' est' : '')}>{nOf(d)}</span></div>
+          <div className="ne-rh"><span>HOW MANY</span><span>ROLE</span><span>START</span><span>END</span><span /></div>
+          {idx.map((i) => { const l = lines[i]; return (
+            <div key={i} className="ne-r">
+              <input aria-label="How many" type="number" min={0} className={estimate ? 'est' : ''} value={l.count} onChange={(e) => upd(i, { count: Math.max(0, Number(e.target.value)) })} />
+              <select aria-label="Role" value={l.code} onChange={(e) => upd(i, { code: e.target.value, names: [] })}>{ROLES.filter((r) => r.dept === d).map((r) => <option key={r.code} value={r.code}>{r.code === 'WW' ? 'Wine waiter' : r.label}</option>)}</select>
+              <span className={'ne-t' + (l.tbc ? ' tbc' : '')}><TimeCell value={l.start} onChange={(v) => upd(i, { start: v, tbc: false })} /><button type="button" className={l.tbc ? 'on' : ''} onClick={() => upd(i, { tbc: !l.tbc })}>TBC</button></span>
+              <TimeCell value={l.end ?? ''} optional onChange={(v) => upd(i, { end: v || null })} />
+              <button type="button" className="ne-x" aria-label="Remove row" onClick={() => setLines(lines.filter((_, k) => k !== i))}>×</button>
+            </div>); })}
+          <button type="button" className="ne-plus" aria-label="Add a row" onClick={() => setLines([...lines, blankLine(d, idx.some((i) => lines[i].code === lead) ? (d === 'floor' ? 'W' : 'BT') : lead, firstStart)])}>+</button>
+        </div>);
+    };
+    return (
+      <form className="ne" onSubmit={(e) => { e.preventDefault(); go('later'); }}>
+        <div className="ne-top"><Link to={date ? `/admin/bookings?date=${date}` : '/admin/week'} className="abtn sm back-btn">‹ Bookings</Link><h1 className="serif-h">New event</h1></div>
+        {err && <p className="error">{err}</p>}
+        <div className="ne-main"><div className="ne-col">
+          <section className="ne-card"><h2><i>1</i>The event</h2>
+            <div className="ne-g3">
+              <label className="ne-f"><span>DATE</span><input type="date" required value={date} onChange={(e) => setDate(e.target.value)} /></label>
+              <label className="ne-f"><span>CLIENT · ONLY YOU</span>
+                {newClient !== null ? <span className="ne-in2"><input autoFocus value={newClient} onChange={(e) => setNewClient(e.target.value)} placeholder="New client" /><button type="button" className="ne-x" onClick={() => setNewClient(null)}>×</button></span>
+                  : <select value={privateId ?? clientId} onChange={(e) => {
+                    const v = e.target.value; if (v === '__new') { setNewClient(''); setClientId(''); return; }
+                    const c = clients.find((x) => x.id === v); if (c?.kind === 'private_home') pickPrivate(c); else { setClientId(v); setRateSet(null); }
+                  }}>
+                    <option value="" />
+                    {clients.filter((c) => !c.kind && !(c as Client & { archived_at?: string | null }).archived_at).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    {privates.length > 0 && <optgroup label="Private homes">{privates.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</optgroup>}
+                    {clients.some((c) => c.kind === 'roaming') && <optgroup label="Venue changes">{clients.filter((c) => c.kind === 'roaming' && !(c as Client & { archived_at?: string | null }).archived_at).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</optgroup>}
+                    <option value="__new">+ New client</option>
+                  </select>}</label>
+              <div className="ne-f"><span>VENUE</span><VenuePicker venues={venues} privates={privates} value={title} venue={venue} privateId={privateId} onPick={pickVenue} onPrivate={pickPrivate} onNew={(name) => { setVenueId(null); setPrivateId(null); setTitle(name); setAddress(''); }} /></div>
+            </div>
+            {title && !venueId && !privateId && (
+              <div className="ne-g2 ne-newv">
+                <label className="ne-f"><span>NAME</span><input value={title} onChange={(e) => setTitle(e.target.value)} /></label>
+                <div className="ne-f"><span>ADDRESS</span><AddressInput value={address} onChange={(v) => { setAddress(v); setParts(null); }} onPick={(p) => { setParts(p); if (p.unit) setUnit(p.unit); }} placeholder="Start typing the address" /></div>
+              </div>)}
+            <div className="ne-g3">
+              <label className="ne-f"><span>FOOD BY</span>
+                <select value={catererId} onChange={(e) => setCatererId(e.target.value)}>
+                  <option value="" />
+                  {clients.filter((c) => c.is_caterer && !(c as Client & { archived_at?: string | null }).archived_at).map((c) => <option key={c.id} value={c.id}>{c.caterer_label || c.name}</option>)}
+                </select></label>
+              <label className="ne-f"><span>GUESTS</span><input type="number" min={0} value={guests} onChange={(e) => setGuests(e.target.value)} /></label>
+              <div className="ne-f"><span>EVENT TIME</span><span className="ne-time"><TimeCell value={firstStart} onChange={setStart} /><em>→</em><select aria-label="Ends" value={ends} onChange={(e) => setEnds(e.target.value)}>{ENDS.map(([l]) => <option key={l} value={l}>{l.replace('~ ', '')}</option>)}</select></span></div>
+            </div>
+            <div className="ne-g2 ne-teams">
+              <div className="ne-f"><span>TEAMS</span><span className="ne-seg">{(['floor', 'bar', 'both'] as const).map((m) => <button type="button" key={m} className={mode === m ? 'on' : ''} onClick={() => setMode(m)}>{m === 'floor' ? 'Floor' : m === 'bar' ? 'Bar' : 'Both'}</button>)}</span></div>
+              <div className="ne-f"><span>&nbsp;</span><Sw on={!tentative} set={(v) => setTentative(!v)} label="Client confirmed" /></div>
+            </div>
+          </section>
+
+          <section className="ne-card"><h2><i>2</i>For the staff</h2>
+            {(mode === 'both' ? (['floor', 'bar'] as const) : ([showBar ? 'bar' : 'floor'] as const)).map((d) => (
+              <div key={d} className="ne-g2">
+                <label className="ne-f"><span>UNIFORM · MEN{mode === 'both' ? (d === 'bar' ? ' · BAR' : ' · FLOOR') : ''}</span><select value={d === 'bar' ? uBar : uFloor} onChange={uni(d === 'bar' ? setUBar : setUFloor)}>{opts(MEN, d === 'bar' ? uBar : uFloor)}</select></label>
+                <label className="ne-f"><span>UNIFORM · WOMEN{mode === 'both' ? (d === 'bar' ? ' · BAR' : ' · FLOOR') : ''}</span><select value={d === 'bar' ? uBarW : uFloorW} onChange={uni(d === 'bar' ? setUBarW : setUFloorW)}>{opts(WOMEN, d === 'bar' ? uBarW : uFloorW)}</select></label>
+              </div>))}
+            <div className="ne-g2">
+              <label className="ne-f"><span>NOTE FOR STAFF</span><textarea rows={3} value={staffNote} onChange={(e) => setStaffNote(e.target.value)} /></label>
+              <label className="ne-f ne-anote"><span>NOTE FOR RONNIE</span><textarea rows={3} value={adminNote} onChange={(e) => setAdminNote(e.target.value)} /></label>
+            </div>
+          </section>
+
+          <section className="ne-card"><h2><i>3</i>Staff<span className="grow" /><Sw on={estimate} set={setEstimate} label="Estimate" /></h2>
+            <div className={'ne-lists' + (showFloor && showBar ? ' two' : '')}>{showFloor && list('floor')}{showBar && list('bar')}</div>
+          </section>
+
+          <details className="ne-card ne-more"><summary><h2>More</h2></summary>
+            <div className="ne-mg">
+              <div className="ne-sub"><b>Travel &amp; rides</b>
+                <Sw on={trOn} set={(v) => setTr({ ...tr, on: v })} label="Far event" />
+                {trOn && <div className="ne-g2">
+                  <label className="ne-f"><span>TRAVEL · ONE WAY</span><select value={tr.travel} onChange={(e) => setTr({ ...tr, travel: Number(e.target.value) })}>{Array.from({ length: 16 }, (_, i) => (i + 1) * 15).map((n) => <option key={n} value={n}>{fmtH(n)}</option>)}</select></label>
+                  <div className="ne-f"><span>PAID · BOTH WAYS</span><b className="ne-v">{fmtH(paidTravel)}</b></div>
+                </div>}
+                <Sw on={tr.rides} set={(v) => { setTr({ ...tr, rides: v }); setCarpool(v); }} label="Offer rides" />
+                {tr.rides && <div className="ne-g2">
+                  <label className="ne-f"><span>GAS PER CAR</span><input inputMode="decimal" value={tr.gas} onChange={(e) => setTr({ ...tr, gas: e.target.value.replace(/[^\d.]/g, '') })} /></label>
+                  <div className="ne-f"><span>LEAVE MONTREAL BY</span><b className="ne-v">{leave}</b></div>
+                </div>}
+              </div>
+              <div className="ne-sub"><b>Drive folder</b>
+                <Sw on={driveWanted} set={(v) => setDriveOn(v)} label={driveName(date, title, client?.name ?? null, !!privateId)} />
+                {!drive && driveWanted && <button type="button" className="abtn sm" onClick={async () => {
+                  const { data: ses } = await supabase.auth.getSession();
+                  const r = await fetch('/api/google/start', { headers: { Authorization: `Bearer ${ses.session?.access_token}` } });
+                  if (r.ok) window.location.href = (await r.json()).url; else setErr('Could not connect Google Drive: ' + (await r.text()));
+                }}>Connect Google Drive</button>}
+                {!showFolder ? <button type="button" className="lnk" onClick={() => setShowFolder(true)}>Use an existing folder instead ›</button>
+                  : <input className="ne-in" value={folder} onChange={(e) => setFolder(e.target.value)} placeholder="Drive folder link" />}
+              </div>
+              <div className="ne-sub"><b>Duplicate this event</b>
+                <div className="ne-dup">
+                  {(dup?.dates ?? []).map((d) => <button type="button" key={d} className="ne-chip" onClick={() => setDup({ ...dup!, dates: dup!.dates.filter((x) => x !== d) })}>{dLabel(d, { month: 'short', day: 'numeric' })} ×</button>)}
+                  <input type="date" value={dup?.pick ?? addDays(date, 1)} onChange={(e) => setDup({ dates: dup?.dates ?? [], pick: e.target.value, names: 'none' })} />
+                  <button type="button" className="abtn sm" onClick={() => { const pk = dup?.pick ?? addDays(date, 1); const ds = dup?.dates ?? []; if (pk && !ds.includes(pk) && pk !== date) setDup({ dates: [...ds, pk].sort(), pick: pk, names: 'none' }); }}>Add date</button>
+                </div>
+                {!!dup?.dates.length && <button type="button" className="abtn sm dark" disabled={busy} onClick={dupGo}>Create on {dup.dates.length + 1} dates</button>}
+              </div>
+            </div>
+          </details>
+        </div>
+        <aside className="ne-side"><div className="ne-sum">
+          <b className="serif">{title || 'New event'}</b>
+          <span>{[dLabel(date, { weekday: 'short', month: 'short', day: 'numeric' }), client?.name ?? newClient ?? '', guests ? `${guests} guests` : ''].filter(Boolean).join(' · ')}</span>
+          <i />
+          {showFloor && <div className="ne-kv"><span>Floor</span><b className={estimate ? 'est' : ''}>{nOf('floor')} staff</b></div>}
+          {showBar && <div className="ne-kv"><span>Bar</span><b className={estimate ? 'est' : ''}>{nOf('bar')} staff</b></div>}
+          <div className="ne-kv"><span>Starts</span><b>{lines.some((l) => l.tbc) && !lines.some((l) => !l.tbc) ? 'TBC' : ap12(firstStart)}</b></div>
+          {tentative && <div className="ne-kv"><span>Client</span><b className="amber">Not confirmed</b></div>}
+          <button type="submit" className="abtn ne-go" disabled={busy}>{busy ? 'Saving…' : 'Create event'}</button>
+          <button type="button" className="abtn" disabled={busy} onClick={() => go('save')}>Create + ask availability</button>
+        </div></aside></div>
+      </form>
+    );
+  }
 
   return (
     <form className="stack-lg ef" onSubmit={save}>
@@ -814,6 +985,7 @@ export function EventForm() {
             <span className="serif" style={{ fontSize: 20 }}>More (optional)</span>
             {!showStaffNote ? <div><button type="button" className="abtn sm" onClick={() => setShowStaffNote(true)}>+ Note for staff</button></div>
               : <label className="ef-f"><span>NOTE FOR STAFF · shows in their event details</span><textarea rows={2} value={staffNote} onChange={(e) => setStaffNote(e.target.value)} placeholder="Enter by the loading dock on Cathcart." /></label>}
+            <label className="ef-f ne-anote"><span>NOTE FOR RONNIE</span><textarea rows={2} value={adminNote} onChange={(e) => setAdminNote(e.target.value)} /></label>
           </div>
         </div>
         <small className="muted">Booked / moved / removed people are recorded when you press Save. They get a red card on their Home only if this event’s confirmations were already sent.</small>

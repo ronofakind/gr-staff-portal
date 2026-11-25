@@ -86,7 +86,9 @@ export function EventDetail() {
             {guestsText(e) ? <span className="tag">{guestsText(e)}</span> : null}
             {floor && <span className="tag">Floor {nFloor}</span>}
             {bar && <span className="tag bar-tag">Bar {nBar}</span>}
+            {evs.some((v) => (v as unknown as { staff_estimate?: boolean }).staff_estimate) && <span className="tag est-tag">ESTIMATE</span>}
           </div>
+          {p?.admin_note && <div className="ed-anote"><b>NOTE FOR RONNIE</b><span>{p.admin_note}</span></div>}
         </div>
         <div className="stack no-print" style={{ gap: 8, alignItems: 'flex-end' }}>
           <div className="row wrap" style={{ gap: 8, justifyContent: 'flex-end' }}>

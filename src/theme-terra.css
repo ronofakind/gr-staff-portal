@@ -1454,4 +1454,25 @@ html[data-theme="terra"] { --teams: #5B5FC7; --teams-bg: #EEEFFB; --teams-ink: #
 :where(html[data-theme="terra"]) .ds-v6 .v6-plus:hover { border-color: #181915; color: #181915; }
 :where(html[data-theme="terra"]) .ds-v6 .v6-row.v6-new { background: #F6F7F5; }
 :where(html[data-theme="terra"]) .ds-v6 .v6-row.v6-new select { border-color: #181915 !important; }
+:where(html[data-theme="terra"]) .ne-card { background: var(--card, #FBFAF6); box-shadow: 0 1px 3px rgba(26,23,20,0.04); }
+:where(html[data-theme="terra"]) .ne-card h2 > i { background: var(--ink, #3B4A3F); }
+:where(html[data-theme="terra"]) .ne-f > span:first-child { color: var(--muted, #878A77); }
+:where(html[data-theme="terra"]) .ne-f input, :where(html[data-theme="terra"]) .ne-f select, :where(html[data-theme="terra"]) .ne-f textarea, :where(html[data-theme="terra"]) .ne-in, :where(html[data-theme="terra"]) .ne-dup input { background: var(--card, #FBFAF6); }
+:where(html[data-theme="terra"]) .ne-time em { color: var(--muted, #878A77); }
+:where(html[data-theme="terra"]) .ne-seg button.on { background: var(--ink, #2A2A24); }
+:where(html[data-theme="terra"]) .ne-sw > i { background: #CFD1C8; }
+:where(html[data-theme="terra"]) .ne-sw > i::after { background: #FBFAF6; }
+:where(html[data-theme="terra"]) .ne-rh span { color: var(--muted, #878A77); }
+:where(html[data-theme="terra"]) .ne-r input, :where(html[data-theme="terra"]) .ne-r select { background: var(--card, #FBFAF6); }
+:where(html[data-theme="terra"]) .ne-t button { color: var(--muted, #878A77); }
+:where(html[data-theme="terra"]) .ne-t button.on { color: #FBFAF6; }
+:where(html[data-theme="terra"]) .ne-t.tbc input { color: var(--muted, #878A77); }
+:where(html[data-theme="terra"]) .ne-x { color: var(--muted, #878A77); }
+:where(html[data-theme="terra"]) .ne-plus { color: var(--muted, #878A77); }
+:where(html[data-theme="terra"]) .ne-plus:hover { border-color: var(--ink, #181915); color: var(--ink, #181915); }
+:where(html[data-theme="terra"]) .ne-more summary h2::after { color: var(--muted, #878A77); }
+:where(html[data-theme="terra"]) .ne-chip { border: 1px solid var(--ink, #181915); }
+:where(html[data-theme="terra"]) .ne-sum { background: var(--card, #FBFAF6); box-shadow: 0 1px 3px rgba(26,23,20,0.04); }
+:where(html[data-theme="terra"]) .ne-sum > span { color: var(--muted, #878A77); }
+:where(html[data-theme="terra"]) .ne-go { background: #9B4D31 !important; border-color: #9B4D31 !important; color: #FBFAF6 !important; }
 html[data-theme="terra"] body { background: #EEF0E8; color: #2A2A24; }
