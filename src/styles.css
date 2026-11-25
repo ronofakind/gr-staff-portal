@@ -5087,3 +5087,8 @@ span.abtn.ds-newq { background: none; border: 0; padding: 0; }
 [data-theme=dark] .ne-anote textarea, [data-theme=dark] .ed-anote { background: #2A2840; border-color: #3B3860; }
 [data-theme=dark] .est, [data-theme=dark] input.est, [data-theme=dark] .est-tag { background: #3A3120 !important; }
 .ds-est { height: 18px; font-size: 9.5px; padding: 0 5px; display: inline-flex; align-items: center; border-radius: 5px; }
+.ne-time { grid-template-columns: minmax(78px, 1fr) auto minmax(84px, 1fr); }
+.ne-time input, .ne-time select { padding: 0 6px; }
+.ne-rh span { white-space: nowrap; font-size: 9.5px; }
+.ne-rh, .ne-r { grid-template-columns: 60px minmax(0, 1fr) 118px 78px 26px; }
+.ne-f .vp-btn { justify-content: flex-start; text-align: left; padding: 0 9px; display: flex; align-items: center; gap: 6px; width: 100%; }
