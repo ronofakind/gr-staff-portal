@@ -250,7 +250,9 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
     return { label: `cleared ${xs.length}`, undo: () => supabase.from('shifts').insert((rows ?? []) as Record<string, unknown>[]).then() };
   });
   /** push 113 · change a line (count / time / add) right on the Day sheet. Saves to the event like the event form. */
-  const lineSave = (e: Ev, next: Line[], label: string, moves: { s: Sh; t: string }[] = []) => run(async () => {
+  // Nov 25 · rows always saved manager first, then by start time (TBC rows last)
+  const sortLines = (ls: Line[]) => [...ls].sort((a, b) => (LEAD.includes(a.code) ? 0 : 1) - (LEAD.includes(b.code) ? 0 : 1) || (a.tbc ? 1 : 0) - (b.tbc ? 1 : 0) || (a.start ?? '').localeCompare(b.start ?? ''));
+  const lineSave = (e: Ev, next0: Line[], label: string, moves: { s: Sh; t: string }[] = []) => run(async () => { const next = sortLines(next0);
     const sent = moves.filter((m) => !m.s.pool_hold);
     const how = sent.length ? await askTell(sent.map((m) => m.s), `${label}: ${ap(hm(sent[0].s.planned_start))} → ${ap(sent[0].t)}.`, 'Your shift changed') : 'later'; if (!how) return;
     const before = { staffing: e.staffing, staff_needed: e.staff_needed, start_time: e.start_time };
@@ -509,7 +511,7 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
                 <div className="ds-grid">
                   <div className={'ds-grp ' + (isBar(e) ? 'g-bar' : 'g-floor')}>
                     <Row e={e} lead code={isBar(e) ? 'BM' : 'MD'} start={(e.staffing ?? []).find((l) => LEAD.includes(l.code))?.start ?? e.start_time?.slice(0, 5) ?? null} count={L.leadNeed} people={L.leads} />
-                    {L.lines.map((l) => <Row key={l.key} idx={l.idx} e={e} code={l.code} start={l.start} end={(e.staffing ?? [])[l.idx] ? ((e.staffing ?? [])[l.idx] as Line & { end?: string | null }).end ?? null : null} count={l.count} people={l.people} />)}
+                    {[...L.lines].sort((a, b) => ((e.staffing ?? [])[a.idx]?.tbc ? 1 : 0) - ((e.staffing ?? [])[b.idx]?.tbc ? 1 : 0) || (a.start ?? '').localeCompare(b.start ?? '')).map((l) => <Row key={l.key} idx={l.idx} e={e} code={l.code} start={l.start} end={(e.staffing ?? [])[l.idx] ? ((e.staffing ?? [])[l.idx] as Line & { end?: string | null }).end ?? null : null} count={l.count} people={l.people} />)}
                     {(L.extras.count > 0 || (!isBar(e) && L.lines.length > 0)) && <Row e={e} extra code={L.extras.code} start={L.extras.start} count={L.extras.count} people={L.extras.people} />}
                     {cx.some((x) => x.event_id === e.id) && <div className="ds-line2 cxl"><div className="ds-lh"><b className="ds-lname">Cancelled</b></div>
                       <span className="ds-cells" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>{cx.filter((x) => x.event_id === e.id).map((x) => <button key={x.id} className="ds-chip cx" disabled={busy}
