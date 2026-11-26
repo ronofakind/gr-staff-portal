@@ -8,8 +8,9 @@ import { setting, useSettings } from '../lib/settings';
 import { dLabel, isoDay, type Venue, type Client } from './api';
 import { AddressInput, type AddressParts } from '../components/AddressInput';
 import { PhotoViewer } from '../components/Avatar';
-import { UniDept, itemsOf, uniName } from './EventForm';
-import type { UniItems, UniItemsMap, UniLineKey } from '../components/Uniform';
+import { itemsOf } from './EventForm';
+import { UniPick } from '../components/UniPick';
+import type { UniItemsMap } from '../components/Uniform';
 
 /*
  * Push 32a · Admin → More → Venues & clients. Everything New event pre-fills comes from here.
@@ -98,47 +99,38 @@ export function Venues() {
   const cur = sel === 'new' ? null : tab === 'venues' ? (venues ?? []).find((x) => x.id === sel) ?? null : (clients ?? []).find((x) => x.id === sel) ?? null;
   const openClient = (id: string) => { setTabK((clients ?? []).find((c) => c.id === id)?.kind === 'private_home' ? 'homes' : 'clients'); setSel(id); };
 
+  const arch = (tab === 'venues' ? venues ?? [] : tab === 'homes' ? homesAll : plainAll).filter((x: { archived_at?: string | null }) => x.archived_at).length;
   return (
-    <div className="stack-lg vc">
-      <div className="vc-top"><h1 className="serif-h">Venues &amp; clients</h1><span className="muted sm">Admin → More → Venues &amp; clients · everything New event pre-fills comes from here · changes apply to new events only</span></div>
-      {!has038 && <p className="tag amber" style={{ height: 'auto', padding: '8px 12px', whiteSpace: 'normal' }}>Migration 038 isn’t applied yet: venue notes, photos, admin fee and transport billing are read-only until it is.</p>}
-      <div className={'vc-grid' + (sel ? ' has-sel' : '')}>
-        <div className="vc-list">
-          <div className="seg3 vc-tabs">
-            {([['venues', 'Venues', venues?.filter((x) => !x.archived_at).length], ['clients', 'Clients', plainAll.filter((x) => !x.archived_at).length], ['homes', 'Private homes', homesAll.filter((x) => !x.archived_at).length]] as [Tab, string, number | undefined][]).map(([k, l, n]) => (
-              <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTabK(k)}>{l}{n != null ? ` · ${n}` : ''}</button>
+    <div className="vc vc2">
+      <h1 className="serif-h vc2-h">Venues &amp; clients</h1>
+      <div className={'vc2-grid' + (sel ? ' has-sel' : '')}>
+        <div className="vc2-list">
+          <div className="vc2-tabs">
+            {([['venues', 'Venues'], ['clients', 'Clients'], ['homes', 'Private homes']] as [Tab, string][]).map(([k, l]) => (
+              <button key={k} className={tab === k ? 'on' : ''} onClick={() => setTabK(k)}>{l}</button>
             ))}
           </div>
-          <input className="vc-search" placeholder={tab === 'venues' ? 'Search venues…' : tab === 'homes' ? 'Search private homes…' : 'Search clients…'} value={q} onChange={(e) => setQ(e.target.value)} />
+          <div className="vc2-sr"><input placeholder="Search" value={q} onChange={(e) => setQ(e.target.value)} /><button className="abtn dark" onClick={() => setSel('new')}>+ New</button></div>
           {venues === null && <div className="muted sm">Loading…</div>}
-          {tab === 'venues' ? (list as V[]).map((x) => {
-            const c = counts.v[x.id];
-            const bits = [lastLabel(c), c?.bar && c?.floor ? 'floor + bar' : c?.bar ? 'bar' : '', x.always_offer_rides ? '🚗 rides' : '', x.far ? 'far' : '', x.no_outside_food ? 'no outside food' : ''].filter(Boolean).join(' · ');
-            return (
-              <button key={x.id} className={'vc-row' + (sel === x.id ? ' on' : '')} onClick={() => setSel(x.id)}>
-                <span className="spread"><b>{x.name}{x.archived_at && <em className="vc-arch"> · archived</em>}</b><small>{bits}</small></span>
-                <small>{x.address ? [shortAddr(x.address), clientName(x.usual_client_id)].filter(Boolean).join(' · ') : <span className="vc-miss">address missing</span>}</small>
-              </button>
-            );
-          }) : (list as C[]).map((x) => {
-            const c = counts.c[x.id]; const qb = qbCheck(x.name, x.qb_customer);
-            return (
-              <button key={x.id} className={'vc-row' + (sel === x.id ? ' on' : '')} onClick={() => setSel(x.id)}>
-                <span className="spread"><b>{x.name}{x.archived_at && <em className="vc-arch"> · archived</em>}</b><small>{lastLabel(c)}{qb.state === 'linked' ? ' · ✓ QB' : ''}</small></span>
-                <small>{tab === 'homes' ? (x.address ? shortAddr(x.address) : <span className="vc-miss">address missing</span>)
-                  : [x.kind === 'roaming' ? 'venue changes each time' : '', x.qb_customer ? `QB: ${x.qb_customer}` : 'no QuickBooks name', (x.admin_fee_pct ?? 10) !== 10 ? `admin fee ${x.admin_fee_pct}%` : ''].filter(Boolean).join(' · ')}</small>
-              </button>
-            );
-          })}
-          {list.length === 0 && venues !== null && <div className="muted sm" style={{ padding: '6px 2px' }}>Nothing matches “{q}”.</div>}
-          {(() => { const pool: { archived_at?: string | null }[] = tab === 'venues' ? venues ?? [] : tab === 'homes' ? homesAll : plainAll; const k = pool.filter((x) => x.archived_at).length;
-            return k > 0 && <button className="lnk sm vc-archt" onClick={() => setShowArch(!showArch)}>{showArch ? '▾ Hide archived' : `▸ Archived (${k}) · tap to see / bring back`}</button>; })()}
-          <button className="vc-new" onClick={() => setSel('new')}>+ New {tab === 'venues' ? 'venue' : tab === 'homes' ? 'private home' : 'client'}</button>
+          {tab === 'venues' ? (list as V[]).map((x) => (
+            <button key={x.id} className={'vc2-row' + (sel === x.id ? ' on' : '') + (x.archived_at ? ' arch' : '')} onClick={() => setSel(x.id)}>
+              <span><b>{x.name}</b><i>{counts.v[x.id]?.n ?? 0}</i></span>
+              <small>{[x.address ? shortAddr(x.address) : 'Address missing', clientName(x.usual_client_id)].filter(Boolean).join(' · ')}</small>
+            </button>
+          )) : (list as C[]).map((x) => (
+            <button key={x.id} className={'vc2-row' + (sel === x.id ? ' on' : '') + (x.archived_at ? ' arch' : '')} onClick={() => setSel(x.id)}>
+              <span><b>{x.name}</b><i>{counts.c[x.id]?.n ?? 0}</i></span>
+              <small>{tab === 'homes' ? (x.address ? shortAddr(x.address) : 'Address missing')
+                : [x.is_caterer ? 'Caterer' : '', x.uniform_special ? 'Own uniform' : '', x.kind === 'roaming' ? 'Changes each time' : '', qbCheck(x.name, x.qb_customer).state === 'linked' ? 'QB ✓' : '', (x.admin_fee_pct ?? 10) !== 10 ? `fee ${x.admin_fee_pct}%` : ''].filter(Boolean).join(' · ') || 'Client'}</small>
+            </button>
+          ))}
+          {list.length === 0 && venues !== null && <div className="muted sm vc2-none">Nothing matches.</div>}
+          {arch > 0 && <button className="vc2-arch" onClick={() => setShowArch(!showArch)}>{showArch ? 'Hide archived' : `Archived · ${arch}`}</button>}
         </div>
 
-        <div className="vc-card">
-          {sel && <button className="vc-back muted sm strong" onClick={() => setSel(null)}>‹ All {tab === 'venues' ? 'venues' : tab === 'homes' ? 'private homes' : 'clients'}</button>}
-          {!sel && <div className="adm-card vc-empty muted">Pick a {tab === 'venues' ? 'venue' : tab === 'homes' ? 'private home' : 'client'} on the left, or add a new one.</div>}
+        <div className="vc2-card">
+          {sel && <button className="abtn sm back-btn vc2-back" onClick={() => setSel(null)}>‹ All</button>}
+          {!sel && <div className="ne-card vc2-empty">Pick one on the left, or + New.</div>}
           {sel && tab === 'venues' && venues && clients && <VenueCard key={sel} v={cur as V | null} clients={clients} count={cur ? counts.v[cur.id] : undefined} has038={has038} all={venues}
             onSaved={async (id) => { await load(); setSel(id); }} onGone={async () => { await load(); setSel(null); }} onClient={openClient} />}
           {sel && tab !== 'venues' && clients && venues && <ClientCard key={sel + tab} c={cur as C | null} home={tab === 'homes'} venues={venues} all={(clients ?? []).filter((x) => (x.kind === 'private_home') === (tab === 'homes'))} onGone={async () => { await load(); setSel(null); }} count={cur ? counts.c[cur.id] : undefined} has038={has038}
@@ -150,27 +142,21 @@ export function Venues() {
 }
 
 // ───────── shared bits ─────────
-function Sec({ title, sub, children }: { title: string; sub?: string; children: React.ReactNode }) {
-  return <section className="adm-card vc-sec"><div className="vc-sec-h"><span>{title}</span>{sub && <small>{sub}</small>}</div>{children}</section>;
+function Sec({ n, title, right, children }: { n?: number; title: string; right?: React.ReactNode; children: React.ReactNode }) {
+  return <section className="ne-card"><h2>{n != null && <i>{n}</i>}{title}<span className="grow" />{right}</h2>{children}</section>;
 }
-function Sw({ on, set, label, sub, disabled }: { on: boolean; set: (v: boolean) => void; label: string; sub?: string; disabled?: boolean }) {
-  return (
-    <div className="sw-row vc-sw">
-      <button type="button" role="switch" aria-checked={on} disabled={disabled} className={'sw' + (on ? ' on' : '')} onClick={() => set(!on)}><span className="sw-track"><span className="sw-knob" /></span><span className="sw-lbl">{on ? 'ON' : 'OFF'}</span></button>
-      <span className="vc-sw-t"><b>{label}</b>{sub && <small className="muted">{sub}</small>}</span>
-    </div>
-  );
+function Sw({ on, set, label, disabled }: { on: boolean; set: (v: boolean) => void; label: string; sub?: string; disabled?: boolean }) {
+  return <button type="button" role="switch" aria-checked={on} disabled={disabled} className={'ne-sw' + (on ? ' on' : '')} onClick={() => set(!on)}><i /><span>{label}</span></button>;
 }
 function Head({ name, count, busy, saved, onSave, isNew }: { name: string; count?: Count; busy: boolean; saved: string | null; onSave: () => void; isNew: boolean }) {
-  const yr = new Date().getFullYear();
   return (
-    <div className="vc-head">
+    <div className="vc2-head">
       <div className="grow" style={{ minWidth: 0 }}>
-        <span className="serif vc-name">{name || (isNew ? 'New' : '—')}</span>
-        <span className="muted sm">{isNew ? 'not saved yet' : !count?.n ? 'no events yet' : `${count.n} event${count.n === 1 ? '' : 's'}${count.last?.startsWith(String(yr)) ? ` in ${yr}` : ''}${count.last ? ` · last ${dLabel(count.last)}` : ''}${count.next ? ` · next ${dLabel(count.next)}` : ''}`}</span>
+        <div className="serif vc2-name">{name || 'New'}</div>
+        <span className="muted">{isNew ? '' : !count?.n ? 'No events yet' : [`${count.n} event${count.n === 1 ? '' : 's'}`, count.last ? `last ${dLabel(count.last, { month: 'short', day: 'numeric' })}` : '', count.next ? `next ${dLabel(count.next, { month: 'short', day: 'numeric' })}` : ''].filter(Boolean).join(' · ')}</span>
       </div>
-      {saved && <span className="okc sm strong">✓ Saved {saved}</span>}
-      <button className="abtn dark" disabled={busy} onClick={onSave}>{busy ? 'Saving…' : 'Save'}</button>
+      {saved && <span className="okc sm strong">Saved {saved}</span>}
+      <button className="abtn ne-go vc2-save" disabled={busy} onClick={onSave}>{busy ? 'Saving…' : 'Save'}</button>
     </div>
   );
 }
@@ -188,15 +174,12 @@ const uniRow = (u: Uni) => ({
 });
 /** Nov 6 fix: a chip tap sets the uniform AND its pieces in one go → functional updates, so the second doesn't undo the first. */
 function Uniforms({ u, set }: { u: Uni; set: React.Dispatch<React.SetStateAction<Uni>> }) {
-  const si = (k: UniLineKey, i: UniItems) => set((x) => ({ ...x, items: { ...x.items, [k]: i } }));
-  return (
-    <div className="uni-card vc-uni">
-      <UniDept label="Floor" sub="MD · waiters · busboys" bar={false} men={u.floor_m} women={u.floor_w} setMen={(v) => set((x) => ({ ...x, floor_m: v }))} setWomen={(v) => set((x) => ({ ...x, floor_w: v }))} items={u.items} setItems={si} />
-      <UniDept label="Bar" sub="BM · bartenders · barbacks" bar men={u.bar_m} women={u.bar_w} setMen={(v) => set((x) => ({ ...x, bar_m: v }))} setWomen={(v) => set((x) => ({ ...x, bar_w: v }))} items={u.items} setItems={si} />
-    </div>
-  );
+  const f = (k: 'floor_m' | 'floor_w' | 'bar_m' | 'bar_w') => (v: string) => set((x) => ({ ...x, [k]: v }));
+  return <>
+    <div className="ne-g2"><UniPick label="UNIFORM · MEN · FLOOR" value={u.floor_m} onChange={f('floor_m')} /><UniPick women label="UNIFORM · WOMEN · FLOOR" value={u.floor_w} onChange={f('floor_w')} /></div>
+    <div className="ne-g2"><UniPick label="UNIFORM · MEN · BAR" value={u.bar_m} onChange={f('bar_m')} /><UniPick women label="UNIFORM · WOMEN · BAR" value={u.bar_w} onChange={f('bar_w')} /></div>
+  </>;
 }
-const uniSummary = (u: Uni) => `Floor · men ${uniName(u.floor_m)} · women ${uniName(u.floor_w)} — Bar · men ${uniName(u.bar_m)} · women ${uniName(u.bar_w)}`;
 
 // ───────── venue card ─────────
 function VenueCard({ v, clients, count, has038, all, onSaved, onGone, onClient }: { v: V | null; clients: C[]; count?: Count; has038: boolean; all: V[]; onSaved: (id: string) => void; onGone: () => void; onClient: (id: string) => void }) {
@@ -227,65 +210,41 @@ function VenueCard({ v, clients, count, has038, all, onSaved, onGone, onClient }
   };
 
   return (
-    <div className="stack" style={{ gap: 12 }}>
+    <div className="vc2-body">
       <Head name={name} count={count} busy={busy} saved={saved} onSave={save} isNew={!v} />
       {err && <p className="error">{err}</p>}
-      <div className="vc-cols">
-        <div className="stack" style={{ gap: 12 }}>
-          <Sec title="BASICS">
-            <div className="vc-2">
-              <label className="ef-f"><span>NAME · WHAT STAFF SEE</span><input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Salon Richmond" /></label>
-              <label className="ef-f"><span>USUAL CLIENT</span>
-                <select value={clientId} onChange={(e) => setClientId(e.target.value)}>
-                  <option value="">—</option>
-                  {clients.filter((c) => c.kind !== 'private_home').map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select><small className="muted">fills the client on New event</small></label>
-              <label className="ef-f"><span>🍽 USUAL CATERER</span>
-                <select value={catId} onChange={(e) => setCatId(e.target.value)}>
-                  <option value="">—</option>
-                  {clients.filter((c) => c.is_caterer).map((c) => <option key={c.id} value={c.id}>{c.caterer_label || c.name}</option>)}
-                </select><small className="muted">fills “Food by” + its uniform on New event</small></label>
-            </div>
-            <div className="ef-f"><span>ADDRESS</span><AddressInput value={address} onChange={(x) => { setAddress(x); setParts(null); }} onPick={setParts} placeholder="Start typing the address…" />
-              <small className="muted">Google autocomplete once the Maps key is set · plain text until then{!address.trim() && <b className="accent"> · address missing</b>}</small></div>
-            <label className="ef-f" style={{ maxWidth: 320 }}><span>AREA · who gets offered gigs here</span>
-              <select value={area} onChange={(e) => setArea(e.target.value)}><option value="">— not set (no filter)</option>{AREAS.map((a) => <option key={a} value={a}>{a}{AREA_HINT[a] ? ` · ${AREA_HINT[a]}` : ''}</option>)}</select>
-              {!vx?.area && area && <small className="muted">guessed from the postal code · Save to keep it</small>}</label>
-            <PinEditor pin={pin} set={setPin} />
-          </Sec>
-          <Sec title="FOR STAFF" sub="shown on their event page">
-            <label className="ef-f"><span>PARKING &amp; ENTRANCE</span><textarea rows={3} value={parking} onChange={(e) => setParking(e.target.value)} placeholder="Street parking after 6 PM… Staff entrance: side door." />
-              <small className="muted">under Where, and in “I’m running late” (same field as the venue staff notes)</small></label>
-            <label className="ef-f"><span>VENUE NOTES</span><textarea rows={3} value={notes} disabled={!has038} onChange={(e) => setNotes(e.target.value)} placeholder="Coats and bags in the room behind the kitchen. No phones on the floor." />
-              <small className="muted">under Notes on their event page</small></label>
-            <VenuePhotos venue={v} disabled={!has038} />
-            <LinksEditor links={links} set={setLinks} />
-          </Sec>
+      <Sec n={1} title="The venue">
+        <div className="ne-g2">
+          <label className="ne-f"><span>NAME</span><input value={name} onChange={(e) => setName(e.target.value)} /></label>
+          <div className="ne-f"><span>ADDRESS</span><AddressInput value={address} onChange={(x) => { setAddress(x); setParts(null); }} onPick={setParts} placeholder="Start typing the address" /></div>
         </div>
-        <div className="stack" style={{ gap: 12 }}>
-          <Sec title="USUAL UNIFORMS" sub="pre-filled on New event"><Uniforms u={u} set={setU} /></Sec>
-          <Sec title="TRANSPORT">
-            <Sw on={rides} set={setRides} label="Always offer rides" sub="turn on for hard-to-reach venues (e.g. Le Andover) · New event suggests Transport ON" />
-            <Sw on={farV} set={setFarV} label="Far venue" sub="✦ Fill on the Day sheet puts people with a car first, with the people they're linked to (Le Andover, Porsche Laval…)" />
-            <Sw on={noFood} set={setNoFood} label="No outside food" sub="synagogues / Chabad · staff see the no-outside-food icon on every event here" />
-            <small className="muted">Far event = {far} min+ drive from the office (<Link to="/admin/settings">Settings</Link>). Drive time from the office isn’t stored on venues yet (needs the Google Maps key), so it isn’t shown here.</small>
-          </Sec>
-          
-          <Sec title="FROM THE CLIENT" sub={client ? undefined : 'pick a usual client'}>
-            {client ? <>
-              <div className="spread"><b>{client.name}</b><button className="link-btn" onClick={() => onClient(client.id)}>edit in Clients ›</button></div>
-              <div className="vc-facts">
-                <span><small>Extras</small><b>{client.extras_billing === 'client' ? 'Client pays' : 'On G&R'}</b></span>
-                <span><small>Transport</small><b>{(client.transport_billing ?? (setting('transport.client_pays') ? 'client' : 'gr')) === 'client' ? 'Client pays' : 'On G&R'}</b></span>
-                <span><small>Drive folder on Save</small><b>{client.drive_folder_default === false ? 'OFF' : 'ON'}</b></span>
-                <span><small>Admin fee</small><b>{client.admin_fee_pct ?? 10}%</b></span>
-                <span><small>Rates</small><b>{client.rate_sets?.length ? client.rate_sets.map((r) => r.label).join(' / ') : 'Standard'}</b></span>
-              </div>
-            </> : <small className="muted">The client’s billing (extras, transport, admin fee, rates) shows here.</small>}
-          </Sec>
-          {v && <Remove kind="venue" it={v} all={all} onSaved={onSaved} onGone={onGone} />}
+        <div className="ne-g2">
+          <label className="ne-f"><span>USUAL CLIENT</span>
+            <select value={clientId} onChange={(e) => setClientId(e.target.value)}>
+              <option value="" />
+              {clients.filter((c) => c.kind !== 'private_home' && (!c.archived_at || c.id === clientId)).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select></label>
+          <label className="ne-f"><span>USUAL FOOD BY</span>
+            <select value={catId} onChange={(e) => setCatId(e.target.value)}>
+              <option value="" />
+              {clients.filter((c) => c.is_caterer && (!c.archived_at || c.id === catId)).map((c) => <option key={c.id} value={c.id}>{c.caterer_label || c.name}</option>)}
+            </select></label>
         </div>
-      </div>
+      </Sec>
+      <Sec n={2} title="For the staff">
+        <div className="ne-g2">
+          <label className="ne-f"><span>PARKING &amp; ENTRANCE</span><textarea rows={3} value={parking} onChange={(e) => setParking(e.target.value)} /></label>
+          <label className="ne-f"><span>VENUE NOTES</span><textarea rows={3} value={notes} disabled={!has038} onChange={(e) => setNotes(e.target.value)} /></label>
+        </div>
+        <div className="ne-f"><span>PHOTOS</span><VenuePhotos venue={v} disabled={!has038} /></div>
+        <div className="ne-f"><span>LINKS</span><LinksEditor links={links} set={setLinks} /></div>
+        <div className="ne-f"><span>STAFF ENTRANCE PIN</span><PinEditor pin={pin} set={setPin} /></div>
+      </Sec>
+      <Sec n={3} title="Defaults for new events">
+        <Uniforms u={u} set={setU} />
+        <div className="vc2-sws"><Sw on={farV} set={setFarV} label="Far venue" /><Sw on={rides} set={setRides} label="Always offer rides" /><Sw on={noFood} set={setNoFood} label="No outside food" /></div>
+      </Sec>
+      {v && <details className="ne-card ne-more"><summary><h2>More</h2></summary><Remove kind="venue" it={v} all={all} onSaved={onSaved} onGone={onGone} /></details>}
     </div>
   );
 }
@@ -324,15 +283,15 @@ function Remove({ kind, it, all, onSaved, onGone }: { kind: 'venue' | 'client' |
   const others = all.filter((x) => x.id !== it.id && !x.archived_at);
   return (
     <section className="adm-card vc-sec vc-rm">
-      <div className="vc-sec-h"><span>{it.archived_at ? '🗄️ ARCHIVED' : `REMOVE THIS ${word.toUpperCase()}`}</span><small>{it.archived_at ? 'hidden from the list and the pickers' : 'duplicates, old names'}</small></div>
+      <div className="vc-sec-h"><span>{it.archived_at ? 'ARCHIVED' : `REMOVE THIS ${word.toUpperCase()}`}</span><small>{it.archived_at ? 'hidden from the list and the pickers' : 'duplicates, old names'}</small></div>
       {!open && <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
         {it.archived_at ? <button className="abtn sm dark" disabled={busy} onClick={() => archive(false)}>Bring it back</button>
-          : <button className="abtn sm" disabled={busy} onClick={() => archive(true)}>🗄️ Archive</button>}
-        <button className="abtn sm vc-del" onClick={show}>🔀 Move its events / 🗑 Delete</button></div>}
+          : <button className="abtn sm" disabled={busy} onClick={() => archive(true)}>Archive</button>}
+        <button className="abtn sm vc-del" onClick={show}>Move its events · Delete</button></div>}
       {open && evs === null && !err && <small className="muted">Looking for its events…</small>}
       {open && evs && <div className="stack" style={{ gap: 10 }}>
         {n > 0 ? <>
-          <b className="vc-warn">⚠️ {n} event{n === 1 ? '' : 's'} use “{it.name}”{up ? ` · ${up} upcoming` : ''}</b>
+          <b className="vc-warn">{n} event{n === 1 ? '' : 's'} use “{it.name}”{up ? ` · ${up} upcoming` : ''}</b>
           <div className="vc-evs">{evs.map((e) => (
             <Link key={e.id} className="vc-ev" to={`/admin/bookings?date=${e.event_date}&view=board&ev=${e.id}`}>
               <span className="vc-ev-d">{dLabel(e.event_date)}</span><span className="grow">{e.title}{e.department === 'bar' ? ' · bar' : ''}</span>
@@ -346,7 +305,7 @@ function Remove({ kind, it, all, onSaved, onGone }: { kind: 'venue' | 'client' |
           <div className="row" style={{ gap: 8 }}>{!it.archived_at && <button className="abtn sm" disabled={busy} onClick={() => archive(true)}>Archive instead</button>}<button className="abtn sm" onClick={() => setOpen(false)}>Cancel</button></div>
         </> : <>
           <b>Delete “{it.name}”?</b><small className="muted">No events use it. This can’t be undone.</small>
-          <div className="row" style={{ gap: 8 }}>{!sure ? <button className="abtn vc-delb" onClick={() => setSure(true)}>🗑 Delete</button> : <button className="abtn vc-delb" disabled={busy} onClick={remove}>{busy ? 'Deleting…' : 'Yes, delete it'}</button>}<button className="abtn sm" onClick={() => setOpen(false)}>Cancel</button></div>
+          <div className="row" style={{ gap: 8 }}>{!sure ? <button className="abtn vc-delb" onClick={() => setSure(true)}>Delete</button> : <button className="abtn vc-delb" disabled={busy} onClick={remove}>{busy ? 'Deleting…' : 'Yes, delete it'}</button>}<button className="abtn sm" onClick={() => setOpen(false)}>Cancel</button></div>
         </>}
       </div>}
       {err && <p className="error">{err}</p>}
@@ -444,58 +403,38 @@ function ClientCard({ c, home, venues, all, count, has038, onSaved, onGone }: { 
   const setRate = (i: number, p: Partial<RateSet>) => setRates(rates.map((r, k) => (k === i ? { ...r, ...p } : r)));
 
   return (
-    <div className="stack" style={{ gap: 12 }}>
+    <div className="vc2-body">
       <Head name={name} count={count} busy={busy} saved={saved} onSave={save} isNew={!c} />
       {err && <p className="error">{err}</p>}
-      <div className="vc-cols">
-        <div className="stack" style={{ gap: 12 }}>
-          <Sec title={isHome ? 'PRIVATE HOME' : 'CLIENT'} sub={isHome ? 'the client is the venue' : 'only you see it'}>
-            <label className="ef-f"><span>{isHome ? 'NAME · WHAT STAFF SEE' : 'NAME'}</span><input value={name} onChange={(e) => setName(e.target.value)} placeholder={isHome ? 'e.g. Bitton residence' : 'e.g. Danielle Bitton'} /></label>
-            <div className="ef-f"><span>KIND</span>
-              <div className="seg3">{([['', 'Client'], ['private_home', 'Private home'], ['roaming', 'Changes each time']] as const).map(([k, l]) => <button type="button" key={k} className={kind === k ? 'on' : ''} onClick={() => setKind(k)}>{l}</button>)}</div></div>
-            {!isHome && usedBy.length > 0 && <small className="muted">Usual client of: {usedBy.map((v) => v.name).join(', ')}</small>}
-            {!isHome && <label className="row" style={{ gap: 8, alignItems: 'center' }}><input type="checkbox" checked={cat} onChange={(e) => setCat(e.target.checked)} /><span>🍽 <b>Caterer</b> · does the food (staff see “Food by …”)</span></label>}
-            {cat && <label className="ef-f" style={{ maxWidth: 320 }}><span>NAME STAFF SEE</span><input value={catLabel} onChange={(e) => setCatLabel(e.target.value)} placeholder={name || 'e.g. Beatrice'} /></label>}
-            {!isHome && <label className="row" style={{ gap: 8, alignItems: 'center' }}><input type="checkbox" checked={special} onChange={(e) => setSpecial(e.target.checked)} /><span><b>Own uniform rule</b> · wins over the caterer (e.g. Power Corp)</span></label>}
-          </Sec>
-          <Sec title="BILLING" sub="pre-filled on New event">
-            <div className="vc-2">
-              <label className="ef-f"><span>QUICKBOOKS CUSTOMER</span><input value={qb} onChange={(e) => setQb(e.target.value)} placeholder={check.expected ?? 'Name as in QuickBooks'} />
-                {check.state === 'linked' ? <small className="okc strong">✓ linked · matches the invoice-builder table</small>
-                  : check.state === 'differs' ? <small className="amberc strong">Invoice builder uses “{check.expected}” <button type="button" className="link-btn" onClick={() => setQb(check.expected!)}>use it</button></small>
-                  : check.state === 'empty' ? <small className="muted">{check.expected ? <>Invoice builder uses “{check.expected}” <button type="button" className="link-btn" onClick={() => setQb(check.expected!)}>use it</button></> : 'empty = the invoice builder looks it up by name'}</small>
-                  : <small className="muted">not in the invoice-builder table · text only, QuickBooks isn’t checked</small>}</label>
-              <label className="ef-f"><span>ADMIN FEE %</span><input inputMode="decimal" value={fee} disabled={!has038} onChange={(e) => setFee(e.target.value.replace(/[^\d.]/g, ''))} /><small className="muted">of the labour subtotal · default 10 (Brera 8)</small></label>
-            </div>
-            <Sw on={drive} set={setDrive} label="Create Drive folder on Save" sub="New event → Event folder starts ON / OFF" />
-            <Sw on={extras === 'client'} set={(x) => setExtras(x ? 'client' : 'gr')} label="Client pays extras" sub="off = extras on G&R (off the invoice unless one replaces a no-show)" />
-            <Sw on={transport === 'client'} set={(x) => setTransport(x ? 'client' : 'gr')} disabled={!has038} label="Client pays transport" sub="far events · paid travel + gas on the invoice" />
-          </Sec>
+      <Sec n={1} title={isHome ? 'The private home' : 'The client'}>
+        <div className="ne-g2">
+          <label className="ne-f"><span>NAME</span><input value={name} onChange={(e) => setName(e.target.value)} /></label>
+          <div className="ne-f"><span>KIND</span><span className="ne-seg">{([['', 'Client'], ['private_home', 'Private home'], ['roaming', 'Changes each time']] as const).map(([k, l]) => <button type="button" key={k} className={kind === k ? 'on' : ''} onClick={() => setKind(k)}>{l}</button>)}</span></div>
         </div>
-        <div className="stack" style={{ gap: 12 }}>
-          <Sec title="RATE SETS" sub="2+ sets → billing choice on the event form">
-            {rates.length === 0 && <small className="muted">Standard rates. Add sets when a client has more than one (e.g. La Nesra No tips / Tips).</small>}
-            {rates.length > 0 && <div className="vc-rates" style={{ gridTemplateColumns: `minmax(120px, 1.6fr) repeat(${roleCols.length}, minmax(56px, 1fr)) 28px` }}>
-              <span className="vc-rh">SET</span>{roleCols.map((k) => <span key={k} className="vc-rh">{k} $/h</span>)}<span />
-              {rates.map((r, i) => <RateRow key={r.key + i} r={r} cols={roleCols} onChange={(p) => setRate(i, p)} onRemove={() => setRates(rates.filter((_, k) => k !== i))} />)}
-            </div>}
-            <div><button type="button" className="abtn sm" onClick={() => { const n = rates.length ? `Set ${rates.length + 1}` : 'Standard'; setRates([...rates, { key: slug(n) + (rates.some((x) => x.key === slug(n)) ? '_' + rates.length : ''), label: n, rates: Object.fromEntries(roleCols.map((k) => [k, rates[0]?.rates?.[k] ?? 0])) }]); }}>+ add rate set</button></div>
-            {rates.length > 0 && <small className="muted">The first set is the default.</small>}
-          </Sec>
-          {isHome && <>
-            <Sec title="ADDRESS" sub="private home · fills the event address">
-              <AddressInput value={address} onChange={setAddress} placeholder="Start typing the address…" />
-              {!address.trim() && <small className="accent strong">address missing</small>}
-              <label className="ef-f" style={{ maxWidth: 320, marginTop: 8 }}><span>AREA</span><select value={area} onChange={(e) => setArea(e.target.value)}><option value="">— not set (no filter)</option>{AREAS.map((a) => <option key={a} value={a}>{a}</option>)}</select></label>
-            </Sec>
-            
-          </>}
-          {ownUni && <Sec title="USUAL UNIFORMS" sub={isHome ? 'pre-filled on New event' : cat ? 'fills events this caterer does the food for' : 'wins over the caterer'}><Uniforms u={u} set={setU} /></Sec>}
-          {!ownUni && <small className="muted" style={{ padding: '0 4px' }}>Caterers, clients with their own uniform rule and private homes get a usual uniform here. Billing clients don’t set the uniform.</small>}
-          {ownUni && <small className="muted" style={{ padding: '0 4px' }}>{uniSummary(u)}</small>}
-          {c && <Remove kind={home ? 'home' : 'client'} it={c} all={all} onSaved={onSaved} onGone={onGone} />}
+        {isHome && <div className="ne-f"><span>ADDRESS</span><AddressInput value={address} onChange={setAddress} placeholder="Start typing the address" /></div>}
+        {!isHome && <div className="vc2-sws vc2-cat">
+          <Sw on={cat} set={setCat} label="Caterer" />
+          {cat && <label className="ne-f"><span>NAME STAFF SEE</span><input value={catLabel} onChange={(e) => setCatLabel(e.target.value)} placeholder={name} /></label>}
+          <Sw on={special} set={setSpecial} label="Own uniform rule" />
+        </div>}
+      </Sec>
+      <Sec n={2} title="Billing">
+        <div className="ne-g2">
+          <label className="ne-f"><span>QUICKBOOKS CUSTOMER{check.state === 'linked' ? ' ✓' : ''}</span><input value={qb} onChange={(e) => setQb(e.target.value)} placeholder={check.expected ?? ''} />
+            {(check.state === 'differs' || (check.state === 'empty' && check.expected)) && <button type="button" className="lnk sm vc2-use" onClick={() => setQb(check.expected!)}>Use “{check.expected}”</button>}</label>
+          <label className="ne-f"><span>ADMIN FEE %</span><input inputMode="decimal" value={fee} disabled={!has038} onChange={(e) => setFee(e.target.value.replace(/[^\d.]/g, ''))} /></label>
         </div>
-      </div>
+        <div className="vc2-sws"><Sw on={drive} set={setDrive} label="Drive folder" /><Sw on={extras === 'client'} set={(x) => setExtras(x ? 'client' : 'gr')} label="Client pays extras" /><Sw on={transport === 'client'} set={(x) => setTransport(x ? 'client' : 'gr')} disabled={!has038} label="Client pays transport" /></div>
+      </Sec>
+      <Sec n={3} title="Rates">
+        {rates.length > 0 && <div className="vc2-rates" style={{ gridTemplateColumns: `minmax(120px, 1.6fr) repeat(${roleCols.length}, minmax(56px, 1fr)) 26px` }}>
+          <span className="vc2-rh">SET</span>{roleCols.map((k) => <span key={k} className="vc2-rh">{k} $/H</span>)}<span />
+          {rates.map((r, i) => <RateRow key={r.key + i} r={r} cols={roleCols} onChange={(p) => setRate(i, p)} onRemove={() => setRates(rates.filter((_, k) => k !== i))} />)}
+        </div>}
+        <button type="button" className="ne-plus" aria-label="Add a rate set" onClick={() => { const n = rates.length ? `Set ${rates.length + 1}` : 'Standard'; setRates([...rates, { key: slug(n) + (rates.some((x) => x.key === slug(n)) ? '_' + rates.length : ''), label: n, rates: Object.fromEntries(roleCols.map((k) => [k, rates[0]?.rates?.[k] ?? 0])) }]); }}>+</button>
+      </Sec>
+      {ownUni && <Sec n={4} title="Uniforms"><Uniforms u={u} set={setU} /></Sec>}
+      {c && <details className="ne-card ne-more"><summary><h2>More</h2></summary><Remove kind={home ? 'home' : 'client'} it={c} all={all} onSaved={onSaved} onGone={onGone} /></details>}
     </div>
   );
 }
@@ -504,6 +443,6 @@ function RateRow({ r, cols, onChange, onRemove }: { r: RateSet; cols: string[]; 
   return <>
     <input aria-label="Rate set name" value={r.label} onChange={(e) => onChange({ label: e.target.value })} />
     {cols.map((k) => <input key={k} aria-label={`${r.label} ${k} rate`} inputMode="decimal" value={String(r.rates?.[k] ?? '')} onChange={(e) => onChange({ rates: { ...r.rates, [k]: Number(e.target.value.replace(/[^\d.]/g, '')) || 0 } })} />)}
-    <button type="button" className="sg-x" aria-label={`Remove ${r.label}`} onClick={onRemove}>×</button>
+    <button type="button" className="ne-x" aria-label={`Remove ${r.label}`} onClick={onRemove}>×</button>
   </>;
 }

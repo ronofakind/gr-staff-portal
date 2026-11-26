@@ -2473,6 +2473,18 @@ html[data-theme="dark"] { --teams: #8487CC; --teams-bg: #1F2137; --teams-ink: #8
 :where(html[data-theme="dark"]) [data-theme=dark] .est, :where(html[data-theme="dark"]) [data-theme=dark] input.est, :where(html[data-theme="dark"]) [data-theme=dark] .est-tag { background: #746344 !important; }
 :where(html[data-theme="dark"]) .ne-newu { background: var(--bg, #312D25); }
 :where(html[data-theme="dark"]) .ne-ro { border: 1px solid var(--line, #4A433A); background: var(--bg, #312D25); }
+:where(html[data-theme="dark"]) .vc2-tabs { background: #36322E; }
+:where(html[data-theme="dark"]) .vc2-tabs button { color: var(--muted, #8A8076); }
+:where(html[data-theme="dark"]) .vc2-tabs button.on { background: var(--card, #1F1D1A); color: var(--ink, #E1DEDB); box-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+:where(html[data-theme="dark"]) .vc2-sr input { border: 1px solid #49433B; background: var(--card, #1F1D1A); }
+:where(html[data-theme="dark"]) .vc2-row:hover { background: rgba(31,29,26,0.5); }
+:where(html[data-theme="dark"]) .vc2-row.on { background: var(--card, #1F1D1A); box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+:where(html[data-theme="dark"]) .vc2-row i { color: var(--muted, #8A8076); }
+:where(html[data-theme="dark"]) .vc2-row small { color: var(--muted, #8A8076); }
+:where(html[data-theme="dark"]) .vc2-arch { color: var(--muted, #8A8076); }
+:where(html[data-theme="dark"]) .vc2-empty { color: var(--muted, #8A8076); }
+:where(html[data-theme="dark"]) .vc2-rates input { border: 1px solid #49433B; background: var(--card, #1F1D1A); }
+:where(html[data-theme="dark"]) .vc2-rh { color: var(--muted, #8A8076); }
 html[data-theme="dark"] { color-scheme: dark; }
 html[data-theme="dark"] body { background: #121110; color: #F1ECE4; }
 html[data-theme="dark"] img[src$="logo-mark.png"]:not(.adm-side img):not(.side-logo), html[data-theme="dark"] img[src$="logo-full.png"] { filter: invert(1) hue-rotate(180deg); mix-blend-mode: normal !important; }
