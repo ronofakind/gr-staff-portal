@@ -5222,3 +5222,39 @@ span.abtn.ds-newq { background: none; border: 0; padding: 0; }
 /* Nov 26 · selected day block readable in every theme */
 .ds-v6 .ds-wd.on { background: var(--ink, #1A1714); color: var(--bg, #fff); border-color: var(--ink, #1A1714); }
 .ds-v6 .ds-wd.on b { color: var(--bg, #fff); } .ds-v6 .ds-wd.on small { color: var(--bg, #fff); opacity: .75; }
+
+/* Nov 26 · Staff profile V2 (board AdminStaffProfileV2) */
+.sp2 { display: flex; flex-direction: column; gap: 14px; }
+.sp2-head { display: flex; align-items: center; gap: 14px; }
+.sp2-name { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.sp2-name .serif { font-size: 26px; line-height: 1.1; }
+.sp2-tier { font-style: normal; width: 26px; height: 26px; border-radius: 7px; display: inline-flex; align-items: center; justify-content: center; font: 700 12.5px Inter, sans-serif; color: #fff; background: #8A8177; }
+.sp2-tier.t-A { background: #3F7D4E; } .sp2-tier.t-B { background: #2F6DB5; } .sp2-tier.t-C { background: #C0582E; }
+.sp2-acts { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.sp2-acts .abtn { height: 32px; }
+.sp2-more { position: relative; }
+.sp2-menu { position: absolute; right: 0; top: 36px; z-index: 30; background: var(--card, #fff); border: 1px solid var(--line, #E2DAD0); border-radius: 10px; box-shadow: 0 10px 24px rgba(0,0,0,.14); padding: 4px; display: flex; flex-direction: column; min-width: 160px; }
+.sp2-menu button { border: 0; background: transparent; text-align: left; padding: 8px 12px; border-radius: 7px; font: inherit; color: inherit; cursor: pointer; }
+.sp2-menu button:hover { background: var(--sand, #F1ECE6); }
+.sp2-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.sp2-kpi { background: var(--card, #fff); border: 1px solid var(--line, #ECE6DE); border-radius: 12px; padding: 10px 14px; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.sp2-kpi span { font-size: 10px; font-weight: 800; letter-spacing: .08em; color: var(--muted, #8A8177); }
+.sp2-kpi b { font-size: 22px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sp2-kpi small { font-size: 12px; color: var(--muted, #8A8177); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sp2-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line, #ECE6DE); }
+.sp2-tabs button { border: 0; background: transparent; padding: 9px 16px; font: inherit; font-size: 13px; color: var(--muted, #8A8177); cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.sp2-tabs button.on { color: var(--ink, #1A1714); font-weight: 700; border-bottom-color: var(--ink, #1A1714); }
+.sp2-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+.sp2-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.sp2-ch { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.sp2-ch .serif, .sp2-cht { font-size: 18px; font-weight: 500; }
+.sp2-tierrow { display: flex; align-items: center; gap: 12px; }
+.sp2 .ab-card > .row:first-child { display: flex; align-items: center; gap: 8px; }
+.sp2 .pcard small.muted, .sp2 .toff-add > .muted { display: none; }
+.kn-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.kn-chip { display: inline-flex; align-items: center; gap: 4px; height: 30px; padding: 0 4px 0 10px; border: 1px solid var(--ink, #1A1714); border-radius: 8px; font-size: 12.5px; }
+.kn-chip button { border: 0; background: transparent; width: 22px; height: 22px; font-size: 15px; color: var(--muted, #8A8177); cursor: pointer; }
+.kn-add { height: 30px; padding: 0 12px; border: 1.5px dashed #D9D0C4; border-radius: 8px; background: transparent; font: inherit; font-size: 12.5px; color: var(--muted, #8A8177); cursor: pointer; }
+.kn-form { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.kn-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+@media (max-width: 900px) { .sp2-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .sp2-cols { grid-template-columns: 1fr; } .sp2-head { flex-wrap: wrap; } }

@@ -95,49 +95,56 @@ export function StaffProfile({ s, onClose, onEdit, all }: { s: AStaff; onClose: 
   const tab = tabOf(s);
   const place = sd && sc ? (() => { const pool = people.filter((p) => p.active && tabOf(p) === tab && p.id !== s.id).map((p) => scoreOf(p, sd).total); return { n: pool.filter((v) => v > sc.total).length + 1, of: pool.length + 1 }; })() : null;
 
+  const [ptab, setPtab] = useState<'over' | 'avail' | 'pay' | 'files'>('over'); const [more, setMore] = useState(false);
+  const [rate, setRate] = useState<{ rate: number; from_date: string } | null>(null);
+  useEffect(() => { supabase.from('staff_rates').select('rate,from_date').eq('staff_id', s.id).lte('from_date', today).order('from_date', { ascending: false }).limit(1).then(({ data }) => setRate(((data ?? [])[0] as { rate: number; from_date: string } | undefined) ?? null)); }, [s.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const ap = inv !== undefined ? appStatus(s, inv) : null;
+  const nx = upcoming[0];
+  const kpi = (l: string, v: React.ReactNode, sub: string) => <div className="sp2-kpi"><span>{l}</span><b className="serif">{v}</b><small>{sub}</small></div>;
   return (
     <>
       <div className="adm-scrim" onClick={onClose} />
-      <aside className="adm-panel sp-wide" aria-label={s.full_name}>
-        {/* Nov 5 · staff profile v2: header + ranking badge, then 3 columns (doing · who · when) */}
-        <div className="sp-head">
-          <span className={'ringt t-' + (tierNow ?? 'none')}><Avatar name={s.full_name} url={s.photo_url} size={68} /></span>
-          <div className="grow sp-who">
-            <div className="serif" style={{ fontSize: 26, lineHeight: 1.1 }}>{s.full_name}</div>
-            <div className="muted sm">{s.nickname ? `"${s.nickname}" · ` : ''}{s.positions.join(', ') || s.role}{s.role !== 'staff' ? ` · ${s.role}` : ''} · {tab === 'bar' ? 'Bar' : tab === 'md' ? 'MD' : 'Floor'} · {s.language.toUpperCase()} · {shifts.filter((x) => x.events.event_date <= today).length} shifts this year</div>
-            <div className="row wrap sp-acts">
-              {tel ? <a className="abtn sm ok" href={`tel:${tel}`}>Call</a> : <span className="abtn sm" aria-disabled>No phone</span>}
-              {tel && <a className="abtn sm" href={`sms:${tel}`}>Text</a>}
-              <Link className="abtn sm dark" to={`/admin/messages?staff=${s.id}`}>✉ Message</Link>
-              <Link className="abtn sm" to={`/admin/view/${s.id}`}>View as</Link>
-              <button className="abtn sm" onClick={onEdit}>Edit details</button>
-            </div>
-            {inv !== undefined && (() => { const ap = appStatus(s, inv); return (
-              <div className="row sm sp-app" style={{ gap: 8 }}><span className="muted">App</span><AppChip st={ap} />
-                {ap.action && <button className={'abtn sm' + (ap.action === 'Invite' ? ' dark' : '')} style={{ marginLeft: 'auto' }} onClick={() => (ap.action === 'Invite' || ap.action === 'Resend' ? setInviting(true) : onEdit())}>{ap.action}</button>}</div>); })()}
+      <aside className="adm-panel sp-wide sp2" aria-label={s.full_name}>
+        {/* Nov 26 · staff profile V2 (board AdminStaffProfileV2): header · 4 blocks · 4 tabs */}
+        <div className="sp2-head">
+          <span className={'ringt t-' + (tierNow ?? 'none')}><Avatar name={s.full_name} url={s.photo_url} size={60} /></span>
+          <div className="grow" style={{ minWidth: 0 }}>
+            <div className="sp2-name"><span className="serif">{s.full_name}</span>{tierNow && <i className={'sp2-tier t-' + tierNow}>{tierNow}</i>}{ap && <AppChip st={ap} />}</div>
+            <div className="muted sm">{[s.nickname ? `"${s.nickname}"` : '', s.positions.join(', ') || s.role, tab === 'bar' ? 'Bar' : tab === 'md' ? 'MD' : 'Floor', s.phone ?? 'No phone', s.language.toUpperCase()].filter(Boolean).join(' · ')}</div>
           </div>
-          <div className={'sp-badge t-' + (tierNow ?? 'none')}><span>RANKING</span><b className="serif">{tierNow ? <i>{tierNow}</i> : null}{tierNow ? ' · ' : ''}{sc ? sc.form : '…'}</b>
-            <small>{place ? `#${place.n} of ${place.of} · ${tab === 'md' ? 'MD' : tab}` : ' '}</small></div>
-          <button className="sq sp-x" aria-label="Close" onClick={onClose}>×</button>
+          <div className="sp2-acts">
+            {tel && <a className="abtn sm" href={`tel:${tel}`}>Call</a>}
+            {tel && <a className="abtn sm" href={`sms:${tel}`}>Text</a>}
+            <Link className="abtn sm" to={`/admin/messages?staff=${s.id}`}>Message</Link>
+            <Link className="abtn sm" to={`/admin/view/${s.id}`}>View as</Link>
+            <button className="abtn sm" onClick={onEdit}>Edit</button>
+            <div className="sp2-more"><button className="abtn sm" onClick={() => setMore(!more)}>More</button>
+              {more && <div className="sp2-menu" onMouseLeave={() => setMore(false)}>
+                {ap?.action && <button onClick={() => { setMore(false); if (ap.action === 'Invite' || ap.action === 'Resend') setInviting(true); else onEdit(); }}>{ap.action}</button>}
+                {s.active && <button className="accent" onClick={async () => { setMore(false); if (confirm(`Mark ${s.full_name} inactive? They stay in the history.`)) { await supabase.rpc('admin_staff_update', { p_id: s.id, p_patch: { active: false } }); onClose(); } }}>Make inactive</button>}
+              </div>}
+            </div>
+            <button className="sq sp-x" aria-label="Close" onClick={onClose}>×</button>
+          </div>
         </div>
-        <div className="seg3 sp-tabs">{(['profile', 'avail'] as const).map((v) => <button key={v} className={pview === v ? 'on' : ''} onClick={() => setPview(v)}>{v === 'profile' ? 'Profile' : 'Availability'}</button>)}</div>
-        {pview === 'avail' && <AvailTab s={s} week={week} off={off} onWeek={(w) => setWeek(w)} />}
-        <div className="sp-cols" style={pview === 'avail' ? { display: 'none' } : undefined}>
-          <div className="sp-col">
-            <div className="sp-colh">HOW THEY’RE DOING</div>
-            {sd && sc && <div className="pcard"><div className="row" style={{ justifyContent: 'space-between' }}><span className="kick">RANKING · WHY {sc.form}</span><Link to="/admin/ranking" className="sm accent strong">All rankings ›</Link></div>
-              <div className="sp-tierh"><b>Tier</b><span className="muted sm">the colour on the Bookings board</span></div>
-              <div className="sp-tier">{(['A', 'B', 'C', null] as const).map((t) => <button key={t ?? 'none'} type="button" className={(tierNow ?? null) === t ? 'on t-' + (t ?? 'none') : ''}
-                onClick={async () => { if ((tierNow ?? null) === t) return; const prev = tierNow; setTierNow(t); const { error } = await supabase.from('staff_private').update({ tier: t }).eq('staff_id', s.id); if (error) { setTierNow(prev); alert(error.message); } }}>{t ?? 'No tier'}</button>)}</div>
+        <div className="sp2-kpis">
+          {kpi('RANKING', sc ? sc.form : '…', place ? `#${place.n} of ${place.of} · ${tab === 'md' ? 'MD' : tab}` : ' ')}
+          {kpi('NEXT SHIFT', nx ? dLabel(nx.events.event_date, { weekday: 'short', month: 'short', day: 'numeric' }) : '—', nx ? `${nx.events.title} · ${tm(nx.planned_start)}` : 'Nothing booked')}
+          {kpi('THIS MONTH', `${month.length} shift${month.length === 1 ? '' : 's'}`, `${monthHours} h`)}
+          {kpi('RATE', rate ? `$${Number(rate.rate)}/h` : '—', rate ? `since ${dLabel(rate.from_date, { month: 'short', day: 'numeric', year: 'numeric' })}` : 'Not set')}
+        </div>
+        <div className="sp2-tabs">{([['over', 'Overview'], ['avail', 'Availability'], ['pay', 'Pay'], ['files', 'Files & notes']] as const).map(([k, l]) => <button key={k} className={ptab === k ? 'on' : ''} onClick={() => setPtab(k)}>{l}</button>)}</div>
+
+        {ptab === 'over' && <div className="sp2-cols">
+          <div className="sp2-col">
+            {sd && sc && <div className="pcard"><div className="sp2-ch"><b className="serif">Ranking</b><Link to="/admin/ranking" className="sm strong">All rankings ›</Link></div>
+              <div className="sp2-tierrow"><span className="muted sm">Tier</span><div className="sp-tier">{(['A', 'B', 'C', null] as const).map((t) => <button key={t ?? 'none'} type="button" className={(tierNow ?? null) === t ? 'on t-' + (t ?? 'none') : ''}
+                onClick={async () => { if ((tierNow ?? null) === t) return; const prev = tierNow; setTierNow(t); const { error } = await supabase.from('staff_private').update({ tier: t }).eq('staff_id', s.id); if (error) { setTierNow(prev); alert(error.message); } }}>{t ?? 'None'}</button>)}</div></div>
               <ScoreWhy compact bars s={me} sc={sc}
                 onTier={() => supabase.from('staff_private').select('tier').eq('staff_id', s.id).maybeSingle().then(({ data }) => setTierNow(((data as { tier?: 'A' | 'B' | 'C' | null } | null)?.tier) ?? null))} /></div>}
             {sd && <MgrFeedback sid={s.id} d={sd} />}
-            <RateCard s={s} />
-            <TaxCard staffId={s.id} />
-            <CvCard staffId={s.id} />{/* push 103 */}
-            <TextViaCard staffId={s.id} />{/* push 107 */}
             <div className="pcard">
-              <div className="row" style={{ justifyContent: 'space-between' }}><span className="kick">RELIABILITY · {today.slice(0, 4)}</span><Link to="/admin/reliability" className="sm accent strong">Full log ›</Link></div>
+              <div className="sp2-ch"><b className="serif">Reliability · {today.slice(0, 4)}</b><Link to="/admin/reliability" className="sm strong">Full log ›</Link></div>
               <div className="rel4">
                 <div className={count('no_show') ? 'r' : 'g'}><b>{count('no_show')}</b><small>no-shows</small></div>
                 <div className={count('cancelled') ? 'r' : 'g'}><b>{count('cancelled')}</b><small>cancels</small></div>
@@ -147,71 +154,72 @@ export function StaffProfile({ s, onClose, onEdit, all }: { s: AStaff; onClose: 
               {last && <div className="muted sm">Last: {flagsOf(last).map((f) => f.flag.replace('_', '-')).join(', ')} · {dLabel(last.events.event_date)} · {last.events.title}</div>}
             </div>
           </div>
-          <div className="sp-col">
-            <div className="sp-colh">WHO THEY ARE · MANAGERS SEE “ABOUT”</div>
+          <div className="sp2-col">
             <AboutCard key={s.id} s={s} people={people} />
-            <PinNoteCard key={"pin" + s.id} staffId={s.id} first={(s.nickname || s.full_name).split(' ')[0]} />
+            <PinNoteCard key={'pin' + s.id} staffId={s.id} first={(s.nickname || s.full_name).split(' ')[0]} />
             <div className="pcard ru-card">
-              <div className="row" style={{ justifyContent: 'space-between' }}><span className="kick">BOOKING RULES · NEVER SHOWN TO STAFF</span><button className="lnk accent" style={{ textDecoration: 'none', fontSize: 13, whiteSpace: 'nowrap', marginLeft: 8 }} onClick={() => setAdding(true)}>+ Add</button></div>
+              <div className="sp2-ch"><b className="serif">Booking rules</b><button className="lnk strong sm" style={{ textDecoration: 'none' }} onClick={() => setAdding(true)}>+ Add</button></div>
               {(['together', 'apart'] as LinkKind[]).map((k) => { const ls = linksOf(links, s.id, k); if (!ls.length) return null; return (
-                <div key={k} className="ru-grp"><div className={'ru-h ' + (k === 'together' ? 'okc' : 'accent')}>{k === 'together' ? 'WORKS WELL WITH' : 'KEEP APART FROM'} · {ls.length}</div>
+                <div key={k} className="ru-grp"><div className={'ru-h ' + (k === 'together' ? 'okc' : 'accent')}>{k === 'together' ? 'WORKS WELL WITH' : 'KEEP APART FROM'}</div>
                   {ls.map((l) => { const o = people.find((p) => p.id === other(l, s.id)); return (
                     <div key={l.staff_a + l.staff_b} className={'ru-row ' + k}><Avatar name={o?.full_name ?? '?'} url={o?.photo_url} size={30} />
-                      <div className="grow"><b>{o?.full_name ?? 'Someone'}</b><small>{l.reason || (k === 'apart' ? 'not on the same event' : 'book together when you can')}</small></div>
+                      <div className="grow"><b>{o?.full_name ?? 'Someone'}</b>{l.reason && <small>{l.reason}</small>}</div>
                       <button className="ru-x" aria-label="Remove rule" onClick={async () => { if (!confirm(`Remove this rule for ${s.full_name.split(' ')[0]} and ${o?.full_name.split(' ')[0] ?? 'them'}?`)) return; await supabase.from('staff_links').delete().eq('staff_a', l.staff_a).eq('staff_b', l.staff_b); reloadRules(); }}>×</button></div>); })}
                 </div>); })}
-              {conds.some((c) => c.staff_id === s.id) && <div className="ru-grp"><div className="ru-h gold">WHEN TO BOOK · {conds.filter((c) => c.staff_id === s.id).length}</div>
+              {conds.some((c) => c.staff_id === s.id) && <div className="ru-grp"><div className="ru-h gold">WHEN TO BOOK</div>
                 {conds.filter((c) => c.staff_id === s.id).map((c) => (
-                  <div key={c.id} className="ru-row when"><span className="ru-ic">{c.kind === 'areas' ? '⌖' : c.kind === 'not_venue' || c.kind === 'private_only' ? '⌂' : c.kind === 'big_dates_only' ? '◆' : c.kind === 'only_if_needed' ? '…' : c.kind === 'not_weekday' ? '◷' : '#'}</span>
-                    <div className="grow"><b>{condLabel(c)}</b>{c.reason && <small>{c.reason}</small>}</div>
-                    {c.kind !== 'min_guests' ? <button className="ru-x" aria-label="Remove rule" onClick={async () => { await supabase.from('staff_conditions').delete().eq('id', c.id); reloadRules(); }}>×</button> : <small className="muted">read-only</small>}</div>))}
+                  <div key={c.id} className="ru-row when"><div className="grow"><b>{condLabel(c)}</b>{c.reason && <small>{c.reason}</small>}</div>
+                    {c.kind !== 'min_guests' ? <button className="ru-x" aria-label="Remove rule" onClick={async () => { await supabase.from('staff_conditions').delete().eq('id', c.id); reloadRules(); }}>×</button> : null}</div>))}
               </div>}
-              {!linksOf(links, s.id).length && !conds.some((c) => c.staff_id === s.id) && <div className="muted sm">No rules. + Add to set who they work well with, who to keep apart, or when to book them.</div>}
-              <div className="muted sm">Bookings and Auto-fill follow these. Changes save right away.</div>
+              {!linksOf(links, s.id).length && !conds.some((c) => c.staff_id === s.id) && <div className="muted sm">None</div>}
             </div>
-            <div className="pcard">
-              <div className="kick">ADMIN ONLY · NEVER SHOWN TO STAFF</div>
-                <div className="row sm" style={{ gap: 8 }}><span className="muted">Uniform line</span>
-                  <div className="seg">{([['m', 'Men'], ['f', 'Women']] as const).map(([k, l]) => <button key={k} className={sex === k ? 'on' : ''} onClick={async () => { setSex(k); await supabase.rpc('admin_staff_update', { p_id: s.id, p_patch: { sex: k } }); }}>{l}</button>)}</div>
-                  {!sex && <span className="accent">not set · they see the men's line</span>}</div>
-              <textarea rows={3} value={notes} onChange={(e) => { setNotes(e.target.value); setSaved(false); }} onBlur={() => !saved && saveNotes()} placeholder="Admin notes · great with VIP tables…" />
-              {!saved && <button className="abtn sm dark" onClick={saveNotes}>Save note</button>}
-              <ReminderList key={'rm' + s.id} staffId={s.id} staffName={s.full_name} />
-            </div>
-            <EmergencyCard key={'em' + s.id} s={s} />
-            {s.active && <button className="lnk accent" style={{ alignSelf: 'flex-start' }} onClick={async () => { if (confirm(`Mark ${s.full_name} inactive? They stay in the history.`)) { await supabase.rpc('admin_staff_update', { p_id: s.id, p_patch: { active: false } }); onClose(); } }}>Mark inactive</button>}
           </div>
-          <div className="sp-col">
-            <div className="sp-colh">WHEN THEY WORK</div>
-            <div className="pcard"><div className="kick">THIS MONTH</div><div className="row" style={{ gap: 20 }}><b className="big">{month.length} <small>shifts</small></b><b className="big">{monthHours} <small>hrs</small></b></div>
-              <b className="sm">Next</b>
-              {upcoming.length ? upcoming.map((x) => <div key={x.id} className="sp-next"><span className="muted">{dLabel(x.events.event_date)}</span><b>{x.events.title} · {tm(x.planned_start)}</b></div>) : <div className="muted sm">Nothing booked.</div>}
-            </div>
+        </div>}
+
+        {ptab === 'avail' && <div className="sp2-cols">
+          <div className="sp2-col"><AvailTab s={s} week={week} off={off} onWeek={(w) => setWeek(w)} /></div>
+          <div className="sp2-col">
             <div className="pcard">
-              <div className="kick">USUAL WEEK</div>
-              <div className="wk7">{DOW.map((d, i) => { const w = week[i]; return <span key={i} className={w?.status ?? 'unset'} title={w && w.status !== 'no' ? (w.until_time ? `day only · ${w.from_time ? ampm(w.from_time) : 'any'}–${ampm(w.until_time)}` : w.from_time ? `from ${ampm(w.from_time)}` : '') : ''}>{d}{w && w.status !== 'no' && w.until_time ? <small>day</small> : w && w.status !== 'no' && w.from_time ? <small>{ampm(w.from_time).replace(' ', '')}</small> : null}</span>; })}</div>
-              {!Object.keys(week).length && <div className="muted sm">Not set yet.</div>}
-            </div>
-            <div className="pcard">
-              <div className="row" style={{ justifyContent: 'space-between' }}><span className="kick">TIME OFF</span><span className="muted sm">on their calendar as days off</span></div>
+              <div className="sp2-ch"><b className="serif">Time off</b></div>
               {offShown.map((o) => (
                 <div key={o.id} className="toff-row"><div className="grow"><b>{o.every_dow != null ? `Every ${DOWL[o.every_dow]}` : o.from_date === o.to_date ? dLabel(o.from_date) : `${dLabel(o.from_date)} – ${dLabel(o.to_date)}`}{o.days_off_private?.note ? ` · ${o.days_off_private.note}` : o.reason ? ` · ${o.reason}` : ''}</b>
-                  <small>{o.added_by_admin ? 'added by G&R' : 'they added it'} · {dLabel(o.created_at.slice(0, 10))}</small></div><button className="sq" aria-label="Remove time off" onClick={() => removeOff(o)}>×</button></div>
+                  <small>{o.added_by_admin ? 'added by G&R' : 'they added it'}</small></div><button className="sq" aria-label="Remove time off" onClick={() => removeOff(o)}>×</button></div>
               ))}
-              {!offShown.length && <div className="muted sm">None coming up.</div>}
+              {!offShown.length && <div className="muted sm">None coming up</div>}
               <div className="toff-add">
-                <b className="sm">+ Add time off</b>
                 <div className="seg">{([['day', 'One day'], ['range', 'Date range'], ['week', 'Every week']] as const).map(([k, l]) => <button key={k} className={toff.mode === k ? 'on' : ''} onClick={() => setToff({ ...toff, mode: k })}>{l}</button>)}</div>
                 {toff.mode === 'week' ? <select value={toff.dow} onChange={(e) => setToff({ ...toff, dow: Number(e.target.value) })}>{DOWL.map((d, i) => <option key={d} value={i}>Every {d}</option>)}</select>
                   : <div className="row" style={{ gap: 8 }}><input type="date" value={toff.from} onChange={(e) => setToff({ ...toff, from: e.target.value, to: toff.to < e.target.value ? e.target.value : toff.to })} />{toff.mode === 'range' && <input type="date" value={toff.to} min={toff.from} onChange={(e) => setToff({ ...toff, to: e.target.value })} />}</div>}
-                <input placeholder="Reason (optional, only you see it)" value={toff.note} onChange={(e) => setToff({ ...toff, note: e.target.value })} />
-                <button className="abtn dark" onClick={addOff}>Save time off</button>
+                <input placeholder="Reason" value={toff.note} onChange={(e) => setToff({ ...toff, note: e.target.value })} />
+                <button className="abtn dark" onClick={addOff}>Add time off</button>
                 {toffMsg && <span className={'sm ' + (toffMsg.startsWith('Saved.') && !toffMsg.includes('⚠') ? 'okc' : 'accent')}>{toffMsg}</span>}
-                <span className="muted sm">They're skipped in availability asks for those dates. If they're already booked, you get a warning.</span>
               </div>
             </div>
           </div>
-        </div>
+        </div>}
+
+        {ptab === 'pay' && <div className="sp2-cols">
+          <div className="sp2-col"><RateCard s={s} /></div>
+          <div className="sp2-col"><TaxCard staffId={s.id} /></div>
+        </div>}
+
+        {ptab === 'files' && <div className="sp2-cols">
+          <div className="sp2-col">
+            <CvCard staffId={s.id} />
+            <EmergencyCard key={'em' + s.id} s={s} />
+            <TextViaCard staffId={s.id} />
+          </div>
+          <div className="sp2-col">
+            <div className="pcard">
+              <div className="sp2-ch"><b className="serif">Admin notes</b></div>
+              <div className="row sm" style={{ gap: 8 }}><span className="muted">Uniform line</span>
+                <div className="seg">{([['m', 'Men'], ['f', 'Women']] as const).map(([k, l]) => <button key={k} className={sex === k ? 'on' : ''} onClick={async () => { setSex(k); await supabase.rpc('admin_staff_update', { p_id: s.id, p_patch: { sex: k } }); }}>{l}</button>)}</div></div>
+              <textarea rows={3} value={notes} onChange={(e) => { setNotes(e.target.value); setSaved(false); }} onBlur={() => !saved && saveNotes()} placeholder="Admin notes" />
+              {!saved && <button className="abtn sm dark" onClick={saveNotes}>Save note</button>}
+              <ReminderList key={'rm' + s.id} staffId={s.id} staffName={s.full_name} />
+            </div>
+          </div>
+        </div>}
       </aside>
       {inviting && <InviteModal queue={[s]} onClose={() => { setInviting(false); loadInv(); }} onChanged={loadInv} onFix={() => { setInviting(false); onEdit(); }} />}
       {adding && <AddRule s={s} people={people} venues={venues} links={links} onClose={() => setAdding(false)} onSaved={() => { setAdding(false); reloadRules(); }} />}
@@ -353,20 +361,21 @@ function EmergencyCard({ s }: { s: AStaff }) {
   );
 }
 
-type About = { veteran: boolean | null; experience: 'SENIOR' | 'MID' | 'JUNIOR' | null; experience_note: string | null; knows_staff_id: string | null; knows_text: string | null; languages: Record<string, number> | null; manager_note: string | null };
+type About = { veteran: boolean | null; experience: 'SENIOR' | 'MID' | 'JUNIOR' | null; experience_note: string | null; knows_staff_id: string | null; knows_text: string | null; knows: Knows[]; languages: Record<string, number> | null; manager_note: string | null };
+type Knows = { id?: string; name?: string; rel?: string };
 const EXP: ['JUNIOR' | 'MID' | 'SENIOR', string][] = [['JUNIOR', 'Junior'], ['MID', 'Mid'], ['SENIOR', 'Senior']];
 const LV: [number, string][] = [[1, 'Basic'], [2, 'Good'], [3, 'Fluent']];
 
 /** ABOUT · managers see this (push 29): experience (1 tap) + note, knows (from application), languages (from onboarding), note for managers. */
 function AboutCard({ s, people }: { s: AStaff; people: AStaff[] }) {
   const [a, setA] = useState<About | null>(null); const [err, setErr] = useState(''); const [ok, setOk] = useState('');
-  const [q, setQ] = useState(''); const [pickOpen, setPickOpen] = useState(false);
+  const [q, setQ] = useState(''); const [pickOpen, setPickOpen] = useState(false); const [kPick, setKPick] = useState<Knows | null>(null);
   const [expNote, setExpNote] = useState(''); const [rel, setRel] = useState(''); const [mnote, setMnote] = useState('');
   useEffect(() => {
-    supabase.from('staff_private').select('veteran,experience,experience_note,knows_staff_id,knows_text,languages,manager_note').eq('staff_id', s.id).maybeSingle().then(({ data, error }) => {
+    supabase.from('staff_private').select('veteran,experience,experience_note,knows_staff_id,knows_text,knows,languages,manager_note').eq('staff_id', s.id).maybeSingle().then(({ data, error }) => {
       if (error) { setErr(/column|schema/i.test(error.message) ? 'Needs migration 032 (not applied yet).' : error.message); return; }
       const d = (data ?? {}) as Partial<About>;
-      const v: About = { veteran: d.veteran ?? null, experience: d.experience ?? null, experience_note: d.experience_note ?? null, knows_staff_id: d.knows_staff_id ?? null, knows_text: d.knows_text ?? null,
+      const v: About = { veteran: d.veteran ?? null, experience: d.experience ?? null, experience_note: d.experience_note ?? null, knows_staff_id: d.knows_staff_id ?? null, knows_text: d.knows_text ?? null, knows: Array.isArray(d.knows) ? d.knows : [],
         languages: d.languages && typeof d.languages === 'object' && !Array.isArray(d.languages) ? d.languages : {}, manager_note: d.manager_note ?? null };
       setA(v); setExpNote(v.experience_note ?? ''); setRel(v.knows_text ?? ''); setMnote(v.manager_note ?? '');
     });
@@ -379,43 +388,48 @@ function AboutCard({ s, people }: { s: AStaff; people: AStaff[] }) {
   };
   const norm = (x: string) => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   const list = q.trim().length < 2 ? [] : people.filter((p) => p.active && p.id !== s.id && norm(p.full_name + ' ' + (p.nickname ?? '')).includes(norm(q.trim()))).slice(0, 6);
-  const who = a?.knows_staff_id ? people.find((p) => p.id === a.knows_staff_id) : null;
+  const saveKnows = (next: Knows[]) => save({ knows: next, knows_staff_id: next.find((k) => k.id)?.id ?? null, knows_text: next[0] ? (next[0].rel ?? next[0].name ?? null) : null } as Partial<About>);
   const blurSave = (k: 'experience_note' | 'knows_text' | 'manager_note', v: string) => { const t = v.trim() || null; if (a && (a[k] ?? null) !== t) save({ [k]: t }); };
   return (
     <div className="pcard ab-card">
-      <div className="row" style={{ justifyContent: 'space-between' }}><span className="kick">ABOUT · MANAGERS SEE THIS</span>{ok && <span className="ab-saved">{ok}</span>}</div>
+      <div className="row" style={{ justifyContent: 'space-between' }}><b className="serif sp2-cht">About</b><span className="grow" /><span className="muted sm">Managers see this</span>{ok && <span className="ab-saved">{ok}</span>}</div>
       {!a ? <div className="muted sm">{err || 'Loading…'}</div> : <>
         <div className="ab-sec">
-          <div className="ab-h"><span>EXPERIENCE</span><i className="ab-badge you">YOU · 1 TAP</i></div>
+          <div className="ab-h"><span>EXPERIENCE</span></div>
           <div className="seg">{EXP.map(([k, l]) => <button key={k} className={a.experience === k ? 'on' : ''} onClick={() => save({ experience: a.experience === k ? null : k })}>{l}</button>)}</div>
-          <input placeholder="Short note (optional · e.g. 2 yrs restaurant)" maxLength={60} value={expNote} onChange={(e) => setExpNote(e.target.value)} onBlur={() => blurSave('experience_note', expNote)} />
+          <input placeholder="Short note" maxLength={60} value={expNote} onChange={(e) => setExpNote(e.target.value)} onBlur={() => blurSave('experience_note', expNote)} />
         </div>
         <div className="ab-sec">
-          <div className="ab-h"><span>KNOWS</span><i className="ab-badge app">FROM APPLICATION</i></div>
-          {who || (a.knows_staff_id && !who) ? <div className="ru-row"><Avatar name={who?.full_name ?? '?'} url={who?.photo_url} size={30} /><div className="grow"><b>{who?.full_name ?? 'Someone (inactive)'}</b></div>
-            <button className="ru-x" aria-label="Clear" onClick={() => { save({ knows_staff_id: null }); setPickOpen(false); }}>×</button></div>
-            : pickOpen ? <><input autoFocus placeholder="Search an active staff member…" value={q} onChange={(e) => setQ(e.target.value)} />
-              {list.map((p) => <button key={p.id} className="ru-opt" onClick={() => { save({ knows_staff_id: p.id }); setQ(''); setPickOpen(false); }}><Avatar name={p.full_name} url={p.photo_url} size={28} /><b className="grow">{p.full_name}</b><span className="muted">›</span></button>)}
-              {q.trim().length >= 2 && !list.length && <span className="muted sm">No active staff by that name. Write it below instead.</span>}</>
-            : <button className="lnk accent" style={{ alignSelf: 'flex-start', textDecoration: 'none', fontSize: 13 }} onClick={() => setPickOpen(true)}>+ Link a staff member</button>}
-          <div className="row" style={{ gap: 6 }}>
-            <input placeholder={a.knows_staff_id ? 'Relation (e.g. cousin, friend)' : 'Relation or name (e.g. referred by …)'} maxLength={60} value={rel} onChange={(e) => setRel(e.target.value)} onBlur={() => blurSave('knows_text', rel)} />
-            {rel && <button className="ru-x" aria-label="Clear relation" onClick={() => { setRel(''); save({ knows_text: null }); }}>×</button>}
+          <div className="ab-h"><span>KNOWS</span></div>
+          {/* Nov 26 · migration 141 · several people, each with a relation */}
+          <div className="kn-list">
+            {a.knows.map((k, n) => { const p = k.id ? people.find((x) => x.id === k.id) : null; return (
+              <span key={n} className="kn-chip"><b>{p?.full_name ?? k.name ?? 'Someone'}</b>{k.rel ? <span> · {k.rel}</span> : null}
+                <button aria-label="Remove" onClick={() => saveKnows(a.knows.filter((_, m) => m !== n))}>×</button></span>); })}
+            {!pickOpen && <button className="kn-add" onClick={() => { setPickOpen(true); setKPick(null); setQ(''); setRel(''); }}>+ Add</button>}
           </div>
+          {pickOpen && <div className="kn-form">
+            {!kPick ? <><input autoFocus placeholder="Search staff or type a name" value={q} onChange={(e) => setQ(e.target.value)} />
+              {list.map((p) => <button key={p.id} className="ru-opt" onClick={() => setKPick({ id: p.id })}><Avatar name={p.full_name} url={p.photo_url} size={26} /><b className="grow">{p.full_name}</b></button>)}
+              {q.trim().length >= 2 && <button className="ru-opt" onClick={() => setKPick({ name: q.trim() })}><b className="grow">Use “{q.trim()}”</b></button>}</>
+              : <div className="kn-row"><b>{kPick.id ? people.find((x) => x.id === kPick.id)?.full_name : kPick.name}</b>
+                <input autoFocus placeholder="Relation (cousin, friend, referred by…)" maxLength={60} value={rel} onChange={(e) => setRel(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { saveKnows([...a.knows, { ...kPick, ...(rel.trim() ? { rel: rel.trim() } : {}) }]); setPickOpen(false); } }} />
+                <button className="abtn sm dark" onClick={() => { saveKnows([...a.knows, { ...kPick, ...(rel.trim() ? { rel: rel.trim() } : {}) }]); setPickOpen(false); }}>Add</button></div>}
+            <button className="lnk sm" onClick={() => setPickOpen(false)}>Cancel</button>
+          </div>}
         </div>
         <div className="ab-sec">
-          <div className="ab-h"><span>LANGUAGES</span><i className="ab-badge onb">FROM ONBOARDING</i></div>
+          <div className="ab-h"><span>LANGUAGES</span></div>
           {(['fr', 'en'] as const).map((k) => { const v = Number(a.languages?.[k] ?? 0); return (
             <div key={k} className="ab-lang"><b>{k.toUpperCase()}</b>
               <div className="seg">{LV.map(([n, l]) => <button key={n} className={v === n ? 'on' : ''} onClick={() => { const nx = { ...(a.languages ?? {}) }; if (v === n) delete nx[k]; else nx[k] = n; save({ languages: nx }); }}>{l}</button>)}</div></div>); })}
-          {!Object.keys(a.languages ?? {}).length && <span className="muted sm">Not set · hidden from managers until set.</span>}
         </div>
         <div className="ab-sec">
           <div className="ab-h"><span>NOTE FOR MANAGERS</span></div>
-          <input placeholder="One line (optional · e.g. strong on wine service)" maxLength={120} value={mnote} onChange={(e) => setMnote(e.target.value)} onBlur={() => blurSave('manager_note', mnote)} />
+          <input placeholder="One line" maxLength={120} value={mnote} onChange={(e) => setMnote(e.target.value)} onBlur={() => blurSave('manager_note', mnote)} />
         </div>
         {err && <p className="error">{err}</p>}
-        <div className="ab-foot">Managers never see tiers, rankings, ratings, rates or admin notes.</div>
       </>}
     </div>
   );
