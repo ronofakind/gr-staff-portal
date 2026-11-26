@@ -5219,3 +5219,6 @@ span.abtn.ds-newq { background: none; border: 0; padding: 0; }
 .mo2-pb .abtn { height: 30px; justify-content: center; }
 .mo2-pb .abtn.dark { flex: 1; }
 @media (max-width: 900px) { .mo2-grid { gap: 4px; } .mo2-d { min-height: 80px; padding: 5px; } .mo2-et { display: none; } .mo2-e { grid-template-columns: 3px auto; } .mo2-e > b { display: none; } }
+/* Nov 26 · selected day block readable in every theme */
+.ds-v6 .ds-wd.on { background: var(--ink, #1A1714); color: var(--bg, #fff); border-color: var(--ink, #1A1714); }
+.ds-v6 .ds-wd.on b { color: var(--bg, #fff); } .ds-v6 .ds-wd.on small { color: var(--bg, #fff); opacity: .75; }

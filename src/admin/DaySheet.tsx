@@ -84,7 +84,7 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
     const byEv: Record<string, number> = {}; for (const r of (ws ?? []) as { event_id: string }[]) byEv[r.event_id] = (byEv[r.event_id] ?? 0) + 1;
     const out = [...Array(7)].map((_, i) => { const d = addDays(wk0, i); const de = ((we ?? []) as { id: string; event_date: string; department: string; staffing: Line[] | null; staff_needed: number; extras: number | null }[]).filter((x) => x.event_date === d);
       // Nov 25 · same count as the day totals: rows + extras (10 % on big floor events when not set)
-      const need = de.reduce((n, x) => { const c = (x.staffing ?? []).reduce((m, l) => m + (l.count || 0), 0); if (!c) return n + (x.staff_needed || 0); const ex = x.extras != null ? Math.max(0, x.extras) : x.department !== 'bar' && c > 7 ? Math.ceil(c * 0.1) : 0; return n + c + ex; }, 0);
+      const need = de.reduce((n, x) => { const c = (x.staffing ?? []).reduce((m, l) => m + (l.count || 0), 0); if (!c) return n + (x.staff_needed || 0); return n + c; }, 0); // Nov 26 · extras are on top: 60/57, not 60/60
       const have = de.reduce((n, x) => n + (byEv[x.id] ?? 0), 0); return { d, need, have, n: de.length, free: ((wa ?? []) as { for_date: string }[]).filter((x) => x.for_date === d).length }; });
     setWeek(out);
   })(); }, [wk0, tick]);
@@ -109,7 +109,7 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
     for (const e of evs) { const L = lays[e.id]; if (!L) continue; const ids = L.extras.people.map((x) => x.id).sort(); const sig = ids.join(',');
       if (xSent.current[e.id] === sig) continue; xSent.current[e.id] = sig;
       supabase.rpc('admin_set_extras', { p_event: e.id, p_shifts: ids }).then(({ error }) => { if (error) delete xSent.current[e.id]; }); } }, [lays, ctx]); // eslint-disable-line react-hooks/exhaustive-deps
-  const tot = (b: boolean) => evs.filter((e) => isBar(e) === b).reduce((acc, e) => { const L = lays[e.id]; const need = L.client + L.extras.count; const have = sh.filter((s) => s.event_id === e.id).length; return [acc[0] + have, acc[1] + need]; }, [0, 0]);
+  const tot = (b: boolean) => evs.filter((e) => isBar(e) === b).reduce((acc, e) => { const L = lays[e.id]; const need = L.client; const have = sh.filter((s) => s.event_id === e.id).length; return [acc[0] + have, acc[1] + need]; }, [0, 0]);
   const [fl, br] = [tot(false), tot(true)];
   const removable = (s: Sh) => s.pool_hold && !s.locked;
 
@@ -494,7 +494,7 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
       <div className={'ds-cols' + (freeFold ? ' ffold' : '')}>
         <div className={'ds-blocks' + (narrow ? ' narrow' : '') + (noEnd ? ' noend' : '')} ref={blocksR} onClick={() => ed && setEd(null)}>
           {!shown.length && <div className="adm-card muted">No {dept === 'both' ? '' : dept + ' '}events this day.</div>}
-          {shown.map((e) => { const L = lays[e.id]; const have = sh.filter((s) => s.event_id === e.id).length; const need = L.client + L.extras.count;
+          {shown.map((e) => { const L = lays[e.id]; const have = sh.filter((s) => s.event_id === e.id).length; const need = L.client;
             return (
               <section key={e.id} className={'ds-card' + (isBar(e) ? ' ds-barev' : '')}>
                 <div className="ds-ch"><span className="serif ds-title">{e.title || e.venues?.name || 'New event'}</span><span className={'ds-dept ' + (isBar(e) ? 'bar' : 'floor')}>{isBar(e) ? 'BAR' : 'FLOOR'}</span>{isFar(e) && <span className="ds-far" title="Far venue: Fill puts drivers first, with the people they're linked to">far</span>}

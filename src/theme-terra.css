@@ -1501,4 +1501,7 @@ html[data-theme="terra"] { --teams: #5B5FC7; --teams-bg: #EEEFFB; --teams-ink: #
 :where(html[data-theme="terra"]) .mo2-e.mt > b { color: var(--muted, #878A77); }
 :where(html[data-theme="terra"]) .mo2-more { color: var(--muted, #878A77); }
 :where(html[data-theme="terra"]) .mo2-pop { background: var(--card, #FBFAF6); box-shadow: 0 14px 34px rgba(0,0,0,0.18); }
+:where(html[data-theme="terra"]) .ds-v6 .ds-wd.on { background: var(--ink, #2A2A24); color: var(--bg, #FBFAF6); border-color: var(--ink, #181915); }
+:where(html[data-theme="terra"]) .ds-v6 .ds-wd.on b { color: var(--bg, #FBFAF6); }
+:where(html[data-theme="terra"]) .ds-v6 .ds-wd.on small { color: var(--bg, #FBFAF6); }
 html[data-theme="terra"] body { background: #EEF0E8; color: #2A2A24; }
