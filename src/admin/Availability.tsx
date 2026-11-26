@@ -50,7 +50,7 @@ export function Availability() {
       supabase.from('staff_weekly').select('staff_id,dow,status,from_time'),
       supabase.from('days_off').select('staff_id,from_date,to_date,reason,every_dow').gte('to_date', today),
       supabase.from('avail_asks').select('*').gte('for_date', today).order('for_date'),
-      supabase.from('availability').select('id,staff_id,for_date,status,tier,from_time,until_time,ask_id,note,answer_by,knows_by,knows_note').not('ask_id', 'is', null).gte('for_date', today),
+      supabase.from('availability').select('id,staff_id,for_date,status,from_time,until_time,ask_id,note,answer_by,knows_by,knows_note').not('ask_id', 'is', null).gte('for_date', today),
       supabase.from('avail_exceptions').select('staff_id,for_date').gte('for_date', today),
     ]);
     loadRules().then(async ({ conds }) => { const [v, c] = await Promise.all([supabase.from('venues').select('id,area,postal_code'), supabase.from('clients').select('id,name,area')]); setAreaCtx({ conds, venues: (v.data ?? []) as never[], clients: (c.data ?? []) as never[] }); });
@@ -127,7 +127,7 @@ export function Availability() {
       const people = recipients(d, tiers);
       if (people.length) {
         const { error: e2 } = await supabase.from('availability').upsert(people.map((s) => ({
-          staff_id: s.id, for_date: d, part: 'evening', status: 'asked', ask_id: ask.id, tier: tierOf(s), asked_at: new Date().toISOString(),
+          staff_id: s.id, for_date: d, part: 'evening', status: 'asked', ask_id: ask.id, asked_at: new Date().toISOString(),
           answer_by: abSel[d] ? fromLocalInput(abSel[d]) : defaultAnswerBy(d).toISOString(),
         })), { onConflict: 'staff_id,for_date,part' });
         if (e2) { setErr(e2.message); break; }
@@ -216,7 +216,7 @@ export function Availability() {
       <div className="answers">
         {asks.map((a) => {
           const rs = rows.filter((r) => r.ask_id === a.id).map((r) => ({ r, s: name(r.staff_id) }))
-            .sort((x, y) => (x.r.tier ?? 'Z').localeCompare(y.r.tier ?? 'Z') || (x.r.status === 'yes' ? 0 : x.r.status === 'asked' ? 1 : 2) - (y.r.status === 'yes' ? 0 : y.r.status === 'asked' ? 1 : 2) || (x.s ? rank(x.s) : 9999) - (y.s ? rank(y.s) : 9999));
+            .sort((x, y) => (x.s?.staff_private?.tier ?? 'Z').localeCompare(y.s?.staff_private?.tier ?? 'Z') || (x.r.status === 'yes' ? 0 : x.r.status === 'asked' ? 1 : 2) - (y.r.status === 'yes' ? 0 : y.r.status === 'asked' ? 1 : 2) || (x.s ? rank(x.s) : 9999) - (y.s ? rank(y.s) : 9999));
           const yes = rs.filter((x) => x.r.status === 'yes').length; const waiting = rs.filter((x) => x.r.status === 'asked').length;
           const no = rs.filter((x) => x.r.status === 'no').length; const maybes = rs.filter((x) => x.r.status === 'maybe');
           const late = rs.filter((x) => x.r.status === 'asked' && x.r.answer_by && new Date(x.r.answer_by).getTime() <= Date.now()).length;
@@ -242,7 +242,7 @@ export function Availability() {
               )}
               {rs.map(({ r, s }) => (
                 <div key={r.id} className={'ans-row ' + r.status}>
-                  <i className={'tier-dot ' + (r.tier ?? '')}>{r.tier ?? '–'}</i>
+                  <i className={'tier-dot ' + (s?.staff_private?.tier ?? '')}>{s?.staff_private?.tier ?? '–'}</i>
                   <span className="rk">#{s ? rank(s) : '?'}</span>
                   <span className="grow strong">{s?.full_name ?? '—'}</span>
                   <span className="sm">{r.status === 'yes' ? <>Yes · {r.until_time ? `day only · ${r.from_time ? ampm(r.from_time) : 'any'}–${ampm(r.until_time)}` : r.from_time ? `from ${ampm(r.from_time)}` : 'any time'}{r.note && <i className="av-note-adm"> “{r.note}”</i>}</> : r.status === 'no' ? 'No'

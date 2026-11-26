@@ -9,6 +9,7 @@ import { isoDay, flagsOf, hoursBetween, dLabel, allStaff, type AStaff, type Flag
 import { loadRules, linksOf, other, condLabel, DOW3, AREAS as WORK_AREAS, AREA_HINT, type SLink, type SCond, type LinkKind, type CondKind } from './rules';
 import { loadScoreData, scoreOf, AREAS, avgStars, isStar, type ScoreData } from './score';
 import { ScoreWhy, tabOf } from './Ranking';
+import { TagsCard } from './SkillTags';
 import { ReminderList } from './StaffRemind';
 import { appStatus, loadInviteStatus, InviteModal, AppChip, type InviteRow } from './Invite';
 
@@ -142,6 +143,7 @@ export function StaffProfile({ s, onClose, onEdit, all }: { s: AStaff; onClose: 
                 onClick={async () => { if ((tierNow ?? null) === t) return; const prev = tierNow; setTierNow(t); const { error } = await supabase.from('staff_private').update({ tier: t }).eq('staff_id', s.id); if (error) { setTierNow(prev); alert(error.message); } }}>{t ?? 'None'}</button>)}</div></div>
               <ScoreWhy compact bars s={me} sc={sc}
                 onTier={() => supabase.from('staff_private').select('tier').eq('staff_id', s.id).maybeSingle().then(({ data }) => setTierNow(((data as { tier?: 'A' | 'B' | 'C' | null } | null)?.tier) ?? null))} /></div>}
+            <TagsCard staffId={s.id} />
             {sd && <MgrFeedback sid={s.id} d={sd} />}
             <div className="pcard">
               <div className="sp2-ch"><b className="serif">Reliability · {today.slice(0, 4)}</b><Link to="/admin/reliability" className="sm strong">Full log ›</Link></div>

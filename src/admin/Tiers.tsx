@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { SkillLine } from './SkillTags';
 import { supabase } from '../lib/supabase';
 import { doesBar, allStaff, type AStaff } from './api';
 
@@ -87,7 +88,7 @@ export function Tiers({ inPage = false }: { inPage?: boolean }) {
                 onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setOver({ t: c.t, i }); }}
                 onDrop={(e) => { e.stopPropagation(); drop(c.t, i); }}>
                 <span className="grip">⋮⋮</span><span className="n">{i + 1}</span>
-                <div className="grow"><b>{s.full_name}</b><small>{s.positions.join(', ') || s.role}</small></div>
+                <div className="grow" style={{ minWidth: 0 }}><b>{s.full_name}</b><small>{s.positions.join(', ') || s.role}</small><SkillLine tags={s.staff_private?.skill_tags} /></div>
                 <div className="tier-mini">
                   <button aria-label="Up" onClick={() => move(s, c.t, -1)}>↑</button>
                   <button aria-label="Down" onClick={() => move(s, c.t, 1)}>↓</button>

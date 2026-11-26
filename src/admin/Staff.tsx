@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useState } from 'react';
+import { SkillLine } from './SkillTags';
 import { supabase } from '../lib/supabase';
 import { Link, useSearchParams } from 'react-router-dom';
 import { loadRules, RuleIcons, type SLink, type SCond } from './rules';
@@ -182,7 +183,7 @@ export function Staff() {
               <div className={'st-row sl-row' + (s.active ? '' : ' inactive') + (prof?.id === s.id ? ' sel' : '')} onClick={() => setProf(s)}>
                 <span className="sl-check" onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={`Select ${s.full_name}`} checked={sel.has(s.id)}
                   onChange={(e) => { const n = new Set(sel); if (e.target.checked) n.add(s.id); else n.delete(s.id); setSel(n); }} /></span>
-                <span className="st-name"><Avatar name={s.full_name} url={s.photo_url} size={34} /><span><b>{s.full_name}{!tr && <i className="new-tag">NEW</i>}<RuleIcons sid={s.id} links={rules.links} conds={rules.conds} /></b><small>{s.nickname ? `"${s.nickname}" · ` : ''}{s.positions.map((p) => p.toLowerCase()).join(', ') || s.role}{s.role !== 'staff' ? ` · ${s.role}` : ''}</small></span></span>
+                <span className="st-name"><Avatar name={s.full_name} url={s.photo_url} size={34} /><span><b>{s.full_name}{!tr && <i className="new-tag">NEW</i>}<RuleIcons sid={s.id} links={rules.links} conds={rules.conds} /></b><small>{s.nickname ? `"${s.nickname}" · ` : ''}{s.positions.map((p) => p.toLowerCase()).join(', ') || s.role}{s.role !== 'staff' ? ` · ${s.role}` : ''}</small><SkillLine tags={s.staff_private?.skill_tags} /></span></span>
                 <span>{tr ? <><i className={'tier-dot ' + tr}>{tr}</i> <span className="muted" title="Form score out of 100 (Admin → Ranking)">{sd ? scoreOf(s, sd).form : '…'}</span></> : <><i className="tier-q">?</i> <Link to="/admin/tiers" className="accent strong sm" onClick={(e) => e.stopPropagation()}>Rank ›</Link></>}</span>
                 <span className="hide-sm">{month[s.id] ?? 0}</span>
                 <span className="hide-sm">{o ? <span className="tag" style={{ height: 24 }}>{o}</span> : <span className="muted">—</span>}</span>

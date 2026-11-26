@@ -567,7 +567,7 @@ export function EventForm() {
     }, { onConflict: 'for_date,department' }).select('id').single();
     if (error || !a) throw error ?? new Error('Could not ask');
     if (pool.length) {
-      const r = await supabase.from('availability').upsert(pool.map((s) => ({ staff_id: s.id, for_date: d, part: 'evening', status: 'asked', ask_id: a.id, tier: tierOf(s), asked_at: new Date().toISOString() })), { onConflict: 'staff_id,for_date,part', ignoreDuplicates: true });
+      const r = await supabase.from('availability').upsert(pool.map((s) => ({ staff_id: s.id, for_date: d, part: 'evening', status: 'asked', ask_id: a.id, asked_at: new Date().toISOString() })), { onConflict: 'staff_id,for_date,part', ignoreDuplicates: true });
       if (r.error) throw r.error;
     }
   };

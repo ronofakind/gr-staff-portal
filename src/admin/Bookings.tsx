@@ -126,7 +126,7 @@ export function Bookings() {
     const since30 = addDays(date, -setting('ask.hold_back').days); const since90 = addDays(date, -90);
     const [evs, st, a, w, o, l, c, s30, hist90, dr] = await Promise.all([
       eventsBetween(range.from, range.to), staff.length ? Promise.resolve(staff) : allStaff(),
-      supabase.from('availability').select('staff_id,status,from_time,until_time,note,tier,for_date').gte('for_date', range.from).lte('for_date', range.to).not('ask_id', 'is', null),
+      supabase.from('availability').select('staff_id,status,from_time,until_time,note,for_date').gte('for_date', range.from).lte('for_date', range.to).not('ask_id', 'is', null),
       supabase.from('staff_weekly').select('staff_id,dow,status,from_time,until_time'),
       supabase.from('days_off').select('staff_id,from_date,to_date').lte('from_date', range.to).gte('to_date', range.from),
       supabase.from('staff_links').select('staff_a,staff_b,kind,reason'), supabase.from('staff_conditions').select('id,staff_id,kind,value,reason'),
@@ -996,7 +996,7 @@ function AskMore({ date, dept, events, staff, av, wk, off, conds, links, booked,
     const { data: a, error } = await askRow();
     if (error || !a) { setMsg(error?.message ?? 'Could not save'); setBusy(false); return; }
     const [ev, st, code] = (shiftOf[s.id] ?? '').split('|');
-    const r = await supabase.from('availability').upsert({ staff_id: s.id, for_date: date, part: 'evening', status: 'asked', ask_id: a.id, tier: s.staff_private?.tier ?? null, asked_at: new Date().toISOString(),
+    const r = await supabase.from('availability').upsert({ staff_id: s.id, for_date: date, part: 'evening', status: 'asked', ask_id: a.id, asked_at: new Date().toISOString(),
       answered_at: null, from_time: null, released_at: null, event_id: ev || null, event_start: st || null, event_role: code || null, direct: true }, { onConflict: 'staff_id,for_date,part' });
     setBusy(false);
     if (r.error) setMsg(r.error.message); else { const o = opts.find((x) => x.v === shiftOf[s.id]); setAskedNow((m) => ({ ...m, [s.id]: o ? o.label : 'the day' })); onAsked(); }
@@ -1007,7 +1007,7 @@ function AskMore({ date, dept, events, staff, av, wk, off, conds, links, booked,
     const people = staff.filter((s) => pick.has(s.id));
     const { data: a, error } = await askRow();
     if (error || !a) { setMsg(error?.message ?? 'Could not save'); setBusy(false); return; }
-    const r = await supabase.from('availability').upsert(people.map((s) => ({ staff_id: s.id, for_date: date, part: 'evening', status: 'asked', ask_id: a.id, tier: s.staff_private?.tier ?? null, asked_at: new Date().toISOString() })), { onConflict: 'staff_id,for_date,part', ignoreDuplicates: true });
+    const r = await supabase.from('availability').upsert(people.map((s) => ({ staff_id: s.id, for_date: date, part: 'evening', status: 'asked', ask_id: a.id, asked_at: new Date().toISOString() })), { onConflict: 'staff_id,for_date,part', ignoreDuplicates: true });
     setBusy(false); if (r.error) setMsg(r.error.message); else { setMsg(`${people.length} people asked. They see it in the app.`); onAsked(); }
   };
   const Row = ({ c }: { c: typeof cands[number] }) => (

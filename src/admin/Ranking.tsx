@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { SkillLine } from './SkillTags';
 import { supabase } from '../lib/supabase';
 import { allStaff, type AStaff } from './api';
 import { Link } from 'react-router-dom';
@@ -38,7 +39,7 @@ export function Ranking() {
           {rows.map(({ s, sc }, i) => (
             <button key={s.id} className={'rk-row' + (sel === s.id ? ' on' : '')} onClick={() => setSel(sel === s.id ? null : s.id)}>
               <span className="muted">{i + 1}</span>
-              <span className="rk-name"><b>{s.full_name}</b>{sc.isNew && <i className="new-tag">NEW</i>}{sc.suggest && !readKeep(keepKey(s.id, sc)) && <i className="rk-sug" title={sc.suggest.why}>→ {sc.suggest.to}?</i>}</span>
+              <span className="rk-name"><b>{s.full_name}</b>{sc.isNew && <i className="new-tag">NEW</i>}{sc.suggest && !readKeep(keepKey(s.id, sc)) && <i className="rk-sug" title={sc.suggest.why}>→ {sc.suggest.to}?</i>}<SkillLine tags={s.staff_private?.skill_tags} /></span>
               <span>{s.staff_private?.tier ? <><i className={'tier-dot ' + s.staff_private.tier}>{s.staff_private.tier}</i> <small className="muted">{sc.tier}</small></> : <i className="tier-q">?</i>}</span>
               {(() => { const P = (k: string) => sc.parts.find((x) => x.key === k)!; const v = (k: string) => { const x = P(k); return x.counted ? <b>{Math.round(x.pts)}</b> : <span className="muted">–</span>; };
                 return <><span>{v('exp')}<small className="muted">/25</small></span><span>{v('rel')}<small className="muted">/25</small></span><span>{v('fb')}<small className="muted">/20</small></span><span>{v('yes')} · {v('save')}</span><span>{v('time')}<small className="muted">/5</small></span></>; })()}

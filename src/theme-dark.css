@@ -2532,6 +2532,16 @@ html[data-theme="dark"] { --teams: #8487CC; --teams-bg: #1F2137; --teams-ink: #8
 :where(html[data-theme="dark"]) .kn-chip { border: 1px solid var(--ink, #E1DEDB); }
 :where(html[data-theme="dark"]) .kn-chip button { color: var(--muted, #8A8076); }
 :where(html[data-theme="dark"]) .kn-add { border: 1.5px dashed #413D38; color: var(--muted, #8A8076); }
+:where(html[data-theme="dark"]) .sk-on { background: #2A2622; color: #F1ECE4; }
+:where(html[data-theme="dark"]) .sk-on button { background: rgba(31,29,26,0.18); color: #F1ECE4; }
+:where(html[data-theme="dark"]) .sk-add { border: 1.5px dashed #E1DEDB; color: #E1DEDB; }
+:where(html[data-theme="dark"]) .sk-pop { background: #1F1D1A; box-shadow: 0 14px 40px rgba(0,0,0,0.45); }
+:where(html[data-theme="dark"]) .sk-pop input { border: 1px solid #49433B; }
+:where(html[data-theme="dark"]) .sk-grp { border-top: 1px solid #4A433A; }
+:where(html[data-theme="dark"]) .sk-grp > span { color: #8A8076; }
+:where(html[data-theme="dark"]) .sk-grp button { border: 1px solid #49433B; background: #1F1D1A; color: #BDB7B1; }
+:where(html[data-theme="dark"]) .sk-grp button.on { background: #E1DEDB; border-color: #E1DEDB; color: #1A1714; }
+:where(html[data-theme="dark"]) .sk-line { color: #8A8076; }
 html[data-theme="dark"] { color-scheme: dark; }
 html[data-theme="dark"] body { background: #121110; color: #F1ECE4; }
 html[data-theme="dark"] img[src$="logo-mark.png"]:not(.adm-side img):not(.side-logo), html[data-theme="dark"] img[src$="logo-full.png"] { filter: invert(1) hue-rotate(180deg); mix-blend-mode: normal !important; }

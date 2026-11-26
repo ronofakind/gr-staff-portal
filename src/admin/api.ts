@@ -4,7 +4,7 @@ import { setting, roundTo } from '../lib/settings';
 export type AStaff = {
   id: string; full_name: string; nickname?: string | null; created_at?: string; sex?: 'm' | 'f' | null; email: string | null; phone: string | null; language: 'fr' | 'en';
   department: 'floor' | 'bar' | 'kitchen'; role: 'staff' | 'manager' | 'admin'; positions: string[]; md_rank?: number | null;
-  active: boolean; photo_url: string | null; staff_private: { ranking: number | null; notes: string | null; tier: 'A' | 'B' | 'C' | null } | null;
+  active: boolean; photo_url: string | null; staff_private: { ranking: number | null; notes: string | null; tier: 'A' | 'B' | 'C' | null; skill_tags?: string[] | null } | null;
 };
 
 export type AShift = {
@@ -46,7 +46,7 @@ export async function eventsBetween(from: string, to: string) {
 
 export async function allStaff() {
   const { data, error } = await supabase.from('staff')
-    .select('id,full_name,nickname,email,phone,language,department,role,positions,md_rank,active,photo_url,created_at,sex,staff_private!staff_private_staff_id_fkey(ranking,notes,tier)')
+    .select('id,full_name,nickname,email,phone,language,department,role,positions,md_rank,active,photo_url,created_at,sex,staff_private!staff_private_staff_id_fkey(ranking,notes,tier,skill_tags)')
     .order('full_name');
   if (error) throw error;
   return (data ?? []) as unknown as AStaff[];
