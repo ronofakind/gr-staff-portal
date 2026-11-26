@@ -13,7 +13,7 @@ const tShort = (t: string | null) => { if (!t) return ''; const [h, m] = t.slice
 const first = (n?: string | null) => (n ?? '').split(' ')[0];
 
 const LIGHT = 'id,event_date,title,department,start_time,staff_needed,staffing,manager_id,shifts(id,status,cancelled_at,attendance,notified_at,changed_at,responded_at)';
-export function MiniMonth() {
+export function MiniMonth({ onPick }: { onPick?: (d: string) => void } = {}) {
   const today = isoDay(new Date());
   const [mo, setMo] = useState(firstOf(today));
   const [sel, setSel] = useState(today);
@@ -40,7 +40,7 @@ export function MiniMonth() {
   const short = list.reduce((n, e) => n + countOf(e).short, 0);
   const label = new Date(mo + 'T12:00:00').toLocaleDateString('en-CA', { month: 'long' });
   return (
-    <div className="adm-card mm">
+    <div className={'adm-card mm' + (onPick ? ' mm-only' : '')}>
       <div className="mm-cal">
         <div className="mm-head"><b style={{ textTransform: 'capitalize' }}>{label}</b><button className="mm-nav" aria-label="Previous month" onClick={() => go(-1)}>‹</button><button className="mm-nav" aria-label="Next month" onClick={() => go(1)}>›</button><span className="grow" /><small><i className="mm-dot" /> booked · <i className="mm-dot short" /> short</small></div>
         <div className="mm-grid">
@@ -49,7 +49,7 @@ export function MiniMonth() {
             if (d < mo || d > last) return <span key={d} />;
             const e = by(d); const past = d < today;
             return (
-              <button key={d} type="button" className={'mm-d' + (d === sel ? ' sel' : '') + (past ? ' past' : '') + (e.length ? ' has' : '')} onClick={() => setSel(d)} aria-label={`${d} · ${e.length} events`}>
+              <button key={d} type="button" className={'mm-d' + (d === sel ? ' sel' : '') + (past ? ' past' : '') + (e.length ? ' has' : '')} onClick={() => (onPick ? onPick(d) : setSel(d))} aria-label={`${d} · ${e.length} events`}>
                 <b className={d === today ? 'today' : ''}>{Number(d.slice(8))}</b>
                 <span className="mm-dots">{e.slice(0, 4).map((x) => <i key={x.id} className={'mm-dot' + (!past && countOf(x).short ? ' short' : '')} />)}</span>
               </button>);

@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
 import { DebriefCards, RecentDebriefs, useRecentDebriefs } from '../components/Debrief';
 import { MiniMonth } from './MiniMonth';
 import { useTodayLayout, Section, EditLayout, SEC_LABEL, WIDE, type SecKey } from './TodayLayout';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ChangeAnswer, CHANGE_COLS, isSelfCancel, isEventDayCancel, replacementOf, type ChangeRow } from './Changes';
 import { CantMakeIt, NotConfirmed, ReplaceSheet, type Late } from './Replace';
 import { adminAsks, type AdminAsk } from '../lib/shiftAsks';
@@ -365,6 +365,17 @@ export function Today() {
   const msgN = useInboxToday(tick).open.length;
   const [wideScreen, setWide] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 1000px)').matches);
   useEffect(() => { const q = window.matchMedia('(min-width: 1000px)'); const f = () => setWide(q.matches); q.addEventListener('change', f); return () => q.removeEventListener('change', f); }, []);
+  // Nov 25 · Today V2 (board AdminTodayV2) · New / Old switch to compare
+  const [v2, setV2] = useState(() => { try { return localStorage.getItem('gr_today_v') !== 'old'; } catch { return true; } });
+  const setVer = (on: boolean) => { setV2(on); try { localStorage.setItem('gr_today_v', on ? 'new' : 'old'); } catch { /* private */ } };
+  const nav = useNavigate();
+  const realEv = (e: AEvent) => e.staff_needed > 0 || e.shifts.some((s) => s.status !== 'declined');
+  const toConf = (ahead ?? []).filter((e) => e.event_date >= today && e.event_date <= addDays(today, 2))
+    .flatMap((e) => e.shifts.filter((s) => s.status === 'booked' && s.notified_at && !s.attendance));
+  const toConfDay = (ahead ?? []).filter((e) => e.event_date >= today && e.shifts.some((x) => toConf.includes(x))).map((e) => e.event_date).sort()[0] ?? today;
+  const toConfLate = toConf.some((s) => Date.now() - new Date(s.notified_at!).getTime() > 24 * 36e5);
+  const working = tonight.reduce((n, e) => n + e.shifts.filter((s) => s.punches?.punch_in && !s.punches.punch_out && !s.attendance).length, 0);
+  const lateNow = Object.keys(lateBy).length;
   const SECS: Record<SecKey, () => JSX.Element> = {
     needs: () => (
       <Section k="needs" mode={md('needs')} title={<>Needs you {needsN > 0 && <b className="accent sm">{needsN}</b>}</>}
@@ -391,7 +402,7 @@ export function Today() {
       <Section k="tonight" mode={md('tonight')} title="Tonight" empty={week && !tonight.length ? 'no events today' : null} right={<Link to={`/admin/day?d=${today}`}>Day view ›</Link>}>
         {week === null && <div className="muted">Loading…</div>}
         {week && !tonight.length && <div className="adm-card muted">No events today.</div>}
-        {tonight.length > 0 && <div className="adm-card t4-list">{tonightSorted.map((e) => <Live key={e.id} e={e} q={qBy[e.id] ?? 0} lateBy={lateBy} cutBy={cutBy} compact onDeleted={gone} />)}</div>}
+        {tonight.length > 0 && <div className="adm-card t4-list">{tonightSorted.filter((e) => !v2 || realEv(e)).map((e) => <Live key={e.id} e={e} q={qBy[e.id] ?? 0} lateBy={lateBy} cutBy={cutBy} compact onDeleted={gone} />)}</div>}
       </Section>),
     debriefs: () => (
       <Section k="debriefs" mode={md('debriefs')} empty={deb.rows.length + deb.miss.length === 0 ? 'none from last night' : null} title={<>Last night · debriefs {deb.rows.length + deb.miss.length > 0 && <b className="accent sm">{deb.rows.length} of {deb.rows.length + deb.miss.length}</b>}</>} right={<Link to="/admin/debriefs">Past debriefs ›</Link>}>
@@ -412,7 +423,7 @@ export function Today() {
       </Section>),
     month: () => (
       <Section k="month" mode={md('month')} title="This month" right={<Link to="/admin/month">Full month ›</Link>}>
-        <MiniMonth />
+        <MiniMonth onPick={v2 ? (d) => nav(`/admin/bookings?date=${d}`) : undefined} />
       </Section>),
     messages: () => (
       <Section k="messages" mode={md('messages')} empty={msgN === 0 ? 'nothing waiting' : null} title={<>Messages {msgN > 0 && <b className="accent sm">{msgN}</b>}</>} right={<Link to="/admin/messages">All messages ›</Link>}>
@@ -438,11 +449,36 @@ export function Today() {
   const pinnedShown = sorted.filter((k) => lay.pinned.includes(k)); const restShown = sorted.filter((k) => !lay.pinned.includes(k));
   const grid = (keys: SecKey[]) => <div className="t4-grid">{keys.map((k) => <div key={k} className={WIDE.includes(k) ? 't4-wide' : 't4-cell'}>{SECS[k]()}</div>)}</div>;
 
+  const verSw = <span className="ne-seg t5-ver">{([[true, 'New'], [false, 'Old']] as const).map(([k, l]) => <button key={l} type="button" className={v2 === k ? 'on' : ''} onClick={() => setVer(k)}>{l}</button>)}</span>;
+  if (v2) {
+    const kpi = (l: string, v: React.ReactNode, sub: string, cls: string, to: string) => <button type="button" className={'t5-kpi ' + cls} onClick={() => { const el = document.querySelector(to); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); else nav(to); }}><span>{l}</span><b>{v}</b><small>{sub}</small></button>;
+    const left: SecKey[] = ['tonight', 'needs', 'debriefs', 'ratings', 'late', 'hiring'];
+    const right: SecKey[] = ['month', 'messages', 'pay', 'meetings'];
+    const show = (ks: SecKey[]) => ks.filter((k) => lay.mode[k] !== 'hidden').map((k) => <div key={k} className="t4-cell">{SECS[k]()}</div>);
+    return (
+      <div className="t4 t5">
+        <div className="t5-top">
+          <div className="grow"><div className="kick">{dLabel(today, { weekday: 'long', month: 'long', day: 'numeric' }).toUpperCase()}</div><h1 className="serif-h">{hello}, Ronnie</h1></div>
+          {verSw}
+        </div>
+        <div className="t5-kpis">
+          {kpi('TONIGHT', `${tonight.filter(realEv).length ? nEv : 0} event${nEv === 1 ? '' : 's'}`, `${working} working · ${lateNow} late`, tonight.length ? 'ok' : '', '.t4-tonight')}
+          {kpi('NEEDS YOU', needsN, needsN ? 'to look at' : 'all clear', needsN ? 'amb' : 'ok', '.t4-needs')}
+          {kpi('MESSAGES', msgN, msgN ? 'waiting' : 'nothing waiting', msgN ? 'amb' : '', '/admin/messages')}
+          {kpi('TO CONFIRM', toConf.length, 'staff · next 2 days', toConfLate ? 'red' : toConf.length ? 'amb' : 'ok', `/admin/bookings?date=${toConfDay}`)}
+        </div>
+        <div className="t5-cols"><div className="t4-col">{show(left)}</div><div className="t4-col">{show(right)}</div></div>
+        {rep && <ReplaceSheet shift={rep.s} ev={rep.e} onClose={() => setRep(null)} onDone={(m) => { setRep(null); setToast(m); setTick((t) => t + 1); }} />}
+        {toast && <div className="undo-bar" role="status"><span className="grow">{toast}</span></div>}
+        {changeId && <ChangeAnswer id={changeId} onClose={() => { const p = new URLSearchParams(params); p.delete('change'); setParams(p, { replace: true }); }} onDone={() => { const p = new URLSearchParams(params); p.delete('change'); setParams(p, { replace: true }); setTick((t) => t + 1); }} />}
+      </div>
+    );
+  }
   return (
     <div className="stack-lg t4">
       <div className="toolbar">
         <div><div className="kick">{dLabel(today, { weekday: 'long', month: 'long', day: 'numeric' }).toUpperCase()}{nEv ? ` · ${nEv} EVENT${nEv > 1 ? 'S' : ''} TONIGHT` : ''}</div><h1 className="serif-h">{hello}, Ronnie</h1></div>
-        <div className="row wrap"><button className="abtn" onClick={() => setEditing(true)} aria-label="Edit layout">✎ <span className="t4-hide-ph">Edit layout</span></button><Link className="abtn dark t4-hide-ph" to="/admin/event/new">＋ New event</Link></div>
+        <div className="row wrap">{verSw}<button className="abtn" onClick={() => setEditing(true)} aria-label="Edit layout">✎ <span className="t4-hide-ph">Edit layout</span></button><Link className="abtn dark t4-hide-ph" to="/admin/event/new">＋ New event</Link></div>
       </div>
       {(() => {
         // Nov 8 · Ronnie: Tonight beside Next 7 days. An empty half next to the last pinned tile is filled by the next (half-width) section.

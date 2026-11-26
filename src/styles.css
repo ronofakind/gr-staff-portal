@@ -5154,3 +5154,23 @@ span.abtn.ds-newq { background: none; border: 0; padding: 0; }
 .vc2 .hl-edit .abtn, .vc2 .vp-edit .abtn { height: 32px; }
 /* Nov 25 · booked dots green (Ronnie) */
 .mm-dot, .mm-d.sel .mm-dot:not(.short) { background: #3F7D4E; }
+
+/* Nov 25 · Today V2 (New / Old switch) */
+.t5 { display: flex; flex-direction: column; gap: 16px; }
+.t5-top { display: flex; align-items: flex-end; gap: 16px; }
+.t5-top h1 { margin: 0; }
+.t5-ver { height: 30px; } .t5-ver button { padding: 0 14px; font-size: 12.5px; }
+.t5-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.t5-kpi { text-align: left; border: 0; background: var(--card, #fff); border-radius: 14px; box-shadow: 0 6px 18px rgba(0,0,0,.06); padding: 12px 16px; display: flex; flex-direction: column; gap: 2px; cursor: pointer; font: inherit; color: inherit; }
+.t5-kpi span { font-size: 10px; font-weight: 800; letter-spacing: .08em; color: var(--muted, #8A8177); }
+.t5-kpi b { font: 500 26px Fraunces, serif; }
+.t5-kpi small { font-size: 12px; color: var(--muted, #8A8177); }
+.t5-kpi.ok b { color: #3F7D4E; } .t5-kpi.amb b { color: #B26A00; } .t5-kpi.red b { color: #9B2226; }
+.t5-cols { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+.t5-cols .t4-col { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.t5 .t4-caret { display: none; }
+.t5 .t4-h .serif, .t5 .t4-thinb .serif { font-size: 19px; }
+.t5 .t4-thin { opacity: .9; }
+.mm.mm-only { grid-template-columns: 1fr; }
+.mm.mm-only .mm-day { display: none; }
+@media (max-width: 900px) { .t5-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .t5-cols { grid-template-columns: 1fr; } }

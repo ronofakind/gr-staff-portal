@@ -2486,6 +2486,12 @@ html[data-theme="dark"] { --teams: #8487CC; --teams-bg: #1F2137; --teams-ink: #8
 :where(html[data-theme="dark"]) .vc2-rates input { border: 1px solid #49433B; background: var(--card, #1F1D1A); }
 :where(html[data-theme="dark"]) .vc2-rh { color: var(--muted, #8A8076); }
 :where(html[data-theme="dark"]) .mm-dot, :where(html[data-theme="dark"]) .mm-d.sel .mm-dot:not(.short) { background: #427A50; }
+:where(html[data-theme="dark"]) .t5-kpi { background: var(--card, #1F1D1A); box-shadow: 0 6px 18px rgba(0,0,0,0.15); }
+:where(html[data-theme="dark"]) .t5-kpi span { color: var(--muted, #8A8076); }
+:where(html[data-theme="dark"]) .t5-kpi small { color: var(--muted, #8A8076); }
+:where(html[data-theme="dark"]) .t5-kpi.ok b { color: #90C19C; }
+:where(html[data-theme="dark"]) .t5-kpi.amb b { color: #F2B65F; }
+:where(html[data-theme="dark"]) .t5-kpi.red b { color: #D7797C; }
 html[data-theme="dark"] { color-scheme: dark; }
 html[data-theme="dark"] body { background: #121110; color: #F1ECE4; }
 html[data-theme="dark"] img[src$="logo-mark.png"]:not(.adm-side img):not(.side-logo), html[data-theme="dark"] img[src$="logo-full.png"] { filter: invert(1) hue-rotate(180deg); mix-blend-mode: normal !important; }
