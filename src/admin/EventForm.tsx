@@ -631,6 +631,7 @@ export function EventForm() {
       try { await saveAll(date, true, 'all'); for (const d of dup.dates) await saveAll(d, true, 'none'); setBusy(false); nav(`/admin/bookings?date=${date}`); }
       catch (e) { setBusy(false); setErr((e as Error).message); }
     };
+    const ridesOn = tr.rides && (trOn || carpool); // what is saved
     const fmtH = (min: number) => `${Math.floor(min / 60)} h${min % 60 ? ` ${min % 60}` : ''}`;
     const leave = (() => { const [h, m] = firstStart.split(':').map(Number); const x = ((h * 60 + m - tr.travel) % 1440 + 1440) % 1440; return ap12(`${String(Math.floor(x / 60)).padStart(2, '0')}:${String(x % 60).padStart(2, '0')}`); })();
     const Sw = ({ on, set, label }: { on: boolean; set: (v: boolean) => void; label: string }) => (
@@ -731,14 +732,14 @@ export function EventForm() {
             <div className="ne-mg">
               <div className="ne-sub"><b>Travel &amp; rides</b>
                 <Sw on={trOn} set={(v) => setTr({ ...tr, on: v })} label="Far event" />
-                {trOn && <div className="ne-g2">
-                  <label className="ne-f"><span>TRAVEL · ONE WAY</span><select value={tr.travel} onChange={(e) => setTr({ ...tr, travel: Number(e.target.value) })}>{Array.from({ length: 16 }, (_, i) => (i + 1) * 15).map((n) => <option key={n} value={n}>{fmtH(n)}</option>)}</select></label>
-                  <div className="ne-f"><span>PAID · BOTH WAYS</span><b className="ne-v">{fmtH(paidTravel)}</b></div>
+                {trOn && <div className="ne-g3 ne-far">
+                  <label className="ne-f"><span>ONE WAY</span><select value={tr.travel} onChange={(e) => setTr({ ...tr, travel: Number(e.target.value) })}>{Array.from({ length: 16 }, (_, i) => (i + 1) * 15).map((n) => <option key={n} value={n}>{fmtH(n)}</option>)}</select></label>
+                  <div className="ne-f"><span>PAID</span><span className="ne-ro">{fmtH(paidTravel)}</span></div>
+                  <div className="ne-f"><span>LEAVE BY</span><span className="ne-ro">{leave}</span></div>
                 </div>}
-                <Sw on={tr.rides} set={(v) => { setTr({ ...tr, rides: v }); setCarpool(v); }} label="Offer rides" />
-                {tr.rides && <div className="ne-g2">
+                <Sw on={ridesOn} set={(v) => { setTr({ ...tr, rides: v }); setCarpool(v); }} label="Offer rides" />
+                {ridesOn && <div className="ne-g3 ne-far">
                   <label className="ne-f"><span>GAS PER CAR</span><input inputMode="decimal" value={tr.gas} onChange={(e) => setTr({ ...tr, gas: e.target.value.replace(/[^\d.]/g, '') })} /></label>
-                  <div className="ne-f"><span>LEAVE MONTREAL BY</span><b className="ne-v">{leave}</b></div>
                 </div>}
               </div>
               <div className="ne-sub"><b>Drive folder</b>

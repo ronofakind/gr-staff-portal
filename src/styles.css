@@ -5098,3 +5098,6 @@ span.abtn.ds-newq { background: none; border: 0; padding: 0; }
 .ne-unirow { display: flex; flex-direction: column; gap: 8px; }
 .ne-newu { display: grid; grid-template-columns: minmax(0, 1fr) 90px 90px; gap: 8px; align-items: end; background: var(--bg, #F4F0EA); border-radius: 10px; padding: 10px; }
 .ne-newu .abtn { height: 32px; justify-content: center; }
+.ne-sub > .ne-far { width: 100%; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.ne-ro { height: 32px; border: 1px solid var(--line, #ECE6DE); border-radius: 8px; background: var(--bg, #F4F0EA); display: flex; align-items: center; padding: 0 9px; font-weight: 600; white-space: nowrap; }
+.ne-far .ne-f > span:first-child { white-space: nowrap; }
