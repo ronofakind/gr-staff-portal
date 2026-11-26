@@ -5101,3 +5101,5 @@ span.abtn.ds-newq { background: none; border: 0; padding: 0; }
 .ne-sub > .ne-far { width: 100%; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .ne-ro { height: 32px; border: 1px solid var(--line, #ECE6DE); border-radius: 8px; background: var(--bg, #F4F0EA); display: flex; align-items: center; padding: 0 9px; font-weight: 600; white-space: nowrap; }
 .ne-far .ne-f > span:first-child { white-space: nowrap; }
+.ne-mg { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.ne-sub > .ne-far { grid-template-columns: repeat(3, minmax(90px, 1fr)); }
