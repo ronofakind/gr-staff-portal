@@ -2492,6 +2492,28 @@ html[data-theme="dark"] { --teams: #8487CC; --teams-bg: #1F2137; --teams-ink: #8
 :where(html[data-theme="dark"]) .t5-kpi.ok b { color: #90C19C; }
 :where(html[data-theme="dark"]) .t5-kpi.amb b { color: #F2B65F; }
 :where(html[data-theme="dark"]) .t5-kpi.red b { color: #D7797C; }
+:where(html[data-theme="dark"]) .mo2-sq { border: 1px solid #49433B; background: var(--card, #1F1D1A); }
+:where(html[data-theme="dark"]) .mo2-newm { background: var(--card, #1F1D1A); border: 1px solid #49433B; box-shadow: 0 10px 24px rgba(0,0,0,0.3); }
+:where(html[data-theme="dark"]) .mo2-newm a:hover { background: #312C26; }
+:where(html[data-theme="dark"]) .t5-kpi.on { box-shadow: inset 0 0 0 2px var(--ink, #E1DEDB); }
+:where(html[data-theme="dark"]) .mo2-leg { color: var(--muted, #8A8076); }
+:where(html[data-theme="dark"]) .mo2 .ok > i, :where(html[data-theme="dark"]) .mo2-leg i.ok { background: #427A50; }
+:where(html[data-theme="dark"]) .mo2 .short > i, :where(html[data-theme="dark"]) .mo2-leg i.short { background: #AE6C09; }
+:where(html[data-theme="dark"]) .mo2 .send > i, :where(html[data-theme="dark"]) .mo2-leg i.send { background: #7D746A; }
+:where(html[data-theme="dark"]) .mo2 .tbc > i, :where(html[data-theme="dark"]) .mo2-leg i.tbc { background: #4F49A3; }
+:where(html[data-theme="dark"]) .mo2 .mt > i { background: #524B45; }
+:where(html[data-theme="dark"]) .mo2-h { color: var(--muted, #8A8076); }
+:where(html[data-theme="dark"]) .mo2-d { background: var(--card, #1F1D1A); }
+:where(html[data-theme="dark"]) .mo2-d.today { box-shadow: inset 0 0 0 2px #95282C; }
+:where(html[data-theme="dark"]) .mo2-short { color: #F2B65F; }
+:where(html[data-theme="dark"]) .mo2-e:hover { background: #312D25; }
+:where(html[data-theme="dark"]) .mo2-e.short > b { color: #F2B65F; }
+:where(html[data-theme="dark"]) .mo2-e.tbc > b { color: #8D89C8; }
+:where(html[data-theme="dark"]) .mo2-e.mt > b { color: var(--muted, #8A8076); }
+:where(html[data-theme="dark"]) .mo2-e > b em { color: #90C19C; }
+:where(html[data-theme="dark"]) .mo2-more { color: var(--muted, #8A8076); }
+:where(html[data-theme="dark"]) .mo2-pop { background: var(--card, #1F1D1A); box-shadow: 0 14px 34px rgba(0,0,0,0.45); }
+:where(html[data-theme="dark"]) .mo2-kv b.amb { color: #F2B65F; }
 html[data-theme="dark"] { color-scheme: dark; }
 html[data-theme="dark"] body { background: #121110; color: #F1ECE4; }
 html[data-theme="dark"] img[src$="logo-mark.png"]:not(.adm-side img):not(.side-logo), html[data-theme="dark"] img[src$="logo-full.png"] { filter: invert(1) hue-rotate(180deg); mix-blend-mode: normal !important; }

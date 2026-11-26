@@ -1491,4 +1491,14 @@ html[data-theme="terra"] { --teams: #5B5FC7; --teams-bg: #EEEFFB; --teams-ink: #
 :where(html[data-theme="terra"]) .t5-kpi span { color: var(--muted, #878A77); }
 :where(html[data-theme="terra"]) .t5-kpi small { color: var(--muted, #878A77); }
 :where(html[data-theme="terra"]) .t5-kpi.red b { color: #9B4D31; }
+:where(html[data-theme="terra"]) .mo2-sq { background: var(--card, #FBFAF6); }
+:where(html[data-theme="terra"]) .mo2-newm { background: var(--card, #FBFAF6); box-shadow: 0 10px 24px rgba(0,0,0,0.12); }
+:where(html[data-theme="terra"]) .mo2-leg { color: var(--muted, #878A77); }
+:where(html[data-theme="terra"]) .mo2 .send > i, :where(html[data-theme="terra"]) .mo2-leg i.send { background: #969987; }
+:where(html[data-theme="terra"]) .mo2 .mt > i { background: #C1C3B8; }
+:where(html[data-theme="terra"]) .mo2-h { color: var(--muted, #878A77); }
+:where(html[data-theme="terra"]) .mo2-d { background: var(--card, #FBFAF6); }
+:where(html[data-theme="terra"]) .mo2-e.mt > b { color: var(--muted, #878A77); }
+:where(html[data-theme="terra"]) .mo2-more { color: var(--muted, #878A77); }
+:where(html[data-theme="terra"]) .mo2-pop { background: var(--card, #FBFAF6); box-shadow: 0 14px 34px rgba(0,0,0,0.18); }
 html[data-theme="terra"] body { background: #EEF0E8; color: #2A2A24; }

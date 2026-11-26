@@ -27,7 +27,7 @@ export type AEvent = {
 };
 
 const EVENT_SELECT_T = `id,event_date,title,address,department,description,dress_code,bring,start_time,end_time,details_pending,
-  staff_needed,manager_id,hours_submitted_at,hours_submitted_by,venue_id,timeline,event_private(client,client_id,punch_code,pay_method,qb_doc_type,qb_doc_number,cash_received_at,qb_removed_at,admin_note),staff_estimate,guests,guests_max,guests_final,event_type,extras,extras_billing,transport,travel_min,paid_travel_min,gas_per_car,transport_billing,rides,ends_label,staffing,notes,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,drive_folder_url,tentative,links,
+  staff_needed,manager_id,hours_submitted_at,hours_submitted_by,venue_id,timeline,event_private(client,client_id,punch_code,pay_method,qb_doc_type,qb_doc_number,cash_received_at,qb_removed_at,admin_note),staff_estimate,caterer_name,guests,guests_max,guests_final,event_type,extras,extras_billing,transport,travel_min,paid_travel_min,gas_per_car,transport_billing,rides,ends_label,staffing,notes,uniform_floor,uniform_bar,uniform_floor_w,uniform_bar_w,drive_folder_url,tentative,links,
   shifts(id,event_id,staff_id,position_code,position_detail,planned_start,planned_end,status,changed_at,notified_at,attendance,left_early,attendance_reason,early_reason,early_note,leave_by,manager_note,note_archived_at,note_archived_by,responded_at,punches(punch_in,punch_out),staff:staff!shifts_staff_id_fkey(full_name,phone)P28)`;
 /** push 28 shift columns (migration 034). */
 export const P28_SHIFT_COLS = ',cancelled_at,cancel_reason,cancel_note,cancel_self,cancel_late,cancel_sent_to_manager,replacement_for';

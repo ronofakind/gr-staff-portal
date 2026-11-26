@@ -5174,3 +5174,48 @@ span.abtn.ds-newq { background: none; border: 0; padding: 0; }
 .mm.mm-only { grid-template-columns: 1fr; }
 .mm.mm-only .mm-day { display: none; }
 @media (max-width: 900px) { .t5-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } .t5-cols { grid-template-columns: 1fr; } }
+
+/* Nov 25 · Calendar V2 (month only) */
+.mo2 { display: flex; flex-direction: column; gap: 14px; font-size: 12.5px; }
+.mo2-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.mo2-top h1 { margin: 0; font-size: 28px; min-width: 210px; text-align: center; }
+.mo2-sq { width: 32px; height: 32px; border: 1px solid #DCD3C7; border-radius: 8px; background: var(--card, #fff); color: inherit; font-size: 16px; cursor: pointer; }
+.mo2-today { height: 32px; }
+.mo2-new { position: relative; }
+.mo2-new .abtn { width: auto; margin: 0; height: 32px; padding: 0 16px; }
+.mo2-newm { position: absolute; right: 0; top: 36px; background: var(--card, #fff); border: 1px solid #E2DAD0; border-radius: 10px; box-shadow: 0 10px 24px rgba(0,0,0,.12); padding: 4px; z-index: 20; display: flex; flex-direction: column; min-width: 140px; }
+.mo2-newm a { padding: 8px 12px; border-radius: 7px; color: inherit; text-decoration: none; }
+.mo2-newm a:hover { background: #F1ECE6; }
+.t5-kpi.on { box-shadow: inset 0 0 0 2px var(--ink, #1A1714); }
+.mo2-leg { display: flex; gap: 18px; color: var(--muted, #8A8177); font-size: 12px; flex-wrap: wrap; }
+.mo2-leg span { display: flex; align-items: center; gap: 6px; }
+.mo2-leg i, .mo2-e > i { width: 3px; height: 13px; border-radius: 2px; display: inline-block; flex: 0 0 auto; }
+.mo2 .ok > i, .mo2-leg i.ok { background: #3F7D4E; } .mo2 .short > i, .mo2-leg i.short { background: #B26A00; }
+.mo2 .send > i, .mo2-leg i.send { background: #9A9086; } .mo2 .tbc > i, .mo2-leg i.tbc { background: #4B44A8; } .mo2 .mt > i { background: #C9BFB2; }
+.mo2-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
+.mo2-h { font-size: 10.5px; font-weight: 800; letter-spacing: .08em; color: var(--muted, #8A8177); padding-left: 4px; }
+.mo2-d { background: var(--card, #fff); border-radius: 10px; padding: 8px 9px; min-height: 118px; display: flex; flex-direction: column; gap: 3px; cursor: pointer; min-width: 0; }
+.mo2-d.out { visibility: hidden; }
+.mo2-d.past { opacity: .5; }
+.mo2-d.today { box-shadow: inset 0 0 0 2px #9B2226; opacity: 1; }
+.mo2-d.open { min-height: 118px; }
+.mo2-dh { display: flex; align-items: center; height: 18px; }
+.mo2-dh b { font-size: 13px; }
+.mo2-short { font-size: 10.5px; font-weight: 800; color: #B26A00; }
+.mo2-e { position: relative; display: grid; grid-template-columns: 3px minmax(0, 1fr) auto; gap: 6px; align-items: center; height: 21px; border-radius: 5px; padding-right: 2px; }
+.mo2-e:hover { background: #F4F0EA; }
+.mo2-et { font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mo2-e > b { font-size: 11px; font-weight: 700; padding: 0 3px; border-radius: 4px; border: 1.5px solid transparent; }
+.mo2-e.short > b { color: #B26A00; } .mo2-e.tbc > b { color: #4B44A8; } .mo2-e.mt > b { color: var(--muted, #8A8177); font-weight: 500; }
+.mo2-e > b em { font-style: normal; color: #3F7D4E; }
+.mo2-more { border: 0; background: transparent; text-align: left; color: var(--muted, #8A8177); font: inherit; font-size: 11px; padding: 0 0 0 9px; cursor: pointer; }
+.mo2-pop { display: none; position: absolute; left: 0; top: 22px; width: 290px; background: var(--card, #fff); border-radius: 12px; box-shadow: 0 14px 34px rgba(0,0,0,.18); padding: 12px 14px; z-index: 30; flex-direction: column; gap: 6px; cursor: default; }
+.mo2-e:hover > .mo2-pop { display: flex; }
+.mo2-grid > .mo2-d:nth-child(7n) .mo2-pop, .mo2-grid > .mo2-d:nth-child(7n - 1) .mo2-pop { left: auto; right: 0; }
+.mo2-pop .serif { font-size: 17px; }
+.mo2-kv { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; }
+.mo2-kv b.amb { color: #B26A00; }
+.mo2-pb { display: flex; gap: 8px; margin-top: 4px; }
+.mo2-pb .abtn { height: 30px; justify-content: center; }
+.mo2-pb .abtn.dark { flex: 1; }
+@media (max-width: 900px) { .mo2-grid { gap: 4px; } .mo2-d { min-height: 80px; padding: 5px; } .mo2-et { display: none; } .mo2-e { grid-template-columns: 3px auto; } .mo2-e > b { display: none; } }
