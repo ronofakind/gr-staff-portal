@@ -80,6 +80,9 @@ root.walkRules((rule) => {
 });
 dark.append(postcss.parse(`html[data-theme="dark"] { color-scheme: dark; }
 html[data-theme="dark"] body { background: ${P.bg}; color: ${P.ink}; }
-html[data-theme="dark"] img[src$="logo-mark.png"]:not(.adm-side img):not(.side-logo), html[data-theme="dark"] img[src$="logo-full.png"] { filter: invert(1) hue-rotate(180deg); mix-blend-mode: normal !important; }`));
+html[data-theme="dark"] img[src$="logo-mark.png"]:not(.adm-side img):not(.side-logo), html[data-theme="dark"] img[src$="logo-full.png"] { filter: invert(1) hue-rotate(180deg); mix-blend-mode: normal !important; }
+html[data-theme="dark"] :is(.adm-new, .adm-fab, .dept-tag.bar, .dept-tag.is-bar, .abtn.red, .pill-red, .btn-red) { background: #95282C; border-color: #95282C; color: #F1ECE4; }
+html[data-theme="dark"] .live-card.edge-bar { box-shadow: inset 4px 0 0 #95282C; }
+html[data-theme="dark"] .t4-ev.edge-bar .t4-line::before { background: #95282C; }`));
 fs.writeFileSync(OUT, dark.toString());
 console.log('theme-dark.css', dark.nodes.length, 'rules');
