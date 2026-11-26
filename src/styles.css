@@ -5152,3 +5152,5 @@ span.abtn.ds-newq { background: none; border: 0; padding: 0; }
 .vc2 .hl-edit > span:first-child, .vc2 .vp-edit > span:first-child { display: none; }
 .vc2 .hl-edit input, .vc2 .vp-edit input { height: 32px; border-radius: 8px; font-size: 12.5px; }
 .vc2 .hl-edit .abtn, .vc2 .vp-edit .abtn { height: 32px; }
+/* Nov 25 · booked dots green (Ronnie) */
+.mm-dot, .mm-d.sel .mm-dot:not(.short) { background: #3F7D4E; }
