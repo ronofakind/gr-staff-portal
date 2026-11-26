@@ -171,6 +171,7 @@ export function EventForm() {
   const setItems = (k: UniLineKey, i: UniItems) => setItemsMap((m) => ({ ...m, [k]: i }));
   const [uniFrom, setUniFrom] = useState<string | null>(null); const [uniToClient, setUniToClient] = useState(false); // Nov 11
   const [catererId, setCatererId] = useState(''); // push 95 · Food by
+  const [catererTbc, setCatererTbc] = useState(false); const [newCat, setNewCat] = useState<string | null>(null); // Nov 25 · 140
   const [mode, setModeRaw] = useState<Mode>('floor');
   const [fold, setFoldMap] = useState<Record<number, boolean>>(readFold);
   const isOpen = (n: number) => fold[n] ?? true;
@@ -260,7 +261,7 @@ export function EventForm() {
       setPendingDetails(!!(e as unknown as { details_pending?: boolean }).details_pending); setWasPending(!!(e as unknown as { details_pending?: boolean }).details_pending);
       { const x = e as unknown as { tentative?: boolean; start_tbc?: boolean }; setTentative(!!x.tentative); setStartTbc(!!x.start_tbc); setWasTbc(!!x.start_tbc); setLinks(asLinks((e as unknown as { links?: unknown }).links)); }
       { const an = (e.event_private as { admin_note?: string | null } | null)?.admin_note ?? ''; setAdminNote(an); setAdminNote0(an); setEstimate(!!(e as unknown as { staff_estimate?: boolean }).staff_estimate); }
-      setClientId(e.event_private?.client_id ?? ''); setRateSet(e.event_private?.rate_set ?? null); setCatererId((e as unknown as { caterer_id?: string | null }).caterer_id ?? '');
+      setClientId(e.event_private?.client_id ?? ''); setRateSet(e.event_private?.rate_set ?? null); setCatererId((e as unknown as { caterer_id?: string | null }).caterer_id ?? ''); setCatererTbc(!!(e as unknown as { caterer_tbc?: boolean }).caterer_tbc);
       setTr({ on: !!e.transport, travel: e.travel_min ?? 60, gas: String(e.gas_per_car ?? 20), billing: e.transport_billing ?? 'client', rides: e.rides ?? !!e.transport });
       setExtras(e.extras != null ? String(e.extras) : ''); setExtrasBill(e.extras_billing ?? 'gr');
       setGuests(e.guests ? String(e.guests) : ''); setGuestsMax(e.guests_max ? String(e.guests_max) : ''); setGFinal(!!e.guests_final); setEventType(e.event_type ?? ''); setPayMethod(e.event_private?.pay_method ?? 'invoice');
@@ -509,7 +510,7 @@ export function EventForm() {
         event_date: forDate, title: title.trim() || (pendingDetails ? 'Details to come' : ''), venue_id: vId, details_pending: pendingDetails, tentative, start_tbc: ls.some((l) => l.tbc) && !pendingDetails, links, address: (address + (unit.trim() ? `, ${unit.trim()}` : '')) || null, department: dept,
         start_time: start, end_time: endT, ends_label: ends, staff_needed: ls.reduce((n, l) => n + l.count, 0),
         manager_id: lead ? keep(lead)[0] ?? null : null, description: note || null, notes: staffNote || null,
-        caterer_id: catererId || null, // push 95 · Food by (same for floor + bar)
+        caterer_id: catererId || null, caterer_tbc: catererTbc && !catererId, // push 95 · 140 · Food by (same for floor + bar)
         uniform_floor: uFloor, uniform_bar: uBar, uniform_floor_w: uFloorW, uniform_bar_w: uBarW, uniform_items: lineItems(), drive_folder_url: folder.trim() || null, staffing: ls.map(({ dept: d, code, start: s, end, count, tbc, hold }) => ({ dept: d, code, start: s, end: end || null, count, ...(tbc ? { tbc: true } : {}), ...(hold ? { hold } : {}) })), guests: guests ? Number(guests) : null, guests_max: !gFinal && guestsMax && Number(guestsMax) > Number(guests || 0) ? Number(guestsMax) : null, guests_final: gFinal && !!guests, event_type: eventType || null, extras: extras === '' ? null : Number(extras), extras_billing: 'client', // push 61 · extras always on the invoice for now
         staff_estimate: estimate,
         transport: trOn, travel_min: trOn ? tr.travel : null, paid_travel_min: trOn ? paidTravel : null, gas_per_car: trOn ? Number(tr.gas) || 0 : null, transport_billing: trOn ? tr.billing : null, rides: tr.rides && (trOn || carpool),
@@ -613,6 +614,17 @@ export function EventForm() {
         {!list.some(([k]) => k === cur) && cur !== 'none' && !cur.startsWith('custom:') && <option value={cur}>{uniName(cur)}</option>}
         <option value="__new">+ New uniform</option></>;
     };
+    const addCat = async () => {
+      const n = (newCat ?? '').trim(); if (!n) return;
+      const ex = clients.find((c) => c.name.toLowerCase() === n.toLowerCase() || (c.caterer_label ?? '').toLowerCase() === n.toLowerCase());
+      if (ex) {
+        if (!ex.is_caterer) await supabase.from('clients').update({ is_caterer: true, caterer_label: ex.caterer_label || n }).eq('id', ex.id);
+        setClients(clients.map((c) => (c.id === ex.id ? { ...c, is_caterer: true } : c))); setCatererId(ex.id); setCatererTbc(false); setNewCat(null); return;
+      }
+      const { data, error } = await supabase.from('clients').insert({ name: n, is_caterer: true, caterer_label: n }).select('id').single();
+      if (error) { setErr(error.message); return; }
+      setClients([...clients, { id: data.id, name: n, rate_sets: [], is_caterer: true, caterer_label: n } as Client]); setCatererId(data.id); setCatererTbc(false); setNewCat(null);
+    };
     const SET = { fm: setUFloor, fw: setUFloorW, bm: setUBar, bw: setUBarW } as const;
     const uniSel = (key: 'fm' | 'fw' | 'bm' | 'bw', val: string, list: [string, string][]) => (
       <select value={val} onChange={(e) => { const v = e.target.value; if (v === '__new') { setNewUni({ key, txt: '' }); return; } uniTouched.current = true; SET[key](v); }}>{opts(list, val)}</select>);
@@ -685,9 +697,16 @@ export function EventForm() {
               </div>)}
             <div className="ne-g3">
               <label className="ne-f"><span>FOOD BY</span>
-                <select value={catererId} onChange={(e) => setCatererId(e.target.value)}>
+                <select value={catererTbc && !catererId ? '__tbc' : catererId} onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === '__new') { setNewCat(''); return; }
+                  if (v === '__tbc') { setCatererId(''); setCatererTbc(true); return; }
+                  setCatererId(v); setCatererTbc(false);
+                }}>
                   <option value="" />
-                  {clients.filter((c) => c.is_caterer && !(c as Client & { archived_at?: string | null }).archived_at).map((c) => <option key={c.id} value={c.id}>{c.caterer_label || c.name}</option>)}
+                  <option value="__tbc">TBC</option>
+                  {clients.filter((c) => c.is_caterer && (!(c as Client & { archived_at?: string | null }).archived_at || c.id === catererId)).map((c) => <option key={c.id} value={c.id}>{c.caterer_label || c.name}</option>)}
+                  <option value="__new">+ New caterer</option>
                 </select></label>
               <label className="ne-f"><span>GUESTS</span><input type="number" min={0} value={guests} onChange={(e) => setGuests(e.target.value)} /></label>
               <label className="ne-f"><span>EVENT TYPE</span>
@@ -701,6 +720,11 @@ export function EventForm() {
                   {eventType && !types.some((t) => t.name === eventType) && <option>{eventType}</option>}
                 </select></label>
             </div>
+            {newCat !== null && <div className="ne-newu">
+              <label className="ne-f"><span>NEW CATERER</span><input autoFocus value={newCat} onChange={(e) => setNewCat(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void addCat(); } if (e.key === 'Escape') setNewCat(null); }} /></label>
+              <button type="button" className="abtn dark" disabled={!newCat.trim()} onClick={addCat}>Add</button>
+              <button type="button" className="abtn" onClick={() => setNewCat(null)}>Cancel</button>
+            </div>}
             <div className="ne-teams">
               <div className="ne-f"><span>TEAMS</span><span className="ne-seg">{(['floor', 'bar', 'both'] as const).map((m) => <button type="button" key={m} className={mode === m ? 'on' : ''} onClick={() => setMode(m)}>{m === 'floor' ? 'Floor' : m === 'bar' ? 'Bar' : 'Both'}</button>)}</span></div>
               <Sw on={!tentative} set={(v) => setTentative(!v)} label="Client confirmed" />
