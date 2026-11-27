@@ -185,8 +185,8 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
     setCancelQ(null); setCard(null); const now = new Date().toISOString();
     const { data: b } = await supabase.from('shifts').select('attendance,cancelled_at,cancel_reason,cancel_note,cancel_late,cancel_self,cancel_sent_to_manager').eq('id', s0.id).single();
     const { error } = await supabase.from('shifts').update({ attendance: 'cancelled', cancelled_at: now, cancel_reason: reason, cancel_note: note.trim() || null, cancel_late: counts, cancel_self: false, cancel_sent_to_manager: now }).eq('id', s0.id); if (error) throw error;
-    setMsg(`${short(nm0(s0))} cancelled · ${reason}${counts ? ' · counts as a late cancel' : ' · excused (not counted)'} · nothing sent to them.`);
-    if (replace) { const e = evs.find((x) => x.id === s0.event_id); if (e) setTimeout(() => setPick({ e, code: s0.position_code ?? 'W', start: hm(s0.planned_start) || null }), 300); }
+    setMsg(`${short(nm0(s0))} cancelled · ${reason}${counts ? '' : ' · not counted'}`);
+    if (replace) { const e = evs.find((x) => x.id === s0.event_id); if (e) setTimeout(() => (narrow && v6 ? setPhAdd : setPick)({ e, code: s0.position_code ?? 'W', start: hm(s0.planned_start) || null }), 300); }
     return { label: `cancelled ${nm0(s0)}`, undo: () => supabase.from('shifts').update(b as Record<string, unknown>).eq('id', s0.id).then() };
   });
   const unCancel = (c0: Cx) => run(async () => {
@@ -738,7 +738,7 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
           onReplace={() => run(async () => { const all = await eventsBetween(date, date); const fe = all.find((x) => x.id === c.event_id); const fs = fe?.shifts.find((x) => x.id === c.id);
             if (!fe || !fs) throw new Error('Could not open the replacement list.'); setCard(null); setRepl({ s: fs, e: fe }); })}
           onRemove={() => { setCard(null); remove(c); }} onCancel={() => setCancelQ(c)} />; })()}
-      {cancelQ && <CancelBox s={cancelQ} name={byId[cancelQ.staff_id]?.full_name ?? '…'} where={(() => { const e = evs.find((x) => x.id === cancelQ.event_id); return `${e?.venues?.name ?? e?.title ?? ''} · ${roleName(cancelQ.position_code)} ${ap(hm(cancelQ.planned_start))} · ${sentTxt(cancelQ)}`; })()}
+      {cancelQ && <CancelBox s={cancelQ} name={byId[cancelQ.staff_id]?.full_name ?? '…'} where={(() => { const e = evs.find((x) => x.id === cancelQ.event_id); return `${e?.venues?.name ?? e?.title ?? ''} · ${ap(hm(cancelQ.planned_start))}`; })()}
         onClose={() => setCancelQ(null)} onSave={(r, n, c, rep) => doCancel(cancelQ, r, n, c, rep)} />}
       {tellQ && <TellBox q={tellQ} names={tellQ.who.map((x) => byId[x.staff_id]?.full_name ?? '…')} states={tellQ.who.map((x) => sentTxt(x))} />}
       {repl && <ReplaceSheet shift={repl.s} ev={repl.e} onClose={() => setRepl(null)} onDone={(m) => { setRepl(null); setMsg(m); setTick((t) => t + 1); }} />}
@@ -954,19 +954,17 @@ function DetailsV6({ e, pv, open, onToggle, venues, clients, types, busy, onEv, 
 
 /** push 122 · cancel with a reason (Ronnie, Nov 13): kept on their record; ranking or not is his call. */
 function CancelBox({ s, name, where, onClose, onSave }: { s: Sh; name: string; where: string; onClose: () => void; onSave: (reason: string, note: string, counts: boolean, replace: boolean) => void }) {
-  const [r, setR] = useState(''); const [n, setN] = useState(''); const [c, setC] = useState(s.status === 'confirmed'); const [rep, setRep] = useState(false);
+  // Nov 27 · simpler (board "Cancel · simpler", A): reason · Count it / Don't count it · Find a replacement · + Note · one red button
+  const [r, setR] = useState(''); const [n, setN] = useState(''); const [c, setC] = useState(s.status === 'confirmed'); const [rep, setRep] = useState(false); const [noteOn, setNoteOn] = useState(false);
+  const first = name.split(' ')[0];
   return (
-    <div className="ds-pick-wrap" onClick={onClose}><div className="ds-pick ds-tell" onClick={(ev) => ev.stopPropagation()}>
-      <b className="serif" style={{ fontSize: 19 }}>{name} · cancel</b><small className="muted">{where}</small>
-      <small className="kick">REASON</small>
+    <div className="ds-pick-wrap cx2-wrap" onClick={onClose}><div className="ds-pick cx2" onClick={(ev) => ev.stopPropagation()}>
+      <span className="ph-grip" />
+      <div className="ph-phead"><b>Cancel {first}</b><small>{where}</small></div>
       <div className="ds-rs">{['Sick', 'Emergency', 'Transport', 'Time change', 'No-show', 'Other'].map((x) => <button key={x} className={r === x ? 'on' : ''} onClick={() => setR(x)}>{x}</button>)}</div>
-      <input placeholder="Note (stays on their profile) · e.g. texted at 7:40 AM, fever" value={n} onChange={(ev) => setN(ev.target.value)} />
-      <small className="kick">COUNTS IN RANKING?</small>
-      <div className="ds-rs two"><button className={c ? 'on' : ''} onClick={() => setC(true)}>Yes · late cancel</button><button className={!c ? 'on' : ''} onClick={() => setC(false)}>No · excused</button></div>
-      <small className="muted">Starts on Yes when they had confirmed · you decide</small>
-      <label className="row sm" style={{ gap: 8 }}><input type="checkbox" checked={rep} onChange={(ev) => setRep(ev.target.checked)} /> Find a replacement after (opens the pick list for the spot)</label>
-      <div className="row" style={{ gap: 10, justifyContent: 'flex-end', alignItems: 'center' }}><button className="lnk muted sm" onClick={onClose}>Cancel · change nothing</button>
-        <button className="abtn ds-cxgo" disabled={!r} onClick={() => onSave(r, n, c, rep)}>Cancel {name.split(' ')[0]}</button></div>
-      <small className="muted">Nothing is sent to them · their MD sees them crossed out · ↶ Undo</small>
+      <div className="cx2-seg"><button className={c ? 'on' : ''} onClick={() => setC(true)}>Count it</button><button className={!c ? 'on' : ''} onClick={() => setC(false)}>Don’t count it</button></div>
+      <button className="cx2-row" onClick={() => setRep(!rep)}><span>Find a replacement</span><i className={'cx2-sw' + (rep ? ' on' : '')} /></button>
+      {noteOn ? <input autoFocus className="ph-search" placeholder="Note" value={n} onChange={(ev) => setN(ev.target.value)} /> : <button className="cx2-row muted" onClick={() => setNoteOn(true)}><span>+ Note</span></button>}
+      <button className="cx2-go" disabled={!r} onClick={() => onSave(r, n, c, rep)}>Cancel {first}</button>
     </div></div>);
 }
