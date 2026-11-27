@@ -2638,6 +2638,13 @@ html[data-theme="dark"] { --teams: #8487CC; --teams-bg: #1F2137; --teams-ink: #8
 :where(html[data-theme="dark"]) .cx2-sw::after { background: #1F1D1A; }
 :where(html[data-theme="dark"]) .cx2-sw.on { background: #427A50; }
 :where(html[data-theme="dark"]) .cx2-go { background: #95282C; color: #F1ECE4; }
+:where(html[data-theme="dark"]) .sw-tag { color: #8D89C8; background: #242235; }
+:where(html[data-theme="dark"]) .crew-sw { border-top: 1px solid #4C4439; }
+:where(html[data-theme="dark"]) .crew-sw button, :where(html[data-theme="dark"]) .lk-sw { border: 1.5px solid #4F49A3; color: #8D89C8; }
+:where(html[data-theme="dark"]) .sw-seg button { background: #312C26; color: #E1DEDB; }
+:where(html[data-theme="dark"]) .sw-seg button.on { background: #E1DEDB; color: #1A1714; }
+:where(html[data-theme="dark"]) .sw-opt.on { background: #242235; box-shadow: inset 0 0 0 1.5px #4F49A3; }
+:where(html[data-theme="dark"]) .btn-ink.sw-go:not(:disabled) { background: #4F49A3; }
 html[data-theme="dark"] { color-scheme: dark; }
 html[data-theme="dark"] body { background: #121110; color: #F1ECE4; }
 html[data-theme="dark"] img[src$="logo-mark.png"]:not(.adm-side img):not(.side-logo), html[data-theme="dark"] img[src$="logo-full.png"] { filter: invert(1) hue-rotate(180deg); mix-blend-mode: normal !important; }

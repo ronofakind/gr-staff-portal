@@ -247,6 +247,9 @@ function AddStaff({ ev, onClose, onDone, lang }: { ev: EvFull; onClose: () => vo
   );
 }
 
+/** Nov 27 · floor staff booked on the bar list (migration 146 · team_link / switch_team) */
+type LinkP = { shift_id: string; staff_id: string; full_name: string; nickname: string | null; photo_url: string | null; position_code: string | null; planned_start: string; punch_in: string | null; punch_out: string | null; switched_at: string | null };
+type TeamLink = { sister: string; bar_event: string; floor_event: string; sister_mgr: string | null; loan: LinkP[]; floor: LinkP[] };
 export function Manage({ me }: { me?: { id: string; full_name: string } | null }) {
   const { eventId } = useParams(); const lang = useLang(); const t = L[lang];
   useSettings(); // push 32: feedback / new tag / undo / start window come from Settings
@@ -293,6 +296,8 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
   // Nov 5 · Ronnie's note for the manager (migration 066 · errors → nothing shown)
   const [rNote, setRNote] = useState<Record<string, string>>({});
   // push 46 · the person's other G&R shift that day (venue + planned times only; migration 052 · errors → nothing shown)
+  const [link, setLink] = useState<TeamLink | null>(null);
+  const [sw, setSw] = useState<{ from: LinkP } | null>(null); const [swPick, setSwPick] = useState<string | null>(null); const [swAll, setSwAll] = useState(false); const [swBusy, setSwBusy] = useState(false);
   const [otherSh, setOtherSh] = useState<Record<string, { venue: string; start_at: string; end_at: string | null }[]>>({});
 
   const load = async () => {
@@ -313,6 +318,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
       if (Array.isArray(data)) for (const x of data as Info[]) if (x && typeof x === 'object' && typeof x.staff_id === 'string') m[x.staff_id] = { ...x, done_before: typeof x.done_before === 'number' ? x.done_before : 0, is_new: x.is_new === true, fb_ratings: x.fb_ratings && typeof x.fb_ratings === 'object' && !Array.isArray(x.fb_ratings) ? x.fb_ratings : null, fb_stars: starOk(x.fb_stars) ? x.fb_stars : null };
       setInfo(m);
     });
+    supabase.rpc('team_link', { p_event: eventId! }).then(({ data, error }) => { const d = data as TeamLink | null; setLink(!error && d && Array.isArray(d.loan) && Array.isArray(d.floor) ? d : null); });
     supabase.rpc('manager_other_shifts', { p_event: eventId! }).then(({ data, error }) => {
       if (error || !Array.isArray(data)) return; const m: typeof otherSh = {};
       for (const x of data as { staff_id: string; venue: string; start_at: string; end_at: string | null }[]) if (x && typeof x.staff_id === 'string' && typeof x.start_at === 'string') (m[x.staff_id] ??= []).push(x);
@@ -469,7 +475,12 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
   // Nov 26 · whoever can take hours (MD / bar manager + co-managers) sits once, at the top, in Taking hours
   const isHrs = (r: Row) => !!r.staff_id && (r.staff_id === ev.manager_id || (ev.co_manager_ids ?? []).includes(r.staff_id));
   const hrsRows = rows.filter(isHrs);
-  const groups = Array.from(new Set(rows.filter((r) => !isHrs(r)).map((r) => r.planned_start)));
+  const isBarEv = ev.department === 'bar';
+  const loanIds = new Set(isBarEv && link ? link.loan.map((x) => x.shift_id) : []);
+  const switchedIds = new Set(link ? [...link.loan, ...link.floor].filter((x) => x.switched_at).map((x) => x.shift_id) : []);
+  const inTimes = (r: Row) => !isHrs(r) && !loanIds.has(r.id);
+  const groups = Array.from(new Set(rows.filter(inTimes).map((r) => r.planned_start)));
+  const openSw = (shiftId: string) => { const f = link?.loan.find((x) => x.shift_id === shiftId); if (!f) return; setSwPick(null); setSwAll(false); setSw({ from: f }); };
   // Nov 26 · one row renderer for the Taking hours section and the time blocks
   const crewRow = (r: Row) => {
               const pin = r.punches?.punch_in ?? null; const pout = r.punches?.punch_out ?? null;
@@ -484,14 +495,14 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
               const inf = infoOf(r); const isNew = !!inf?.is_new && inf.done_before < newUnder;
               return (
                 <SwipeRow key={r.id} on={canUndo(r)} label={pout ? 'Undo end' : 'Undo start'} onAct={() => (pout ? undoEnd(r) : undoStart(r))}>
-                <div className={'crew' + (isHrs(r) ? ' hrs' : '') + (r.attendance ? ' flagged' : '') + (r.left_early ? ' left' : '') + (r.adder ? ' has-add' : '')}>
+                <div className={'crew' + (isHrs(r) ? ' hrs' : '') + (r.attendance ? ' flagged' : '') + (r.left_early ? ' left' : '') + (r.adder || (loanIds.has(r.id) && !ev.hours_submitted_at) ? ' has-add' : '')}>
                   <button className={'ring tap ' + ring + (isNew && !pin ? ' newp' : '')} aria-label={`Options for ${r.staff?.full_name}`} onClick={() => openRow(r, isNew)}>
                     <Avatar name={r.staff?.full_name ?? '?'} url={r.staff?.photo_url} size={44} />
                     {isNew && <i className="new-badge">NEW</i>}
                     <i className="crew-pos">{roleLabel(r.position_code, r.position_detail).toUpperCase()}</i>
                   </button>
                   <button className="who" aria-label={`Options for ${r.staff?.full_name}`} onClick={() => openRow(r, isNew)}>
-                    <span className="nm">{r.staff ? teamName(r.staff) : ''}{r.ends_own && !r.punches?.late_entry_at && <i className="own-tag">ENDS OWN</i>}{r.punches?.late_entry_at && <i className="late-tag">{r.punches.late_ok_at ? '✓ ' : ''}ENTERED LATER</i>}{xIds.has(r.id) && !r.attendance && <i className="x-tag">EXTRA</i>}{r.cut_first_at && !r.attendance && !r.punches?.punch_out && <i className="fc-tag" title={`Asked ${time(r.cut_first_at, lang)} · cut first if you can`}>FIRST CUT ✋</i>}</span>
+                    <span className="nm">{r.staff ? teamName(r.staff) : ''}{r.ends_own && !r.punches?.late_entry_at && <i className="own-tag">ENDS OWN</i>}{r.punches?.late_entry_at && <i className="late-tag">{r.punches.late_ok_at ? '✓ ' : ''}ENTERED LATER</i>}{xIds.has(r.id) && !r.attendance && <i className="x-tag">EXTRA</i>}{switchedIds.has(r.id) && !r.attendance && <i className="sw-tag">SWITCHED</i>}{r.cut_first_at && !r.attendance && !r.punches?.punch_out && <i className="fc-tag" title={`Asked ${time(r.cut_first_at, lang)} · cut first if you can`}>FIRST CUT ✋</i>}</span>
                     {fromRonnie && <span><i className="p28-tag red">CANCELLED{r.attendance === 'no_show' ? ' · NO-SHOW' : ''} · FROM RONNIE</i></span>}
                     {r.replacement_for && !r.attendance && <span><i className="p28-tag blue">REPLACEMENT · {fullT(r.planned_start)}</i></span>}
                     {ln && !pin && !lnPassed && <span><i className="p28-tag gold">LATE ~{shortT(ln.eta)}{ln.reason ? ` · ${ln.reason.toUpperCase()}` : ''}{ln.seen_at ? ' · ✓ SEEN' : ''}</i></span>}
@@ -531,6 +542,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
                       : !pin ? (gate(r).kind === 'locked' ? <button className="act locked" disabled title={gate(r).label}>{t.start}</button> : <button className="act start" onClick={() => startRows([r])}>{t.start}</button>)
                       : !ended ? <button className="act end" onClick={() => endRow(r, pin)}>{t.end}</button> : <span className="act done-mark">✓</span>}
                   </div>
+                {loanIds.has(r.id) && !ev.hours_submitted_at && <div className="crew-sw"><button onClick={() => openSw(r.id)}>Switch</button></div>}
                 {r.adder && <div className="crew-add">＋ Added by {r.adder.full_name.split(' ')[0]}</div>}{/* Nov 15 · own line at the bottom (Ronnie: option D) */}</div>
                 </SwipeRow>
               );
@@ -653,7 +665,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
         {[...hrsRows].sort((a, b) => a.planned_start.localeCompare(b.planned_start)).map(crewRow)}
       </section>}
       {groups.map((g) => {
-        const grp = rows.filter((r) => r.planned_start === g && !isHrs(r));
+        const grp = rows.filter((r) => r.planned_start === g && inTimes(r));
         const notIn = grp.filter((r) => !r.attendance && !r.punches?.punch_in);
         return (
           <section key={g} className="stack" style={{ gap: 10 }}>
@@ -668,6 +680,36 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
           </section>
         );
       })}
+      {link && link.loan.length > 0 && (isBarEv ? <section className="stack" style={{ gap: 10 }}>
+        <div className="grp-head"><span className="hrs-t">From the floor</span><span className="grp-n">{link.loan.length}</span><span className="grp-rule" /></div>
+        {rows.filter((r) => loanIds.has(r.id)).map(crewRow)}
+      </section> : <section className="stack" style={{ gap: 10 }}>
+        <div className="grp-head"><span className="hrs-t">With the bar</span><span className="grp-n">{link.loan.length}</span><span className="grp-rule" />{link.sister_mgr && <span className="grp-n">{link.sister_mgr}</span>}</div>
+        {link.loan.map((x) => <div key={x.shift_id} className="crew lk-row">
+          <span className="ring"><Avatar name={x.full_name} url={x.photo_url} size={44} /><i className="crew-pos">{roleLabel(x.position_code, null).toUpperCase()}</i></span>
+          <span className="who"><span className="nm">{teamName({ full_name: x.full_name, nickname: x.nickname })}{x.switched_at && <i className="sw-tag">SWITCHED</i>}</span>
+            <span className={'st' + (x.punch_in ? ' ok' : '')}>{x.punch_out && new Date(x.punch_out).getTime() <= nowMs ? `${time(x.punch_in!, lang)} → ${time(x.punch_out, lang)}` : x.punch_in ? `Started ${time(x.punch_in, lang)}` : `Starts ${time(x.planned_start, lang)}`}</span></span>
+          {!ev.hours_submitted_at && <button className="lk-sw" onClick={() => openSw(x.shift_id)}>Switch</button>}
+        </div>)}
+      </section>)}
+      {sw && link && (() => {
+        const same = link.floor.filter((f) => f.planned_start === sw.from.planned_start);
+        const list = swAll || !same.length ? link.floor : same;
+        const pick = link.floor.find((f) => f.shift_id === swPick);
+        const go = async () => { if (!pick) return; setSwBusy(true); setErr('');
+          const { error } = await supabase.rpc('switch_team', { p_bar_shift: sw.from.shift_id, p_floor_shift: pick.shift_id }); setSwBusy(false);
+          if (error) { setErr(error.message); setSw(null); return; } setSw(null); await load(); };
+        const nm = (x: LinkP) => x.nickname || first(x.full_name);
+        return <><div className="scrim" onClick={() => setSw(null)} />
+          <SwipeSheet onClose={() => setSw(null)} label={`Switch ${sw.from.full_name}`}>
+            <div className="serif" style={{ fontSize: 24 }}>Switch {nm(sw.from)}</div>
+            {same.length > 0 && <div className="sw-seg"><button className={!swAll ? 'on' : ''} onClick={() => setSwAll(false)}>{time(sw.from.planned_start, lang)}</button><button className={swAll ? 'on' : ''} onClick={() => setSwAll(true)}>All floor</button></div>}
+            <div className="mgr-list">{list.map((f) => <button key={f.shift_id} className={'mgr-opt sw-opt' + (swPick === f.shift_id ? ' on' : '')} onClick={() => setSwPick(f.shift_id)}>
+              <Avatar name={f.full_name} url={f.photo_url} size={34} /><b className="grow">{f.full_name}</b><span className="muted sm">{time(f.punch_in ?? f.planned_start, lang)}</span></button>)}
+              {!list.length && <div className="muted sm">No floor staff to switch with.</div>}</div>
+            <button className="btn-ink sw-go" disabled={!pick || swBusy} onClick={go}>{pick ? `${nm(pick)} to the bar · ${nm(sw.from)} to the floor` : 'Pick someone'}</button>
+          </SwipeSheet></>;
+      })()}
       {!ev.hours_submitted_at && <div className="add-two"><button className="add-staff" onClick={() => setAdding(true)}>+ Add staff</button><button className="add-staff" onClick={() => { setMgrPick(null); setMgrQ(''); setAddMgr(true); }}>+ Add manager</button></div>}
       {addMgr && (() => {
         const mgrs = new Set([ev.manager_id, ...(ev.co_manager_ids ?? [])].filter(Boolean) as string[]);

@@ -5435,3 +5435,15 @@ span.abtn.ds-newq { background: none; border: 0; padding: 0; }
   .cx2 { width: 100%; border-radius: 18px 18px 0 0 !important; padding: 8px 16px calc(16px + env(safe-area-inset-bottom)) !important; }
   .cx2 .ph-grip { display: block; }
 }
+/* Nov 27 · floor staff with the bar (146) */
+.sw-tag { display: inline-block; margin-left: 6px; font-style: normal; font-size: 10px; font-weight: 800; letter-spacing: .04em; color: #4B44A8; background: #ECEAF8; border-radius: 6px; padding: 1px 6px; vertical-align: 1px; }
+.crew-sw { flex: 0 0 calc(100% + 22px); margin: 10px -10px 0 -12px; padding: 6px 14px; border-top: 1px solid #F0EAE2; display: flex; justify-content: flex-end; box-sizing: border-box; }
+.crew-sw button, .lk-sw { height: 32px; padding: 0 16px; border-radius: 16px; border: 1.5px solid #4B44A8; background: none; color: #4B44A8; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.lk-row .ring { cursor: default; }
+.lk-row .who { cursor: default; }
+.sw-seg { display: flex; gap: 6px; margin: 8px 0 4px; }
+.sw-seg button { flex: 1; height: 38px; border-radius: 10px; border: 0; background: #F1ECE6; color: #1A1714; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+.sw-seg button.on { background: #1A1714; color: #fff; }
+.sw-opt { gap: 12px; }
+.sw-opt.on { background: #ECEAF8; box-shadow: inset 0 0 0 1.5px #4B44A8; }
+.btn-ink.sw-go:not(:disabled) { background: #4B44A8; }
