@@ -5450,4 +5450,4 @@ span.abtn.ds-newq { background: none; border: 0; padding: 0; }
 .bl-head .hrs-t { font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #4A443D; }
 /* Nov 27 · long position words (BARTENDER, BAR MANAGER) stay inside the photo column */
 .crew > .ring, .crew > button.ring { margin: 0 6px; }
-.crew-pos.long { font-size: 7px; letter-spacing: 0; padding: 1px 4px; }
+.crew-pos, .crew-pos.long { font-size: 7px; letter-spacing: 0; padding: 1px 4px; } /* Nov 27 · one size for every position */
