@@ -1,3 +1,4 @@
+import { afterTonight } from './loadGate';
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { allStaff, isoDay, dLabel, type AStaff } from './api';
@@ -30,7 +31,7 @@ export function useApplications(tick = 0) {
   useEffect(() => {
     supabase.from('applications').select(COLS).order('created_at', { ascending: false }).limit(500)
       .then(({ data, error }) => setRows(error ? null : (data ?? []).map((a) => ({ ...(a as App), start_rate: (a as App).start_rate == null ? null : Number((a as App).start_rate) }))));
-    allStaff().then(setStaff).catch(() => {});
+    afterTonight().then(allStaff).then(setStaff).catch(() => {});
   }, [tick, t2]);
   useEffect(() => {
     const ch = supabase.channel('apps').on('postgres_changes', { event: '*', schema: 'public', table: 'applications' }, () => setT2((x) => x + 1)).subscribe();

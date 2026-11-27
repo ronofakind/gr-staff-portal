@@ -1,3 +1,4 @@
+import { afterTonight } from './loadGate';
 import { useEffect, useMemo, useState } from 'react';
 import { Avatar } from '../components/Avatar';
 import { allStaff, addDays, isoDay, dLabel, type AStaff } from './api';
@@ -18,7 +19,7 @@ export function useNewStaffRatings(tick = 0, days = 30) {
   const [d, setD] = useState<ScoreData | null>(null); const [staff, setStaff] = useState<AStaff[]>([]);
   const [seen, setSeen] = useState(() => rd(SEEN) ?? '');
   const [arch, setArch] = useState<Record<string, string>>({}); // Nov 8 · 080: archived from Today (still in Past ratings)
-  useEffect(() => { Promise.all([loadScoreData(), allStaff()]).then(([x, s]) => { setD(x); setStaff(s); }); }, [tick]);
+  useEffect(() => { afterTonight().then(() => Promise.all([loadScoreData(), allStaff()])).then(([x, s]) => { setD(x); setStaff(s); }); }, [tick]);
   useEffect(() => { supabase.from('staff_feedback').select('id,today_archived_at').not('today_archived_at', 'is', null).limit(5000)
     .then(({ data, error }) => { if (!error) setArch(Object.fromEntries(((data ?? []) as { id: string; today_archived_at: string }[]).map((x) => [x.id, x.today_archived_at]))); }); }, [tick]);
   const rows = useMemo<NsrRow[]>(() => {

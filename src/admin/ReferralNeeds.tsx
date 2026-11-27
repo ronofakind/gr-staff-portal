@@ -1,4 +1,5 @@
 // push 75 · Today → Needs you: a new hire typed who referred them → "Is that Melanie Jobin?" Yes · Pick someone else · Skip.
+import { afterTonight } from './loadGate';
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 
@@ -29,6 +30,7 @@ export function ReferralNeeds({ tick = 0, onCount }: { tick?: number; onCount?: 
     const { data, error } = await supabase.from('applications').select('id,first_name,last_name,referrer_text,staff_id').eq('status', 'accepted').is('referral_status', null).is('referrer_id', null).not('referrer_text', 'is', null).not('staff_id', 'is', null).limit(20);
     if (error) { setApps([]); return; }
     setApps(((data ?? []) as App[]).filter((a) => a.referrer_text.trim()));
+    await afterTonight();
     const { data: st } = await supabase.from('staff').select('id,full_name,nickname').eq('active', true).order('full_name');
     setStaff((st ?? []) as S[]);
   })(); }, [tick, t]);

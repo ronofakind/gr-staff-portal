@@ -26,6 +26,7 @@ import { needsSend, hoursBetween } from './api';
 import { LateEnds } from './LateEnds';
 import { useNewStaffRatings, RatingsToday, TAG_LABEL, BAD_TAGS } from './NewStaffRatings';
 import { supabase } from '../lib/supabase';
+import { holdForTonight, tonightLoaded } from './loadGate';
 import { eventsBetween, addDays, isoDay, flagsOf, flagText, loadLateDecisions, LATE_DECISION, periodOf, dLabel, tTime, type AEvent, type AShift } from './api';
 
 type Need = { key: string; title: string; sub: string; action: string; to: string; red?: boolean; onAct?: () => Promise<void>; alt?: { label: string; to: string } };
@@ -58,7 +59,7 @@ export function Today() {
   const [asks, setAsks] = useState<AdminAsk[]>([]);
   const [rep, setRep] = useState<{ s: AShift; e: AEvent } | null>(null); const [toast, setToast] = useState<string | null>(null);
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 5000); return () => clearTimeout(t); }, [toast]);
-  const [lastNight, setLastNight] = useState<AEvent[] | null>(null); const fullDone = useRef(false);
+  const [lastNight, setLastNight] = useState<AEvent[] | null>(null); const fullDone = useRef(false); useState(() => { holdForTonight(); return 0; });
   const loadArch = () => supabase.from('admin_archive').select('key,sig,label,archived_at').order('archived_at', { ascending: false }).then(({ data }) => setArch((data ?? []) as Arch[]));
 
   useEffect(() => {
@@ -68,7 +69,7 @@ export function Today() {
     try { const c = JSON.parse(localStorage.getItem(ck) ?? 'null') as { ln: AEvent[]; td: AEvent[] } | null; if (c) { setLastNight((x) => x ?? c.ln); setWeek((x) => x ?? c.td); } } catch { /* */ }
     const fast = eventsBetween(addDays(today, -1), today).then((two) => { const ln0 = two.filter((e) => e.event_date < today); const td0 = two.filter((e) => e.event_date === today);
       setLastNight((x) => x === null || !fullDone.current ? ln0 : x); setWeek((x) => (x === null || !fullDone.current ? td0 : x));
-      try { localStorage.setItem(ck, JSON.stringify({ ln: ln0, td: td0 })); Object.keys(localStorage).filter((k) => k.startsWith('gr_tonight_') && k !== ck).forEach((k) => localStorage.removeItem(k)); } catch { /* full or blocked */ } }).catch(() => { /* the full load below still runs */ });
+      try { localStorage.setItem(ck, JSON.stringify({ ln: ln0, td: td0 })); Object.keys(localStorage).filter((k) => k.startsWith('gr_tonight_') && k !== ck).forEach((k) => localStorage.removeItem(k)); } catch { /* full or blocked */ } }).catch(() => { /* the full load below still runs */ }).finally(tonightLoaded);
     (async () => {
       await fast; // heavy loads wait so Tonight gets the connection first
       const mon = addDays(today, -((new Date(today + 'T12:00:00').getDay() + 6) % 7));
