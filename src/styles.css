@@ -5411,3 +5411,6 @@ span.abtn.ds-newq { background: none; border: 0; padding: 0; }
 .ph-how { display: flex; flex-direction: column; gap: 8px; }
 .ph-how button { height: 48px; border-radius: 12px; border: 1px solid #E2DAD0; background: #fff; font: 700 14px Inter, system-ui, sans-serif; color: #1A1714; cursor: pointer; }
 .ph-how button.on { background: #1A1714; color: #fff; border-color: #1A1714; }
+.ds-blocks.narrow .ds-fold .ds-open { display: none; }
+.ds-blocks.narrow .ds-fold .ds-fsub b { font-weight: 800; margin-left: 4px; }
+.ph-chev { color: #C9C0B4; font-size: 14px; }
