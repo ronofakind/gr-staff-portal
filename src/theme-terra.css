@@ -1592,4 +1592,5 @@ html[data-theme="terra"] { --teams: #5B5FC7; --teams-bg: #EEEFFB; --teams-ink: #
 :where(html[data-theme="terra"]) .sw-seg button { color: #181915; }
 :where(html[data-theme="terra"]) .sw-seg button.on { background: #2A2A24; color: #FBFAF6; }
 :where(html[data-theme="terra"]) .btn-ink.sw-go:not(:disabled) { color: #FBFAF6; }
+:where(html[data-theme="terra"]) .bl-head .hrs-t { color: #47493E; }
 html[data-theme="terra"] body { background: #EEF0E8; color: #2A2A24; }

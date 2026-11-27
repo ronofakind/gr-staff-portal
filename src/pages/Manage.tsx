@@ -681,11 +681,11 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
         );
       })}
       {link && link.loan.length > 0 && (isBarEv ? <section className="stack" style={{ gap: 10 }}>
-        <div className="grp-head"><span className="hrs-t">From the floor</span><span className="grp-n">{link.loan.length}</span><span className="grp-rule" /></div>
+        <div className="grp-head bl-head"><span className="hrs-t">From the floor</span><span className="grp-n">{link.loan.length}</span><span className="grp-rule" /></div>
         {rows.filter((r) => loanIds.has(r.id)).map(crewRow)}
       </section> : <section className="stack" style={{ gap: 10 }}>
-        <div className="grp-head"><span className="hrs-t">With the bar</span><span className="grp-n">{link.loan.length}</span><span className="grp-rule" />{link.sister_mgr && <span className="grp-n">{link.sister_mgr}</span>}</div>
-        {link.loan.map((x) => <div key={x.shift_id} className="crew lk-row">
+        <div className="grp-head bl-head"><span className="hrs-t">With the bar</span><span className="grp-n">{link.loan.length}</span><span className="grp-rule" />{link.sister_mgr && <span className="grp-n">{link.sister_mgr}</span>}</div>
+        {link.loan.map((x) => <div key={x.shift_id} className="crew bl-row">
           <span className="ring"><Avatar name={x.full_name} url={x.photo_url} size={44} /><i className="crew-pos">{roleLabel(x.position_code, null).toUpperCase()}</i></span>
           <span className="who"><span className="nm">{teamName({ full_name: x.full_name, nickname: x.nickname })}{x.switched_at && <i className="sw-tag">SWITCHED</i>}</span>
             <span className={'st' + (x.punch_in ? ' ok' : '')}>{x.punch_out && new Date(x.punch_out).getTime() <= nowMs ? `${time(x.punch_in!, lang)} → ${time(x.punch_out, lang)}` : x.punch_in ? `Started ${time(x.punch_in, lang)}` : `Starts ${time(x.planned_start, lang)}`}</span></span>
