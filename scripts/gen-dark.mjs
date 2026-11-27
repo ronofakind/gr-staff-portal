@@ -117,6 +117,7 @@ html[data-theme="dark"] .ph-btn.dark { background: #F1ECE4; color: #1A1714; bord
 html[data-theme="dark"] .sw-ask { background: #1F1D1A; }
 html[data-theme="dark"] .ph-go.stick { box-shadow: 0 -10px 16px rgba(31,29,26,.95); } html[data-theme="dark"] .ph-go.stick:disabled { background: #4A443D; color: #B5ACA1; }
 html[data-theme="dark"] .cx2-seg { background: #2A2622; } html[data-theme="dark"] .cx2-seg button { color: #F1ECE4; } html[data-theme="dark"] .cx2-seg button.on { background: #F1ECE4; color: #1A1714; }
-html[data-theme="dark"] .cx2-row { color: #F1ECE4; border-top-color: #34302A; } html[data-theme="dark"] .cx2-row.muted { color: #B5ACA1; } html[data-theme="dark"] .cx2-sw { background: #4A443D; }`));
+html[data-theme="dark"] .cx2-row { color: #F1ECE4; border-top-color: #34302A; } html[data-theme="dark"] .cx2-row.muted { color: #B5ACA1; } html[data-theme="dark"] .cx2-sw { background: #4A443D; }
+html[data-theme="dark"] .btn-ink.sw-go:not(:disabled) { background: #6F68D6; color: #fff; } html[data-theme="dark"] .sw-opt.on { background: #2E2B4A; } html[data-theme="dark"] .sw-tag { background: #2E2B4A; color: #B8B3F2; } html[data-theme="dark"] .crew-sw { border-top-color: #34302A; }`));
 fs.writeFileSync(OUT, dark.toString());
 console.log('theme-dark.css', dark.nodes.length, 'rules');
