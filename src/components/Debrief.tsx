@@ -58,7 +58,7 @@ export function DebriefSheet({ eventId, onClose, onSent }: { eventId: string; on
           </div>
         ))}
       </div>
-      <label className="db-note"><span aria-hidden="true">💬</span><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a note (optional)" maxLength={500} /></label>
+      <label className="db-note"><input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a note (optional)" maxLength={500} /></label>
       {err && <p className="error">{err}</p>}
       <button type="button" className="btn-ink" disabled={busy || n === 0} onClick={send}>{busy ? 'Sending…' : 'Send'}</button>
     </SwipeSheet>
@@ -77,12 +77,12 @@ export function DebriefCard({ r: r0, withEvent, onArchive, flagged }: { r: Row; 
   const day = r.events ? new Date(r.events.event_date + 'T12:00:00').toLocaleDateString('en-CA', { weekday: 'short', month: 'short', day: 'numeric' }) : '';
   return (
     <div className="dbr">
-      <div className="dbr-top"><span aria-hidden="true">📝</span><b>{withEvent && r.events ? `${r.events.title} · ${day} · ${who}` : `Debrief · ${who}`}</b><span className="muted sm">{new Date(r.created_at).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' })}</span>
-        <button type="button" className="lnk sm" onClick={() => setEdit(true)} title="Edit this debrief · the MD isn’t told">✎ Edit</button>
+      <div className="dbr-top"><b>{withEvent && r.events ? `${r.events.title} · ${day} · ${who}` : `Debrief · ${who}`}</b><span className="muted sm">{new Date(r.created_at).toLocaleTimeString('en-CA', { hour: 'numeric', minute: '2-digit', timeZone: 'America/Toronto' })}</span>
+        <button type="button" className="lnk sm" onClick={() => setEdit(true)} title="Edit this debrief · the MD isn’t told">Edit</button>
         {onArchive && <button type="button" className="sq need-arch" aria-label="Archive" title="Archive · stays in Past debriefs" onClick={onArchive}>{ARCH_ICON}</button>}</div>
       {tags.length > 0 && <div className="dbr-tags">{tags.map(([l, t]) => <span key={l} className={t}>{l}</span>)}</div>}
       {(r.issues.length > 0 || r.what) && <div className="dbr-txt">{[r.issues.join(' · '), r.what ? `“${r.what}”` : ''].filter(Boolean).join(' · ')}</div>}
-      {r.note && <div className="dbr-txt">💬 {r.note}</div>}
+      {r.note && <div className="dbr-txt">{r.note}</div>}
       {(r.edited_at || flagged) && <div className="dbr-ed">{r.edited_at && <i>EDITED BY YOU · {new Date(r.edited_at).toLocaleDateString('en-CA', { month: 'short', day: 'numeric', timeZone: 'America/Toronto' })}</i>}{r.edited_at && r.original && <span className="muted sm"> MD said: {(['night', 'client', 'difficulty', 'team_size'] as const).filter((k) => (r.original?.[k] ?? null) !== (r[k] ?? null)).map((k) => r.original?.[k] ? DEBRIEF_LABEL[k + ':' + r.original[k]]?.[0] : '—').join(' · ') || 'same answers'}{r.original.note && r.original.note !== r.note ? ` · “${r.original.note}”` : ''}</span>}{flagged && <i className="red">DEBRIEFS OFTEN CORRECTED</i>}</div>}
       {edit && <DebriefEdit r={r} onClose={() => setEdit(false)} onSaved={(x) => { setR(x); setEdit(false); }} />}
     </div>
@@ -180,7 +180,7 @@ export function RecentDebriefs({ rows, archive, archiveMiss, miss }: ReturnType<
   return <>{rows.map((r) => <DebriefCard key={r.id} r={r} withEvent onArchive={() => archive(r.id)} />)}
     {miss.map((m) => (
       <div key={m.event_id} className="dbr dbr-miss">
-        <div className="dbr-top"><span aria-hidden="true">📝</span><b>{m.title} · {m.who}</b><span className={'dbm ' + m.status}>{m.status === 'skipped' ? 'SKIPPED' : m.status === 'open' ? 'NOT ANSWERED' : 'NEVER SAW IT'}</span>
+        <div className="dbr-top"><b>{m.title} · {m.who}</b><span className={'dbm ' + m.status}>{m.status === 'skipped' ? 'SKIPPED' : m.status === 'open' ? 'NOT ANSWERED' : 'NEVER SAW IT'}</span>
           <button type="button" className="sq need-arch" aria-label="Archive" title="Archive" onClick={() => archiveMiss(m)}>{ARCH_ICON}</button></div>
         <div className="dbr-txt muted">{m.status === 'skipped' ? `Saw it at ${hm(m.at!)} and tapped Skip` : m.status === 'open' ? `Opened at ${hm(m.at!)} · no answer yet` : `Hours sent ${hm(m.sent)} · the question never opened on their phone`}</div>
       </div>))}</>;
