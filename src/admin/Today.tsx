@@ -66,10 +66,11 @@ export function Today() {
     // Nov 27 · Tonight first: show the last copy right away, then a small today + last-night load, then everything else
     const ck = 'gr_tonight_' + today;
     try { const c = JSON.parse(localStorage.getItem(ck) ?? 'null') as { ln: AEvent[]; td: AEvent[] } | null; if (c) { setLastNight((x) => x ?? c.ln); setWeek((x) => x ?? c.td); } } catch { /* */ }
-    eventsBetween(addDays(today, -1), today).then((two) => { const ln0 = two.filter((e) => e.event_date < today); const td0 = two.filter((e) => e.event_date === today);
+    const fast = eventsBetween(addDays(today, -1), today).then((two) => { const ln0 = two.filter((e) => e.event_date < today); const td0 = two.filter((e) => e.event_date === today);
       setLastNight((x) => x === null || !fullDone.current ? ln0 : x); setWeek((x) => (x === null || !fullDone.current ? td0 : x));
       try { localStorage.setItem(ck, JSON.stringify({ ln: ln0, td: td0 })); Object.keys(localStorage).filter((k) => k.startsWith('gr_tonight_') && k !== ck).forEach((k) => localStorage.removeItem(k)); } catch { /* full or blocked */ } }).catch(() => { /* the full load below still runs */ });
     (async () => {
+      await fast; // heavy loads wait so Tonight gets the connection first
       const mon = addDays(today, -((new Date(today + 'T12:00:00').getDay() + 6) % 7));
       const [evs, ahead, ans, ln] = await Promise.all([
         eventsBetween(mon, addDays(mon, 6)),
