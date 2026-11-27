@@ -375,7 +375,9 @@ export function Today() {
   const toConfDay = (ahead ?? []).filter((e) => e.event_date >= today && e.shifts.some((x) => toConf.includes(x))).map((e) => e.event_date).sort()[0] ?? today;
   const toConfLate = toConf.some((s) => Date.now() - new Date(s.notified_at!).getTime() > 24 * 36e5);
   const working = tonight.reduce((n, e) => n + e.shifts.filter((s) => s.punches?.punch_in && !s.punches.punch_out && !s.attendance).length, 0);
-  const lateNow = Object.keys(lateBy).length;
+  // Nov 26 · same count as the Tonight cards: not in yet past their time + came in late (told-ahead included)
+  const nowT = Date.now();
+  const lateNow = tonight.reduce((n, e) => n + e.shifts.filter((s) => !s.attendance && ((!s.punches?.punch_in && new Date(s.planned_start).getTime() < nowT) || flagsOf(s).some((f) => f.flag === 'late'))).length, 0);
   const SECS: Record<SecKey, () => JSX.Element> = {
     needs: () => (
       <Section k="needs" mode={md('needs')} title={<>Needs you {needsN > 0 && <b className="accent sm">{needsN}</b>}</>}

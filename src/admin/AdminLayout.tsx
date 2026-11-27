@@ -35,7 +35,7 @@ export const NAV = [...NAV_GROUPS.flatMap((g) => g.items), ...SETUP.filter(([to]
 /** One nav line stands for several pages: Calendar = Week + Day, Tiers & ranking = Tiers + Ranking. */
 const ALSO: Record<string, string[]> = { '/admin/day-sheet': ['/admin/bookings', '/admin/day-sheet'], '/admin/calendar': ['/admin/week', '/admin/day', '/admin/month'], '/admin/week': ['/admin/day', '/admin/calendar', '/admin/month'], '/admin/tiers': ['/admin/ranking'] };
 const TABS: [string, string, keyof typeof ICONS][] = [
-  ['/admin', 'Today', 'today'], ['/admin/week', 'Week', 'week'], ['/admin/availability', 'Availability', 'avail'], ['/admin/staff', 'Staff', 'staff'], ['/admin/more', 'More', 'more'],
+  ['/admin', 'Today', 'today'], ['/admin/day-sheet', 'Bookings', 'book'], ['/admin/availability', 'Availability', 'avail'], ['/admin/staff', 'Staff', 'staff'], ['/admin/more', 'More', 'more'],
 ];
 
 export function AdminLayout() {
@@ -78,7 +78,7 @@ export function AdminLayout() {
 export function More() {
   const needsReply = useInboxCount();
   const items: [string, string, keyof typeof ICONS][] = [
-    ['/admin/day-sheet', 'Bookings', 'book'], ['/admin/day', 'Day view', 'day'], ['/admin/hours', 'Hours & pay period', 'hours'], ['/admin/payroll', 'Payroll', 'hours'], ['/admin/reliability', 'Reliability', 'flag'], ['/admin/debriefs', 'Debriefs & ratings', 'msg'], ['/admin/rates', 'Pay rates', 'hours'], ['/admin/hiring', 'Hiring', 'staff'], ['/admin/incidents', 'Incidents', 'alert'], ['/admin/messages', 'Messages', 'msg'],
+    ['/admin/calendar', 'Calendar', 'week'], ['/admin/day', 'Day view', 'day'], ['/admin/hours', 'Hours & pay period', 'hours'], ['/admin/payroll', 'Payroll', 'hours'], ['/admin/reliability', 'Reliability', 'flag'], ['/admin/debriefs', 'Debriefs & ratings', 'msg'], ['/admin/rates', 'Pay rates', 'hours'], ['/admin/hiring', 'Hiring', 'staff'], ['/admin/incidents', 'Incidents', 'alert'], ['/admin/messages', 'Messages', 'msg'],
     ['/admin/meetings', 'Meetings', 'meet'], ['/admin/tiers', 'Tiers', 'tiers'], ['/admin/ranking', 'Ranking · score', 'rank'], ['/admin/venues', 'Venues & clients', 'venue'], ['/admin/settings', 'Settings', 'gear'], ['/me', 'My shifts', 'today'],
   ];
   return (
