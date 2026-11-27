@@ -3,7 +3,7 @@ import { NewHireNeeds } from './NewHireNeeds';
 import { PendingBar, UnseenNeeds, UnseenRides } from './SendBox'; // push 72 · 73
 import { ReferralNeeds } from './ReferralNeeds'; // push 75
 import { MessagesToday, useInboxToday } from './MessagesToday'; // Nov 11
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { DebriefCards, RecentDebriefs, useRecentDebriefs } from '../components/Debrief';
 import { MiniMonth } from './MiniMonth';
 import { useTodayLayout, Section, EditLayout, SEC_LABEL, WIDE, type SecKey } from './TodayLayout';
@@ -58,11 +58,17 @@ export function Today() {
   const [asks, setAsks] = useState<AdminAsk[]>([]);
   const [rep, setRep] = useState<{ s: AShift; e: AEvent } | null>(null); const [toast, setToast] = useState<string | null>(null);
   useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(null), 5000); return () => clearTimeout(t); }, [toast]);
-  const [lastNight, setLastNight] = useState<AEvent[] | null>(null);
+  const [lastNight, setLastNight] = useState<AEvent[] | null>(null); const fullDone = useRef(false);
   const loadArch = () => supabase.from('admin_archive').select('key,sig,label,archived_at').order('archived_at', { ascending: false }).then(({ data }) => setArch((data ?? []) as Arch[]));
 
   useEffect(() => {
     loadArch();
+    // Nov 27 · Tonight first: show the last copy right away, then a small today + last-night load, then everything else
+    const ck = 'gr_tonight_' + today;
+    try { const c = JSON.parse(localStorage.getItem(ck) ?? 'null') as { ln: AEvent[]; td: AEvent[] } | null; if (c) { setLastNight((x) => x ?? c.ln); setWeek((x) => x ?? c.td); } } catch { /* */ }
+    eventsBetween(addDays(today, -1), today).then((two) => { const ln0 = two.filter((e) => e.event_date < today); const td0 = two.filter((e) => e.event_date === today);
+      setLastNight((x) => x === null || !fullDone.current ? ln0 : x); setWeek((x) => (x === null || !fullDone.current ? td0 : x));
+      try { localStorage.setItem(ck, JSON.stringify({ ln: ln0, td: td0 })); Object.keys(localStorage).filter((k) => k.startsWith('gr_tonight_') && k !== ck).forEach((k) => localStorage.removeItem(k)); } catch { /* full or blocked */ } }).catch(() => { /* the full load below still runs */ });
     (async () => {
       const mon = addDays(today, -((new Date(today + 'T12:00:00').getDay() + 6) % 7));
       const [evs, ahead, ans, ln] = await Promise.all([
@@ -71,7 +77,7 @@ export function Today() {
         supabase.from('availability').select('id', { count: 'exact', head: true }).eq('status', 'yes').not('ask_id', 'is', null).gte('for_date', today),
         eventsBetween(addDays(today, -1), addDays(today, -1)), // Nov 15 · last night's events stay on Tonight past midnight
       ]);
-      setLastNight(ln);
+      fullDone.current = true; setLastNight(ln);
       setWeek(evs); setAhead(ahead); setAnswers(ans.count ?? 0);
       // Missing end times in this + last pay period
       const cur = periodOf(today); const prev = periodOf(addDays(cur.start, -1));
