@@ -84,7 +84,7 @@ html[data-theme="dark"] img[src$="logo-mark.png"]:not(.adm-side img):not(.side-l
 html[data-theme="dark"] :is(.adm-new, .adm-fab, .dept-tag.bar, .dept-tag.is-bar, .abtn.red, .pill-red, .btn-red) { background: #95282C; border-color: #95282C; color: #F1ECE4; }
 html[data-theme="dark"] .live-card.edge-bar { box-shadow: inset 4px 0 0 #95282C; }
 html[data-theme="dark"] .t4-ev.edge-bar .t4-line::before { background: #95282C; }
-html[data-theme="dark"] .pos-badge { background: #E9E4DC; color: #1A1714; border-color: #1E1B18; }
+html[data-theme="dark"] .crew-pos { background: #E9E4DC; color: #1A1714; border-color: #1E1B18; }
 html[data-theme="dark"] .crew.hrs { box-shadow: inset 0 0 0 1.5px #D4A93A; }
 html[data-theme="dark"] .crew.hrs .ring { box-shadow: 0 0 0 2px #D4A93A, 0 0 0 4px rgba(212,169,58,.18); }
 html[data-theme="dark"] .hrs-head .hrs-t { color: #D4A93A; }

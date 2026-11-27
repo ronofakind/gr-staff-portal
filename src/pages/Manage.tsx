@@ -488,7 +488,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
                   <button className={'ring tap ' + ring + (isNew && !pin ? ' newp' : '')} aria-label={`Options for ${r.staff?.full_name}`} onClick={() => openRow(r, isNew)}>
                     <Avatar name={r.staff?.full_name ?? '?'} url={r.staff?.photo_url} size={44} />
                     {isNew && <i className="new-badge">NEW</i>}
-                    <i className="pos-badge">{roleLabel(r.position_code, r.position_detail).toUpperCase()}</i>
+                    <i className="crew-pos">{roleLabel(r.position_code, r.position_detail).toUpperCase()}</i>
                   </button>
                   <button className="who" aria-label={`Options for ${r.staff?.full_name}`} onClick={() => openRow(r, isNew)}>
                     <span className="nm">{r.staff ? teamName(r.staff) : ''}{r.ends_own && !r.punches?.late_entry_at && <i className="own-tag">ENDS OWN</i>}{r.punches?.late_entry_at && <i className="late-tag">{r.punches.late_ok_at ? '✓ ' : ''}ENTERED LATER</i>}{xIds.has(r.id) && !r.attendance && <i className="x-tag">EXTRA</i>}{r.cut_first_at && !r.attendance && !r.punches?.punch_out && <i className="fc-tag" title={`Asked ${time(r.cut_first_at, lang)} · cut first if you can`}>FIRST CUT ✋</i>}</span>
