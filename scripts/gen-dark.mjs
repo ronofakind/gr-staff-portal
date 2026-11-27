@@ -114,6 +114,7 @@ html[data-theme="dark"] .ph-search { background: #24211D; color: #F1ECE4; border
 html[data-theme="dark"] .ph-now b { color: #F1ECE4; } html[data-theme="dark"] .ph-sw, html[data-theme="dark"] .ph-swn { color: #B9B4F2; }
 html[data-theme="dark"] .ds-blocks.narrow .ds-dept { color: #B5ACA1; } html[data-theme="dark"] .ds-blocks.narrow .ds-dept.bar { color: #E2777C; }
 html[data-theme="dark"] .ph-btn.dark { background: #F1ECE4; color: #1A1714; border-color: #F1ECE4; }
-html[data-theme="dark"] .sw-ask { background: #1F1D1A; }`));
+html[data-theme="dark"] .sw-ask { background: #1F1D1A; }
+html[data-theme="dark"] .ph-go.stick { box-shadow: 0 -10px 16px rgba(31,29,26,.95); } html[data-theme="dark"] .ph-go.stick:disabled { background: #4A443D; color: #B5ACA1; }`));
 fs.writeFileSync(OUT, dark.toString());
 console.log('theme-dark.css', dark.nodes.length, 'rules');

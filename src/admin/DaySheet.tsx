@@ -493,7 +493,7 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
   const fsUsual = weekly.filter((w) => byId[w.staff_id]?.active && byId[w.staff_id]?.role !== 'admin' && !/app review|unranked|test/i.test(byId[w.staff_id]?.full_name ?? '') && dptOf(w.staff_id) === fsDept && !answered.has(w.staff_id) && !onDay.has(w.staff_id) && !off.has(w.staff_id) && !asked[w.staff_id])
     .sort((a, b) => sortP(a.staff_id, b.staff_id));
   const tierB = (id: string) => { const t = tier(id); return <i className={'ph-t ' + (t ?? 'x')}>{t ?? '?'}</i>; };
-  const evLines = (e: Ev) => { const L = lays[e.id]; return [...L.lines.map((l) => ({ k: l.key, code: l.code, start: l.start, label: `${l.count} ${plural(l.code, l.count)}`, open: Math.max(0, l.count - l.people.length) })),
+  const evLines = (e: Ev) => { const L = lays[e.id]; return [...[...L.lines].sort((a, b) => (a.start ?? '99').localeCompare(b.start ?? '99')).map((l) => ({ k: l.key, code: l.code, start: l.start, label: `${l.count} ${plural(l.code, l.count)}`, open: Math.max(0, l.count - l.people.length) })),
     { k: 'x', code: L.extras.code, start: L.extras.start, label: 'Extras', open: Math.max(0, L.extras.count - L.extras.people.length) }]; };
   const sendAsk = (ids: string[], evId: string, t: string) => run(async () => {
     const e = evs.find((x) => x.id === evId); const label = soon && e ? `${e.venues?.name ?? e.title}${t ? ` · ${ap(t)}` : ''}` : 'Event';
@@ -586,7 +586,7 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
           {evLines(e).map((l) => { const here = e.id === s0.event_id && l.code === s0.position_code && l.start === hm(s0.planned_start); const sel = to && to.e.id === e.id && to.code === l.code && to.start === l.start;
             return <button key={l.k} disabled={here} className={'ph-ml' + (here ? ' here' : '') + (sel ? ' sel' : '')} onClick={() => setPhP({ s: s0, v: 'move', to: { e, code: l.code, start: l.start } })}>
               <i className="ph-radio" /><span>{l.label} · {l.start ? ap(l.start) : 'TBC'}</span>{here ? <small>Now</small> : l.open ? <em>{l.open} open</em> : <small>full</small>}</button>; })}</div>)}
-        <button className="ph-go" disabled={!to || busy} onClick={() => { if (!to) return; if (!s0.pool_hold) setPhP({ s: s0, v: 'how', to }); else { closeP(); move(s0, to.e, to.code, to.start); } }}>{to ? `Move to ${evName(to.e)} · ${to.start ? ap(to.start) : 'TBC'}` : 'Pick a line'}</button></>; }
+        <button className="ph-go stick" disabled={!to || busy} onClick={() => { if (!to) return; if (!s0.pool_hold) setPhP({ s: s0, v: 'how', to }); else { closeP(); move(s0, to.e, to.code, to.start); } }}>{to ? `Move to ${evName(to.e)} · ${to.start ? ap(to.start) : 'TBC'}` : 'Pick a line'}</button></>; }
     else if (phP.v === 'time') body = <>{head}<div className="ds-tq">{timeQuick(hm(s0.planned_start)).map((t) => <button key={t} onClick={() => { closeP(); patch(s0, { planned_start: startIso(date, t) }, `time → ${ap(t)}`); }}>{ap(t)}</button>)}</div>
       <span className="row" style={{ gap: 6, marginTop: 8 }}><select className="ds-tsel" style={{ flex: 1, height: 40 }} value={phT} onChange={(ev) => setPhT(ev.target.value)}>{!Q15.includes(phT) && <option value={phT}>{ap(phT)}</option>}{Q15.map((q) => <option key={q} value={q}>{ap(q)}</option>)}</select>
         <button className="abtn dark" disabled={!phT || phT === hm(s0.planned_start)} onClick={() => { closeP(); patch(s0, { planned_start: startIso(date, phT) }, `time → ${ap(phT)}`); }}>Set</button></span></>;

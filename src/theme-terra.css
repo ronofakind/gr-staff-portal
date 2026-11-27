@@ -1580,4 +1580,6 @@ html[data-theme="terra"] { --teams: #5B5FC7; --teams-bg: #EEEFFB; --teams-ink: #
 :where(html[data-theme="terra"]) .ph-how button { background: #FBFAF6; color: #181915; }
 :where(html[data-theme="terra"]) .ph-how button.on { background: #2A2A24; color: #FBFAF6; border-color: #181915; }
 :where(html[data-theme="terra"]) .ph-chev { color: #C2C4B9; }
+:where(html[data-theme="terra"]) .ph-go.stick { box-shadow: 0 -10px 16px rgba(255,255,255,0.9); }
+:where(html[data-theme="terra"]) .ph-go.stick:disabled { background: #AFB2A4; }
 html[data-theme="terra"] body { background: #EEF0E8; color: #2A2A24; }

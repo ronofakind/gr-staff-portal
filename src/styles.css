@@ -5414,3 +5414,5 @@ span.abtn.ds-newq { background: none; border: 0; padding: 0; }
 .ds-blocks.narrow .ds-fold .ds-open { display: none; }
 .ds-blocks.narrow .ds-fold .ds-fsub b { font-weight: 800; margin-left: 4px; }
 .ph-chev { color: #C9C0B4; font-size: 14px; }
+.ph-go.stick { position: sticky; bottom: 0; box-shadow: 0 -10px 16px rgba(255,255,255,.9); }
+.ph-go.stick:disabled { opacity: 1; background: #B5ACA1; }
