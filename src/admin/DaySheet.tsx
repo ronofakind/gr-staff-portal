@@ -484,7 +484,7 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
   const fsYes = av.filter((a) => a.status === 'yes' && !a.released_at && !onDay.has(a.staff_id) && !off.has(a.staff_id) && aDept(a) === fsDept).sort((a, b) => sortP(a.staff_id, b.staff_id));
   const fsWait = av.filter((a) => a.status === 'asked' && !onDay.has(a.staff_id) && !off.has(a.staff_id) && aDept(a) === fsDept);
   const answered = new Set(av.map((a) => a.staff_id));
-  const fsUsual = weekly.filter((w) => byId[w.staff_id]?.active && byId[w.staff_id]?.role !== 'admin' && dptOf(w.staff_id) === fsDept && !answered.has(w.staff_id) && !onDay.has(w.staff_id) && !off.has(w.staff_id) && !asked[w.staff_id])
+  const fsUsual = weekly.filter((w) => byId[w.staff_id]?.active && byId[w.staff_id]?.role !== 'admin' && !/app review|unranked|test/i.test(byId[w.staff_id]?.full_name ?? '') && dptOf(w.staff_id) === fsDept && !answered.has(w.staff_id) && !onDay.has(w.staff_id) && !off.has(w.staff_id) && !asked[w.staff_id])
     .sort((a, b) => sortP(a.staff_id, b.staff_id));
   const tierB = (id: string) => { const t = tier(id); return <i className={'ph-t ' + (t ?? 'x')}>{t ?? '?'}</i>; };
   const evLines = (e: Ev) => { const L = lays[e.id]; return [...L.lines.map((l) => ({ k: l.key, code: l.code, start: l.start, label: `${l.count} ${plural(l.code, l.count)}`, open: Math.max(0, l.count - l.people.length) })),
