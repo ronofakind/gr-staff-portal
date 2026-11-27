@@ -5281,3 +5281,21 @@ span.abtn.ds-newq { background: none; border: 0; padding: 0; }
 .crew.hrs .ring { box-shadow: 0 0 0 2px #B8860B, 0 0 0 4px #F6EBCF; border-radius: 50%; }
 .hrs-head .hrs-t { font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #9A7209; }
 .hrs-head .grp-rule { background: #EAD9B0; }
+/* Nov 26 · Bookings on the phone (A2): one name per row, small line headers, one event open at a time */
+.ds-blocks.narrow .ds-lh.ph { padding: 7px 10px; gap: 6px; }
+.ds-blocks.narrow .ds-lt { font: 700 14px Inter, system-ui, sans-serif; }
+.ds-blocks.narrow .ds-lt2 { font-size: 13px; font-weight: 600; }
+.ds-blocks.narrow .ds-badge { font-size: 11px; padding: 2px 8px; }
+.ds-blocks.narrow .ds-pen { width: 28px; height: 28px; font-size: 13px; }
+.ds-blocks.narrow .ds-cells { gap: 0 !important; padding: 0 !important; }
+.ds-blocks.narrow .ds-chip { height: 32px; border-radius: 0; border: 0; border-top: 1px solid #F1EBE3; background: transparent; padding: 0 4px 0 12px; font-size: 13px; font-weight: 500; }
+.ds-blocks.narrow .ds-chip.fixed { background: transparent; }
+.ds-blocks.narrow .ds-chip .ds-nm { flex: 1 1 auto; }
+.ds-blocks.narrow .ds-slot { height: 32px; border-radius: 0; border: 0; border-top: 1px solid #F1EBE3; justify-content: flex-start; padding-left: 12px; font-size: 12.5px; }
+.ds-blocks.narrow .ds-off { display: none; }
+.ds-blocks.narrow .ds-title { font-size: 19px; }
+.ds-blocks.narrow .ds-ch { cursor: pointer; }
+.ds-car { color: #8A8177; font-size: 12px; width: 12px; flex: none; }
+.ds-fold { display: flex; flex-direction: column; align-items: stretch; gap: 2px; width: 100%; text-align: left; font: inherit; color: inherit; border: 0; cursor: pointer; padding: 10px 12px; }
+.ds-fold .ds-ch { display: flex; align-items: center; gap: 8px; }
+.ds-fsub { font-size: 12px; color: #8A8177; padding-left: 20px; }

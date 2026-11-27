@@ -5,6 +5,7 @@
 // Part 2 (push 109) = ✦ Fill the day / week / block, Clear, ⚑ more than 3 shifts, hover = why. Part 3 = click a name (person card, note, lock, confirm), part 4 = phone swap + retire Bookings / Day pool.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
+import { UniPick } from '../components/UniPick';
 import { supabase } from '../lib/supabase';
 import { UNIFORMS, addDays, dLabel, eventsBetween, isoDay, roleName, startIso, type AEvent, type AShift, type AStaff } from './api';
 import { ReplaceSheet } from './Replace';
@@ -51,7 +52,7 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
   const detK = (id: string) => (v6 ? 'gr_v6_det_' : 'gr_ds_det_') + id;
   const detOpen = (id: string) => { void detTick; try { const v = localStorage.getItem(detK(id)); return v6 ? v === '1' : v !== '0'; } catch { return !v6; } };
   const togDet = (id: string) => { try { localStorage.setItem(detK(id), detOpen(id) ? '0' : '1'); } catch { /* */ } setDetTick((t) => t + 1); };
-  const blocksR = useRef<HTMLDivElement | null>(null); const [cols, setCols] = useState(4); const [lineEd, setLineEd] = useState<string | null>(null); const [endK, setEndK] = useState<string | null>(null); const [narrow, setNarrow] = useState(false);
+  const blocksR = useRef<HTMLDivElement | null>(null); const [cols, setCols] = useState(4); const [lineEd, setLineEd] = useState<string | null>(null); const [endK, setEndK] = useState<string | null>(null); const [narrow, setNarrow] = useState(false); const [phOpen, setPhOpen] = useState<string | null>(null);
   // push 119 · Ronnie: "a little squished" → Free this day folds to a thin tab, END ~ column can be hidden (both remembered)
   const ls0 = (k: string) => { try { return localStorage.getItem(k) === '1'; } catch { return false; } };
   const [freeFold, setFreeFold] = useState(() => ls0('gr_ds_freefold')); const [noEnd, setNoEnd] = useState(() => ls0('gr_ds_noend'));
@@ -59,6 +60,7 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
   useEffect(() => { loadCtx().then((c) => { setCtx(c); setStaff(c.staff); }).catch((x) => setErr((x as Error).message)); }, []);
   useEffect(() => { try { localStorage.setItem('gr_ds_dept', dept); } catch { /* */ } }, [dept]);
   const wk0 = monday(date);
+  useEffect(() => { setPhOpen(null); }, [date]);
 
   useEffect(() => { (async () => {
     try { const d = await loadDay(date); setEvs(d.evs); setSh(d.sh); setAv(d.av); setOff(d.off); setCx(d.cx); } catch (x) { setErr((x as Error).message); }
@@ -70,7 +72,7 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
   const noEndR = useRef(noEnd); noEndR.current = noEnd;
   // C · as many equal cells across as fit (Ronnie, Nov 12): one count for the whole sheet so every block lines up
   useEffect(() => { const el = blocksR.current; if (!el) return; const f = () => { const w = el.clientWidth; const phone = window.innerWidth <= 700 || w < 760; setNarrow(w < 760);
-      setCols(phone ? 2 : v6 && w >= 760 ? Math.max(3, Math.min(6, Math.floor((w - 380) / 150))) : 3); }; // Nov 23 · V6: as many name columns as fit (3–6) // Nov 16 · like the Events sheet: names in 3 columns (E–G), full names · phone 2
+      setCols(phone ? 1 : v6 && w >= 760 ? Math.max(3, Math.min(6, Math.floor((w - 380) / 150))) : 3); }; // Nov 23 · V6: as many name columns as fit (3–6) // Nov 16 · like the Events sheet: names in 3 columns (E–G), full names · phone 2
     f(); const ro = new ResizeObserver(f); ro.observe(el); return () => ro.disconnect(); }, [evs.length, noEnd, freeFold, v6]);
 
   // week strip
@@ -495,9 +497,16 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
         <div className={'ds-blocks' + (narrow ? ' narrow' : '') + (noEnd ? ' noend' : '')} ref={blocksR} onClick={() => ed && setEd(null)}>
           {!shown.length && <div className="adm-card muted">No {dept === 'both' ? '' : dept + ' '}events this day.</div>}
           {shown.map((e) => { const L = lays[e.id]; const have = sh.filter((s) => s.event_id === e.id).length; const need = L.client;
+            // Nov 26 · phone: one event open at a time (the first short one opens by itself)
+            const autoOpen = (shown.find((x) => lays[x.id].client > sh.filter((y) => y.event_id === x.id).length) ?? shown[0])?.id;
+            const folded = narrow && (phOpen ?? autoOpen) !== e.id;
+            if (folded) { const st = (e.staffing ?? []).map((l) => l.start).concat(e.start_time ? [e.start_time.slice(0, 5)] : []).filter(Boolean).sort()[0];
+              return <button key={e.id} className={'ds-card ds-fold' + (isBar(e) ? ' ds-barev' : '')} onClick={() => setPhOpen(e.id)}>
+                <span className="ds-ch"><span className="ds-car">▸</span><span className="serif ds-title">{e.title || e.venues?.name || 'New event'}</span><span className={'ds-dept ' + (isBar(e) ? 'bar' : 'floor')}>{isBar(e) ? 'BAR' : 'FLOOR'}</span><span className={'ds-open' + (need > have ? '' : ' ok')}>{need > have ? `${need - have} open` : need ? 'All filled' : 'No lines yet'}</span></span>
+                <span className="ds-fsub">{st ? `Start ${ap(st)}` : 'Start TBC'} · {Math.min(have, need)} / {need}{have > need ? ` · ${have - need} extra${have - need > 1 ? 's' : ''}` : ''}</span></button>; }
             return (
               <section key={e.id} className={'ds-card' + (isBar(e) ? ' ds-barev' : '')}>
-                <div className="ds-ch"><span className="serif ds-title">{e.title || e.venues?.name || 'New event'}</span><span className={'ds-dept ' + (isBar(e) ? 'bar' : 'floor')}>{isBar(e) ? 'BAR' : 'FLOOR'}</span>{isFar(e) && <span className="ds-far" title="Far venue: Fill puts drivers first, with the people they're linked to">far</span>}
+                <div className="ds-ch" onClick={narrow ? (ev) => { if ((ev.target as HTMLElement).closest('a,button,select,input')) return; setPhOpen('__none'); } : undefined}>{narrow && <span className="ds-car">▾</span>}<span className="serif ds-title">{e.title || e.venues?.name || 'New event'}</span><span className={'ds-dept ' + (isBar(e) ? 'bar' : 'floor')}>{isBar(e) ? 'BAR' : 'FLOOR'}</span>{isFar(e) && <span className="ds-far" title="Far venue: Fill puts drivers first, with the people they're linked to">far</span>}
                   {(e as unknown as { staff_estimate?: boolean }).staff_estimate && <span className="tag est-tag ds-est">ESTIMATE</span>}<span className={'ds-open' + (need > have ? '' : ' ok') + ((e as unknown as { staff_estimate?: boolean }).staff_estimate ? ' est' : '')}>{need > have ? `${need - have} open` : need ? 'All filled' : 'No lines yet'}</span>
                   <span className="grow" />
                   {need > have && <button className="lnk sm" disabled={busy || !ctx} onClick={() => fillDay(e)} title="Fill this event only">Fill</button>}
@@ -718,8 +727,8 @@ function Details({ e, open, onToggle, venues, clients, types, busy, onEv, onVenu
         <label>GUESTS<input inputMode="numeric" value={g} disabled={busy} onChange={(ev) => setG(ev.target.value.replace(/\D/g, ''))} onBlur={() => { const n = g ? Number(g) : null; if (n !== (e.guests ?? null)) onEv({ guests: n }, `guests → ${n ?? '—'}`); }} /></label>
         <label>FOOD BY<select value={e.caterer_id ?? ''} disabled={busy} onChange={(ev) => onEv({ caterer_id: ev.target.value || null }, `food by → ${cs.find((c) => c.id === ev.target.value)?.name ?? '—'}`)}><option value="">—</option>{cs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
         <label className="wide2">EVENT TYPE<select value={e.event_type ?? ''} disabled={busy} onChange={(ev) => onType(ev.target.value)}><option value="">—</option>{[...new Set([...(e.event_type ? [e.event_type] : []), ...types])].map((t) => <option key={t} value={t}>{t}</option>)}</select></label>
-        <label>UNIFORM · MEN<select value={uVal} disabled={busy} onChange={(ev) => onEv({ [uKey]: ev.target.value || null }, `men's uniform → ${uL(ev.target.value) ?? '—'}`)}><option value="">—</option>{MEN.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></label>
-        <label>UNIFORM · WOMEN<select value={wVal} disabled={busy} onChange={(ev) => onEv({ [wKey]: ev.target.value || null }, `women's uniform → ${uL(ev.target.value) ?? '—'}`)}><option value="">—</option>{UNIFORMS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></label>
+        <UniPick label="UNIFORM · MEN" value={uVal} onChange={(v) => onEv({ [uKey]: v || null }, `men's uniform → ${uL(v) ?? (v.startsWith('custom:') ? v.slice(7) : v === 'none' ? 'No uniform' : '—')}`)} />
+        <UniPick women label="UNIFORM · WOMEN" value={wVal} onChange={(v) => onEv({ [wKey]: v || null }, `women's uniform → ${uL(v) ?? (v.startsWith('custom:') ? v.slice(7) : v === 'none' ? 'No uniform' : '—')}`)} />
         <label className="wide2">NOTES FOR STAFF<input value={nt} disabled={busy} placeholder="e.g. enter by the side door · parking at the back" onChange={(ev) => setNt(ev.target.value)} onBlur={() => { if (nt.trim() !== (e.notes ?? '')) onEv({ notes: nt.trim() || null }, 'notes for staff'); }} /></label>
       </div>
       <small className="muted">Saves as you go, like the event form · ↶ Undo · staff see it in the app (no message) · on-site contact = the MD</small>
@@ -763,8 +772,8 @@ function DetailsV6({ e, pv, open, onToggle, venues, clients, types, busy, onEv, 
       </div>
       <small className="v6g">3 · FOR THE STAFF</small>
       <div className="ds-detg">
-        <label>UNIFORM · MEN<select value={uVal} disabled={busy} onChange={(ev) => onEv({ [uKey]: ev.target.value || null }, `men's uniform → ${uL(ev.target.value) ?? '—'}`)}><option value="">—</option>{MEN.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></label>
-        <label>UNIFORM · WOMEN<select value={wVal} disabled={busy} onChange={(ev) => onEv({ [wKey]: ev.target.value || null }, `women's uniform → ${uL(ev.target.value) ?? '—'}`)}><option value="">—</option>{UNIFORMS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></label>
+        <UniPick label="UNIFORM · MEN" value={uVal} onChange={(v) => onEv({ [uKey]: v || null }, `men's uniform → ${uL(v) ?? (v.startsWith('custom:') ? v.slice(7) : v === 'none' ? 'No uniform' : '—')}`)} />
+        <UniPick women label="UNIFORM · WOMEN" value={wVal} onChange={(v) => onEv({ [wKey]: v || null }, `women's uniform → ${uL(v) ?? (v.startsWith('custom:') ? v.slice(7) : v === 'none' ? 'No uniform' : '—')}`)} />
         <label>FOOD BY<select value={e.caterer_id ?? ''} disabled={busy} onChange={(ev) => onEv({ caterer_id: ev.target.value || null }, `food by → ${cs.find((c) => c.id === ev.target.value)?.name ?? '—'}`)}><option value="">—</option>{cs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
         <label>DRIVE FOLDER<input value={dr} disabled={busy} placeholder="Paste a link…" onChange={(ev) => setDr(ev.target.value)} onBlur={() => { if (dr.trim() !== (e.drive_folder_url ?? '')) onEv({ drive_folder_url: dr.trim() || null }, 'Drive folder'); }} /></label>
       </div>

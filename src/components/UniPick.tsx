@@ -25,10 +25,11 @@ export function UniPick({ label, value, onChange, women = false }: { label: stri
     <div className="ne-f uni-pick">
       <span>{label}</span>
       <select value={value} onChange={(e) => { const v = e.target.value; if (v === '__new') setNw(''); else onChange(v); }}>
+        {value === '' && <option value="">—</option>}
         <option value="none">No uniform</option>
         <optgroup label="Usual">{base.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</optgroup>
         {cust.length > 0 && <optgroup label="Added">{cust.map((n) => <option key={n} value={'custom:' + n}>{n}</option>)}</optgroup>}
-        {value !== 'none' && !value.startsWith('custom:') && !base.some(([k]) => k === value) && <option value={value}>{value}</option>}
+        {value !== '' && value !== 'none' && !value.startsWith('custom:') && !base.some(([k]) => k === value) && <option value={value}>{value}</option>}
         <option value="__new">+ New uniform</option>
       </select>
       {nw !== null && <div className="uni-new">

@@ -2547,6 +2547,10 @@ html[data-theme="dark"] { --teams: #8487CC; --teams-bg: #1F2137; --teams-ink: #8
 :where(html[data-theme="dark"]) .crew.hrs .ring { box-shadow: 0 0 0 2px #AF8214, 0 0 0 4px #39311E; }
 :where(html[data-theme="dark"]) .hrs-head .hrs-t { color: #EAC667; }
 :where(html[data-theme="dark"]) .hrs-head .grp-rule { background: #373020; }
+:where(html[data-theme="dark"]) .ds-blocks.narrow .ds-chip { border-top: 1px solid #4C4438; }
+:where(html[data-theme="dark"]) .ds-blocks.narrow .ds-slot { border-top: 1px solid #4C4438; }
+:where(html[data-theme="dark"]) .ds-car { color: #8A8076; }
+:where(html[data-theme="dark"]) .ds-fsub { color: #8A8076; }
 html[data-theme="dark"] { color-scheme: dark; }
 html[data-theme="dark"] body { background: #121110; color: #F1ECE4; }
 html[data-theme="dark"] img[src$="logo-mark.png"]:not(.adm-side img):not(.side-logo), html[data-theme="dark"] img[src$="logo-full.png"] { filter: invert(1) hue-rotate(180deg); mix-blend-mode: normal !important; }
