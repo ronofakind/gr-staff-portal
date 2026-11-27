@@ -5299,3 +5299,7 @@ span.abtn.ds-newq { background: none; border: 0; padding: 0; }
 .ds-fold { display: flex; flex-direction: column; align-items: stretch; gap: 2px; width: 100%; text-align: left; font: inherit; color: inherit; border: 0; cursor: pointer; padding: 10px 12px; }
 .ds-fold .ds-ch { display: flex; align-items: center; gap: 8px; }
 .ds-fsub { font-size: 12px; color: #8A8177; padding-left: 20px; }
+/* Nov 26 · phone: the line time picker opens as a card in the middle of the screen (was cut off on the left) */
+.ds-blocks.narrow .ds-tpop { position: fixed; left: 50%; top: 50%; right: auto; transform: translate(-50%, -50%); width: min(320px, 90vw); z-index: 200; background: #fff; box-shadow: 0 0 0 100vmax rgba(0,0,0,.35), 0 12px 40px rgba(0,0,0,.25); padding: 14px; gap: 10px; font-size: 14px; }
+.ds-blocks.narrow .ds-tq button { padding: 10px 0; font-size: 13px; }
+.ds-blocks.narrow .ds-tpop .ds-tsel { flex: 1; height: 40px; }
