@@ -33,9 +33,9 @@ export const NAV_GROUPS: { title: string; items: [string, string, keyof typeof I
 const SETUP: [string, string, keyof typeof ICONS][] = [['/admin/venues', 'Venues & clients', 'venue'], ['/admin/settings', 'Settings', 'gear'], ['/me', 'My shifts', 'today']];
 export const NAV = [...NAV_GROUPS.flatMap((g) => g.items), ...SETUP.filter(([to]) => to !== '/me')];
 /** One nav line stands for several pages: Calendar = Week + Day, Tiers & ranking = Tiers + Ranking. */
-const ALSO: Record<string, string[]> = { '/admin/day-sheet': ['/admin/bookings', '/admin/day-sheet'], '/admin/calendar': ['/admin/week', '/admin/day', '/admin/month'], '/admin/week': ['/admin/day', '/admin/calendar', '/admin/month'], '/admin/tiers': ['/admin/ranking'] };
+const ALSO: Record<string, string[]> = { '/admin/bookings-v6': ['/admin/bookings-v6'], '/admin/day-sheet': ['/admin/bookings', '/admin/day-sheet'], '/admin/calendar': ['/admin/week', '/admin/day', '/admin/month'], '/admin/week': ['/admin/day', '/admin/calendar', '/admin/month'], '/admin/tiers': ['/admin/ranking'] };
 const TABS: [string, string, keyof typeof ICONS][] = [
-  ['/admin', 'Today', 'today'], ['/admin/day-sheet', 'Bookings', 'book'], ['/admin/availability', 'Availability', 'avail'], ['/admin/staff', 'Staff', 'staff'], ['/admin/more', 'More', 'more'],
+  ['/admin', 'Today', 'today'], ['/admin/bookings-v6', 'Bookings', 'book'], ['/admin/availability', 'Availability', 'avail'], ['/admin/staff', 'Staff', 'staff'], ['/admin/more', 'More', 'more'],
 ];
 
 export function AdminLayout() {
