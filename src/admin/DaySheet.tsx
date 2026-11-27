@@ -7,6 +7,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { UniPick } from '../components/UniPick';
 import { createPortal } from 'react-dom';
+import { defaultAnswerBy } from '../lib/myDates';
 import type { ReactElement } from 'react';
 /** Nov 26 · on the phone the time picker sits above everything (a portal), centred, with a dim backdrop */
 const portalIf = (on: boolean, el: ReactElement) => (on ? createPortal(<div className="ds-tback" onClick={(ev) => ev.stopPropagation()}>{el}</div>, document.body) : el);
@@ -57,6 +58,10 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
   const detOpen = (id: string) => { void detTick; try { const v = localStorage.getItem(detK(id)); return v6 ? v === '1' : v !== '0'; } catch { return !v6; } };
   const togDet = (id: string) => { try { localStorage.setItem(detK(id), detOpen(id) ? '0' : '1'); } catch { /* */ } setDetTick((t) => t + 1); };
   const blocksR = useRef<HTMLDivElement | null>(null); const [cols, setCols] = useState(4); const [lineEd, setLineEd] = useState<string | null>(null); const [endK, setEndK] = useState<string | null>(null); const [narrow, setNarrow] = useState(false); const [phOpen, setPhOpen] = useState<string | null>(null);
+  // Nov 26 · phone top (week strip) + Free sheet (Book / Ask)
+  const [phFind, setPhFind] = useState(false); const [freeOpen, setFreeOpen] = useState(false); const [fsDept, setFsDept] = useState<'floor' | 'bar'>('floor');
+  const [bookFor, setBookFor] = useState<string | null>(null); const [askQ, setAskQ] = useState<{ ids: string[]; ev: string; t: string } | null>(null);
+  const [weekly, setWeekly] = useState<{ staff_id: string; status: string; from_time: string | null }[]>([]); const [asked, setAsked] = useState<Record<string, string>>({});
   // push 119 · Ronnie: "a little squished" → Free this day folds to a thin tab, END ~ column can be hidden (both remembered)
   const ls0 = (k: string) => { try { return localStorage.getItem(k) === '1'; } catch { return false; } };
   const [freeFold, setFreeFold] = useState(() => ls0('gr_ds_freefold')); const [noEnd, setNoEnd] = useState(() => ls0('gr_ds_noend'));
@@ -64,7 +69,9 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
   useEffect(() => { loadCtx().then((c) => { setCtx(c); setStaff(c.staff); }).catch((x) => setErr((x as Error).message)); }, []);
   useEffect(() => { try { localStorage.setItem('gr_ds_dept', dept); } catch { /* */ } }, [dept]);
   const wk0 = monday(date);
-  useEffect(() => { setPhOpen(null); }, [date]);
+  useEffect(() => { setPhOpen(null); setFreeOpen(false); setAsked({}); }, [date]);
+  useEffect(() => { if (!freeOpen) return; const dw = (new Date(date + 'T12:00:00').getDay() + 6) % 7;
+    supabase.from('staff_weekly').select('staff_id,status,from_time').eq('dow', dw).neq('status', 'no').then(({ data }) => setWeekly((data ?? []) as { staff_id: string; status: string; from_time: string | null }[])); }, [freeOpen, date]);
 
   useEffect(() => { (async () => {
     try { const d = await loadDay(date); setEvs(d.evs); setSh(d.sh); setAv(d.av); setOff(d.off); setCx(d.cx); } catch (x) { setErr((x as Error).message); }
@@ -446,9 +453,89 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
       <span className="ds-cells" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>{people.map((s) => <Chip key={s.id} s={s} at={start} />)}{[...Array(Math.max(0, count - people.length))].map((_, i) => <Slot key={i} e={e} code={code} start={start} />)}{[...Array(pad)].map((_, i) => <i key={'p' + i} className="ds-off" />)}</span>
     </div>); };
 
+  // ── Nov 26 · phone (A): week strip on top, Free sheet with Book / Ask ──
+  const moreMenu = more && <span className="ds-morel" onClick={() => setMore(false)}>
+    {(() => { const n = sh.filter((x) => x.pool_hold && shown.some((e) => e.id === x.event_id)).length; return <button disabled={busy || !n} onClick={confirmDay}>Confirm people ({n})</button>; })()}
+    <button disabled={busy || !ops.length} onClick={undo}>Undo{ops.length ? ` · ${ops[ops.length - 1].label}` : ''}</button>
+    <button disabled={busy || !ctx} onClick={fillWeek}>Fill the week</button>
+    <button disabled={busy || !sh.some((x) => x.pool_hold && !x.locked && !LEAD.includes(x.position_code ?? ''))} onClick={() => clear()}>Clear unlocked</button>
+    <button disabled={busy || !sh.some((x) => x.pool_hold && !x.locked && !LEAD.includes(x.position_code ?? ''))} onClick={lockAll}>Lock all</button>
+    <NewEv cls="" label="＋ New event" />
+    <Link to={`/admin/day-sheet/${date}`}>Old layout</Link></span>;
+  const findBox = <span className="ds-find"><input autoFocus={phFind} placeholder="Find a name" value={find} onChange={(ev) => { setFind(ev.target.value); setHl(null); }}
+    onKeyDown={(ev) => { if (ev.key === 'Enter' && findRes[0]) goTo(findRes[0].id); if (ev.key === 'Escape') { setFind(''); setHl(null); } }} />
+    {find.trim().length >= 2 && !hl && <span className="ds-findl">{findRes.length ? findRes.map((r) => <button key={r.id} onClick={() => goTo(r.id)}><b>{r.name}</b> <small>{r.where}</small></button>) : <small className="muted">Nobody by that name</small>}</span>}</span>;
+  const nFree = av.filter((a) => a.status === 'yes' && !a.released_at && !onDay.has(a.staff_id) && !off.has(a.staff_id)).length;
+  const phoneTop = <div className="ph-top">
+    <div className="ph-mrow"><Link className="ph-arr" to={`${base}/${addDays(date, -7)}`} aria-label="Week before">‹</Link><span className="ph-month">{dLabel(date, { month: 'long' }).toUpperCase()}</span><Link className="ph-arr" to={`${base}/${addDays(date, 7)}`} aria-label="Next week">›</Link><span className="grow" />
+      <button className={'ph-ic' + (phFind ? ' on' : '')} onClick={() => { setPhFind(!phFind); if (phFind) { setFind(''); setHl(null); } }} aria-label="Find a name"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg></button>
+      <span className="ds-more"><button className="ph-ic" onClick={() => setMore(!more)} aria-label="More">···</button>{moreMenu}</span></div>
+    {phFind && findBox}
+    <div className="ph-week">{week.map((w) => <Link key={w.d} to={`${base}/${w.d}`} className={'ph-day' + (w.d === date ? ' on' : '')}>
+      <small>{dLabel(w.d, { weekday: 'narrow' })}</small><b>{Number(w.d.slice(8))}</b><i className={!w.n ? '' : w.have >= w.need ? 'ok' : 'short'} /></Link>)}</div>
+    <div className="ph-drow"><span className="serif ph-date">{dLabel(date, { weekday: 'short', month: 'short', day: 'numeric' })}</span><span className="grow" />
+      <button className="ph-free" onClick={() => setFreeOpen(true)}>Free <b>{nFree}</b></button></div>
+    <div className="ph-tot">Floor <b className={fl[0] >= fl[1] ? 'okc' : 'accent'}>{fl[0]}/{fl[1]}</b> · Bar <b className={br[0] >= br[1] ? 'okc' : 'accent'}>{br[0]}/{br[1]}</b> · {evs.length} event{evs.length === 1 ? '' : 's'}</div>
+    <div className="ph-frow"><span className="seg3">{(['floor', 'bar', 'both'] as const).map((d) => <button key={d} className={dept === d ? 'on' : ''} onClick={() => setDept(d)}>{d === 'both' ? 'Both' : d === 'floor' ? 'Floor' : 'Bar'}</button>)}</span>
+      <button className="abtn dark" disabled={busy || !ctx || !shown.length} onClick={() => fillDay()}>Fill the day</button></div>
+  </div>;
+  const soon = (new Date(date + 'T12:00:00').getTime() - new Date(isoDay(new Date()) + 'T12:00:00').getTime()) / 86400000 <= 3;
+  const dptOf = (id: string) => (byId[id]?.department === 'bar' ? 'bar' : 'floor');
+  const fsYes = av.filter((a) => a.status === 'yes' && !a.released_at && !onDay.has(a.staff_id) && !off.has(a.staff_id) && aDept(a) === fsDept).sort((a, b) => sortP(a.staff_id, b.staff_id));
+  const fsWait = av.filter((a) => a.status === 'asked' && !onDay.has(a.staff_id) && !off.has(a.staff_id) && aDept(a) === fsDept);
+  const answered = new Set(av.map((a) => a.staff_id));
+  const fsUsual = weekly.filter((w) => byId[w.staff_id]?.active && byId[w.staff_id]?.role !== 'admin' && dptOf(w.staff_id) === fsDept && !answered.has(w.staff_id) && !onDay.has(w.staff_id) && !off.has(w.staff_id) && !asked[w.staff_id])
+    .sort((a, b) => sortP(a.staff_id, b.staff_id));
+  const tierB = (id: string) => { const t = tier(id); return <i className={'ph-t ' + (t ?? 'x')}>{t ?? '?'}</i>; };
+  const evLines = (e: Ev) => { const L = lays[e.id]; return [...L.lines.map((l) => ({ k: l.key, code: l.code, start: l.start, label: `${l.count} ${plural(l.code, l.count)}`, open: Math.max(0, l.count - l.people.length) })),
+    { k: 'x', code: L.extras.code, start: L.extras.start, label: 'Extras', open: Math.max(0, L.extras.count - L.extras.people.length) }]; };
+  const sendAsk = (ids: string[], evId: string, t: string) => run(async () => {
+    const e = evs.find((x) => x.id === evId); const label = soon && e ? `${e.venues?.name ?? e.title}${t ? ` · ${ap(t)}` : ''}` : 'Event';
+    // reuse the day's ask if there is one (keeps its tiers / headcount); short notice puts the event + time on it
+    const { data: ex } = await supabase.from('avail_asks').select('id').eq('for_date', date).eq('department', fsDept).maybeSingle();
+    let ask = ex as { id: string } | null;
+    if (ask) { if (soon) { const { error } = await supabase.from('avail_asks').update({ label, approx_start: t || null }).eq('id', ask.id); if (error) throw new Error(error.message); } }
+    else { const { data, error } = await supabase.from('avail_asks').insert({ for_date: date, department: fsDept, label, approx_start: soon && t ? t : null, staff_needed: 0, tiers_sent: [], reply_by: null }).select('id').single();
+      if (error || !data) throw new Error(error?.message ?? 'Could not save the ask'); ask = data as { id: string }; }
+    const now = new Date().toISOString();
+    const { error: e2 } = await supabase.from('availability').upsert(ids.map((id) => ({ staff_id: id, for_date: date, part: 'evening', status: 'asked', ask_id: ask.id, asked_at: now, answer_by: defaultAnswerBy(date).toISOString() })), { onConflict: 'staff_id,for_date,part' });
+    if (e2) throw new Error(e2.message);
+    setAsked((m) => ({ ...m, ...Object.fromEntries(ids.map((id) => [id, now])) })); setAskQ(null); setTick((x) => x + 1);
+  });
+  const askStart = (ids: string[]) => { const e0 = shown.find((e) => isBar(e) === (fsDept === 'bar')) ?? shown[0]; const l0 = e0 ? evLines(e0).find((l) => l.open > 0) ?? evLines(e0)[0] : null;
+    setAskQ({ ids, ev: e0?.id ?? '', t: l0?.start ?? e0?.start_time?.slice(0, 5) ?? '' }); };
+  const freeSheet = freeOpen && createPortal(<div className="ph-back" onClick={() => { setFreeOpen(false); setBookFor(null); setAskQ(null); }}>
+    <div className="ph-sheet" onClick={(ev) => ev.stopPropagation()}>
+      <span className="ph-grip" />
+      <div className="ph-shead"><b className="serif">Free this day</b><span className="grow" /><button className="lnk sm" onClick={() => { setFreeOpen(false); setBookFor(null); setAskQ(null); }}>Close</button></div>
+      <span className="seg3 ph-seg">{(['floor', 'bar'] as const).map((d) => <button key={d} className={fsDept === d ? 'on' : ''} onClick={() => setFsDept(d)}>{d === 'floor' ? 'Floor' : 'Bar'}</button>)}</span>
+      {err && <div className="adm-card err sm">{err}</div>}
+      <div className="ph-g">SAID YES <span>{fsYes.length}</span></div>
+      {!fsYes.length && <div className="ph-none">Nobody yet</div>}
+      {fsYes.map((a) => <div key={a.staff_id} className="ph-fr">{tierB(a.staff_id)}<span className="ph-nm"><b>{byId[a.staff_id]?.full_name ?? '…'}</b><small className={a.from_time ? 'amber' : ''}>{a.from_time ? `From ${ap(a.from_time.slice(0, 5))}` : 'Any time'}</small></span>
+        <button className="ph-btn" disabled={busy} onClick={() => setBookFor(bookFor === a.staff_id ? null : a.staff_id)}>Book</button>
+        {bookFor === a.staff_id && <div className="ph-pick">{shown.filter((e) => isBar(e) === (fsDept === 'bar')).concat(shown.filter((e) => isBar(e) !== (fsDept === 'bar'))).map((e) => <div key={e.id} className="ph-pe"><small>{e.title || e.venues?.name}</small>
+          {evLines(e).map((l) => <button key={l.k} disabled={busy} className={l.open ? 'open' : ''} onClick={() => { setBookFor(null); place(a.staff_id, e, l.code, l.start); }}>{l.label} · {l.start ? ap(l.start) : 'TBC'}{l.open ? ` · ${l.open} open` : ''}</button>)}</div>)}</div>}
+      </div>)}
+      <div className="ph-g">WAITING ON A REPLY <span>{fsWait.length + Object.keys(asked).filter((id) => dptOf(id) === fsDept && !answered.has(id)).length}</span></div>
+      {fsWait.map((a) => <div key={a.staff_id} className="ph-fr">{tierB(a.staff_id)}<span className="ph-nm"><b>{byId[a.staff_id]?.full_name ?? '…'}</b><small className="amber">Asked · no reply yet</small></span></div>)}
+      {Object.keys(asked).filter((id) => dptOf(id) === fsDept && !answered.has(id)).map((id) => <div key={id} className="ph-fr">{tierB(id)}<span className="ph-nm"><b>{byId[id]?.full_name ?? '…'}</b><small className="amber">Asked {ap(hm(asked[id]))}</small></span></div>)}
+      <div className="ph-g">USUALLY FREE {dLabel(date, { weekday: 'long' }).toUpperCase()}S · NOT ASKED <span>{fsUsual.length}</span><span className="grow" />{fsUsual.length > 1 && <button className="ph-ask" disabled={busy} onClick={() => askStart(fsUsual.map((w) => w.staff_id))}>Ask all {fsUsual.length}</button>}</div>
+      {!fsUsual.length && <div className="ph-none">Nobody else</div>}
+      {fsUsual.map((w) => <div key={w.staff_id} className="ph-fr">{tierB(w.staff_id)}<span className="ph-nm"><b>{byId[w.staff_id]?.full_name ?? '…'}</b><small>{w.from_time ? `Usually from ${ap(w.from_time.slice(0, 5))}` : 'Usually any time'}</small></span>
+        <button className="ph-ask" disabled={busy} onClick={() => askStart([w.staff_id])}>Ask</button></div>)}
+      {askQ && <div className="ph-askq"><b>Ask {askQ.ids.length === 1 ? byId[askQ.ids[0]]?.full_name : `${askQ.ids.length} people`} for {dLabel(date, { weekday: 'short', month: 'short', day: 'numeric' })}?</b>
+        {soon ? <><label><small>Event</small><select value={askQ.ev} onChange={(ev) => { const e = evs.find((x) => x.id === ev.target.value); const l = e ? evLines(e).find((x) => x.open > 0) ?? evLines(e)[0] : null; setAskQ({ ...askQ, ev: ev.target.value, t: l?.start ?? '' }); }}>{shown.map((e) => <option key={e.id} value={e.id}>{e.title || e.venues?.name}</option>)}</select></label>
+          <label><small>Time</small><select value={askQ.t} onChange={(ev) => setAskQ({ ...askQ, t: ev.target.value })}>{!Q15.includes(askQ.t) && <option value={askQ.t}>{askQ.t ? ap(askQ.t) : '—'}</option>}{Q15.map((q) => <option key={q} value={q}>{ap(q)}</option>)}</select></label>
+          <small className="muted">They see: {(() => { const e = evs.find((x) => x.id === askQ.ev); return `${e?.venues?.name ?? e?.title ?? ''}${askQ.t ? ` · ${ap(askQ.t)}` : ''}`; })()}</small></>
+          : <small className="muted">They’re asked for the day. It’s more than 3 days away.</small>}
+        <span className="row" style={{ gap: 6 }}><button className="abtn dark" disabled={busy} onClick={() => sendAsk(askQ.ids, askQ.ev, askQ.t)}>Send the ask</button><button className="abtn" onClick={() => setAskQ(null)}>Cancel</button></span></div>}
+    </div></div>, document.body);
+
   return (
     <div className={'stack-lg ds' + (v6 ? ' ds-v6' : '')}>
       {!v6 && <div className="kick"><Link to={`/admin/bookings?date=${date}&view=sheet`}>Bookings · week</Link> · DAY SHEET</div>}
+      {v6 && narrow ? <>{phoneTop}{freeSheet}</> : <>
       <div className="ds-weekw"><Link className="ds-warr" to={`${base}/${addDays(date, -7)}`} title="Week before">‹</Link><div className="ds-week">{week.map((w) => <Link key={w.d} to={`${base}/${w.d}`} className={'ds-wd' + (w.d === date ? ' on' : '') + (!w.n ? ' none' : w.have >= w.need ? ' done' : ' short')}>
         <small>{dLabel(w.d, { weekday: 'short', day: 'numeric' })}</small><b>{w.n ? `${w.have}/${w.need}` : '—'}</b><small>{w.n ? `${w.n} event${w.n > 1 ? 's' : ''}${w.free && !v6 ? ` · ${w.free} free` : ''}` : 'no events'}</small></Link>)}</div><Link className="ds-warr" to={`${base}/${addDays(date, 7)}`} title="Next week">›</Link></div>
       {v6 ? <>
@@ -489,7 +576,7 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
         <button className="abtn" disabled={busy || !ops.length} onClick={undo} title={ops.length ? `Undo: ${ops[ops.length - 1].label}` : 'Nothing to undo'}>↶ Undo{ops.length ? ` (${ops.length})` : ''}</button>
         {(() => { const n = sh.filter((x) => x.pool_hold && shown.some((e) => e.id === x.event_id)).length; const out = addDays(date, -4); const due = isoDay(new Date()) >= out;
           return <button className={'abtn' + (due && n ? ' dark' : '')} disabled={busy || !n} onClick={confirmDay} title={`Confirmations usually go ~4 days out (${dLabel(out, { weekday: 'short', month: 'short', day: 'numeric' })})`}>Confirm {n}{dept !== 'both' ? ` ${dept}` : ''} ›</button>; })()}
-      </div>}
+      </div>}</>}
       {!v6 && <div className="ds-sum"><b>{evs.length} event{evs.length === 1 ? '' : 's'}</b><span>Floor <b className={fl[0] >= fl[1] ? 'okc' : 'accent'}>{fl[0]}/{fl[1]}</b></span><span>Bar <b className={br[0] >= br[1] ? 'okc' : 'accent'}>{br[0]}/{br[1]}</b></span><span>Free <b>{nYes}</b></span>
         {v6 ? <span className="muted ds-legend"><i className="v6m ok">✓</i> confirmed <i className="v6m sent">◷</i> sent, waiting · no mark = not sent · <span className="v6-dash">open</span> = open spot</span>
           : <span className="muted ds-legend"><i className="ds-sd ok" /> confirmed <i className="ds-sd sent" /> sent, not confirmed <i className="ds-sd" /> placed, not sent</span>}
@@ -551,7 +638,7 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
               </section>); })}
           <NewEv cls="ds-newev" label={`＋ New event on ${dLabel(date, { weekday: 'short', month: 'short', day: 'numeric' })}`} />
         </div>
-        {freeFold ? <aside className="ds-free fold" onClick={() => setFreeFold(false)} title="Show Free this day (you can still drop a name here = back to Free)" onDragOver={(ev) => ev.preventDefault()} onDrop={() => { const d = dragR.current; setDrag(null); if (d && 'id' in d) remove(d); }}>
+        {v6 && narrow ? null : freeFold ? <aside className="ds-free fold" onClick={() => setFreeFold(false)} title="Show Free this day (you can still drop a name here = back to Free)" onDragOver={(ev) => ev.preventDefault()} onDrop={() => { const d = dragR.current; setDrag(null); if (d && 'id' in d) remove(d); }}>
           <span>‹</span><b>Free · {nYes}</b></aside> : <aside className="ds-free" onDragOver={(ev) => ev.preventDefault()} onDrop={() => { const d = dragR.current; setDrag(null); if (d && 'id' in d) remove(d); }}>
           <span className="row" style={{ alignItems: 'baseline' }}><b className="serif grow">Free this day · {nYes}</b><button className="ds-dett" onClick={() => setFreeFold(true)} title="Fold to make room">Hide ›</button></span>
           <small className="muted">said yes, not placed · best first · drag onto a slot, or tap a slot · drop a name here = back to free</small>

@@ -90,6 +90,19 @@ html[data-theme="dark"] .crew.hrs .ring { box-shadow: 0 0 0 2px #D4A93A, 0 0 0 4
 html[data-theme="dark"] .hrs-head .hrs-t { color: #D4A93A; }
 html[data-theme="dark"] .hrs-head .grp-rule { background: rgba(212,169,58,.3); }
 html[data-theme="dark"] .ds-tpop.ph { background: #24211D; color: #F1ECE4; }
-html[data-theme="dark"] .ds-tpop.ph .ds-tq button { background: #33302B; color: #F1ECE4; }`));
+html[data-theme="dark"] .ds-tpop.ph .ds-tq button { background: #33302B; color: #F1ECE4; }
+html[data-theme="dark"] .ph-day { background: #24211D; color: #F1ECE4; }
+html[data-theme="dark"] .ph-day.on { background: #F1ECE4; color: #1A1714; }
+html[data-theme="dark"] .ph-day.on i.ok { background: #3F7D4E; } html[data-theme="dark"] .ph-day.on i.short { background: #9B2226; }
+html[data-theme="dark"] .ph-ic { background: #24211D; color: #F1ECE4; border-color: #3A352F; }
+html[data-theme="dark"] .ph-ic.on { background: #F1ECE4; color: #1A1714; }
+html[data-theme="dark"] .ph-free { background: #F1ECE4; color: #1A1714; } html[data-theme="dark"] .ph-free b { color: #3F7D4E; }
+html[data-theme="dark"] .ph-sheet { background: #1F1D1A; color: #F1ECE4; }
+html[data-theme="dark"] .ph-fr { border-top-color: #34302A; }
+html[data-theme="dark"] .ph-btn { border-color: #F1ECE4; color: #F1ECE4; }
+html[data-theme="dark"] .ph-ask { background: #2C2A44; color: #B9B4F2; }
+html[data-theme="dark"] .ph-pe button { background: #24211D; border-color: #3A352F; color: #F1ECE4; }
+html[data-theme="dark"] .ph-pe button.open { border-color: #5FA572; color: #8FD0A2; }
+html[data-theme="dark"] .ph-askq { background: #2A2622; }`));
 fs.writeFileSync(OUT, dark.toString());
 console.log('theme-dark.css', dark.nodes.length, 'rules');

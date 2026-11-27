@@ -5305,3 +5305,47 @@ span.abtn.ds-newq { background: none; border: 0; padding: 0; }
 .ds-tpop.ph .ds-tq button { padding: 10px 0; font-size: 13px; }
 .ds-tpop.ph .ds-tsel { flex: 1; height: 40px; }
 .ds-tpop.ph .ds-tclose { align-self: stretch; }
+/* Nov 26 · Bookings on the phone (A): week strip on top + Free sheet */
+.ph-top { display: flex; flex-direction: column; gap: 8px; }
+.ph-mrow { display: flex; align-items: center; gap: 6px; }
+.ph-month { font-size: 11px; font-weight: 800; letter-spacing: .1em; color: #8A8177; }
+.ph-arr { font-size: 18px; color: #8A8177; text-decoration: none; padding: 0 4px; }
+.ph-ic { width: 34px; height: 34px; border-radius: 17px; border: 1px solid #E2DAD0; background: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 800; color: #1A1714; cursor: pointer; padding: 0; }
+.ph-ic.on { background: #1A1714; color: #fff; border-color: #1A1714; }
+.ph-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.ph-day { height: 54px; border-radius: 12px; background: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; text-decoration: none; color: #1A1714; }
+.ph-day small { font-size: 10px; font-weight: 700; opacity: .6; }
+.ph-day b { font-size: 15px; }
+.ph-day i { width: 5px; height: 5px; border-radius: 3px; }
+.ph-day i.ok { background: #3F7D4E; } .ph-day i.short { background: #9B2226; }
+.ph-day.on { background: #1A1714; color: #fff; } .ph-day.on i.ok { background: #9FD3AE; } .ph-day.on i.short { background: #F2A3A6; }
+.ph-drow { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+.ph-date { font-size: 22px; }
+.ph-free { height: 30px; padding: 0 12px; border-radius: 15px; border: 0; background: #1A1714; color: #fff; font: 700 12.5px Inter, system-ui, sans-serif; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
+.ph-free b { color: #9FD3AE; }
+.ph-tot { font-size: 12px; color: #8A8177; margin-top: -4px; }
+.ph-frow { display: flex; gap: 6px; align-items: center; }
+.ph-frow .seg3 { flex: 1; display: flex; } .ph-frow .seg3 button { flex: 1; }
+.ph-frow .abtn { height: 34px; white-space: nowrap; }
+.ph-top .ds-find { width: 100%; } .ph-top .ds-find input { width: 100%; box-sizing: border-box; }
+.ph-back { position: fixed; inset: 0; z-index: 300; background: rgba(0,0,0,.4); display: flex; align-items: flex-end; }
+.ph-sheet { width: 100%; max-height: 86vh; overflow: auto; background: #fff; border-radius: 18px 18px 0 0; padding: 8px 16px calc(16px + env(safe-area-inset-bottom)); box-sizing: border-box; display: flex; flex-direction: column; gap: 2px; }
+.ph-grip { width: 38px; height: 4px; border-radius: 2px; background: #DDD5CA; margin: 0 auto 8px; }
+.ph-shead { display: flex; align-items: baseline; gap: 8px; } .ph-shead .serif { font-size: 19px; }
+.ph-seg { display: flex; margin: 6px 0 2px; } .ph-seg button { flex: 1; }
+.ph-g { display: flex; align-items: center; gap: 6px; font-size: 10px; font-weight: 800; letter-spacing: .08em; color: #8A8177; padding: 12px 0 4px; }
+.ph-none { font-size: 12px; color: #8A8177; padding: 2px 0 4px; }
+.ph-fr { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 42px; border-top: 1px solid #F1EBE3; padding: 4px 0; }
+.ph-t { width: 20px; height: 20px; border-radius: 6px; flex: none; display: inline-flex; align-items: center; justify-content: center; font: 800 11px Inter, sans-serif; font-style: normal; color: #fff; background: #B5ACA1; }
+.ph-t.A { background: #3F7D4E; } .ph-t.B { background: #C9A74A; } .ph-t.C { background: #B5675E; }
+.ph-nm { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ph-nm b { font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ph-nm small { font-size: 11px; color: #8A8177; } .ph-nm small.amber { color: #B26A00; }
+.ph-btn { height: 30px; padding: 0 14px; border-radius: 15px; border: 1px solid #1A1714; background: transparent; color: #1A1714; font: 700 12px Inter, sans-serif; cursor: pointer; }
+.ph-ask { height: 28px; padding: 0 12px; border-radius: 14px; border: 0; background: #EEEDFA; color: #4B44A8; font: 700 12px Inter, sans-serif; cursor: pointer; letter-spacing: 0; }
+.ph-pick { flex-basis: 100%; display: flex; flex-direction: column; gap: 6px; padding: 4px 0 6px 28px; }
+.ph-pe { display: flex; flex-direction: column; gap: 4px; } .ph-pe small { font-size: 11px; font-weight: 700; color: #8A8177; }
+.ph-pe button { text-align: left; height: 34px; padding: 0 10px; border-radius: 8px; border: 1px solid #E2DAD0; background: #fff; font: 500 12.5px Inter, sans-serif; color: #1A1714; cursor: pointer; }
+.ph-pe button.open { border-color: #3F7D4E; color: #3F7D4E; font-weight: 700; }
+.ph-askq { position: sticky; bottom: 0; margin-top: 10px; background: #F7F3EE; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.ph-askq label { display: flex; flex-direction: column; gap: 2px; } .ph-askq select { height: 38px; }
