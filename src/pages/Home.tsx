@@ -1,4 +1,5 @@
 import { QuarterTime } from '../components/QuarterTime';
+import { SwitchAsks } from '../components/SwitchAsk';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { supabase, SHIFT_SELECT, isSetup, type ShiftRow, type Staff } from '../lib/supabase';
@@ -228,7 +229,8 @@ export function Home({ me, base = '', preview = false }: { me: Staff; base?: str
 
       {!preview && <PastStrips me={me} />}
 
-      {me.role !== 'admin' && <NeedsBar me={me} preview={preview} />}{/* push 90 · one call to action → Messages → Needs your answer */}
+      {me.role !== 'admin' && <NeedsBar me={me} preview={preview} />}
+      {!preview && <SwitchAsks staffId={me.id} />}{/* push 90 · one call to action → Messages → Needs your answer */}
 
       {/* push 90 · shift changed / new shift / removed / asks / confirm / dates moved to Messages → Needs your answer (NeedsBar above) */}
 

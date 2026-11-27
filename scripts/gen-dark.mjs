@@ -103,6 +103,17 @@ html[data-theme="dark"] .ph-btn { border-color: #F1ECE4; color: #F1ECE4; }
 html[data-theme="dark"] .ph-ask { background: #2C2A44; color: #B9B4F2; }
 html[data-theme="dark"] .ph-pe button { background: #24211D; border-color: #3A352F; color: #F1ECE4; }
 html[data-theme="dark"] .ph-pe button.open { border-color: #5FA572; color: #8FD0A2; }
-html[data-theme="dark"] .ph-askq { background: #2A2622; }`));
+html[data-theme="dark"] .ph-askq { background: #2A2622; }
+html[data-theme="dark"] .ph-chips > * { background: #2A2622; color: #F1ECE4; } html[data-theme="dark"] .ph-chips > .on { background: #F1ECE4; color: #1A1714; }
+html[data-theme="dark"] .ph-acts button { color: #F1ECE4; border-top-color: #34302A; } html[data-theme="dark"] .ph-acts button.red { color: #E2777C; }
+html[data-theme="dark"] .ph-ml { background: #24211D; border-color: #3A352F; color: #F1ECE4; } html[data-theme="dark"] .ph-ml.here { background: #2A2622; }
+html[data-theme="dark"] .ph-ml.sel { background: #1E2E22; border-color: #5FA572; } html[data-theme="dark"] .ph-ml.sel .ph-radio { background: #5FA572; border-color: #5FA572; box-shadow: inset 0 0 0 4px #1E2E22; }
+html[data-theme="dark"] .ph-go { background: #F1ECE4; color: #1A1714; } html[data-theme="dark"] .ph-go.line { background: transparent; color: #F1ECE4; border-color: #3A352F; }
+html[data-theme="dark"] .ph-how button { background: #24211D; color: #F1ECE4; border-color: #3A352F; } html[data-theme="dark"] .ph-how button.on { background: #F1ECE4; color: #1A1714; }
+html[data-theme="dark"] .ph-search { background: #24211D; color: #F1ECE4; border-color: #3A352F; }
+html[data-theme="dark"] .ph-now b { color: #F1ECE4; } html[data-theme="dark"] .ph-sw, html[data-theme="dark"] .ph-swn { color: #B9B4F2; }
+html[data-theme="dark"] .ds-blocks.narrow .ds-dept { color: #B5ACA1; } html[data-theme="dark"] .ds-blocks.narrow .ds-dept.bar { color: #E2777C; }
+html[data-theme="dark"] .ph-btn.dark { background: #F1ECE4; color: #1A1714; border-color: #F1ECE4; }
+html[data-theme="dark"] .sw-ask { background: #1F1D1A; }`));
 fs.writeFileSync(OUT, dark.toString());
 console.log('theme-dark.css', dark.nodes.length, 'rules');

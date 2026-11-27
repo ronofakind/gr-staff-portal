@@ -60,7 +60,10 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
   const blocksR = useRef<HTMLDivElement | null>(null); const [cols, setCols] = useState(4); const [lineEd, setLineEd] = useState<string | null>(null); const [endK, setEndK] = useState<string | null>(null); const [narrow, setNarrow] = useState(false); const [phOpen, setPhOpen] = useState<string | null>(null);
   // Nov 26 · phone top (week strip) + Free sheet (Book / Ask)
   const [phFind, setPhFind] = useState(false); const [freeOpen, setFreeOpen] = useState(false); const [fsDept, setFsDept] = useState<'floor' | 'bar'>('floor');
-  const [bookFor, setBookFor] = useState<string | null>(null); const [askQ, setAskQ] = useState<{ ids: string[]; ev: string; t: string } | null>(null);
+  const [bookFor, setBookFor] = useState<string | null>(null);
+  const [phP, setPhP] = useState<{ s: Sh; v: 'menu' | 'replace' | 'move' | 'time' | 'call' | 'how'; to?: { e: Ev; code: string; start: string | null } } | null>(null);
+  const [phAdd, setPhAdd] = useState<{ e: Ev; code: string; start: string | null } | null>(null); const [phQ, setPhQ] = useState(''); const [phT, setPhT] = useState('');
+  const [swBy, setSwBy] = useState<Record<string, { id: string; to_label: string | null }>>({}); const [askQ, setAskQ] = useState<{ ids: string[]; ev: string; t: string } | null>(null);
   const [weekly, setWeekly] = useState<{ staff_id: string; status: string; from_time: string | null }[]>([]); const [asked, setAsked] = useState<Record<string, string>>({});
   // push 119 · Ronnie: "a little squished" → Free this day folds to a thin tab, END ~ column can be hidden (both remembered)
   const ls0 = (k: string) => { try { return localStorage.getItem(k) === '1'; } catch { return false; } };
@@ -69,9 +72,12 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
   useEffect(() => { loadCtx().then((c) => { setCtx(c); setStaff(c.staff); }).catch((x) => setErr((x as Error).message)); }, []);
   useEffect(() => { try { localStorage.setItem('gr_ds_dept', dept); } catch { /* */ } }, [dept]);
   const wk0 = monday(date);
-  useEffect(() => { setPhOpen(null); setFreeOpen(false); setAsked({}); }, [date]);
-  useEffect(() => { if (!freeOpen) return; const dw = (new Date(date + 'T12:00:00').getDay() + 6) % 7;
-    supabase.from('staff_weekly').select('staff_id,status,from_time').eq('dow', dw).neq('status', 'no').then(({ data }) => setWeekly((data ?? []) as { staff_id: string; status: string; from_time: string | null }[])); }, [freeOpen, date]);
+  useEffect(() => { setPhOpen(null); setFreeOpen(false); setAsked({}); setPhP(null); setPhAdd(null); }, [date]);
+  useEffect(() => { if (!v6) return; const ids = sh.map((x) => x.id); if (!ids.length) { setSwBy({}); return; }
+    supabase.from('switch_asks').select('id,shift_id,to_label').in('shift_id', ids).eq('status', 'asked').then(({ data, error }) => { if (error) return;
+      setSwBy(Object.fromEntries(((data ?? []) as { id: string; shift_id: string; to_label: string | null }[]).map((r) => [r.shift_id, { id: r.id, to_label: r.to_label }]))); }); }, [v6, sh]);
+  useEffect(() => { if (!freeOpen && !phAdd) return; const dw = (new Date(date + 'T12:00:00').getDay() + 6) % 7;
+    supabase.from('staff_weekly').select('staff_id,status,from_time').eq('dow', dw).neq('status', 'no').then(({ data }) => setWeekly((data ?? []) as { staff_id: string; status: string; from_time: string | null }[])); }, [freeOpen, !!phAdd, date]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { (async () => {
     try { const d = await loadDay(date); setEvs(d.evs); setSh(d.sh); setAv(d.av); setOff(d.off); setCx(d.cx); } catch (x) { setErr((x as Error).message); }
@@ -386,14 +392,14 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
     const e = evs.find((x) => x.id === s.event_id); const n = wn[s.staff_id] ?? 0;
     const w = [why[s.id] ? `✦ ${why[s.id]}` : null, e && ctx ? whyText(s.staff_id, e, ctx, sh.filter((x) => x.event_id === s.event_id && x.staff_id !== s.staff_id).map((x) => x.staff_id), n, a) : null,
       s.locked ? 'locked' : null, !s.pool_hold ? (s.status === 'confirmed' ? 'confirmed' : s.notified_at ? 'sent' : 'booked') : null].filter(Boolean).join(' · ');
-    return <span data-sid={s.staff_id} className={'ds-chip' + (can ? '' : ' fixed') + (flagged[s.id] ? ' over' : '') + (hl === s.staff_id ? ' hl' : '')} draggable onDragStart={(ev) => { ev.dataTransfer.setData('text/plain', s.id); ev.dataTransfer.effectAllowed = 'move'; setDrag(s); }} onDragEnd={() => setDrag(null)} title={v6 ? `${nm}${s.planned_start ? ` · from ${ap(hm(s.planned_start))}` : ''}${s.locked ? ' · locked' : ''}` : `${nm} · ${w}${s.booking_note ? ` · 📌 ${s.booking_note}` : ''}${s.pool_hold ? ' · moving them sends nothing' : ' · already sent: moving them sends "Your shift changed" (asked first)'} · click = options`} onClick={() => setCard(s)}>
+    return <span data-sid={s.staff_id} className={'ds-chip' + (can ? '' : ' fixed') + (flagged[s.id] ? ' over' : '') + (hl === s.staff_id ? ' hl' : '')} draggable onDragStart={(ev) => { ev.dataTransfer.setData('text/plain', s.id); ev.dataTransfer.effectAllowed = 'move'; setDrag(s); }} onDragEnd={() => setDrag(null)} title={v6 ? `${nm}${s.planned_start ? ` · from ${ap(hm(s.planned_start))}` : ''}${s.locked ? ' · locked' : ''}` : `${nm} · ${w}${s.booking_note ? ` · 📌 ${s.booking_note}` : ''}${s.pool_hold ? ' · moving them sends nothing' : ' · already sent: moving them sends "Your shift changed" (asked first)'} · click = options`} onClick={() => (narrow && v6 ? setPhP({ s, v: 'menu' }) : setCard(s))}>
       {v6 ? (s.status === 'confirmed' ? <i className="v6m ok" title="Confirmed">✓</i> : !s.pool_hold && s.notified_at ? <i className="v6m sent" title="Sent, waiting for a reply">◷</i> : null)
-        : <i className={'ds-sd' + (s.status === 'confirmed' ? ' ok' : !s.pool_hold && s.notified_at ? ' sent' : '')} title={s.status === 'confirmed' ? 'Confirmed' : !s.pool_hold && s.notified_at ? 'Sent, not confirmed yet' : 'Placed, not sent yet'} />}<span className="ds-nm">{nm}</span>{ctx && isNewStaff(ctx, s.staff_id) ? <small className="ds-new" title="New: came through onboarding">NEW</small> : null}{v6 ? <button className={'v6-lk' + (s.locked ? ' on' : '')} disabled={busy} draggable={false} title={s.locked ? 'Locked · Fill and Clear leave them here · click to unlock' : 'Lock · Fill and Clear leave them here'}
+        : <i className={'ds-sd' + (s.status === 'confirmed' ? ' ok' : !s.pool_hold && s.notified_at ? ' sent' : '')} title={s.status === 'confirmed' ? 'Confirmed' : !s.pool_hold && s.notified_at ? 'Sent, not confirmed yet' : 'Placed, not sent yet'} />}<span className="ds-nm">{nm}{narrow && v6 && swBy[s.id] ? <small className="ph-sw">Asked to switch → {swBy[s.id].to_label} · waiting</small> : null}</span>{ctx && isNewStaff(ctx, s.staff_id) ? <small className="ds-new" title="New: came through onboarding">NEW</small> : null}{v6 ? <button className={'v6-lk' + (s.locked ? ' on' : '')} disabled={busy} draggable={false} title={s.locked ? 'Locked · Fill and Clear leave them here · click to unlock' : 'Lock · Fill and Clear leave them here'}
           onClick={(ev) => { ev.stopPropagation(); void patch(s, { locked: s.locked ? false : true, locked_at: new Date().toISOString() }, s.locked ? 'unlocked' : 'locked'); }}>{s.locked ? '🔒' : '🔓'}</button>
           : s.locked ? <small className="ds-lk" title="Locked">locked</small> : null}{own ? <small className="ds-own" title={`Starts at ${ap(own)} (line ${ap(at)})`}>{ap(own)}</small> : late ? <small className="gold"> from {ap(a!.from_time)}</small> : null}
       {!LEAD.includes(s.position_code ?? '') && <button className="ds-x" disabled={busy} onClick={(ev) => { ev.stopPropagation(); remove(s); }} aria-label={`Back to free: ${nm}`}>×</button>}</span>; };
   const Slot = ({ e, code, start }: { e: Ev; code: string; start: string | null }) =>
-    <button className={'ds-slot' + (v6 ? ' v6' : '')} onClick={() => setPick({ e, code, start })} onDragOver={(ev) => ev.preventDefault()} onDrop={() => dropOn(e, code, start)}>{v6 ? 'open' : '+ add'}</button>;
+    <button className={'ds-slot' + (v6 ? ' v6' : '')} onClick={() => (narrow && v6 ? setPhAdd({ e, code, start }) : setPick({ e, code, start }))} onDragOver={(ev) => ev.preventDefault()} onDrop={() => dropOn(e, code, start)}>{narrow && v6 ? <><i className="ph-od" />Open spot</> : v6 ? 'open' : '+ add'}</button>;
   const Step = ({ n, on }: { n: number; on: (n: number) => void }) => <span className="ds-step"><button disabled={busy} onClick={() => on(n - 1)} aria-label="One less">−</button><b>{n}</b><button disabled={busy} onClick={() => on(n + 1)} aria-label="One more">+</button></span>;
   const TimePop = ({ e, k, start, title, onSet, people }: { e: Ev; k: string; start: string | null; title: string; onSet: (t: string) => void; people?: Sh[] }) => (
     ed?.eid === e.id && ed.key === k ? portalIf(narrow, <span className={'ds-tpop' + (narrow ? ' ph' : '')} onClick={(ev) => ev.stopPropagation()}><b>{title}</b>
@@ -504,6 +510,12 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
   });
   const askStart = (ids: string[]) => { const e0 = shown.find((e) => isBar(e) === (fsDept === 'bar')) ?? shown[0]; const l0 = e0 ? evLines(e0).find((l) => l.open > 0) ?? evLines(e0)[0] : null;
     setAskQ({ ids, ev: e0?.id ?? '', t: l0?.start ?? e0?.start_time?.slice(0, 5) ?? '' }); };
+  const askPanel = askQ && <div className="ph-askq"><b>Ask {askQ.ids.length === 1 ? byId[askQ.ids[0]]?.full_name : `${askQ.ids.length} people`} for {dLabel(date, { weekday: 'short', month: 'short', day: 'numeric' })}?</b>
+        {soon ? <><label><small>Event</small><select value={askQ.ev} onChange={(ev) => { const e = evs.find((x) => x.id === ev.target.value); const l = e ? evLines(e).find((x) => x.open > 0) ?? evLines(e)[0] : null; setAskQ({ ...askQ, ev: ev.target.value, t: l?.start ?? '' }); }}>{shown.map((e) => <option key={e.id} value={e.id}>{e.title || e.venues?.name}</option>)}</select></label>
+          <label><small>Time</small><select value={askQ.t} onChange={(ev) => setAskQ({ ...askQ, t: ev.target.value })}>{!Q15.includes(askQ.t) && <option value={askQ.t}>{askQ.t ? ap(askQ.t) : '—'}</option>}{Q15.map((q) => <option key={q} value={q}>{ap(q)}</option>)}</select></label>
+          <small className="muted">They see: {(() => { const e = evs.find((x) => x.id === askQ.ev); return `${e?.venues?.name ?? e?.title ?? ''}${askQ.t ? ` · ${ap(askQ.t)}` : ''}`; })()}</small></>
+          : <small className="muted">They’re asked for the day. It’s more than 3 days away.</small>}
+        <span className="row" style={{ gap: 6 }}><button className="abtn dark" disabled={busy} onClick={() => sendAsk(askQ.ids, askQ.ev, askQ.t)}>Send the ask</button><button className="abtn" onClick={() => setAskQ(null)}>Cancel</button></span></div>;
   const freeSheet = freeOpen && createPortal(<div className="ph-back" onClick={() => { setFreeOpen(false); setBookFor(null); setAskQ(null); }}>
     <div className="ph-sheet" onClick={(ev) => ev.stopPropagation()}>
       <span className="ph-grip" />
@@ -524,18 +536,78 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
       {!fsUsual.length && <div className="ph-none">Nobody else</div>}
       {fsUsual.map((w) => <div key={w.staff_id} className="ph-fr">{tierB(w.staff_id)}<span className="ph-nm"><b>{byId[w.staff_id]?.full_name ?? '…'}</b><small>{w.from_time ? `Usually from ${ap(w.from_time.slice(0, 5))}` : 'Usually any time'}</small></span>
         <button className="ph-ask" disabled={busy} onClick={() => askStart([w.staff_id])}>Ask</button></div>)}
-      {askQ && <div className="ph-askq"><b>Ask {askQ.ids.length === 1 ? byId[askQ.ids[0]]?.full_name : `${askQ.ids.length} people`} for {dLabel(date, { weekday: 'short', month: 'short', day: 'numeric' })}?</b>
-        {soon ? <><label><small>Event</small><select value={askQ.ev} onChange={(ev) => { const e = evs.find((x) => x.id === ev.target.value); const l = e ? evLines(e).find((x) => x.open > 0) ?? evLines(e)[0] : null; setAskQ({ ...askQ, ev: ev.target.value, t: l?.start ?? '' }); }}>{shown.map((e) => <option key={e.id} value={e.id}>{e.title || e.venues?.name}</option>)}</select></label>
-          <label><small>Time</small><select value={askQ.t} onChange={(ev) => setAskQ({ ...askQ, t: ev.target.value })}>{!Q15.includes(askQ.t) && <option value={askQ.t}>{askQ.t ? ap(askQ.t) : '—'}</option>}{Q15.map((q) => <option key={q} value={q}>{ap(q)}</option>)}</select></label>
-          <small className="muted">They see: {(() => { const e = evs.find((x) => x.id === askQ.ev); return `${e?.venues?.name ?? e?.title ?? ''}${askQ.t ? ` · ${ap(askQ.t)}` : ''}`; })()}</small></>
-          : <small className="muted">They’re asked for the day. It’s more than 3 days away.</small>}
-        <span className="row" style={{ gap: 6 }}><button className="abtn dark" disabled={busy} onClick={() => sendAsk(askQ.ids, askQ.ev, askQ.t)}>Send the ask</button><button className="abtn" onClick={() => setAskQ(null)}>Cancel</button></span></div>}
+      {askPanel}
     </div></div>, document.body);
+
+  // ── Nov 26 · Bookings V2 on the phone: tap a name / tap an open spot ──
+  const lineName = (code: string, start: string | null, e: Ev) => { const L = lays[e.id]; const l = L.lines.find((x) => x.code === code && x.start === start);
+    return l ? `${l.count} ${plural(code, l.count)} · ${start ? ap(start) : 'TBC'}` : L.extras.code === code && L.extras.start === start ? `Extras · ${start ? ap(start) : 'TBC'}` : `${roleName(code)} · ${start ? ap(start) : 'TBC'}`; };
+  const evName = (e?: Ev | null) => e?.venues?.name ?? e?.title ?? '';
+  const closeP = () => { setPhP(null); setPhQ(''); };
+  const askSwitch = (s0: Sh, to: { e: Ev; code: string; start: string | null }) => run(async () => {
+    const e0 = evs.find((x) => x.id === s0.event_id); const t = to.start ?? to.e.start_time?.slice(0, 5) ?? '17:00';
+    const { error } = await supabase.from('switch_asks').insert({ shift_id: s0.id, staff_id: s0.staff_id, to_event_id: to.e.id, to_code: to.code, to_detail: roleName(to.code), to_start: startIso(date, t),
+      from_label: `${evName(e0)} · ${ap(hm(s0.planned_start))}`, to_label: `${evName(to.e)} · ${ap(t)}` });
+    if (error) throw error; closeP(); return `Asked ${short(nm0(s0))} to switch to ${evName(to.e)}.`;
+  });
+  const takeBack = (s0: Sh) => run(async () => { const a = swBy[s0.id]; if (!a) return; const { error } = await supabase.from('switch_asks').update({ status: 'cancelled' }).eq('id', a.id); if (error) throw error; closeP(); return 'Question taken back.'; });
+  const said = (dpt: 'floor' | 'bar') => av.filter((a) => a.status === 'yes' && !a.released_at && !onDay.has(a.staff_id) && !off.has(a.staff_id) && aDept(a) === dpt).sort((a, b) => sortP(a.staff_id, b.staff_id));
+  const anyone = (q: string) => { const w = q.trim().toLowerCase().split(/\s+/).filter(Boolean); if (w.join('').length < 2) return [];
+    return staff.filter((p) => p.active && !onDay.has(p.id) && w.every((x) => p.full_name.toLowerCase().includes(x))).slice(0, 8); };
+  const pRow = (id: string, sub: string, btn: ReactElement) => <div key={id} className="ph-fr">{tierB(id)}<span className="ph-nm"><b>{byId[id]?.full_name ?? '…'}</b><small>{sub}</small></span>{btn}</div>;
+  const timeQuick = (base: string | null) => { const [h, m] = (base ?? '17:00').split(':').map(Number); const b0 = h * 60 + m;
+    return [-60, -30, -15, 15, 30, 60].map((d) => { const x = b0 + d; return `${String(Math.floor(((x % 1440) + 1440) % 1440 / 60)).padStart(2, '0')}:${String(((x % 60) + 60) % 60).padStart(2, '0')}`; }); };
+  const phSheet = (body: ReactElement, close: () => void) => createPortal(<div className="ph-back" onClick={close}><div className="ph-sheet" onClick={(ev) => ev.stopPropagation()}><span className="ph-grip" />{body}</div></div>, document.body);
+  const personSheet = phP && (() => { const s0 = sh.find((x) => x.id === phP.s.id) ?? phP.s; const e0 = evs.find((x) => x.id === s0.event_id); const nm = nm0(s0);
+    const dpt: 'floor' | 'bar' = e0 && isBar(e0) ? 'bar' : 'floor'; const tel = byId[s0.staff_id]?.phone?.replace(/[^\d+]/g, '');
+    const head = <div className="ph-phead"><b>{phP.v === 'menu' ? nm : phP.v === 'replace' ? `Replace ${short(nm)}` : phP.v === 'move' ? `Move ${short(nm)}` : phP.v === 'time' ? `${short(nm)}’s start` : phP.v === 'how' ? `Move ${short(nm)}?` : nm}</b>
+      <small>{phP.v === 'how' ? `Already sent ${evName(e0)} · ${ap(hm(s0.planned_start))}` : `${roleName(s0.position_code)} · ${ap(hm(s0.planned_start))}`}</small></div>;
+    let body: ReactElement;
+    if (phP.v === 'menu') body = <>{head}{swBy[s0.id] && <div className="ph-swn">Asked to switch → {swBy[s0.id].to_label}</div>}
+      <div className="ph-acts">
+        <button onClick={() => setPhP({ s: s0, v: 'replace' })}>Replace</button>
+        <button onClick={() => setPhP({ s: s0, v: 'move' })}>Move</button>
+        <button onClick={() => { setPhT(hm(s0.planned_start)); setPhP({ s: s0, v: 'time' }); }}>Change time</button>
+        {s0.status !== 'confirmed' && <button onClick={() => { closeP(); markConfirmed(s0); }}>Mark confirmed</button>}
+        {tel && <button onClick={() => setPhP({ s: s0, v: 'call' })}>Call or text</button>}
+        {swBy[s0.id] && <button onClick={() => takeBack(s0)}>Take back the question</button>}
+        <button className="red" onClick={() => { closeP(); setCancelQ(s0); }}>Cancel</button></div></>;
+    else if (phP.v === 'replace') { const list = said(dpt); const found = anyone(phQ);
+      body = <>{head}<input className="ph-search" placeholder="Find anyone" value={phQ} onChange={(ev) => setPhQ(ev.target.value)} />
+        {found.length > 0 ? found.map((p) => pRow(p.id, av.find((a) => a.staff_id === p.id)?.status === 'yes' ? 'Said yes' : 'Not asked', <button className="ph-btn dark" disabled={busy} onClick={() => { closeP(); patch(s0, { staff_id: p.id }, `replaced by ${p.full_name}`); }}>Use</button>))
+          : <><div className="ph-g">SAID YES</div>{!list.length && <div className="ph-none">Nobody free</div>}
+            {list.map((a) => pRow(a.staff_id, a.from_time ? `From ${ap(a.from_time.slice(0, 5))}` : 'Any time', <button className="ph-btn dark" disabled={busy} onClick={() => { closeP(); patch(s0, { staff_id: a.staff_id }, `replaced by ${byId[a.staff_id]?.full_name ?? ''}`); }}>Use</button>))}</>}</>; }
+    else if (phP.v === 'move' || phP.v === 'how') { const to = phP.to;
+      if (phP.v === 'how' && to) body = <>{head}<div className="ph-how">
+        <button className="on" disabled={busy} onClick={() => askSwitch(s0, to)}>Ask {short(nm).split(' ')[0]} first</button>
+        <button disabled={busy} onClick={() => { closeP(); move(s0, to.e, to.code, to.start); }}>Move now and tell {short(nm).split(' ')[0]}</button></div></>;
+      else body = <>{head}<div className="ph-now">Now <b>{evName(e0)} · {lineName(s0.position_code ?? 'W', hm(s0.planned_start), e0!)}</b></div>
+        {shown.map((e) => <div key={e.id} className="ph-mev"><div className="ph-mevh"><b>{evName(e)}</b><i>{isBar(e) ? 'BAR' : 'FLOOR'}</i></div>
+          {evLines(e).map((l) => { const here = e.id === s0.event_id && l.code === s0.position_code && l.start === hm(s0.planned_start); const sel = to && to.e.id === e.id && to.code === l.code && to.start === l.start;
+            return <button key={l.k} disabled={here} className={'ph-ml' + (here ? ' here' : '') + (sel ? ' sel' : '')} onClick={() => setPhP({ s: s0, v: 'move', to: { e, code: l.code, start: l.start } })}>
+              <i className="ph-radio" /><span>{l.label} · {l.start ? ap(l.start) : 'TBC'}</span>{here ? <small>Now</small> : l.open ? <em>{l.open} open</em> : <small>full</small>}</button>; })}</div>)}
+        <button className="ph-go" disabled={!to || busy} onClick={() => { if (!to) return; if (!s0.pool_hold) setPhP({ s: s0, v: 'how', to }); else { closeP(); move(s0, to.e, to.code, to.start); } }}>{to ? `Move to ${evName(to.e)} · ${to.start ? ap(to.start) : 'TBC'}` : 'Pick a line'}</button></>; }
+    else if (phP.v === 'time') body = <>{head}<div className="ds-tq">{timeQuick(hm(s0.planned_start)).map((t) => <button key={t} onClick={() => { closeP(); patch(s0, { planned_start: startIso(date, t) }, `time → ${ap(t)}`); }}>{ap(t)}</button>)}</div>
+      <span className="row" style={{ gap: 6, marginTop: 8 }}><select className="ds-tsel" style={{ flex: 1, height: 40 }} value={phT} onChange={(ev) => setPhT(ev.target.value)}>{!Q15.includes(phT) && <option value={phT}>{ap(phT)}</option>}{Q15.map((q) => <option key={q} value={q}>{ap(q)}</option>)}</select>
+        <button className="abtn dark" disabled={!phT || phT === hm(s0.planned_start)} onClick={() => { closeP(); patch(s0, { planned_start: startIso(date, phT) }, `time → ${ap(phT)}`); }}>Set</button></span></>;
+    else body = <>{head}<a className="ph-go" href={`tel:${tel}`}>Call</a><a className="ph-go line" href={`sms:${tel}`}>Text</a></>;
+    return phSheet(body, closeP); })();
+  const addSheet = phAdd && (() => { const { e, code, start } = phAdd; const dpt: 'floor' | 'bar' = isBar(e) ? 'bar' : 'floor'; const found = anyone(phQ); const list = said(dpt);
+    const add = (id: string) => { setPhAdd(null); setPhQ(''); place(id, e, code, start); };
+    const usual = weekly.filter((w) => byId[w.staff_id]?.active && !/app review|unranked|test/i.test(byId[w.staff_id]?.full_name ?? '') && dptOf(w.staff_id) === dpt && !answered.has(w.staff_id) && !onDay.has(w.staff_id) && !off.has(w.staff_id) && !asked[w.staff_id]).sort((a, b) => sortP(a.staff_id, b.staff_id));
+    return phSheet(<><div className="ph-phead"><b>Add to {lineName(code, start, e)}</b><small>{evName(e)}</small></div>
+      <input className="ph-search" placeholder="Find anyone" value={phQ} onChange={(ev) => setPhQ(ev.target.value)} />
+      {found.length > 0 ? found.map((p) => pRow(p.id, av.find((a) => a.staff_id === p.id)?.status === 'yes' ? 'Said yes' : 'Not asked', <button className="ph-btn dark" disabled={busy} onClick={() => add(p.id)}>Add</button>))
+        : <><div className="ph-g">SAID YES</div>{!list.length && <div className="ph-none">Nobody free</div>}
+          {list.map((a) => pRow(a.staff_id, a.from_time ? `From ${ap(a.from_time.slice(0, 5))}` : 'Any time', <button className="ph-btn dark" disabled={busy} onClick={() => add(a.staff_id)}>Add</button>))}
+          {usual.length > 0 && <><div className="ph-g">USUALLY FREE {dLabel(date, { weekday: 'long' }).toUpperCase()}S</div>
+            {usual.map((w) => pRow(w.staff_id, w.from_time ? `Usually from ${ap(w.from_time.slice(0, 5))}` : 'Usually any time', <button className="ph-ask" disabled={busy} onClick={() => { setFsDept(dpt); setAskQ({ ids: [w.staff_id], ev: e.id, t: start ?? '' }); }}>Ask</button>))}</>}</>}
+      {askPanel}</>, () => { setPhAdd(null); setPhQ(''); setAskQ(null); }); })();
 
   return (
     <div className={'stack-lg ds' + (v6 ? ' ds-v6' : '')}>
       {!v6 && <div className="kick"><Link to={`/admin/bookings?date=${date}&view=sheet`}>Bookings · week</Link> · DAY SHEET</div>}
-      {v6 && narrow ? <>{phoneTop}{freeSheet}</> : <>
+      {v6 && narrow ? <>{phoneTop}{freeSheet}{personSheet}{addSheet}</> : <>
       <div className="ds-weekw"><Link className="ds-warr" to={`${base}/${addDays(date, -7)}`} title="Week before">‹</Link><div className="ds-week">{week.map((w) => <Link key={w.d} to={`${base}/${w.d}`} className={'ds-wd' + (w.d === date ? ' on' : '') + (!w.n ? ' none' : w.have >= w.need ? ' done' : ' short')}>
         <small>{dLabel(w.d, { weekday: 'short', day: 'numeric' })}</small><b>{w.n ? `${w.have}/${w.need}` : '—'}</b><small>{w.n ? `${w.n} event${w.n > 1 ? 's' : ''}${w.free && !v6 ? ` · ${w.free} free` : ''}` : 'no events'}</small></Link>)}</div><Link className="ds-warr" to={`${base}/${addDays(date, 7)}`} title="Next week">›</Link></div>
       {v6 ? <>
@@ -604,6 +676,9 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
                   {need > have && <button className="lnk sm" disabled={busy || !ctx} onClick={() => fillDay(e)} title="Fill this event only">Fill</button>}
                   {sh.some((x) => x.event_id === e.id && x.pool_hold && !x.locked && !LEAD.includes(x.position_code ?? '')) && <button className="lnk sm muted" disabled={busy} onClick={() => clear(e)}>Clear</button>}
                   <Link className="lnk sm" to={`/admin/event/${e.id}`}>{v6 ? 'Full event ›' : 'Event ›'}</Link></div>
+                {narrow && v6 && <div className="ph-chips"><button className={detOpen(e.id) ? 'on' : ''} onClick={() => togDet(e.id)}>Details</button><Link to={`/admin/event/${e.id}`}>Full event</Link>
+                  <button onClick={() => setAdd({ eid: e.id, code: isBar(e) ? 'BT' : 'W', count: '1', t: (e.staffing ?? []).slice(-1)[0]?.start ?? e.start_time?.slice(0, 5) ?? 'TBC' })}>+ Line</button>
+                  {need > have && <button disabled={busy || !ctx} onClick={() => fillDay(e)}>Fill</button>}</div>}
                 {v6 ? <DetailsV6 e={e} pv={priv[e.id]} open={detOpen(e.id)} onToggle={() => togDet(e.id)} venues={ctx?.venues ?? []} clients={ctx?.clients ?? []} types={types} busy={busy}
                   onEv={(row, label) => saveEv(e, row, label)} onPriv={(row, label) => savePriv(e, row, label)} onVenue={(v) => setVenue(e, v)} onClient={(c) => saveClient(e, c)} onType={(t) => setType(e, t)} />
                 : <Details e={e} open={detOpen(e.id)} onToggle={() => togDet(e.id)} venues={ctx?.venues ?? []} clients={ctx?.clients ?? []} types={types} busy={busy}
@@ -626,6 +701,7 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
                       <button className="abtn sm" disabled={busy} onClick={() => { unflag(x.id); const ex = L.extras.start; if (ex && hm(x.planned_start) !== ex) patch(x, { planned_start: startIso(date, ex) }, 'to extras'); }}>Make extra</button>
                       <button className="abtn sm" disabled={busy} onClick={() => { unflag(x.id); remove(x); }}>Back to Free</button>
                       <button className="lnk sm muted" onClick={() => unflag(x.id)}>Keep</button></span>)}</div>; })()}
+                  {narrow && v6 && <button className="ph-addp" onClick={() => setPhAdd({ e, code: L.extras.code || (isBar(e) ? 'BT' : 'W'), start: L.extras.start ?? e.start_time?.slice(0, 5) ?? null })}>+ Add someone</button>}
                   {v6 ? (add?.eid === e.id ? <div className="v6-row v6-new">
                       <select className="v6-n" value={add.count} onChange={(ev) => setAdd({ ...add, count: ev.target.value })}>{[...Array(30)].map((_, i) => <option key={i + 1} value={i + 1}>{i + 1}</option>)}</select>
                       <select className="ds-lsel" value={add.code} onChange={(ev) => setAdd({ ...add, code: ev.target.value })}>{[...ROLES.filter((r) => (isBar(e) ? r.dept === 'bar' : r.dept === 'floor')), ...ROLES.filter((r) => (isBar(e) ? r.dept !== 'bar' : r.dept !== 'floor'))].map((r) => <option key={r.code} value={r.code}>{plural(r.code, 2)}</option>)}<option value="EX">Extras</option></select>
