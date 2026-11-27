@@ -6,6 +6,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { UniPick } from '../components/UniPick';
+import { createPortal } from 'react-dom';
+import type { ReactElement } from 'react';
+/** Nov 26 · on the phone the time picker sits above everything (a portal), centred, with a dim backdrop */
+const portalIf = (on: boolean, el: ReactElement) => (on ? createPortal(<div className="ds-tback" onClick={(ev) => ev.stopPropagation()}>{el}</div>, document.body) : el);
 import { supabase } from '../lib/supabase';
 import { UNIFORMS, addDays, dLabel, eventsBetween, isoDay, roleName, startIso, type AEvent, type AShift, type AStaff } from './api';
 import { ReplaceSheet } from './Replace';
@@ -385,11 +389,12 @@ export function DaySheet({ v6 = false }: { v6?: boolean } = {}) {
     <button className={'ds-slot' + (v6 ? ' v6' : '')} onClick={() => setPick({ e, code, start })} onDragOver={(ev) => ev.preventDefault()} onDrop={() => dropOn(e, code, start)}>{v6 ? 'open' : '+ add'}</button>;
   const Step = ({ n, on }: { n: number; on: (n: number) => void }) => <span className="ds-step"><button disabled={busy} onClick={() => on(n - 1)} aria-label="One less">−</button><b>{n}</b><button disabled={busy} onClick={() => on(n + 1)} aria-label="One more">+</button></span>;
   const TimePop = ({ e, k, start, title, onSet, people }: { e: Ev; k: string; start: string | null; title: string; onSet: (t: string) => void; people?: Sh[] }) => (
-    ed?.eid === e.id && ed.key === k ? <span className="ds-tpop" onClick={(ev) => ev.stopPropagation()}><b>{title}</b>
+    ed?.eid === e.id && ed.key === k ? portalIf(narrow, <span className={'ds-tpop' + (narrow ? ' ph' : '')} onClick={(ev) => ev.stopPropagation()}><b>{title}</b>
       {/^\d+$/.test(k) && !e.staffing?.[Number(k)]?.tbc && <button className="abtn sm v6-tbcb" onClick={() => setTbc(e, Number(k))}>TBC</button>}
       <span className="ds-tq">{(() => { const [h, m] = (start ?? '17:00').split(':').map(Number); const b0 = h * 60 + m; return [-60, -30, -15, 15, 30, 60].map((d) => { const x = b0 + d; const t = `${String(Math.floor(((x % 1440) + 1440) % 1440 / 60)).padStart(2, '0')}:${String(((x % 60) + 60) % 60).padStart(2, '0')}`; return <button key={d} onClick={() => onSet(t)}>{ap(t)}</button>; }); })()}</span>
       <span className="row" style={{ gap: 6 }}><select className="ds-tsel" value={edT} onChange={(ev) => setEdT(ev.target.value)}>{!Q15.includes(edT) && <option value={edT}>{edT ? ap(edT) : '—'}</option>}{Q15.map((q) => <option key={q} value={q}>{ap(q)}</option>)}</select><button className="abtn sm dark" disabled={!edT || edT === start} onClick={() => onSet(edT)}>Set</button></span>
-</span> : null);
+      {narrow && <button className="abtn sm ds-tclose" onClick={() => setEd(null)}>Cancel</button>}
+</span>) : null);
   const tBtn = (e: Ev, k: string, start: string | null) => <button className={'ds-tbtn' + (ed?.eid === e.id && ed.key === k ? ' on' : '')} disabled={busy} onClick={() => { setEdT(start ?? ''); setEd(ed?.eid === e.id && ed.key === k ? null : { eid: e.id, key: k }); }}>{ap(start)}</button>;
   /** push 123 · each line = a band on top (desktop: position · − n + · start · end, all clickable · phone: "6 Barbacks · 12 PM" + ✎) and the names under it, 5 across. */
   const Row = ({ e, code, start, end, count, people, extra, idx, lead }: { e: Ev; code: string; start: string | null; end?: string | null; count: number; people: Sh[]; extra?: boolean; idx?: number; lead?: boolean }) => {
