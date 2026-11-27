@@ -5272,3 +5272,12 @@ span.abtn.ds-newq { background: none; border: 0; padding: 0; }
 .sk-grp button.on { background: #1A1714; border-color: #1A1714; color: #fff; font-weight: 700; }
 .sk-line { display: block; color: #8A8177; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; font-weight: 500; }
 .rk-name .sk-line { flex-basis: 100%; }
+/* Nov 26 · manager page: position under the photo (whole word), Taking hours section (gold) */
+.crew .ring.tap { overflow: visible; }
+.pos-badge { position: absolute; bottom: -7px; left: 50%; transform: translateX(-50%); font-style: normal; font-size: 8px; font-weight: 800; letter-spacing: .05em; color: #fff; background: #1A1714; border: 2px solid #fff; border-radius: 6px; padding: 1px 5px; white-space: nowrap; line-height: 1.3; z-index: 1; }
+.ring.tap .new-badge { bottom: auto; top: -8px; }
+.crew { overflow: visible; }
+.crew.hrs { box-shadow: inset 0 0 0 1.5px #B8860B; }
+.crew.hrs .ring { box-shadow: 0 0 0 2px #B8860B, 0 0 0 4px #F6EBCF; border-radius: 50%; }
+.hrs-head .hrs-t { font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #9A7209; }
+.hrs-head .grp-rule { background: #EAD9B0; }

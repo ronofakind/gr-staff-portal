@@ -466,7 +466,75 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
   const myRow = rows.find((r) => r.staff_id === me?.id); const myBarSide = myRow ? isBarPos(myRow.position_code, myRow.position_detail) : null;
   const mySide = (r: Row) => myBarSide === null || isBarPos(r.position_code, r.position_detail) === myBarSide;
   const newRows = active.filter((r) => { const i = infoOf(r); return r.staff_id !== me?.id && mySide(r) && !!i?.is_new && i.done_before < newUnder; });
-  const groups = Array.from(new Set(rows.map((r) => r.planned_start)));
+  // Nov 26 · whoever can take hours (MD / bar manager + co-managers) sits once, at the top, in Taking hours
+  const isHrs = (r: Row) => !!r.staff_id && (r.staff_id === ev.manager_id || (ev.co_manager_ids ?? []).includes(r.staff_id));
+  const hrsRows = rows.filter(isHrs);
+  const groups = Array.from(new Set(rows.filter((r) => !isHrs(r)).map((r) => r.planned_start)));
+  // Nov 26 · one row renderer for the Taking hours section and the time blocks
+  const crewRow = (r: Row) => {
+              const pin = r.punches?.punch_in ?? null; const pout = r.punches?.punch_out ?? null;
+              const isLate = !r.attendance && !pin && new Date(r.planned_start).getTime() < Date.now();
+              const callMs = new Date(r.planned_start).getTime();
+              const ended = !!pout && new Date(pout).getTime() <= nowMs; const endsLater = !!pout && !ended;
+              const isEarly = !!pin && new Date(pin).getTime() < callMs - 60000; const wasLate = !!pin && new Date(pin).getTime() > callMs + 10 * 60000;
+              const ln = lateOf(r); const lnPassed = !!ln && !pin && new Date(ln.eta).getTime() < Date.now();
+              const ring = r.attendance ? '' : ended ? 'done' : pin ? 'working' : ln && !lnPassed ? 'told' : isLate ? 'late' : '';
+              const fromRonnie = !!r.cancel_self && !!r.cancel_sent_to_manager;
+              const tel = r.staff?.phone?.replace(/[^\d+]/g, '');
+              const inf = infoOf(r); const isNew = !!inf?.is_new && inf.done_before < newUnder;
+              return (
+                <SwipeRow key={r.id} on={canUndo(r)} label={pout ? 'Undo end' : 'Undo start'} onAct={() => (pout ? undoEnd(r) : undoStart(r))}>
+                <div className={'crew' + (isHrs(r) ? ' hrs' : '') + (r.attendance ? ' flagged' : '') + (r.left_early ? ' left' : '') + (r.adder ? ' has-add' : '')}>
+                  <button className={'ring tap ' + ring + (isNew && !pin ? ' newp' : '')} aria-label={`Options for ${r.staff?.full_name}`} onClick={() => openRow(r, isNew)}>
+                    <Avatar name={r.staff?.full_name ?? '?'} url={r.staff?.photo_url} size={44} />
+                    {isNew && <i className="new-badge">NEW</i>}
+                    <i className="pos-badge">{roleLabel(r.position_code, r.position_detail).toUpperCase()}</i>
+                  </button>
+                  <button className="who" aria-label={`Options for ${r.staff?.full_name}`} onClick={() => openRow(r, isNew)}>
+                    <span className="nm">{r.staff ? teamName(r.staff) : ''}{r.ends_own && !r.punches?.late_entry_at && <i className="own-tag">ENDS OWN</i>}{r.punches?.late_entry_at && <i className="late-tag">{r.punches.late_ok_at ? '✓ ' : ''}ENTERED LATER</i>}{xIds.has(r.id) && !r.attendance && <i className="x-tag">EXTRA</i>}{r.cut_first_at && !r.attendance && !r.punches?.punch_out && <i className="fc-tag" title={`Asked ${time(r.cut_first_at, lang)} · cut first if you can`}>FIRST CUT ✋</i>}</span>
+                    {fromRonnie && <span><i className="p28-tag red">CANCELLED{r.attendance === 'no_show' ? ' · NO-SHOW' : ''} · FROM RONNIE</i></span>}
+                    {r.replacement_for && !r.attendance && <span><i className="p28-tag blue">REPLACEMENT · {fullT(r.planned_start)}</i></span>}
+                    {ln && !pin && !lnPassed && <span><i className="p28-tag gold">LATE ~{shortT(ln.eta)}{ln.reason ? ` · ${ln.reason.toUpperCase()}` : ''}{ln.seen_at ? ' · ✓ SEEN' : ''}</i></span>}
+                    {ln && lnPassed && <span><i className="p28-tag red">~{shortT(ln.eta)} PASSED · NOT IN YET</i></span>}
+                    {ln && pin && <span><i className="p28-tag green">IN {fullT(r.punches?.arrived_at ?? pin)} · TOLD AHEAD</i></span>}
+                    {(r.manager_note || (fbOn && inf?.fb_stars)) && <span className="rl">{[r.manager_note ? '📝 note' : '', fbOn && inf?.fb_stars ? `★ ${inf.fb_stars}` : ''].filter(Boolean).join(' · ')}</span>}
+                    {r.booking_note && !r.attendance && <span className="rl">📌 {r.booking_note}</span>}
+                    {!r.attendance && (() => {
+                      // push 46 · two shifts the same day: LEAVES <end> (another shift later) / COMING FROM <venue> (earlier shift)
+                      const os = r.staff_id ? otherSh[r.staff_id] ?? [] : []; const me0 = new Date(r.planned_start).getTime();
+                      const later = os.find((o) => new Date(o.start_at).getTime() > me0); const before = [...os].reverse().find((o) => new Date(o.start_at).getTime() < me0);
+                      const endIso = r.planned_end ?? (ev.end_time ? toIso(ev.event_date, ev.end_time.slice(0, 5), r.planned_start) : null);
+                      return <>
+                        {later && !ended && <><span><i className="p28-tag leaves">{endIso ? `LEAVES ${fullT(endIso)}` : 'ANOTHER SHIFT LATER'}</i></span><span className="two-line">Has another <Brand /> shift at {fullT(later.start_at)}.</span></>}
+                        {before && !pin && <><span><i className="p28-tag from">COMING FROM {before.venue.toUpperCase()}</i></span><span className="two-line">If their first shift runs late, you’ll see it here.</span></>}
+                      </>;
+                    })()}
+                    {!r.attendance && r.leave_by && !pout && <span><i className="p28-tag gold">⏱ MUST LEAVE BY {fullT(r.leave_by).toUpperCase()}</i></span>}
+                    {!r.attendance && rNote[r.id] && <span className="pin-line">📌 {rNote[r.id]}</span>}
+                    {fromRonnie ? <span className="st muted-st">Don’t wait for {first(r.staff?.full_name)}{r.attendance_reason ? ` · ${r.attendance_reason}` : ''}</span>
+                      : r.attendance ? <span className="st muted-st">{r.attendance === 'no_show' ? 'No-show' : 'Cancelled'}{r.attendance_reason ? ` · ${r.attendance_reason}` : ''}</span>
+                      : r.left_early && pin && pout ? <span className="st gold">{time(pin, lang)} → {time(pout, lang)} · {hours(pin, pout)} {t.hours}<i className="st-tag gold">LEFT EARLY</i></span>
+                      : ended ? <span className="st">{time(pin!, lang)} → {time(pout!, lang)} · {hours(pin!, pout!)} {t.hours}</span>
+                      : endsLater ? <span className="st gold">Working · ends {time(pout!, lang)}</span>
+                      : pin ? <span className="st ok">{new Date(pin).getTime() > nowMs ? 'Starts' : 'Started'} {time(pin, lang)}{isEarly ? <i className="st-tag">EARLY</i> : wasLate && !ln ? <i className="st-tag">LATE</i> : null}</span>
+                      : ln && !lnPassed ? <span className="st gold">Told ahead · starts {time(r.planned_start, lang)}</span>
+                      : isLate ? <span className="st red">Not here · {Math.round((Date.now() - new Date(r.planned_start).getTime()) / 60000)} min late</span>
+                      : <span className="st">Starts {time(r.planned_start, lang)}</span>}
+                  </button>
+                  {tel && (!r.attendance || (ln && lnPassed)) ? <>
+                    <a className="ic" href={`tel:${tel}`} aria-label={`Call ${r.staff!.full_name}`}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z" /></svg></a>
+                    <a className="ic" href={`sms:${tel}`} aria-label={`Text ${r.staff!.full_name}`}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg></a>
+                  </> : <><span className="ic ghost" aria-hidden="true" /><span className="ic ghost" aria-hidden="true" /></>}
+                  <div className="act-slot">
+                    {fromRonnie ? <span className="act done-mark" aria-hidden="true" />
+                      : r.attendance ? <button className="act undo" onClick={() => mark(r.id, null)}>Undo</button>
+                      : !pin ? (gate(r).kind === 'locked' ? <button className="act locked" disabled title={gate(r).label}>{t.start}</button> : <button className="act start" onClick={() => startRows([r])}>{t.start}</button>)
+                      : !ended ? <button className="act end" onClick={() => endRow(r, pin)}>{t.end}</button> : <span className="act done-mark">✓</span>}
+                  </div>
+                {r.adder && <div className="crew-add">＋ Added by {r.adder.full_name.split(' ')[0]}</div>}{/* Nov 15 · own line at the bottom (Ronnie: option D) */}</div>
+                </SwipeRow>
+              );
+  };
   const barN = active.filter((r) => isBar(r.position_code, r.position_detail)).length;
   const floorN = active.length - barN;
   const workingN = active.filter(isWorking).length;
@@ -580,8 +648,12 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
       })()}
 
       {(() => { const n = active.filter((r) => xIds.has(r.id)).length; return n > 0 ? <div className="x-note"><b>{n} extra{n === 1 ? '' : 's'} tonight</b> · tagged EXTRA below. Quiet night? Send them home first. Only you see this.</div> : null; })()}
+      {hrsRows.length > 0 && <section className="stack" style={{ gap: 10 }}>
+        <div className="grp-head hrs-head"><span className="hrs-t">Taking hours</span><span className="grp-n">{hrsRows.length}</span><span className="grp-rule" /></div>
+        {[...hrsRows].sort((a, b) => a.planned_start.localeCompare(b.planned_start)).map(crewRow)}
+      </section>}
       {groups.map((g) => {
-        const grp = rows.filter((r) => r.planned_start === g);
+        const grp = rows.filter((r) => r.planned_start === g && !isHrs(r));
         const notIn = grp.filter((r) => !r.attendance && !r.punches?.punch_in);
         return (
           <section key={g} className="stack" style={{ gap: 10 }}>
@@ -592,69 +664,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
                 : gate(notIn[0]).kind === 'locked' ? <span className="grp-st lock">{gate(notIn[0]).label}</span>
                 : <button className="btn-go" onClick={() => startRows(notIn)}>Start remaining ({notIn.length})</button>}
             </div>
-            {grp.map((r) => {
-              const pin = r.punches?.punch_in ?? null; const pout = r.punches?.punch_out ?? null;
-              const isLate = !r.attendance && !pin && new Date(r.planned_start).getTime() < Date.now();
-              const callMs = new Date(r.planned_start).getTime();
-              const ended = !!pout && new Date(pout).getTime() <= nowMs; const endsLater = !!pout && !ended;
-              const isEarly = !!pin && new Date(pin).getTime() < callMs - 60000; const wasLate = !!pin && new Date(pin).getTime() > callMs + 10 * 60000;
-              const ln = lateOf(r); const lnPassed = !!ln && !pin && new Date(ln.eta).getTime() < Date.now();
-              const ring = r.attendance ? '' : ended ? 'done' : pin ? 'working' : ln && !lnPassed ? 'told' : isLate ? 'late' : '';
-              const fromRonnie = !!r.cancel_self && !!r.cancel_sent_to_manager;
-              const tel = r.staff?.phone?.replace(/[^\d+]/g, '');
-              const inf = infoOf(r); const isNew = !!inf?.is_new && inf.done_before < newUnder;
-              return (
-                <SwipeRow key={r.id} on={canUndo(r)} label={pout ? 'Undo end' : 'Undo start'} onAct={() => (pout ? undoEnd(r) : undoStart(r))}>
-                <div className={'crew' + (r.attendance ? ' flagged' : '') + (r.left_early ? ' left' : '') + (r.adder ? ' has-add' : '')}>
-                  <button className={'ring tap ' + ring + (isNew && !pin ? ' newp' : '')} aria-label={`Options for ${r.staff?.full_name}`} onClick={() => openRow(r, isNew)}>
-                    <Avatar name={r.staff?.full_name ?? '?'} url={r.staff?.photo_url} size={44} />
-                    {isNew && <i className="new-badge">NEW</i>}
-                  </button>
-                  <button className="who" aria-label={`Options for ${r.staff?.full_name}`} onClick={() => openRow(r, isNew)}>
-                    <span className="nm">{r.staff ? teamName(r.staff) : ''}{(r.staff_id === ev.manager_id || (ev.co_manager_ids ?? []).includes(r.staff_id ?? '')) && <i className="mgr-tag">MANAGER</i>}{r.ends_own && !r.punches?.late_entry_at && <i className="own-tag">ENDS OWN</i>}{r.punches?.late_entry_at && <i className="late-tag">{r.punches.late_ok_at ? '✓ ' : ''}ENTERED LATER</i>}{xIds.has(r.id) && !r.attendance && <i className="x-tag">EXTRA</i>}{r.cut_first_at && !r.attendance && !r.punches?.punch_out && <i className="fc-tag" title={`Asked ${time(r.cut_first_at, lang)} · cut first if you can`}>FIRST CUT ✋</i>}</span>
-                    {fromRonnie && <span><i className="p28-tag red">CANCELLED{r.attendance === 'no_show' ? ' · NO-SHOW' : ''} · FROM RONNIE</i></span>}
-                    {r.replacement_for && !r.attendance && <span><i className="p28-tag blue">REPLACEMENT · {fullT(r.planned_start)}</i></span>}
-                    {ln && !pin && !lnPassed && <span><i className="p28-tag gold">LATE ~{shortT(ln.eta)}{ln.reason ? ` · ${ln.reason.toUpperCase()}` : ''}{ln.seen_at ? ' · ✓ SEEN' : ''}</i></span>}
-                    {ln && lnPassed && <span><i className="p28-tag red">~{shortT(ln.eta)} PASSED · NOT IN YET</i></span>}
-                    {ln && pin && <span><i className="p28-tag green">IN {fullT(r.punches?.arrived_at ?? pin)} · TOLD AHEAD</i></span>}
-                    <span className="rl">{roleLabel(r.position_code, r.position_detail)}{r.manager_note ? ' · 📝 note' : ''}{fbOn && inf?.fb_stars ? ` · ★ ${inf.fb_stars}` : ''}</span>
-                    {r.booking_note && !r.attendance && <span className="rl">📌 {r.booking_note}</span>}
-                    {!r.attendance && (() => {
-                      // push 46 · two shifts the same day: LEAVES <end> (another shift later) / COMING FROM <venue> (earlier shift)
-                      const os = r.staff_id ? otherSh[r.staff_id] ?? [] : []; const me0 = new Date(r.planned_start).getTime();
-                      const later = os.find((o) => new Date(o.start_at).getTime() > me0); const before = [...os].reverse().find((o) => new Date(o.start_at).getTime() < me0);
-                      const endIso = r.planned_end ?? (ev.end_time ? toIso(ev.event_date, ev.end_time.slice(0, 5), r.planned_start) : null);
-                      return <>
-                        {later && !ended && <><span><i className="p28-tag leaves">{endIso ? `LEAVES ${fullT(endIso)}` : 'ANOTHER SHIFT LATER'}</i></span><span className="two-line">Has another <Brand /> shift at {fullT(later.start_at)}.</span></>}
-                        {before && !pin && <><span><i className="p28-tag from">COMING FROM {before.venue.toUpperCase()}</i></span><span className="two-line">If their first shift runs late, you’ll see it here.</span></>}
-                      </>;
-                    })()}
-                    {!r.attendance && r.leave_by && !pout && <span><i className="p28-tag gold">⏱ MUST LEAVE BY {fullT(r.leave_by).toUpperCase()}</i></span>}
-                    {!r.attendance && rNote[r.id] && <span className="pin-line">📌 {rNote[r.id]}</span>}
-                    {fromRonnie ? <span className="st muted-st">Don’t wait for {first(r.staff?.full_name)}{r.attendance_reason ? ` · ${r.attendance_reason}` : ''}</span>
-                      : r.attendance ? <span className="st muted-st">{r.attendance === 'no_show' ? 'No-show' : 'Cancelled'}{r.attendance_reason ? ` · ${r.attendance_reason}` : ''}</span>
-                      : r.left_early && pin && pout ? <span className="st gold">{time(pin, lang)} → {time(pout, lang)} · {hours(pin, pout)} {t.hours}<i className="st-tag gold">LEFT EARLY</i></span>
-                      : ended ? <span className="st">{time(pin!, lang)} → {time(pout!, lang)} · {hours(pin!, pout!)} {t.hours}</span>
-                      : endsLater ? <span className="st gold">Working · ends {time(pout!, lang)}</span>
-                      : pin ? <span className="st ok">{new Date(pin).getTime() > nowMs ? 'Starts' : 'Started'} {time(pin, lang)}{isEarly ? <i className="st-tag">EARLY</i> : wasLate && !ln ? <i className="st-tag">LATE</i> : null}</span>
-                      : ln && !lnPassed ? <span className="st gold">Told ahead · starts {time(r.planned_start, lang)}</span>
-                      : isLate ? <span className="st red">Not here · {Math.round((Date.now() - new Date(r.planned_start).getTime()) / 60000)} min late</span>
-                      : <span className="st">Starts {time(r.planned_start, lang)}</span>}
-                  </button>
-                  {tel && (!r.attendance || (ln && lnPassed)) ? <>
-                    <a className="ic" href={`tel:${tel}`} aria-label={`Call ${r.staff!.full_name}`}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z" /></svg></a>
-                    <a className="ic" href={`sms:${tel}`} aria-label={`Text ${r.staff!.full_name}`}><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg></a>
-                  </> : <><span className="ic ghost" aria-hidden="true" /><span className="ic ghost" aria-hidden="true" /></>}
-                  <div className="act-slot">
-                    {fromRonnie ? <span className="act done-mark" aria-hidden="true" />
-                      : r.attendance ? <button className="act undo" onClick={() => mark(r.id, null)}>Undo</button>
-                      : !pin ? (gate(r).kind === 'locked' ? <button className="act locked" disabled title={gate(r).label}>{t.start}</button> : <button className="act start" onClick={() => startRows([r])}>{t.start}</button>)
-                      : !ended ? <button className="act end" onClick={() => endRow(r, pin)}>{t.end}</button> : <span className="act done-mark">✓</span>}
-                  </div>
-                {r.adder && <div className="crew-add">＋ Added by {r.adder.full_name.split(' ')[0]}</div>}{/* Nov 15 · own line at the bottom (Ronnie: option D) */}</div>
-                </SwipeRow>
-              );
-            })}
+            {grp.map(crewRow)}
           </section>
         );
       })}

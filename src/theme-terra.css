@@ -1523,4 +1523,5 @@ html[data-theme="terra"] { --teams: #5B5FC7; --teams-bg: #EEEFFB; --teams-ink: #
 :where(html[data-theme="terra"]) .sk-grp button { background: #FBFAF6; color: #47493E; }
 :where(html[data-theme="terra"]) .sk-grp button.on { background: #2A2A24; border-color: #181915; color: #FBFAF6; }
 :where(html[data-theme="terra"]) .sk-line { color: #878A77; }
+:where(html[data-theme="terra"]) .pos-badge { color: #FBFAF6; background: #3B4A3F; border: 2px solid #DCDDD0; }
 html[data-theme="terra"] body { background: #EEF0E8; color: #2A2A24; }
