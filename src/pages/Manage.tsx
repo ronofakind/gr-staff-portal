@@ -499,7 +499,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
                   <button className={'ring tap ' + ring + (isNew && !pin ? ' newp' : '')} aria-label={`Options for ${r.staff?.full_name}`} onClick={() => openRow(r, isNew)}>
                     <Avatar name={r.staff?.full_name ?? '?'} url={r.staff?.photo_url} size={44} />
                     {isNew && <i className="new-badge">NEW</i>}
-                    <i className="crew-pos">{roleLabel(r.position_code, r.position_detail).toUpperCase()}</i>
+                    <i className={'crew-pos' + (roleLabel(r.position_code, r.position_detail).length > 7 ? ' long' : '')}>{roleLabel(r.position_code, r.position_detail).toUpperCase()}</i>
                   </button>
                   <button className="who" aria-label={`Options for ${r.staff?.full_name}`} onClick={() => openRow(r, isNew)}>
                     <span className="nm">{r.staff ? teamName(r.staff) : ''}{r.ends_own && !r.punches?.late_entry_at && <i className="own-tag">ENDS OWN</i>}{r.punches?.late_entry_at && <i className="late-tag">{r.punches.late_ok_at ? '✓ ' : ''}ENTERED LATER</i>}{xIds.has(r.id) && !r.attendance && <i className="x-tag">EXTRA</i>}{switchedIds.has(r.id) && !r.attendance && <i className="sw-tag">SWITCHED</i>}{r.cut_first_at && !r.attendance && !r.punches?.punch_out && <i className="fc-tag" title={`Asked ${time(r.cut_first_at, lang)} · cut first if you can`}>FIRST CUT ✋</i>}</span>
@@ -686,7 +686,7 @@ export function Manage({ me }: { me?: { id: string; full_name: string } | null }
       </section> : <section className="stack" style={{ gap: 10 }}>
         <div className="grp-head bl-head"><span className="hrs-t">With the bar</span><span className="grp-n">{link.loan.length}</span><span className="grp-rule" />{link.sister_mgr && <span className="grp-n">{link.sister_mgr}</span>}</div>
         {link.loan.map((x) => <div key={x.shift_id} className="crew bl-row">
-          <span className="ring"><Avatar name={x.full_name} url={x.photo_url} size={44} /><i className="crew-pos">{roleLabel(x.position_code, null).toUpperCase()}</i></span>
+          <span className="ring"><Avatar name={x.full_name} url={x.photo_url} size={44} /><i className={'crew-pos' + (roleLabel(x.position_code, null).length > 7 ? ' long' : '')}>{roleLabel(x.position_code, null).toUpperCase()}</i></span>
           <span className="who"><span className="nm">{teamName({ full_name: x.full_name, nickname: x.nickname })}{x.switched_at && <i className="sw-tag">SWITCHED</i>}</span>
             <span className={'st' + (x.punch_in ? ' ok' : '')}>{x.punch_out && new Date(x.punch_out).getTime() <= nowMs ? `${time(x.punch_in!, lang)} → ${time(x.punch_out, lang)}` : x.punch_in ? `Started ${time(x.punch_in, lang)}` : `Starts ${time(x.planned_start, lang)}`}</span></span>
           {!ev.hours_submitted_at && <button className="lk-sw" onClick={() => openSw(x.shift_id)}>Switch</button>}
