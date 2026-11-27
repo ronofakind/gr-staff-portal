@@ -88,8 +88,8 @@ html[data-theme="dark"] .crew-pos { background: #E9E4DC; color: #1A1714; border-
 html[data-theme="dark"] .crew.hrs { box-shadow: inset 0 0 0 1.5px #D4A93A; }
 html[data-theme="dark"] .crew.hrs .ring { box-shadow: 0 0 0 2px #D4A93A, 0 0 0 4px rgba(212,169,58,.18); }
 html[data-theme="dark"] .hrs-head .hrs-t { color: #D4A93A; }
-html[data-theme="dark"] .hrs-head .grp-rule { background: rgba(212,169,58,.3); }`));
+html[data-theme="dark"] .hrs-head .grp-rule { background: rgba(212,169,58,.3); }
 html[data-theme="dark"] .ds-blocks.narrow .ds-tpop { background: #24211D; color: #F1ECE4; }
-html[data-theme="dark"] .ds-blocks.narrow .ds-tq button { background: #33302B; color: #F1ECE4; }
+html[data-theme="dark"] .ds-blocks.narrow .ds-tq button { background: #33302B; color: #F1ECE4; }`));
 fs.writeFileSync(OUT, dark.toString());
 console.log('theme-dark.css', dark.nodes.length, 'rules');
