@@ -1,4 +1,4 @@
--- 144 · Mark someone NEW again until N more manager reviews come in (Ronnie, Nov 27: Alicia Gonthier, 2 more reviews).
+-- 144 · Mark someone NEW again until N more manager reviews come in (Ronnie, Nov 27: Alicia Gonthier and Eden Walker, 2 more reviews each).
 -- MDs see the NEW tag on their team page and are asked to rate them; NEW drops off by itself after the reviews. Safe to run twice.
 alter table public.staff_private add column if not exists new_reviews int not null default 0;
 alter table public.staff_private add column if not exists new_since timestamptz;
@@ -30,7 +30,6 @@ begin
     left join staff k on k.id = sp.knows_staff_id
     left join staff_feedback f on f.event_id = p_event and f.staff_id = t.staff_id and f.by_staff_id = me();
 end $$;
-insert into public.staff_private (staff_id) select id from public.staff where full_name = 'Alicia Gonthier' on conflict (staff_id) do nothing;
-update public.staff_private set new_reviews = 2, new_since = now() where staff_id = (select id from public.staff where full_name = 'Alicia Gonthier');
-select 'RESULT 144 · ' || (select count(*) from public.staff_private where new_reviews > 0) || ' marked new · Alicia: ' ||
-  coalesce((select new_reviews::text from public.staff_private sp join public.staff s on s.id = sp.staff_id where s.full_name = 'Alicia Gonthier'), 'not found') as result;
+insert into public.staff_private (staff_id) select id from public.staff where full_name in ('Alicia Gonthier', 'Eden Walker') on conflict (staff_id) do nothing;
+update public.staff_private set new_reviews = 2, new_since = now() where staff_id in (select id from public.staff where full_name in ('Alicia Gonthier', 'Eden Walker'));
+select 'RESULT 144 · ' || (select count(*) from public.staff_private where new_reviews > 0) || ' marked new: ' || coalesce((select string_agg(s.full_name, ', ') from public.staff_private sp join public.staff s on s.id = sp.staff_id where sp.new_reviews > 0), 'nobody') as result;
